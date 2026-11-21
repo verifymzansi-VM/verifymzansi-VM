@@ -8,7 +8,7 @@ CREATE OR REPLACE FUNCTION internal.prepare_frontend_privacy_export(p_case uuid,
  SET search_path TO 'pg_catalog'
 AS $function$
 declare actor uuid:=internal.staff_actor('dsar:manage');r private.privacy_requests;data jsonb;
-  new_export uuid:=gen_random_uuid();
+  new_export uuid:=gen_random_uuid();bell boolean;deliverable boolean;
 begin
   -- The row lock makes the limits below count one export at a time.
   select * into r from private.privacy_requests where id=p_case for no key update;
@@ -19,11 +19,14 @@ begin
   actor:=internal.staff_actor('dsar:manage');
   if actor=r.subject_user_id or exists(select 1 from auth.users u where u.id=actor and lower(u.email)=lower(r.requester_email))
     then raise exception 'another staff member must export your request' using errcode='42501';end if;
+  -- Whether the account the request names can see its bell, and whether the
+  -- requester's address can be emailed under the email job's own rule.
+  bell:=r.subject_user_id is not null and exists(select 1 from private.current_account_access a where a.id=r.subject_user_id);
+  deliverable:=internal.privacy_notice_deliverable(r);
   -- A member who cannot see the bell (no account access, or a deleted
   -- account) is told only by email: no export unless that email can be
-  -- delivered under the email job's own rule.
-  if r.subject_user_id is not null and not exists(select 1 from private.current_account_access a where a.id=r.subject_user_id)
-      and not internal.privacy_notice_deliverable(r)
+  -- delivered.
+  if r.subject_user_id is not null and not bell and not deliverable
     then raise exception 'The member can''t be notified right now, so nothing was exported. Contact the member and update the request first.'
       using errcode='55000', detail='member_not_notifiable';end if;
   if (select count(*) from private.privacy_request_events e where e.request_id=r.id and e.actor_id=actor

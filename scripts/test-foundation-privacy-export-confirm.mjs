@@ -804,6 +804,175 @@ try {
     assert.equal(exportedJobs(closing), 0);
     assert.equal(notices(member2), 0);
   });
+  await check("an undeliverable export email never holds a request for ever", () => {
+    /** Exported now; then made undeliverable by `breakIt`; finally aged past
+     * the 24-hour export hold and the 7-day cap, and 31 days after
+     * completion. */
+    const scenario = (label, setup, breakIt) => {
+      const [who, id] = completedRequest(label, 1);
+      setup?.(who);
+      json(confirm(admin, id, json(prepare(admin, id)).export_id));
+      assert.equal(exportedJobs(id), 1, label);
+      breakIt(who, id);
+      retention();
+      assert.equal(minimised(id), false, `${label}: the 24-hour export hold`);
+      q(`update private.privacy_request_events set occurred_at=occurred_at-interval '8 days'
+          where request_id='${id}' and action='exported';
+        update private.privacy_requests set completed_at=now()-interval '31 days' where id='${id}';`);
+      retention();
+      assert.equal(minimised(id), true, label);
+    };
+    const moveEmail = (who) =>
+      q(`update auth.users set email='moved-'||id||'@example.invalid' where id='${who.id}';`);
+    const ban = (who) =>
+      q(`update auth.users set banned_until=now()+interval '1 day' where id='${who.id}';`);
+    // B1: the email changes while the account can still sign in.
+    scenario("undeliverable-b1", null, (who) => moveEmail(who));
+    // B2: the account is soft-deleted after the export.
+    scenario("undeliverable-b2", null, (who) =>
+      q(`update auth.users set deleted_at=now() where id='${who.id}';`)
+    );
+    // B3: banned, and the email changes after the export.
+    scenario("undeliverable-b3", ban, (who) => moveEmail(who));
+    // B4: the Auth user is removed, so the request names no account.
+    scenario("undeliverable-b4", null, (who, id) => {
+      q(`delete from auth.users where id='${who.id}';`);
+      assert.equal(privacy(id).subject_user_id, null);
+    });
+    // A deliverable email that keeps failing holds the request at most 7 days.
+    const [, failing] = completedRequest("undeliverable-cap", 1);
+    json(confirm(admin, failing, json(prepare(admin, failing)).export_id));
+    q(`update private.privacy_notice_jobs set attempts=3 where request_id='${failing}' and kind='exported';
+      update private.privacy_request_events set occurred_at=occurred_at-interval '6 days'
+        where request_id='${failing}' and action='exported';
+      update private.privacy_requests set completed_at=now()-interval '31 days' where id='${failing}';`);
+    retention();
+    assert.equal(minimised(failing), false, "inside the 7 days");
+    q(`update private.privacy_request_events set occurred_at=occurred_at-interval '2 days'
+      where request_id='${failing}' and action='exported';`);
+    retention();
+    assert.equal(minimised(failing), true, "past the 7 days");
+  });
+  await check("no email job is created that could never run", () => {
+    // The account can see its bell, but its email is no longer the request's
+    // address: the bell tells it, and no email job is armed.
+    const requester = user("bell-no-email");
+    const id = approved(requester);
+    q(`update auth.users set email='moved-'||id||'@example.invalid' where id='${requester.id}';`);
+    json(confirm(admin, id, json(prepare(admin, id)).export_id));
+    json(oldExport(admin, id));
+    assert.equal(exportedJobs(id), 0);
+    assert.equal(notices(requester), 2);
+  });
+  await check("an email the worker already claimed is sent again for a later export", () => {
+    const banned = user("in-flight");
+    const id = approved(banned);
+    q(`update auth.users set banned_until=now()+interval '1 day' where id='${banned.id}';`);
+    json(confirm(admin, id, json(prepare(admin, id)).export_id));
+    // The worker claims export 1's email ...
+    const claimed = json(`update private.privacy_notice_jobs set claim_token=gen_random_uuid(),
+        locked_until=now()+interval '90 seconds',attempts=attempts+1
+      where request_id='${id}' and kind='exported' returning jsonb_build_object('id',id,'claim',claim_token);`);
+    // ... staff confirm export 2 ...
+    json(confirm(admin, id, json(prepare(admin, id)).export_id));
+    // ... and the worker's completion of the old claim no longer counts.
+    assert.equal(
+      q(
+        service(
+          `select api.complete_frontend_privacy_notice('${claimed.id}','${claimed.claim}',true);`
+        )
+      ),
+      "f"
+    );
+    assert.equal(
+      q(`select delivered_at is null and claim_token is null and attempts=0 from private.privacy_notice_jobs
+        where id='${claimed.id}';`),
+      "t"
+    );
+    assert.equal(notices(banned), 2);
+  });
+  await check(
+    "a confirmation committed in the middle of a sweep is seen before minimising",
+    async () => {
+      // Deterministic. For this check only, retention runs as a role without
+      // row-security bypass, and a row-security policy makes that role wait,
+      // while the sweep reads the target request, on an advisory lock the
+      // test holds. The sweep has taken its statement snapshot by then; the
+      // confirmation commits while it waits; then the lock is released.
+      const [requester, target] = completedRequest("race-mid-sweep", 695);
+      const exportId = json(prepare(admin, target)).export_id;
+      const RETENTION = "internal.retention_privacy_requests(integer)";
+      const TABLES = [
+        "private.privacy_request_events",
+        "private.privacy_notice_jobs",
+        "private.account_erasure_requests",
+        "private.account_erasures",
+      ];
+      q(`create role vm_sweeper nologin nobypassrls;
+        grant usage on schema private, internal, auth, vmtest to vm_sweeper;
+        grant select, insert, update, delete on all tables in schema private to vm_sweeper;
+        grant select on auth.users to vm_sweeper;
+        grant execute on function internal.privacy_notice_deliverable(private.privacy_requests) to vm_sweeper;
+        create table vmtest.sweep_gate_target(id uuid primary key);
+        insert into vmtest.sweep_gate_target values('${target}');
+        grant select on vmtest.sweep_gate_target to vm_sweeper;
+        create function vmtest.sweep_gate(p_id uuid) returns boolean language plpgsql volatile as $$
+        begin
+          if exists(select 1 from vmtest.sweep_gate_target t where t.id=p_id) then
+            perform pg_advisory_xact_lock_shared(424242);
+          end if;
+          return true;
+        end$$;
+        grant execute on function vmtest.sweep_gate(uuid) to vm_sweeper;
+        create policy vm_sweep_gate on private.privacy_requests for all to vm_sweeper
+          using (vmtest.sweep_gate(id)) with check (true);
+        ${TABLES.map((t) => `create policy vm_sweeper_all on ${t} for all to vm_sweeper using (true) with check (true);`).join("\n")}
+        alter function ${RETENTION} owner to vm_sweeper;`);
+      const call = `select api.confirm_frontend_privacy_export('${target}',${privacy(target).revision},'${exportId}')`;
+      const epoch = "select extract(epoch from clock_timestamp());";
+      try {
+        const [gate, sweep, confirmed] = await Promise.all([
+          // Holds the gate for 3 seconds.
+          session(
+            `select pg_advisory_lock(424242);\nselect pg_sleep(3);\n${epoch}\nselect pg_advisory_unlock(424242);`
+          ),
+          // Starts at 0.5 s and waits at the gate while reading the target.
+          delayed(500, `${epoch}\nselect internal.retention_privacy_requests(100);`),
+          // Commits at about 1 s, while the sweep waits.
+          delayed(1000, staff(admin, `begin;\n${call};\n${epoch}\ncommit;`)),
+        ]);
+        assert.equal(gate.status, 0, gate.stderr);
+        assert.equal(sweep.status, 0, sweep.stderr);
+        assert.equal(confirmed.status, 0, confirmed.stderr);
+        const released = Number(gate.stdout.trim().split("\n").filter(Boolean).at(-2));
+        const swept = Number(sweep.stdout.trim().split("\n")[0]);
+        const committed = Number(confirmed.stdout.trim().split("\n").at(-1));
+        assert.ok(
+          swept < committed && committed < released,
+          JSON.stringify({ swept, committed, released })
+        );
+        // Statement 2 sees the export: the request is kept.
+        assert.equal(minimised(target), false);
+        assert.equal(exportedJobs(target), 1);
+        assert.equal(notices(requester), 1);
+      } finally {
+        q(`alter function ${RETENTION} owner to postgres;
+          drop policy vm_sweep_gate on private.privacy_requests;
+          ${TABLES.map((t) => `drop policy vm_sweeper_all on ${t};`).join("\n")}
+          drop function vmtest.sweep_gate(uuid);
+          drop table vmtest.sweep_gate_target;
+          drop owned by vm_sweeper;
+          drop role vm_sweeper;`);
+      }
+    }
+  );
+  await check("retention refuses to run without READ COMMITTED", () => {
+    fails(
+      `begin isolation level repeatable read;\nselect internal.retention_privacy_requests(1);\nrollback;`,
+      "25001",
+      /privacy retention needs read committed isolation/
+    );
+  });
   await check("retention clears the digest of unconfirmed exports a day after expiry", () => {
     const requester = user("retention");
     const id = approved(requester);

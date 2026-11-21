@@ -28,9 +28,9 @@ do $$
 declare present integer;
 begin
   if exists(select 1 from (values
-      ('internal.export_frontend_privacy_request(uuid,integer)','939737e433fcf800d5e98a3dd1569e5d','46cc7ed7289c283e04804faaa38bb156'),
+      ('internal.export_frontend_privacy_request(uuid,integer)','939737e433fcf800d5e98a3dd1569e5d','d29fd99879829f9a6df017b1a351e93c'),
       ('api.export_frontend_privacy_request(uuid,integer)','251a62d1bb6d474172d02a2867b2556a','251a62d1bb6d474172d02a2867b2556a'),
-      ('internal.retention_privacy_requests(integer)','ae00ab54c00fd3f6f64ac6b8061ba929','036cf32ba918a30fa0480b7fcd4a6615'),
+      ('internal.retention_privacy_requests(integer)','ae00ab54c00fd3f6f64ac6b8061ba929','cbb20e00ff20ef8448bd64b79081596e'),
       ('internal.claim_frontend_privacy_notice()','ab583eeac94d2d46cee6344b5e0d6ef6','98f8a3f23b7509881aa6dfc8b1e7a335')) v(sig,reviewed,updated)
     where to_regprocedure(v.sig) is null
       or (select md5(replace(p.prosrc,E'\r\n',E'\n')) from pg_proc p where p.oid=to_regprocedure(v.sig))
@@ -49,9 +49,9 @@ begin
     + (exists(select 1 from pg_constraint c where c.conrelid='private.privacy_request_events'::regclass
         and c.conname='privacy_request_events_export_check'))::integer
     + ((select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc
-        where oid=to_regprocedure('internal.export_frontend_privacy_request(uuid,integer)'))='46cc7ed7289c283e04804faaa38bb156')::integer
+        where oid=to_regprocedure('internal.export_frontend_privacy_request(uuid,integer)'))='d29fd99879829f9a6df017b1a351e93c')::integer
     + ((select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc
-        where oid=to_regprocedure('internal.retention_privacy_requests(integer)'))='036cf32ba918a30fa0480b7fcd4a6615')::integer
+        where oid=to_regprocedure('internal.retention_privacy_requests(integer)'))='cbb20e00ff20ef8448bd64b79081596e')::integer
     + ((select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc
         where oid=to_regprocedure('internal.claim_frontend_privacy_notice()'))='98f8a3f23b7509881aa6dfc8b1e7a335')::integer
     + (to_regprocedure('internal.privacy_notice_deliverable(private.privacy_requests)') is not null)::integer
@@ -60,9 +60,9 @@ begin
     raise exception 'rollback precondition: the privacy export confirm update is not applied' using errcode='55000';
   end if;
   if exists(select 1 from (values
-      ('internal.prepare_frontend_privacy_export(uuid,integer)','3d75ecc26ff4d4a499a1e2ca3b678a49'),
+      ('internal.prepare_frontend_privacy_export(uuid,integer)','d00c387a3868a4ed4296001f8c295249'),
       ('api.prepare_frontend_privacy_export(uuid,integer)','001f2fc46398c56fd2ac6d7b3bf2cf11'),
-      ('internal.confirm_frontend_privacy_export(uuid,integer,uuid)','5fbb8a6db23bbdb1b77e81a221ec6e4d'),
+      ('internal.confirm_frontend_privacy_export(uuid,integer,uuid)','5f2a7f2e960e24fa7e56e25251513684'),
       ('api.confirm_frontend_privacy_export(uuid,integer,uuid)','438d948a6a90a8fefd9c6bf49df8c99f'),
       ('internal.privacy_notice_deliverable(private.privacy_requests)','07d09e5b62485aebc0bd4d1b16e04809')) v(sig,body)
     where to_regprocedure(v.sig) is not null

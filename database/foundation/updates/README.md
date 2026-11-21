@@ -135,16 +135,23 @@ signature) until a later update removes it (contract step, with a
   while `private.notifications` has any trigger or rule but its reviewed update
   guard. The requester's email goes once per request while that account can sign
   in, and on every export when it cannot (no account, or closed, banned,
-  suspended or restricted), since nobody would see the bell: a delivered or
-  abandoned email is armed again, and one still waiting covers the export.
+  suspended or restricted), since nobody would see the bell: a delivered,
+  abandoned or in-flight email is armed again (an in-flight one is sent again),
+  and one still waiting covers the export. No email job is created for an
+  account that sees its bell while its address cannot be emailed.
 - **Retention:** `internal.retention_privacy_requests` (run daily by
   `api.run_retention`) also clears the digest of prepared exports never
-  confirmed, a day after they expired, and reports `export_digests_cleared`. It
-  no longer minimises a request exported in the last 24 hours or whose export
-  email is still being tried (undelivered, fewer than 8 attempts), and it locks
-  the requests it minimises (`for update skip locked`): a request an export
-  holds is left for the next run, and an export waiting for retention then finds
-  the request closed out and refuses. Its results are otherwise unchanged.
+  confirmed, a day after they expired, and reports `export_digests_cleared`. Two
+  holds keep a request from being minimised while an export may still be telling
+  the member: an export in the last 24 hours, and its email while it is
+  deliverable and being tried (undelivered, fewer than 8 attempts), for at most
+  7 days after the export (the retries take about 8.5 hours; the hold must never
+  be open ended, or an undeliverable address would keep a member's details for
+  ever). The race with a confirmation is closed by lock-then-recheck: the first
+  statement locks the requests that look due (`for update skip locked`), the
+  second minimises only those still due under a new snapshot, so an export
+  committed in between is seen. That needs READ COMMITTED, so retention refuses
+  to run under any other isolation (25001). Its results are otherwise unchanged.
 - **The website** checks the prepared dataset names (exactly one set in
   `src/lib/foundation/privacy-export-datasets.ts`, read from the raw object's
   own keys), confirms, and hands the file over without the export id. Every
