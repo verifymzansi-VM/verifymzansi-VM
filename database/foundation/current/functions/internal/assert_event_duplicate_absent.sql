@@ -14,7 +14,9 @@ begin
   -- Callers already hold original -> copy -> media locks. Never lock competitors.
   select * into target from private.posts p where p.id=p_post_id;
   if target.id is null or target.kind<>'event' then raise exception 'event not found' using errcode='22023'; end if;
-  if (not p_staff and actor<>target.owner_id) or (p_staff and actor=target.owner_id) then
+  -- Staff never decide their own event, except in single-administrator mode
+  -- (internal.queue_conflict).
+  if (not p_staff and actor<>target.owner_id) or (p_staff and internal.queue_conflict(actor, target.id, null)) then
     raise exception 'event authority denied' using errcode='42501';
   end if;
   logical_id:=coalesce(target.edit_of,target.id);

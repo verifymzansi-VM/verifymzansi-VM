@@ -9691,20 +9691,24 @@
     },
     {
       "id": "LIM-SQL-house-slots-count",
-      "title": "House slots: 1 to 15 per grant",
-      "value": "1 to 15",
+      "title": "House slots: an account holds 1 to 25 in total",
+      "value": "1 to 25",
       "category": "cap",
       "enforcedAt": [
         {
           "file": "database/foundation/current/functions/internal/grant_house_slots.sql",
           "symbol": "internal.grant_house_slots",
-          "contains": "if p_slots is null or p_slots<1 or p_slots>15 then"
+          "contains": "if p_slots is null or p_slots<1 or p_slots>25 then"
         }
       ],
       "tests": [
         {
           "kind": "behaviour",
           "file": "scripts/test-foundation-house-slots.mjs"
+        },
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-one-person-admin-mode.mjs"
         }
       ]
     },

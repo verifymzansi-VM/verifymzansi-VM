@@ -26,7 +26,7 @@ begin
   if p_queue = 'content' then
     for r in
       select p.id from private.posts p
-      where p.status = 'pending_moderation' and p.owner_id <> actor
+      where p.status = 'pending_moderation' and not internal.queue_conflict(actor, p.id, null)
         and not exists (select 1 from private.queue_claims q where q.post_id = p.id
           and q.claimed_by is not null and q.claim_expires_at > clock_timestamp())
       order by p.submitted_at, p.id limit allowed * 2

@@ -14,16 +14,32 @@ const FIXTURES = `create schema vmtest;
     insert into auth.sessions(id,user_id,aal) values(sid,uid,'aal1');
     return jsonb_build_object('id',uid,'session',sid);
   end$$;
-  -- Staff: an AAL2 session, a verified authenticator app, a role and an
-  -- accepted ID review of their own (a synthetic identity fingerprint).
+  -- Staff: an AAL2 session, a verified authenticator app, a role and a
+  -- current accepted ID review of their own (internal.current_verified_identity:
+  -- a decided case with its reviewed submission, a synthetic identity
+  -- fingerprint, a verified phone and an area), since staff review posts only
+  -- with one (20261121143000_one_person_admin_mode.sql).
   create function vmtest.staff(p_label text,p_role text) returns jsonb language plpgsql as $$
-  declare m jsonb:=vmtest.member(p_label); uid uuid:=(m->>'id')::uuid; begin
+  declare m jsonb:=vmtest.member(p_label); uid uuid:=(m->>'id')::uuid; c uuid:=gen_random_uuid();
+    ida uuid:=gen_random_uuid(); sea uuid:=gen_random_uuid(); sub uuid:=gen_random_uuid();
+    fp text:=left(translate(encode(sha256(convert_to(uid::text,'UTF8')),'base64'),'+/=','-_'),42)||'A'; begin
     update auth.sessions set aal='aal2' where id=(m->>'session')::uuid;
     insert into auth.mfa_factors(user_id,factor_type,status) values(uid,'totp','verified');
     insert into private.staff_roles(user_id,role) values(uid,p_role);
     perform set_config('session_replication_role','replica',true);
+    insert into private.evidence_cases(id,subject_id,kind,status,version) values(c,uid,'kyc','decided',2);
+    insert into private.evidence_artifacts(id,case_id,owner_id,purpose,object_key,state,deleted_at)
+      values(ida,c,uid,'id_front','evidence/'||c||'/'||ida,'deleted',now()),(sea,c,uid,'selfie','evidence/'||c||'/'||sea,'deleted',now());
+    insert into private.verification_identity_submissions(id,case_id,owner_id,case_version,id_artifact_id,
+        selfie_artifact_id,identity_hmac,identity_key_id,number_ciphertext,number_iv,number_tag,encryption_key_id,
+        receipt_id,recipe,risk_score)
+      values(sub,c,uid,1,ida,sea,fp,'identity-match-v1',repeat('a1',13),repeat('b2',12),repeat('c3',16),
+        'identity-number-v1',gen_random_uuid(),'manual-id-selfie-v1',10);
     insert into private.accepted_identity_facts(owner_id,submission_id,identity_hmac,reviewed_by)
-      values(uid,gen_random_uuid(),left(translate(encode(sha256(convert_to(uid::text,'UTF8')),'base64'),'+/=','-_'),42)||'A',gen_random_uuid());
+      values(uid,sub,fp,gen_random_uuid());
+    insert into private.verification_phone_proofs(owner_id,challenge_id,phone)
+      values(uid,gen_random_uuid(),'+2783'||lpad((abs(hashtext(uid::text))%10000000)::text,7,'0'));
+    insert into private.verification_localities(owner_id,province_id,city_id) values(uid,'gp','gp_johannesburg');
     perform set_config('session_replication_role','origin',true);
     return m || jsonb_build_object('staff',true);
   end$$;`;

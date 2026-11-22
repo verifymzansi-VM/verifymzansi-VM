@@ -1,7 +1,7 @@
 {
   "description": "Fingerprint of the production (foundation) schema rebuilt from this repository: platform-prelude.sql, candidate.sql, baseline-supplement.sql and updates/*.sql in filename order. Produced by `pnpm db:foundation:replay -- --write` with database/foundation/fingerprint.sql. CI fails when the replay differs.",
   "productionCheck": {
-    "capturedOn": "2026-11-21",
+    "capturedOn": "2026-11-22",
     "method": "Read-only catalogue capture of production, same query formats. table_grants returns no row in production or in the replay (no table privileges for the API roles), so it is listed as matching without a fingerprint.",
     "matching": [
       "function_bodies",
@@ -19,15 +19,15 @@
     ],
     "notYetCompared": [],
     "howToCompare": "In the Supabase SQL editor (read-only), run `set search_path to \"$user\", public;` first, so pg_get_indexdef prints `extensions.gin_trgm_ops` as the replay does, then run database/foundation/fingerprint.sql unchanged and compare each row with categories below.",
-    "matchedThroughUpdate": "20261121131915_business_storefront.sql",
+    "matchedThroughUpdate": "20261121143000_one_person_admin_mode.sql",
     "matchedFingerprints": {
       "column_grants": "5e5623672e80b927048d8553487d5442",
-      "columns": "45af9ec0bb632dec0dde919706f66a36",
-      "constraints": "0a7accec0683e0811d73959c1dd62c6c",
+      "columns": "217849050f2f7ae5500f62f7bda8dd37",
+      "constraints": "c47723e7245a46fc0953fbe6417f2d23",
       "event_triggers": "821f7d069c595c075754fad9309136ac",
-      "function_bodies": "76c87ff13493a2919770515262f25ba9",
+      "function_bodies": "76f505666adc555d8235180b78aaa48d",
       "function_grants": "e6112db339632367bbd40057e324438f",
-      "function_metadata": "cc065aa65bb7a88a0ce12a0da54db158",
+      "function_metadata": "9f3b47ebc1cfdc4af74658025cfe551b",
       "indexes": "6f3d22a71f5fb0fb1770587b59bf2a05",
       "policies": "085a305fbc41d38d34eb40c3748c0793",
       "row_level_security": "287fedeb91e1ed0d3c4322fcfced4039",
@@ -41,7 +41,7 @@
     "Reference data is not fingerprinted. candidate.sql seeds posting-terms version posting-v2, which production does not hold: production has posting-v1 and posting-v3 (current since 20261109173012_posting_terms_v3.sql), and posting-v4 once 20261112122001_publish_posting_terms_v4.sql is applied (current from 20261112173841_switch_posting_terms_v4.sql).",
     "schema_grants: production has 8 items (d397fed9c8bd9d4fc50ebdd777899d93) and the replay 7 (categories below). The extra production item is `internal supabase_auth_admin:USAGE`, which Supabase grants when the Auth \"Before user created\" hook is switched on; no repository file creates it (see replay/hosted-auth-hook-grants.sql)."
   ],
-  "updateCount": 102,
+  "updateCount": 103,
   "lastUpdate": "20261122022323_identity_keep_for.sql",
   "categories": {
     "column_grants": {
@@ -49,28 +49,28 @@
       "fingerprint": "5e5623672e80b927048d8553487d5442"
     },
     "columns": {
-      "items": 1483,
-      "fingerprint": "5c84bf7bbec9d6148c0d9a0a4c1ff0f5"
+      "items": 1485,
+      "fingerprint": "b421f630dea284b5f5af3ce93c626a54"
     },
     "constraints": {
-      "items": 1307,
-      "fingerprint": "3a42e8cffd11b215847417307a28055a"
+      "items": 1309,
+      "fingerprint": "2121cc6b504f50a9718f55e3fdfbf1b9"
     },
     "event_triggers": {
       "items": 1,
       "fingerprint": "821f7d069c595c075754fad9309136ac"
     },
     "function_bodies": {
-      "items": 1145,
-      "fingerprint": "b6220698fb26d20e29cc15d994bbda9a"
+      "items": 1147,
+      "fingerprint": "cc0f672f3cd6a7593e11aad884c80a82"
     },
     "function_grants": {
       "items": 831,
       "fingerprint": "e6112db339632367bbd40057e324438f"
     },
     "function_metadata": {
-      "items": 1145,
-      "fingerprint": "b70caa18e7bd72df7d558736fd54bd55"
+      "items": 1147,
+      "fingerprint": "25170b98cc7fe76849ab67a833671203"
     },
     "indexes": {
       "items": 596,
