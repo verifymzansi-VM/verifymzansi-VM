@@ -1182,6 +1182,110 @@ describe("CreateListingPage", () => {
       }
     });
 
+    it("post templates: the member's area fills in with the template, not as a later edit", async () => {
+      const dismiss = vi.fn();
+      mockToast.mockReturnValue({ id: "toast", dismiss, update: vi.fn() });
+      useAuthMock.mockReturnValue({
+        user: { id: DRAFT_USER_ID, email: "draft@test.com" },
+        profile: { location_province: "Gauteng", location_city: "Pretoria" },
+        isLoading: false,
+      });
+      const restore = serveTemplate(PHONE);
+      seedDraft();
+      window.history.replaceState(null, "", `/post/create-listing?template=${TEMPLATE_ID}`);
+      try {
+        render(<CreateListingPage />);
+        await waitFor(() => {
+          expect(screen.getByLabelText("Description (Required)")).toHaveValue(
+            "Template wording for phones."
+          );
+        });
+        await new Promise((resolve) => setTimeout(resolve, 1200));
+        expect(dismiss).not.toHaveBeenCalled();
+        expect(localStorage.getItem(draftKey)).toContain("Saved iPhone 15");
+      } finally {
+        restore();
+      }
+    });
+
+    it("post templates: a template that changes nothing still saves the first edit", async () => {
+      const dismiss = vi.fn();
+      mockToast.mockReturnValue({ id: "toast", dismiss, update: vi.fn() });
+      const restore = serveTemplate(PHONE);
+      window.history.replaceState(null, "", `/post/create-listing?template=${TEMPLATE_ID}`);
+      try {
+        const view = render(<CreateListingPage />);
+        await waitFor(() => {
+          expect(screen.getByLabelText("Description (Required)")).toHaveValue(
+            "Template wording for phones."
+          );
+        });
+        // The same template again leaves the form exactly as it is.
+        window.history.replaceState(null, "", `/post/create-listing?template=${TEMPLATE_ID}`);
+        view.rerender(<CreateListingPage />);
+        await waitFor(() => expect(window.location.search).toBe(""));
+        await waitFor(() =>
+          expect(
+            mockToast.mock.calls.filter(([s]) => s.title === 'Started from "Used phone"')
+          ).toHaveLength(2)
+        );
+        fireEvent.change(screen.getByLabelText("Title (Required)"), {
+          target: { value: "Galaxy A15" },
+        });
+        await waitFor(() => expect(localStorage.getItem(draftKey)).toContain("Galaxy A15"), {
+          timeout: 3000,
+        });
+      } finally {
+        restore();
+      }
+    });
+
+    it("post templates: leaving the form closes the Undo message", async () => {
+      const dismiss = vi.fn();
+      mockToast.mockReturnValue({ id: "toast", dismiss, update: vi.fn() });
+      const restore = serveTemplate(PHONE);
+      seedDraft();
+      window.history.replaceState(null, "", `/post/create-listing?template=${TEMPLATE_ID}`);
+      try {
+        const view = render(<CreateListingPage />);
+        await waitFor(() => {
+          expect(screen.getByLabelText("Description (Required)")).toHaveValue(
+            "Template wording for phones."
+          );
+        });
+        expect(dismiss).not.toHaveBeenCalled();
+        view.unmount();
+        expect(dismiss).toHaveBeenCalled();
+      } finally {
+        restore();
+      }
+    });
+
+    it("post templates: Undo brings back the draft as stored now", async () => {
+      const restore = serveTemplate(PHONE);
+      seedDraft();
+      window.history.replaceState(null, "", `/post/create-listing?template=${TEMPLATE_ID}`);
+      try {
+        render(<CreateListingPage />);
+        await waitFor(() => {
+          expect(screen.getByLabelText("Description (Required)")).toHaveValue(
+            "Template wording for phones."
+          );
+        });
+        // Another tab saves newer work meanwhile.
+        seedDraft({ title: "Newer from another tab" });
+        const started = mockToast.mock.calls.find(
+          ([shown]) => shown.title === 'Started from "Used phone"'
+        );
+        act(() => started?.[0].action.props.onClick());
+        await waitFor(() => {
+          expect(screen.getByLabelText("Title (Required)")).toHaveValue("Newer from another tab");
+        });
+      } finally {
+        restore();
+      }
+    });
+
     it("post templates: a template that fails to load restores the saved draft", async () => {
       const base = global.fetch;
       global.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>

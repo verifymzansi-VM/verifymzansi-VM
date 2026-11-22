@@ -65,7 +65,7 @@ import {
 import { CATEGORIES } from "@/lib/constants/categories";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 import { checkUploadServiceReachable } from "@/lib/utils/upload-preflight";
-import type { DraftEnvelope, ListingDraftData } from "@/lib/post-drafts/storage";
+import { loadDraft, type DraftEnvelope, type ListingDraftData } from "@/lib/post-drafts/storage";
 import { LISTING_CONDITIONS } from "@/lib/constants/listing-condition";
 import { ListingDetailContent } from "@/components/listings/listing-detail-content";
 import { readMediaDimensions } from "@/lib/utils/media-metadata";
@@ -73,6 +73,7 @@ import { VIDEO_GUIDANCE, VIDEO_SOUND_OFF_TIP } from "@/lib/media/video-length";
 import {
   announceTemplate,
   announceTemplateFailed,
+  draftSnapshot,
   dropTemplateFromAddress,
   loadListingStart,
   TemplateLoading,
@@ -386,8 +387,17 @@ export default function CreateListingPage() {
     [videoCoverPreviewUrl]
   );
 
+  // While a template's fields are untouched (see settleStart), autosave waits
+  // and Undo stays offered; `pristine` is the form as the template left it.
+  const templateHold = useRef<{ pristine: string; end: () => void } | null>(null);
   useEffect(() => {
-    if (!profile) return;
+    const hold = templateHold;
+    return () => hold.current?.end();
+  }, []);
+
+  useEffect(() => {
+    // A template fills these itself (settleStart), so a later fill is no edit.
+    if (!profile || templateHold.current) return;
 
     queueMicrotask(() => {
       if (!province && profile.location_province) {
@@ -425,7 +435,6 @@ export default function CreateListingPage() {
   const started = useRef(false);
   // A kept page (opened again from Create Post) settles again only for a template.
   const templateParam = useSearchParams()?.get("template") ?? null;
-  const templateHold = useRef<{ pristine: string | null; end: () => void } | null>(null);
   const applyDraft = (restored: DraftEnvelope<ListingDraftData>) => {
     const restoredData = restored.data;
     setStep(Math.min(Math.max(restored.step ?? 0, 0), STEPS.length - 1));
@@ -482,7 +491,21 @@ export default function CreateListingPage() {
         ? { v: 1, savedAt: Date.now(), step, data: formData }
         : null
       : start.draft;
+    templateHold.current?.end();
     const fields = formFieldsFromTemplate(template.data);
+    // The member's area when the template has none, as an empty form gets it.
+    const filled: ListingDraftData = {
+      ...fields,
+      title: "",
+      price: "",
+      negotiable: false,
+      province: fields.province || profile?.location_province || "",
+      city:
+        fields.city ||
+        (!fields.province || fields.province === profile?.location_province
+          ? profile?.location_city || ""
+          : ""),
+    };
     setStep(0);
     setTitle("");
     setPrice("");
@@ -494,14 +517,19 @@ export default function CreateListingPage() {
     setCondition(fields.condition as ListingCondition | "");
     setCategoryAttributes(fields.categoryAttributes);
     setDescription(fields.description);
-    setProvince(fields.province);
-    setCity(fields.city);
+    setProvince(filled.province);
+    setCity(filled.city);
     setTown(fields.town);
     setAddress(fields.address);
     setContactMethods(fields.contactMethods);
+    const userId = user?.id;
     const undo = draft
       ? () => {
-          applyDraft(draft);
+          // First visit: the stored draft as it is now (another tab may have
+          // saved newer work), since the template's fields were never saved.
+          applyDraft(
+            (!again && userId ? loadDraft<ListingDraftData>("listing", userId) : null) ?? draft
+          );
           if (again) {
             setPhotoFiles(files.photoFiles);
             setVideoFile(files.videoFile);
@@ -512,7 +540,7 @@ export default function CreateListingPage() {
     // Untouched template fields are not autosaved (a reload restores the earlier
     // draft) and Undo stays offered; the first change to the form ends both.
     const shown = announceTemplate(toast, template, undo);
-    templateHold.current = { pristine: null, end: () => shown.dismiss() };
+    templateHold.current = { pristine: draftSnapshot(filled), end: () => shown.dismiss() };
   });
 
   useEffect(() => {
@@ -549,11 +577,7 @@ export default function CreateListingPage() {
     };
     const hold = templateHold.current;
     if (hold) {
-      const now = JSON.stringify(data);
-      if (hold.pristine === null || hold.pristine === now) {
-        hold.pristine ??= now;
-        return;
-      }
+      if (hold.pristine === draftSnapshot(data)) return;
       templateHold.current = null;
       hold.end();
     }
