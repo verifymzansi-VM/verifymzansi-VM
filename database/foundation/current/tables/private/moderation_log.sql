@@ -11,10 +11,12 @@ create table private.moderation_log (
   reason text,
   decided_at timestamp with time zone default statement_timestamp() not null,
   price_only boolean default false not null,
+  self_approved boolean default false not null,
   constraint moderation_log_check CHECK (edit_id IS DISTINCT FROM post_id),
   constraint moderation_log_check1 CHECK (NOT price_only OR edit_id IS NOT NULL),
   constraint moderation_log_decision_check CHECK (decision = ANY (ARRAY['approve'::text, 'reject'::text])),
   constraint moderation_log_pkey PRIMARY KEY (id),
+  constraint moderation_log_self_approved_check CHECK (NOT self_approved OR decision = 'approve'::text),
   constraint moderation_log_staff_id_fkey FOREIGN KEY (staff_id) REFERENCES auth.users(id) ON DELETE RESTRICT
 );
 alter table private.moderation_log owner to postgres;
@@ -29,3 +31,4 @@ CREATE TRIGGER moderation_log_append_only BEFORE DELETE OR UPDATE ON private.mod
 CREATE TRIGGER moderation_log_no_truncate BEFORE TRUNCATE ON private.moderation_log FOR EACH STATEMENT EXECUTE FUNCTION internal.append_only_guard();
 CREATE TRIGGER notify_post_moderation AFTER INSERT ON private.moderation_log FOR EACH ROW EXECUTE FUNCTION internal.notify_post_moderation();
 revoke all on private.moderation_log from public;
+comment on column private.moderation_log.self_approved is 'Approved in single-administrator mode: the only ID-verified staff member approved their own post (internal.moderate_post).';

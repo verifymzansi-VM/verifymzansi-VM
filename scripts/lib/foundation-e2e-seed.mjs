@@ -162,7 +162,7 @@ function syntheticIdNumber(sequence) {
   throw new Error("Synthetic identity number unavailable");
 }
 
-async function verifyIdentity({ api, sql, owner, reviewer }) {
+async function verifyIdentity({ api, sql, owner, reviewer, sequence }) {
   const opened = await api.call("open_verification_case", {}, owner.token);
   const caseId = opened.case_id;
   assert.match(caseId, UUID);
@@ -191,7 +191,7 @@ async function verifyIdentity({ api, sql, owner, reviewer }) {
       );
   }
   // Throwaway keys: the encrypted number never leaves this local database.
-  const processed = processIdentityNumber(owner.id, syntheticIdNumber(1), {
+  const processed = processIdentityNumber(owner.id, syntheticIdNumber(sequence), {
     identityMatchKey: randomBytes(32).toString("hex"),
     numberEncryptionKey: randomBytes(32).toString("hex"),
     identityKeyId: "identity-match-v1",
@@ -444,15 +444,25 @@ export async function seedTestCopy({ root = process.cwd(), status, sql, log = ()
     ...(await signIn(api, people.moderator, factors.moderator)),
   };
 
-  log("Verified member: legal name, identity review by the admin, phone and area.");
-  for (const key of ["invitedMember", "verifiedMember"]) await claimLegalName(key);
-  await verifyIdentity({ api, sql, owner: session.verifiedMember, reviewer: session.admin });
-  await verifyPhone({ api, owner: session.verifiedMember });
-  await api.call(
-    "confirm_verification_locality",
-    { p_province: "gp", p_city: "gp_johannesburg" },
-    session.verifiedMember.token
-  );
+  log("Verified member and moderator: legal name, identity review by the admin, phone and area.");
+  for (const key of ["invitedMember", "verifiedMember", "moderator"]) await claimLegalName(key);
+  // Staff review posts only with an accepted ID review of their own, so the
+  // moderator is verified like the member.
+  for (const [sequence, key] of ["verifiedMember", "moderator"].entries()) {
+    await verifyIdentity({
+      api,
+      sql,
+      owner: session[key],
+      reviewer: session.admin,
+      sequence: sequence + 1,
+    });
+    await verifyPhone({ api, owner: session[key] });
+    await api.call(
+      "confirm_verification_locality",
+      { p_province: "gp", p_city: "gp_johannesburg" },
+      session[key].token
+    );
+  }
   const terms = await api.call("get_current_posting_terms", {}, null);
   await api.call(
     "accept_posting_terms",

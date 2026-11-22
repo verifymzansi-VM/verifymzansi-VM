@@ -11,9 +11,7 @@ declare actor uuid := internal.staff_actor('post:moderate'); c private.queue_cla
 begin
   select q.* into c from private.queue_claims q join private.posts p on p.id = q.post_id
     where q.post_id = p_post_id and p.status = 'pending_moderation';
-  if internal.queue_conflict(actor, p_post_id, null) then
-    raise exception 'self-review is not allowed' using errcode = '42501';
-  end if;
+  perform internal.assert_post_reviewer(actor, p_post_id);
   perform internal.assert_queue_claim(c, actor, p_claim_generation, p_claim_nonce);
   dto := internal.post_review_view(p_post_id);
   if dto->>'edit_of' is not null then

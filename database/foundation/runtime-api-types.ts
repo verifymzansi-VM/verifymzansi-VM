@@ -719,6 +719,20 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         };
         Returns: Json;
       };
+      open_authority_request: {
+        Args: {
+          p_request_type: string;
+          p_reference: string;
+          p_issued_by: string;
+          p_confirmed_number: string;
+          p_confirmed_by: string;
+          p_reason: string;
+          p_lookup_kind: string;
+          p_lookup_value: string;
+          p_attested: boolean;
+        };
+        Returns: Json;
+      };
       read_identity_disclosure: {
         Args: { p_disclosure: string; p_purpose: string; p_subject?: string };
         Returns: Json;
@@ -743,6 +757,9 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         Returns: Json;
       };
       get_my_post_performance: { Args: Record<never, never>; Returns: Json };
+      copy_my_post: { Args: { p_post: string; p_request: string }; Returns: Json };
+      get_frontend_staff_copy_facts: { Args: { p_posts: string[] }; Returns: Json };
+      list_my_copy_drafts: { Args: Record<never, never>; Returns: Json };
     };
   };
 };

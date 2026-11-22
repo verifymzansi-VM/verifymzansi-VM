@@ -197,6 +197,299 @@ appearances counted up to 3 fair shares (two flooded posts level); no mark for
 random ids, a draft or an own post; the marks under the views' daily valve; and
 that reads write nothing.
 
+## Authority requests under rule D9, 22 November 2026
+
+`20261122013616_authority_request_types.sql` was applied on 22 November 2026 at
+13:00 UTC (see the applied register). Launch checklist item 69, owner decision
+D9 of 21 November ("Keep both"): staff may disclose a member's kept identity
+record to an authority only on a subpoena (Criminal Procedure Act s205, issued
+by a magistrate or judge), a court order or a search warrant, each checked with
+the issuing court or the named prosecutor on an official number; or on an urgent
+written request from SAPS where a life is at risk, checked by calling the
+station. An urgent request gives only the minimum, never the selfie.
+
+- **The request types:** `subpoena`, `court_order`, `search_warrant` and
+  `urgent_life_risk`. The earlier `warrant`, `police_case` and `regulator` rows
+  stay as they are and read as before; no row is rewritten.
+- **The confirmation:** `private.identity_disclosures` gains `issued_by` (the
+  court or prosecutor's office, or the SAPS station; 3 to 120 characters),
+  `confirmed_number` (the official number that was called; 5 to 20 digits with
+  single spaces between them, an optional leading +) and `confirmed_by` (who
+  confirmed it on that call; 3 to 120 characters). The reference (3 to 100) is
+  the subpoena, warrant or case number. The reference, issuer and confirmer each
+  need at least one letter or digit. A table check makes every `search_warrant`
+  and `urgent_life_risk` row carry all three; the command, the table's only
+  writer, checks the rest.
+- **Opening:** the new
+  `api.open_authority_request(type, reference, issued_by, confirmed_number, confirmed_by, reason, lookup kind, lookup value, attested)`
+  refuses each missing part with 22023 and its own detail
+  (`disclosure_issued_by_required`, `disclosure_confirmed_number_required`,
+  `disclosure_confirmed_by_required`, and the existing ones); the staff rule,
+  the search and log-before-show are unchanged. `api.open_identity_disclosure`
+  keeps its signature but now runs the same rule with no confirmation, so it is
+  always refused; a later contract step removes it.
+- **Urgent requests, in the database:** the record leaves out the selfie and the
+  ID photo and lists only the current verified phone numbers, never removed ones
+  (names, ID number state, current phones and dates only); reading the selfie is
+  refused with `disclosure_selfie_withheld` before anything is logged; the
+  server material never carries the selfie's stored object (the encrypted ID
+  number still). An urgent search by phone finds only the number's current
+  holder (never someone whose proof of it was removed), and an urgent search by
+  ID number never falls back to numbers that were only tried.
+- **Reading:** `api.read_identity_disclosure` adds `issued_by`,
+  `confirmed_number` and `confirmed_by` only when the row has them, so the live
+  website still reads every earlier row.
+
+One new command; no command or argument removed (expand). ORDER: apply first,
+then merge. Between the two, the live website cannot open a new record (its form
+has no confirmation fields and the earlier command is refused); records opened
+before read as they did.
+
+**Applying.**
+
+1. Run `../preflight/20261122013616_authority_request_types.check.sql` unchanged
+   in the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "authority request types: update not applied;
+   disclosures: N" (any count).
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "authority request types: already applied; disclosures:
+   N; under rule D9: 0; urgent: 0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is
+`../rollback/20261122013616_authority_request_types.down.sql` (only with the
+owner's decision; prefer a forward fix). It first locks the disclosure log
+against new openings, refuses unless the update is applied, and refuses while
+any record opened under rule D9 is kept. Otherwise it puts back the four
+functions byte for byte, drops the new command and removes the three columns and
+the check.
+
+`node --import tsx scripts/test-foundation-identity-record-disclosure.mjs` (part
+of `pnpm db:foundation:lifecycle-test`) now also runs
+`scripts/lib/foundation-authority-request-types.mjs` on the throwaway database:
+the preflight before and after, read only; drifted bodies and a premature
+rollback refused; apply, rollback and re-apply return the same fingerprints; the
+new command's grants; records opened under the first rule (subpoena, warrant,
+police case) read as they did and stay listed; the earlier command always
+refused, logging nothing; the three earlier and any other types refused; for
+each of the four types, each missing or malformed reference, issuer, number,
+confirmer, reason and confirmation refused with its own detail and nothing
+logged; each type opening with its trimmed reference and confirmation on the row
+and the record; text of only spaces or invisible marks refused; the table check
+refusing a new-type row without its confirmation; an urgent request showing
+names, ID number state and only the current phone without the selfie or ID photo
+(view and print), its selfie read refused before logging and its server material
+without the selfie; a court order still showing the selfie and the earlier phone
+numbers; an urgent phone search finding no removed holder, only a number's
+current holder, while a court order still finds both; an urgent ID number search
+never giving attempts; and the rollback refused while a D9 record is kept.
+
+## Copy a post, 21 November 2026
+
+`20261121150309_copy_a_post.sql` was applied on 22 November 2026 at 11:40 UTC
+(see the applied register). Launch checklist item 17b, business tools plan
+section 3 (owner-approved 20 November 2026 with all 10 recommendations): a
+member whose Multi-listing package runs makes a new Market listing from one of
+their own.
+
+- **The copy:** `api.copy_my_post(post, request)` (members) copies one of the
+  caller's own Market listings that was submitted at least once (not a draft,
+  not held by staff: PT423) into a new draft, only while the caller's package
+  runs (`internal.slot_package_now`; PT402, detail `package_required`). The
+  draft is made by `internal.create_core_draft`, so its category rules and draft
+  allowance (5 plus the package's places, PT429) apply. It gets the category,
+  title, description, area, price, details, which contact buttons to show (never
+  a number), the presentation fields, the photos and the listing logo; never the
+  video or its cover. A repeated request returns the same copy.
+- **Photos:** the copy links the same stored files. A file is deleted only when
+  no post uses it (`internal.claim_media_cleanup` checks every link), so
+  deleting either post never removes the other's photos; post edits already
+  share files the same way.
+- **New photo:** trigger `copy_new_photo_required` refuses moving a copy of a
+  vehicle or property into review (22023, detail `copy_new_photo_required`)
+  unless one of its photos has bytes (sha256) not among the source's photos when
+  it was copied (owner decision, question 5). The copy keeps that list
+  (`source_photo_sha256`), so deleting or re-photographing the source changes
+  nothing. Copying a draft or a business is refused with detail
+  `copy_source_invalid`.
+- **Reviewers:** `api.get_frontend_staff_copy_facts(posts)` (staff with
+  `queue:view`) returns, only for copies under review the caller has claimed (at
+  most 25 per call), the post each was copied from (status `deleted` and no
+  title once it is gone).
+- **Unfinished copies:** `private.post_copies` records the source (a plain id,
+  kept after the source is deleted), its photo bytes and the request.
+  `api.list_my_copy_drafts()` (members) lists the caller's unfinished copies and
+  when each will be deleted, for the Drafts tab on My posts.
+  `internal.purge_copy_drafts`, run by `internal.run_retention` (which now also
+  returns `copy_drafts`), deletes a copy still in draft 14 days after its last
+  change, never during a legal hold. Drafts that are not copies are untouched.
+- **Privacy export:** the `posts` rows gain `copied_from` (no new dataset).
+
+Expand only: three new commands, a table and a trigger; `run_retention` returns
+one more count and the export's posts rows one more field, both read without a
+strict field list. ORDER: apply first, then merge; the website offers Copy only
+while `SHOW_POST_COPY` is on (off until launch switch-on).
+
+**Applying.**
+
+1. Run `../preflight/20261121150309_copy_a_post.check.sql` unchanged in the SQL
+   editor. It is read only. Continue only if its result is the single "summary"
+   row reading "copy a post: update not applied; draft posts: N" (any count).
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "copy a post: already applied; draft posts: N; copies: 0;
+   unfinished copies: 0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is `../rollback/20261121150309_copy_a_post.down.sql` (only
+with the owner's decision; prefer a forward fix; switch `SHOW_POST_COPY` off
+first). It refuses (55000) unless every piece of the update has the update's
+body; then it puts back `internal.run_retention` and
+`internal.frontend_privacy_export_data` byte for byte and drops the trigger, the
+eight functions and `private.post_copies`. Copies already made stay as ordinary
+posts and drafts; only the record of their source goes.
+
+`node --import tsx scripts/test-foundation-copy-a-post.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; drifted bodies and a premature rollback
+refused; apply, rollback and re-apply return the same fingerprints; the grants
+(members only, wrappers security invoker, helpers for nobody, no table access);
+a copy's fields, buttons, photos (same files, focal point kept) and logo,
+without the video, its cover, contact numbers or video layout; replay of a
+request; refusals for another member, a visitor, a draft, a business, a held
+post, no package and the draft allowance; the new-photo rule for vehicles and
+property against the photos at copy time (the same bytes again do not count; a
+deleted or re-photographed source still needs one; the source later taking the
+copy's photo does not block it; other categories and posts that are not copies
+are not checked); photos kept when either post is deleted; the reviewer read
+only for claimed posts, refused to members, visitors, above 25 posts and with a
+stale authenticator code, and a deleted source shown as deleted; the member's
+list of unfinished copies; the 14-day deletion (and its bounds, the legal hold,
+other drafts and submitted copies kept); and `copied_from` in the privacy
+export.
+
+## Single-administrator mode for house slots and own posts, 21 November 2026
+
+`20261121143000_one_person_admin_mode.sql` was applied on 22 November 2026 at
+06:40 UTC (see the applied register). Launch checklist item 67 (owner's
+decisions of 21 November 2026, "Option A", cap 25, and 22 November 2026, "Yes,
+all my posts"). The owner has two admin accounts but one ID, so the two-person
+rules for house slots could not be met: a house-slot grant needs a second
+ID-verified administrator, and staff never review their own posts.
+
+- **The mode.** `internal.single_administrator(account)` (no API role can run
+  it) is true while the account holds an active admin role and an accepted ID
+  review, and no other account with an active staff role has one. It is worked
+  out at every call; nothing is stored. As soon as a second staff member's ID
+  review is accepted (any staff role), the normal two-person rules apply again,
+  also to an item already claimed. A suspended staff member does not count
+  (their ID review is not current while the account is not active).
+- **Self-grant (database owner only).** `internal.grant_house_slots` keeps its
+  signature and every rule; in this mode `p_approved_by_email` may name the
+  recipient's own account (otherwise 42501 `house_slots_self_approval`, as
+  before). The owner's second admin account, which has no ID review, can neither
+  receive nor approve (`house_slots_identity_required`,
+  `house_slots_approver_identity_required`). Each event it records is marked
+  `self_granted` (new column of the append-only `private.house_slot_events`,
+  check: only on `granted` and `extended`), and the result has
+  `self_granted: true`.
+- **Cap 25 in total.** The cap is on the account's total house slots: a grant
+  makes the recipient hold 1 to 25 house slots in all (was 15); outside that,
+  22023 `house_slots_count_invalid`. LIM-SQL-house-slots-count in
+  `docs/testing/limits-register.json` follows.
+- **Staff review posts only with an ID review.** `internal.queue_conflict`
+  counts every post as a conflict for a staff member without an accepted ID
+  review of their own (`internal.current_verified_identity`), so such an account
+  (the owner's second admin account, for one) can neither list, claim, open,
+  renew nor decide (approve or reject) posts. The per-item commands
+  (`claim_queue_item`, `staff_review_post`, `renew_queue_claim` for posts and
+  `moderate_post` for every decision) refuse through the new
+  `internal.assert_post_reviewer`: 42501 "ID verification required to review
+  posts" (detail `staff_identity_required`), otherwise "self-review is not
+  allowed" on a conflict. A moderator whose ID review ends while holding a claim
+  can no longer renew or decide it. Reports are unchanged.
+- **Self-approval of all own posts** (owner's decision of 22 November 2026,
+  "Yes, all my posts"). While the mode holds, `internal.queue_conflict` no
+  longer counts any of the administrator's own pending posts or edits as a
+  conflict, whatever funds them (house slot, free first post, paid or package
+  slot, an event), so the moderation queue lists them and `claim_queue_items`
+  (which now asks `queue_conflict` instead of comparing the owner),
+  `claim_queue_item`, `staff_review_post` and
+  `assert_posting_verification_ready` and `assert_event_duplicate_absent`
+  (likewise) accept them. The owner reviews members' posts and their own from
+  the verified account; the second account sees an empty queue.
+  `internal.moderate_post` lets them approve their own post, never reject it
+  ("self-review is not allowed"). The admin role's `post:moderate` already needs
+  an authenticator code from the last 15 minutes (`internal.staff_actor`); the
+  update refuses to run unless it still does. The decision is recorded with
+  `self_approved` (new column of the append-only `private.moderation_log`,
+  check: approvals only) and the staff Audit log shows it as
+  `post:self_approved` (`post_self_approved` on the page). House-slot grants
+  keep their own rules (above). Identity reviews, refunds, business checks,
+  reports and every other two-person rule are unchanged.
+
+No API command, argument, grant or result field changes (internal functions, two
+columns with a default, one branch of
+`private.frontend_staff_nonpayment_audit_events`). ORDER: apply first, then
+merge. No screen changes: the queue and the Audit log already show what the
+database returns.
+
+**Applying.**
+
+1. Run `../preflight/20261121143000_one_person_admin_mode.check.sql` unchanged
+   in the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "one-person admin mode: update not applied; ID-verified
+   staff: N; house slots: N; post claims by staff without an ID review: N" (any
+   counts). ID-verified staff 1 means the mode will apply; post claims by staff
+   without an ID review can no longer be decided or renewed after the update and
+   expire within 15 minutes.
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "one-person admin mode: already applied; ID-verified
+   staff: N; house slots: N; post claims by staff without an ID review: N;
+   self-granted slot events: 0; self-approved decisions: 0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+**Granting afterwards (the owner, in the SQL editor).** With the ID-verified
+admin account's own address in both places:
+`select internal.grant_house_slots('<verified admin email>', <1 to 25>, <7 to 180 days>, '<written reason, 5 to 500 characters>', '<verified admin email>');`
+
+The reviewed rollback is
+`../rollback/20261121143000_one_person_admin_mode.down.sql` (only with the
+owner's decision; prefer a forward fix). It refuses unless the update is applied
+and the nine functions still have its bodies (both records are locked first,
+access exclusive), and while any event is `self_granted` or any decision
+`self_approved` (those records are kept). Otherwise it puts back the nine
+function bodies and the audit view, drops `internal.single_administrator`,
+`internal.assert_post_reviewer` and the two columns.
+
+`node --import tsx scripts/test-foundation-one-person-admin-mode.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; drifted bodies and a premature rollback
+refused; apply, rollback and re-apply return the same fingerprints; no API role
+can run the grant, the mode check or the conflict check; with two ID-verified
+staff the mode is off and the cap is 25 (26 and a count below the slots held
+refused); with one, the self-grant needs a reason, the verified account itself
+(not the second account) and at most 25, and its events are marked and
+append-only; the own house-slot post is listed, claimed, opened, refused with a
+16-minute-old code and as a rejection, approved with a 14-minute-old code,
+logged `self_approved` and shown as `post_self_approved`; the own
+free-first-post, paid-slot and event posts and an edit are each refused as a
+rejection and self-approved, marked; another member's post is approved as
+before, unmarked; a second ID-verified staff member ends the mode for grants and
+for every kind of own post (house slot, event, edits of the free-first-post and
+paid-slot posts: listing, claims and items already claimed), and removing or
+suspending them brings it back; the second admin account without an ID review
+can neither claim the owner's post nor, with a lease written directly, open,
+approve, reject or renew it (`staff_identity_required`), and the preflight
+counts that claim; the owner's own ID review ending turns the mode off; the
+rollback refuses a changed function and once a marked record exists; and after
+every later update a 16-minute-old code is still refused.
+
 ## Business storefront, 21 November 2026
 
 `20261121131915_business_storefront.sql` was applied on 21 November 2026 at
@@ -6984,6 +7277,30 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   new functions absent), after: already applied (the 5 bodies as updated);
   production fingerprint after it (fingerprint.sql) matched the full replay
   (except the known schema grant difference)
+
+- `20261121143000_one_person_admin_mode.sql`: applied 2026-11-22 06:40 UTC;
+  owner-approved, apply-first, Supabase SQL editor (pull request #343); update
+  sha256 starting 3cceed8f; preflight (sha256 starting 7074a32b) before: update
+  not applied (ID-verified staff 1, no problems), after: already applied (11 of
+  11 bodies as updated, both new columns present; self-granted slot events: 0;
+  self-approved decisions: 0); production fingerprint after it (fingerprint.sql)
+  matched the full replay (except the known schema grant difference)
+
+- `20261121150309_copy_a_post.sql`: applied 2026-11-22 11:40 UTC;
+  owner-approved, apply-first, Supabase SQL editor (pull request #341); update
+  sha256 starting 1acd618f; preflight (sha256 starting 73f33a34) before: update
+  not applied (draft posts: 0, no problems), after: already applied (11 of 11
+  parts as updated; copies: 0); production fingerprint after it
+  (fingerprint.sql) matched the full replay (except the known schema grant
+  difference)
+
+- `20261122013616_authority_request_types.sql`: applied 2026-11-22 13:00 UTC;
+  owner-approved, apply-first, Supabase SQL editor (pull request #346); update
+  sha256 starting 3528b0f5; preflight (sha256 starting 10c3307f) before: update
+  not applied (4 of 4 bodies reviewed, new objects 0 of 6, disclosures 0, no
+  problems), after: already applied (4 of 4 bodies updated, 6 of 6 new objects,
+  disclosures 0); production fingerprint after it (fingerprint.sql) matched the
+  full replay (except the known schema grant difference)
 
 - `20261122023000_fair_showroom.sql`: pending; apply-first
 

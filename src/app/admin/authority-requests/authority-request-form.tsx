@@ -15,6 +15,8 @@ import {
   AUTHORITY_REQUESTS_PATH,
   LOOKUP_KINDS,
   REQUEST_TYPES,
+  URGENT_REQUEST,
+  confirmationWords,
   type LookupKind,
   type RequestType,
 } from "@/lib/admin/authority-requests";
@@ -26,6 +28,9 @@ const SELECT =
 const FIELD_OF: Record<string, string> = {
   disclosure_request_type_invalid: "authority-type",
   disclosure_reference_required: "authority-reference",
+  disclosure_issued_by_required: "authority-issued-by",
+  disclosure_confirmed_number_required: "authority-confirmed-number",
+  disclosure_confirmed_by_required: "authority-confirmed-by",
   disclosure_reason_required: "authority-reason",
   disclosure_attestation_required: "authority-attested",
   disclosure_lookup_invalid: "authority-lookup-kind",
@@ -36,6 +41,9 @@ export function AuthorityRequestForm() {
   const router = useRouter();
   const [requestType, setRequestType] = useState<RequestType>("subpoena");
   const [reference, setReference] = useState("");
+  const [issuedBy, setIssuedBy] = useState("");
+  const [confirmedNumber, setConfirmedNumber] = useState("");
+  const [confirmedBy, setConfirmedBy] = useState("");
   const [reason, setReason] = useState("");
   const [lookupKind, setLookupKind] = useState<LookupKind>("post");
   const [lookupValue, setLookupValue] = useState("");
@@ -44,6 +52,7 @@ export function AuthorityRequestForm() {
   const [error, setError] = useState<{ message: string; field: string | null } | null>(null);
 
   const kind = LOOKUP_KINDS.find((item) => item.value === lookupKind) ?? LOOKUP_KINDS[0];
+  const words = confirmationWords(requestType);
   const invalid = (id: string) => error?.field === id;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -58,6 +67,9 @@ export function AuthorityRequestForm() {
         body: JSON.stringify({
           requestType,
           reference,
+          issuedBy,
+          confirmedNumber,
+          confirmedBy,
           reason,
           lookupKind,
           lookupValue,
@@ -115,7 +127,7 @@ export function AuthorityRequestForm() {
               </select>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="authority-reference">Request reference</Label>
+              <Label htmlFor="authority-reference">{words.reference}</Label>
               <Input
                 id="authority-reference"
                 className="h-11"
@@ -125,13 +137,58 @@ export function AuthorityRequestForm() {
                 required
                 autoComplete="off"
                 aria-invalid={invalid("authority-reference") || undefined}
-                aria-describedby={describedBy("authority-reference", "authority-reference-hint")}
+                aria-describedby={describedBy("authority-reference")}
               />
-              <p id="authority-reference-hint" className="text-sm text-muted-foreground">
-                The subpoena, court order or police case number.
-              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="authority-issued-by">{words.issuedBy}</Label>
+              <Input
+                id="authority-issued-by"
+                className="h-11"
+                value={issuedBy}
+                onChange={(e) => setIssuedBy(e.target.value)}
+                maxLength={120}
+                required
+                autoComplete="off"
+                aria-invalid={invalid("authority-issued-by") || undefined}
+                aria-describedby={describedBy("authority-issued-by")}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="authority-confirmed-number">Official number you called</Label>
+              <Input
+                id="authority-confirmed-number"
+                className="h-11"
+                value={confirmedNumber}
+                onChange={(e) => setConfirmedNumber(e.target.value)}
+                inputMode="tel"
+                maxLength={40}
+                required
+                autoComplete="off"
+                aria-invalid={invalid("authority-confirmed-number") || undefined}
+                aria-describedby={describedBy("authority-confirmed-number", "authority-check-hint")}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="authority-confirmed-by">Who confirmed it</Label>
+              <Input
+                id="authority-confirmed-by"
+                className="h-11"
+                value={confirmedBy}
+                onChange={(e) => setConfirmedBy(e.target.value)}
+                maxLength={120}
+                required
+                autoComplete="off"
+                aria-invalid={invalid("authority-confirmed-by") || undefined}
+                aria-describedby={describedBy("authority-confirmed-by", "authority-check-hint")}
+              />
             </div>
           </div>
+          <p id="authority-check-hint" className="text-sm text-muted-foreground">
+            {words.check}
+            {requestType === URGENT_REQUEST &&
+              " Only the names, ID number and verified phone are given; never the selfie."}
+          </p>
           <div className="space-y-1.5">
             <Label htmlFor="authority-reason">Reason</Label>
             <Textarea
@@ -206,8 +263,8 @@ export function AuthorityRequestForm() {
               aria-invalid={invalid("authority-attested") || undefined}
             />
             <span>
-              I have checked that this request is genuine, signed, and names this person or this
-              post. I will keep the original with the company records.
+              I checked this request on the official number above. It is genuine and names this
+              person or this post. I will keep the original with the company records.
             </span>
           </label>
         </fieldset>

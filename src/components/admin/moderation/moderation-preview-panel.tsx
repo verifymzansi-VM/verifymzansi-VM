@@ -99,6 +99,10 @@ export interface ModerationItem {
   /** Owner's other recent listings, for duplicate hints. */
   owner_recent_titles?: string[];
   owner_photo_urls?: string[];
+  /** Copy a post: the post this one was copied from (claimed posts only). */
+  copy_facts?: {
+    copied_from: { id: string; title: string | null; status: string };
+  };
 }
 
 interface ModerationPreviewPanelProps {
@@ -979,6 +983,37 @@ function QualitySummary({ score, issues }: ReturnType<typeof scoreListingQuality
   );
 }
 
+/** Copy a post: where the post was copied from. */
+function CopyFactsNotice({ facts }: { facts: NonNullable<ModerationItem["copy_facts"]> }) {
+  const source = facts.copied_from;
+  return (
+    <p className="rounded-lg border border-border bg-muted/40 p-3 text-sm">
+      <span className="font-medium">Copied from </span>
+      {source.status === "deleted" ? (
+        <span className="text-muted-foreground">a post that has since been deleted</span>
+      ) : (
+        <>
+          {/* Only a live post has a public page to open. */}
+          {source.status === "live" ? (
+            <a
+              href={`/listing/${source.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium underline underline-offset-2"
+            >
+              {source.title || "Untitled post"}
+              <span className="sr-only"> (opens in a new tab)</span>
+            </a>
+          ) : (
+            <span className="font-medium">{source.title || "Untitled post"}</span>
+          )}
+          <span className="text-muted-foreground"> ({formatEnumLabel(source.status)})</span>
+        </>
+      )}
+    </p>
+  );
+}
+
 export function ModerationPreviewPanel({ item }: ModerationPreviewPanelProps) {
   const [activeIndex, setActiveIndex] = useState(0);
 
@@ -1053,6 +1088,7 @@ export function ModerationPreviewPanel({ item }: ModerationPreviewPanelProps) {
     <div className="h-full min-h-0 overflow-auto">
       <div className="space-y-5 pr-4">
         <QualitySummary score={quality.score} issues={quality.issues} />
+        {item.copy_facts ? <CopyFactsNotice facts={item.copy_facts} /> : null}
         {item.isEditRequest && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
             <p className="font-medium">Edit review</p>

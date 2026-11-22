@@ -3741,7 +3741,7 @@
         {
           "file": "database/foundation/current/functions/internal/identity_disclosure_record.sql",
           "symbol": "internal.identity_disclosure_record",
-          "contains": "where y.owner_id=p_subject order by y.verified_at desc limit 20) v),'[]'::jsonb))"
+          "contains": "order by y.verified_at desc limit 20) v),'[]'::jsonb))"
         }
       ],
       "tests": [
@@ -4284,14 +4284,14 @@
       ]
     },
     {
-      "id": "LIM-F-open_identity_disclosure",
-      "title": "internal.open_identity_disclosure: email search value",
+      "id": "LIM-F-open_authority_request",
+      "title": "internal.open_authority_request: email search value",
       "value": "<= 254",
       "category": "length",
       "enforcedAt": [
         {
-          "file": "database/foundation/current/functions/internal/open_identity_disclosure.sql",
-          "symbol": "internal.open_identity_disclosure",
+          "file": "database/foundation/current/functions/internal/open_authority_request.sql",
+          "symbol": "internal.open_authority_request",
           "contains": "else length(v_value)<=254 and v_value ~ '^[^[:space:]@]+@[^[:space:]@]+[.][^[:space:]@]+$' end) then"
         }
       ],
@@ -4717,6 +4717,63 @@
         {
           "kind": "behaviour",
           "file": "scripts/limits-sql-bounds.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-purge_copy_drafts",
+      "title": "internal.purge_copy_drafts: limit 1 to 5000",
+      "value": "1 to 5000",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/purge_copy_drafts.sql",
+          "symbol": "internal.purge_copy_drafts",
+          "contains": "if p_limit is null or p_limit not between 1 and 5000 then"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-copy-a-post.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-SQL-copy-facts-posts",
+      "title": "Staff copy facts: at most 25 posts per read",
+      "value": "25",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_frontend_staff_copy_facts.sql",
+          "symbol": "internal.get_frontend_staff_copy_facts",
+          "contains": "if p_posts is null or cardinality(p_posts) > 25 then"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-copy-a-post.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-SQL-copy-draft-age",
+      "title": "Copy a post: an unfinished copy is deleted 14 days after its last change",
+      "value": "14 days",
+      "category": "expiry",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/purge_copy_drafts.sql",
+          "symbol": "internal.purge_copy_drafts",
+          "contains": "x.content_updated_at < statement_timestamp() - interval '14 days'"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-copy-a-post.mjs"
         }
       ]
     },
@@ -9755,20 +9812,24 @@
     },
     {
       "id": "LIM-SQL-house-slots-count",
-      "title": "House slots: 1 to 15 per grant",
-      "value": "1 to 15",
+      "title": "House slots: an account holds 1 to 25 in total",
+      "value": "1 to 25",
       "category": "cap",
       "enforcedAt": [
         {
           "file": "database/foundation/current/functions/internal/grant_house_slots.sql",
           "symbol": "internal.grant_house_slots",
-          "contains": "if p_slots is null or p_slots<1 or p_slots>15 then"
+          "contains": "if p_slots is null or p_slots<1 or p_slots>25 then"
         }
       ],
       "tests": [
         {
           "kind": "behaviour",
           "file": "scripts/test-foundation-house-slots.mjs"
+        },
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-one-person-admin-mode.mjs"
         }
       ]
     },

@@ -12,7 +12,9 @@ begin
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(actor::text, 1201));
   select * into s from internal.lock_queue_subject(p_subject, p_id);
   actor := internal.staff_actor('queue:claim'); -- authority after any lock wait
-  if internal.queue_conflict(actor, s.post_id, s.report_id) then
+  if s.post_id is not null then
+    perform internal.assert_post_reviewer(actor, s.post_id);
+  elsif internal.queue_conflict(actor, s.post_id, s.report_id) then
     raise exception 'self-review is not allowed' using errcode = '42501';
   end if;
   if (select count(*) from private.queue_claims q where q.claimed_by = actor and q.claim_expires_at > clock_timestamp()
