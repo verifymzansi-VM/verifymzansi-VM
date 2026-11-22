@@ -57,8 +57,12 @@ const toPosix = (path) => path.split("\\").join("/");
  * Whether `text` names `id` as a whole id: "LIM-F-x" is not named by
  * "LIM-F-x-2" or "LIM-F-x_y".
  */
-export const namesId = (text, id) =>
-  new RegExp(`(?<![-\\w])${id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![-\\w])`).test(text);
+function namesId(text, id) {
+  const idChar = (c) => c !== undefined && /[-\w]/.test(c);
+  for (let at = text.indexOf(id); at >= 0; at = text.indexOf(id, at + 1))
+    if (!idChar(text[at - 1]) && !idChar(text[at + id.length])) return true;
+  return false;
+}
 
 function walk(dir) {
   if (!existsSync(dir)) return [];
