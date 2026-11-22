@@ -25,7 +25,7 @@ begin
       ('internal.list_my_copy_drafts()'), ('api.list_my_copy_drafts()')) v(sig)
   loop
     if shape not in (
-        'internal.run_retention(integer) 27b281d704dc40daeeb3f97b88a839e9',
+        'internal.run_retention(integer) 55c133c8f2f031c62aac57eca13fb3b5',
         'internal.frontend_privacy_export_data(uuid) 4aa0fa034c5c09e495530b5563ff3008',
         'private.post_copies table',
         'internal.copy_my_post(uuid,uuid) 2195159d14323575798a6ce2421e2c47',
@@ -64,7 +64,6 @@ begin
     'staff_records',internal.retention_staff_records(p_limit),
     'commerce',internal.retention_commerce(p_limit),
     'operations',internal.retention_operations(p_limit),
-    'engagement',internal.purge_post_engagement(),
     'member_invitations',internal.purge_member_invitations(p_limit),
     'capture_handoffs',internal.purge_capture_handoffs(p_limit));
   perform pg_catalog.set_config('vm.retention','off',true);

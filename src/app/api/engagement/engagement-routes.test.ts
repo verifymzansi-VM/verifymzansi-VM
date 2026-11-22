@@ -41,6 +41,8 @@ const db = vi.hoisted(() => {
     seen: new Set<string>(),
     views: new Map<string, number>(),
     likes: new Map<string, Set<string>>(),
+    activity: [] as Array<[string, string]>,
+    engaged: new Set<string>(),
     calls: [] as Array<{ name: string; args: Record<string, unknown> }>,
   };
   const rpc = vi.fn(async (name: string, args: Record<string, unknown>) => {
@@ -55,6 +57,24 @@ const db = vi.hoisted(() => {
         counted.push(post);
       }
       return { data: { counted }, error: null };
+    }
+    if (name === "record_post_activity") {
+      const posts = args.p_post_ids as string[];
+      const metrics = args.p_metrics as string[];
+      let engaged = 0;
+      posts.forEach((post, n) => {
+        if (metrics[n] !== "engaged_views") return state.activity.push([post, metrics[n]!]);
+        // Counted once per browser, and only after its view was counted.
+        const key = `${args.p_device}|${post}`;
+        if (state.seen.has(key) && !state.engaged.has(key)) {
+          state.engaged.add(key);
+          engaged++;
+        }
+      });
+      return {
+        data: { posts: new Set(state.activity.map(([post]) => post)).size, engaged },
+        error: null,
+      };
     }
     const post = args.p_post_id as string;
     const liker = (args.p_account as string | undefined) ?? `device:${args.p_device}`;
@@ -74,6 +94,7 @@ vi.mock("@/lib/foundation/service-api", () => ({
 import { POST as postView } from "./view/route";
 import { POST as postLike } from "./like/route";
 import { POST as postViewer } from "./viewer/route";
+import { POST as postEvents } from "../analytics/events/route";
 import { issueViewerToken } from "@/lib/engagement-cookie";
 
 const POST_ID = "aaaaaaaa-aaaa-4aaa-8aaa-000000000001";
@@ -128,6 +149,8 @@ beforeEach(() => {
   db.state.seen.clear();
   db.state.views.clear();
   db.state.likes.clear();
+  db.state.activity.length = 0;
+  db.state.engaged.clear();
   db.state.calls.length = 0;
 });
 
@@ -212,6 +235,213 @@ describe("the identifier route", () => {
     } finally {
       vi.stubEnv("ENGAGEMENT_COOKIE_SECRET", SECRET);
     }
+  });
+});
+
+describe("engaged video views through the view route", () => {
+  const engagedVideo = (id = POST_ID) => ({ type: "business", id, source: "video", engaged: true });
+
+  it("counts an engaged view once per browser, only after its page view counted", async () => {
+    const cookie = await minutesAgo(30);
+    // No counted view yet: nothing.
+    expect(await (await view(cookie, [engagedVideo()])).json()).toEqual({ ok: true, counted: [] });
+    expect(db.state.engaged.size).toBe(0);
+    // The page view, then the engaged signal in the same request: both count.
+    await view(cookie, [pageView(), engagedVideo()]);
+    expect(db.state.engaged.size).toBe(1);
+    await view(cookie, [engagedVideo()]);
+    expect(db.state.engaged.size).toBe(1);
+    const engagedCall = db.state.calls.find((call) => call.name === "record_post_activity")!;
+    expect(engagedCall.args).toEqual({
+      p_post_ids: [POST_ID],
+      p_metrics: ["engaged_views"],
+      p_device: cookie.split(".")[1],
+    });
+  });
+
+  it("a plain video play is never a view or an engaged view", async () => {
+    const cookie = await minutesAgo(30);
+    const response = await view(cookie, [{ type: "business", id: POST_ID, source: "video" }]);
+    expect(await response.json()).toEqual({ ok: true, counted: [] });
+    expect(db.rpc).not.toHaveBeenCalled();
+  });
+
+  it("an engaged signal without a signed identifier asks for the check", async () => {
+    expect(await (await view(null, [engagedVideo()])).json()).toMatchObject({
+      needs_challenge: true,
+    });
+    expect(db.rpc).not.toHaveBeenCalled();
+  });
+});
+
+describe("Performance page events (/api/analytics/events)", () => {
+  const events = (
+    list: object[],
+    headers: Record<string, string> = {},
+    cookie: string | null = null
+  ) => postEvents(request("/api/analytics/events", { events: list }, { cookie, headers }));
+  const card = (type: string, extra: object = {}, id = POST_ID) => ({
+    table: "businesses",
+    id,
+    type,
+    ...extra,
+  });
+
+  it("maps each event to its daily counter, without a cookie or sign-in", async () => {
+    const response = await events([
+      card("impression", { surface: "business_list" }),
+      card("search_appearance", { surface: "site_search" }),
+      card("homepage_appearance", { surface: "home_business" }),
+      card("showroom_appearance", { surface: "showroom:home" }),
+      card("showroom_appearance", { surface: "showroom:tourism" }),
+      card("showroom_appearance", { surface: "programme:home" }),
+      card("organisation_directory_appearance", { surface: "org:x" }),
+      card("detail_view", { surface: "detail" }),
+      card("detail_view", { surface: "detail", source: "social" }),
+      card("whatsapp_click"),
+      card("phone_click"),
+      card("website_click"),
+      card("directions_click"),
+      card("booking_click"),
+      card("ticket_click"),
+      card("share"),
+    ]);
+    expect(response.status).toBe(204);
+    expect(db.state.activity.map(([, counter]) => counter)).toEqual([
+      "list_impressions",
+      "search_appearances",
+      "homepage_appearances",
+      "showroom_home",
+      "showroom_tourism",
+      "showroom_programme",
+      "directory_appearances",
+      "views_direct",
+      "views_social",
+      "whatsapp_taps",
+      "phone_taps",
+      "website_taps",
+      "directions_taps",
+      "booking_taps",
+      "ticket_taps",
+      "shares",
+    ]);
+    // Nothing about the visitor but the account check reaches the database.
+    expect(Object.keys(db.state.calls[0]!.args).sort()).toEqual(["p_metrics", "p_post_ids"]);
+  });
+
+  it("passes the verified account so the owner and staff are not counted", async () => {
+    mocks.account.mockResolvedValueOnce({ accountId: ACCOUNT });
+    await events([card("share")]);
+    expect(db.state.calls[0]!.args.p_account).toBe(ACCOUNT);
+  });
+
+  it("saves, sponsor clicks and organisation events are not counted here", async () => {
+    const response = await events([
+      card("save"),
+      card("sponsor_click"),
+      { table: "organisations", id: OTHER_ID, type: "impression" },
+    ]);
+    expect(response.status).toBe(204);
+    expect(db.rpc).not.toHaveBeenCalled();
+  });
+
+  it("per-source limit: over it nothing is counted", async () => {
+    mocks.rate.mockResolvedValue({ limited: true, retryAfter: 60 });
+    const response = await events([card("share")], { "cf-connecting-ip": "2001:db8:1:2::1" });
+    expect(response.status).toBe(204);
+    expect(db.rpc).not.toHaveBeenCalled();
+    expect(mocks.rate).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "engagement:activity", key: "v6:2001:db8:1::/48" })
+    );
+  });
+
+  it("each (post, counter) pair once per request", async () => {
+    await events([
+      ...Array.from({ length: 30 }, () => card("share")),
+      card("share", {}, OTHER_ID),
+      card("phone_click"),
+    ]);
+    expect(db.state.calls[0]!.args).toEqual({
+      p_post_ids: [POST_ID, OTHER_ID, POST_ID],
+      p_metrics: ["shares", "shares", "phone_taps"],
+    });
+  });
+
+  it("per-post daily limit: a post over it is dropped silently, the others still count", async () => {
+    mocks.rate.mockImplementation(async ({ action, key }: { action: string; key: string }) => ({
+      limited: action === "engagement:activity:post" && key.endsWith(POST_ID),
+    }));
+    const response = await events([card("share"), card("share", {}, OTHER_ID)], {
+      "cf-connecting-ip": "198.51.100.4",
+    });
+    expect(response.status).toBe(204);
+    expect(db.state.activity).toEqual([[OTHER_ID, "shares"]]);
+    expect(mocks.rate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "engagement:activity:post",
+        key: `v4:198.51.100.4|${POST_ID}`,
+      })
+    );
+    // Every post over its limit: no database call at all.
+    mocks.rate.mockImplementation(async ({ action }: { action: string }) => ({
+      limited: action === "engagement:activity:post",
+    }));
+    db.rpc.mockClear();
+    expect((await events([card("share")])).status).toBe(204);
+    expect(db.rpc).not.toHaveBeenCalled();
+  });
+
+  it("the per-post limit covers page events only: appearances are never checked or dropped by it", async () => {
+    mocks.rate.mockImplementation(async ({ action }: { action: string }) => ({
+      limited: action === "engagement:activity:post",
+    }));
+    await events([
+      card("impression", { surface: "market_list" }),
+      card("showroom_appearance", { surface: "showroom:home" }, OTHER_ID),
+      card("detail_view", { surface: "detail" }),
+      card("whatsapp_click"),
+    ]);
+    // The post's page events are over the limit; its appearance and the other
+    // post's showroom turn still count.
+    expect(db.state.activity).toEqual([
+      [POST_ID, "list_impressions"],
+      [OTHER_ID, "showroom_home"],
+    ]);
+    const perPost = mocks.rate.mock.calls
+      .map(([options]) => options as { action: string; key: string })
+      .filter((options) => options.action === "engagement:activity:post");
+    expect(perPost.map((options) => options.key.split("|")[1])).toEqual([POST_ID]);
+    // A batch of appearances alone makes one limiter call, for the address.
+    mocks.rate.mockClear();
+    await events(
+      Array.from({ length: 20 }, (_, n) =>
+        card("impression", {}, `aaaaaaaa-aaaa-4aaa-8aaa-0000000001${String(n).padStart(2, "0")}`)
+      )
+    );
+    expect(mocks.rate).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["a crawler", { "user-agent": "Googlebot/2.1 (+http://www.google.com/bot.html)" }],
+    ["a prefetch", { "sec-purpose": "prefetch" }],
+  ])("%s is never counted", async (_label, headers) => {
+    expect((await events([card("share")], headers)).status).toBe(204);
+    expect(db.rpc).not.toHaveBeenCalled();
+  });
+
+  it("refuses a bad payload (more than 50 events, a bad id) and answers 503 when the database fails", async () => {
+    expect((await events([])).status).toBe(400);
+    expect((await events(Array.from({ length: 51 }, () => card("share")))).status).toBe(400);
+    expect((await events([card("share", {}, "not-a-uuid")])).status).toBe(400);
+    expect(db.rpc).not.toHaveBeenCalled();
+    db.rpc.mockResolvedValueOnce({ data: null, error: { code: "XX000" } } as never);
+    expect((await events([card("share")])).status).toBe(503);
+  });
+
+  it("a cross-site request is refused by the origin check", async () => {
+    mocks.origin.mockReturnValueOnce(NextResponse.json({ error: "forbidden" }, { status: 403 }));
+    expect((await events([card("share")])).status).toBe(403);
+    expect(db.rpc).not.toHaveBeenCalled();
   });
 });
 

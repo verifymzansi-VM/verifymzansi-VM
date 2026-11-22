@@ -5,7 +5,10 @@ import { feedSourceAttribute } from "@/lib/feed/session";
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Calendar, Eye, MapPin, Phone, MessageCircle } from "lucide-react";
+import { ArrowRight, Calendar, Eye, MapPin, Phone, MessageCircle } from "lucide-react";
+import { BusinessStickers } from "@/components/trust/business-stickers";
+import { ID_REVIEWED_TRUST_LEVEL } from "@/lib/business-verification/public";
+import { initialsOf } from "@/lib/utils/initials";
 import { contactPhone, whatsappLink } from "@/lib/utils/contact-links";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -112,6 +115,17 @@ export interface SimilarSellerRow {
   account_verification_status: AccountVerificationStatus | null;
 }
 
+/** The checked business whose storefront holds this listing (item 17b). */
+export interface ListingSellerBusiness {
+  id: string;
+  name: string;
+  /** The business's logo; its initials when it has none. */
+  logoUrl?: string | null;
+  /** "See all 18 cars". */
+  seeAllLabel: string;
+  cipcCheckedAt: string | null;
+}
+
 export function ListingDetailContent({
   listing,
   seller,
@@ -122,9 +136,12 @@ export function ListingDetailContent({
   photoCount,
   trackView = true,
   layoutMode = "public",
+  sellerBusiness = null,
 }: {
   listing: ListingDetailRecord;
   seller: ListingSellerRecord | null;
+  /** Shown in place of the seller's short name, with a link to its stock. */
+  sellerBusiness?: ListingSellerBusiness | null;
   showContactActions?: boolean;
   showSimilarListings?: boolean;
   similarItems?: SimilarListingRow[];
@@ -434,29 +451,72 @@ export function ListingDetailContent({
             <CardContent className="space-y-4 p-5">
               <h2 className="font-display text-lg font-semibold">Seller</h2>
 
-              <div className="flex items-center gap-3">
-                {listing.logo_url ? (
-                  <div className="h-11 w-11 shrink-0 overflow-hidden rounded-full border bg-white p-1 dark:bg-warm-900">
-                    <Image
-                      src={normalizeMediaUrl(listing.logo_url)}
-                      alt=""
-                      width={44}
-                      height={44}
-                      className="h-full w-full rounded-full object-contain"
-                    />
+              {sellerBusiness ? (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    {sellerBusiness.logoUrl ? (
+                      <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl border bg-white p-1 dark:bg-warm-900">
+                        <Image
+                          src={normalizeMediaUrl(sellerBusiness.logoUrl)}
+                          alt=""
+                          width={56}
+                          height={56}
+                          className="h-full w-full rounded-lg object-contain"
+                        />
+                      </div>
+                    ) : (
+                      <div
+                        aria-hidden="true"
+                        className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-brand-green-800 font-display text-xl font-bold text-brand-gold-300"
+                      >
+                        {initialsOf(sellerBusiness.name, "B")}
+                      </div>
+                    )}
+                    <div className="min-w-0 space-y-1.5">
+                      <p className="break-words font-medium">{sellerBusiness.name}</p>
+                      <BusinessStickers
+                        size="md"
+                        idLabel="Poster ID reviewed"
+                        state={{
+                          idReviewed: (trustLevel ?? 0) >= ID_REVIEWED_TRUST_LEVEL,
+                          cipcCheckedAt: sellerBusiness.cipcCheckedAt,
+                        }}
+                      />
+                    </div>
                   </div>
-                ) : (
-                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-green text-lg font-bold text-white">
-                    {sellerInitial}
-                  </div>
-                )}
-                <div className="min-w-0">
-                  <p className="break-words font-medium">
-                    {seller?.display_name || "Account name unavailable"}
-                  </p>
-                  {trustLevel ? <TrustBadge level={trustLevel} size="sm" /> : null}
+                  <Link
+                    href={`/mzansi-business/${sellerBusiness.id}#stock`}
+                    className="flex h-12 items-center justify-between rounded-xl border px-4 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {sellerBusiness.seeAllLabel}
+                    <ArrowRight aria-hidden="true" className="h-4 w-4" />
+                  </Link>
                 </div>
-              </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  {listing.logo_url ? (
+                    <div className="h-11 w-11 shrink-0 overflow-hidden rounded-full border bg-white p-1 dark:bg-warm-900">
+                      <Image
+                        src={normalizeMediaUrl(listing.logo_url)}
+                        alt=""
+                        width={44}
+                        height={44}
+                        className="h-full w-full rounded-full object-contain"
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-green text-lg font-bold text-white">
+                      {sellerInitial}
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <p className="break-words font-medium">
+                      {seller?.display_name || "Account name unavailable"}
+                    </p>
+                    {trustLevel ? <TrustBadge level={trustLevel} size="sm" /> : null}
+                  </div>
+                </div>
+              )}
 
               {seller?.location_city || seller?.location_province ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">

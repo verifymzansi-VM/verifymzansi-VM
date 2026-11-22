@@ -217,6 +217,15 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
   "verification:handoff-open": [{ limit: 20, ttl: 600 }],
   // One token per camera start (ID photo, selfie, retakes).
   "verification:capture-token": [{ limit: 30, ttl: 600 }],
+  // Automatic ID check: start (or resume) and "ask a person". The database
+  // also allows 3 checks per member in 7 days and 60 a day site-wide.
+  // Looking again at a check still unfinished after 10 minutes: once per
+  // check every 2 minutes, however often the page asks.
+  "verification:identity-check-look": [{ limit: 1, ttl: 120 }],
+  "verification:identity-check": [
+    { limit: 10, ttl: 600 },
+    { limit: 30, ttl: 86400 },
+  ],
   "verification:manual-location": [{ limit: 10, ttl: 60 }],
   // "Detect province and city": a suggestion only, kept apart from manual saving.
   "verification:location-detect": [{ limit: 10, ttl: 60 }],
@@ -283,6 +292,7 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
     { limit: 20, ttl: 3600 },
   ],
   "webhook:ozow": [{ limit: 100, ttl: 60 }], // webhooks can be bursty
+  "webhook:didit": [{ limit: 100, ttl: 60 }],
 
   // ── Media ────────────────────────────────────────────
   "media:upload": [{ limit: 20, ttl: 60 }],
@@ -321,6 +331,18 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
     { limit: 300, ttl: 3600 },
     { limit: 3000, ttl: 86400 },
   ],
+  // Performance page events (src/app/api/analytics/events): a beacon of at
+  // most 50 card appearances, page opens, contact taps and shares every few
+  // seconds while someone browses. The database keeps daily counts per post.
+  "engagement:activity": [
+    { limit: 30, ttl: 60 },
+    { limit: 600, ttl: 3600 },
+    { limit: 3000, ttl: 86400 },
+  ],
+  // Per address and post: requests with a post's page events (detail views,
+  // contact taps, shares) a day; card appearances are not checked against it.
+  // Far above what one person reaches; room for a shared carrier address.
+  "engagement:activity:post": [{ limit: 200, ttl: 86400 }],
   "engagement:like": [
     { limit: 30, ttl: 60 },
     { limit: 300, ttl: 3600 },

@@ -72,7 +72,7 @@ begin
   end if;
   if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc
       where oid=to_regprocedure('internal.run_retention(integer)'))
-      not in ('1d51acbc8fb435ac6f9b1f12a9020c2b', '27b281d704dc40daeeb3f97b88a839e9') then
+      not in ('135e5c77e403b724fdcd48844a994938', '55c133c8f2f031c62aac57eca13fb3b5') then
     raise exception 'copy a post precondition: internal.run_retention is not the reviewed body' using errcode='55000';
   end if;
   if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc
@@ -324,7 +324,6 @@ begin
     'staff_records',internal.retention_staff_records(p_limit),
     'commerce',internal.retention_commerce(p_limit),
     'operations',internal.retention_operations(p_limit),
-    'engagement',internal.purge_post_engagement(),
     'member_invitations',internal.purge_member_invitations(p_limit),
     'capture_handoffs',internal.purge_capture_handoffs(p_limit),
     'copy_drafts',internal.purge_copy_drafts(p_limit));

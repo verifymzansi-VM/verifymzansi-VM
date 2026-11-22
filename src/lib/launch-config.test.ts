@@ -48,13 +48,14 @@ describe("launch configuration switches", () => {
     expect(Object.keys(flag.LAUNCH_VALUES).sort()).toEqual(
       [...Object.keys(hidden), "PACKAGES_ON_SALE", "PRELAUNCH_BANNER_ENABLED"].sort()
     );
-    // The pop-up is gone on launch day; every hidden feature is on.
+    // The pop-up is gone on launch day; every hidden feature is on except the
+    // partner page, which waits for the partner agreement.
     expect(flag.LAUNCH_VALUES.PRELAUNCH_BANNER_ENABLED).toBe(false);
     expect(
       Object.entries(flag.LAUNCH_VALUES)
         .filter(([, on]) => !on)
         .map(([name]) => name)
         .sort()
-    ).toEqual(["PRELAUNCH_BANNER_ENABLED"]);
+    ).toEqual(["PRELAUNCH_BANNER_ENABLED", "SHOW_PARTNER_PAGE"]);
   });
 });

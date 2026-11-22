@@ -599,7 +599,13 @@ try {
       q(`delete from private.scheduled_job_runs;`);
       runEveryJob(runJob);
       assert.equal(Object.keys(runs()).length, 17);
-      assert.equal(read().jobs.length, 17);
+      // Later updates may add jobs to the catalogue
+      // (20261121100028_post_performance_stats.sql: engagement_purge); the read
+      // lists every one.
+      assert.equal(
+        read().jobs.length,
+        Number(q("select count(*) from internal.scheduled_job_catalogue();"))
+      );
     });
   }
 } catch (error) {

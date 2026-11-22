@@ -102,6 +102,7 @@ const METHODS = ["POST", "PUT", "PATCH", "DELETE"] as const;
 /** Routes outside this test: not called by signed-in pages with JSON. */
 const OUTSIDE = new Set([
   // Server-to-server, covered by their own tests.
+  "webhooks/didit",
   "webhooks/ozow",
   "webhooks/ozow/refunds",
   "webhooks/ops-jobs",
@@ -111,7 +112,6 @@ const OUTSIDE = new Set([
   "internal/retention/run",
   "csp-report",
   // Closed: answer 204 without reading the request.
-  "analytics/events",
   "analytics/visit",
   "engagement/share",
 ]);
@@ -210,6 +210,8 @@ const NO_BODY = new Set([
   "verification/location/detect",
   // A page-view beacon: answers 200 to anything and counts nothing it cannot read.
   "engagement/view",
+  // The Performance page beacon: answers 204 to anything, the same way.
+  "analytics/events",
 ]);
 /** Also checked with a body just past their small limit, at the end of this file. */
 const RECOVERY = ["auth/forgot-password", "foundation/auth/recovery/request"];

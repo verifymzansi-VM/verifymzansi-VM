@@ -129,6 +129,10 @@ const SWEEPS = [
   // Voids unpaid added-slots invoices whose package has ended
   // (20261120045404_package_add_slots.sql). Each row is its own subtransaction.
   ["void_ended_package_add_invoices", { p_limit: 50 }],
+  // Old view and engaged-view marks, view salts and activity days, and
+  // waiting likes that are due (20261121100028_post_performance_stats.sql):
+  // its own job, outside the retention sweep.
+  ["purge_post_engagement", {}],
 ] as const;
 // Sweeps an earlier database does not have yet: until their update is
 // applied, the missing command does not fail the run, but a warning is logged

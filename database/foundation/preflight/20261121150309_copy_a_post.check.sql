@@ -23,7 +23,7 @@ with bodies as (
       else (select md5(replace(p.prosrc, E'\r\n', E'\n')) from pg_proc p where p.oid = to_regprocedure(v.sig))
     end as body
   from (values
-    ('internal.run_retention(integer)', '1d51acbc8fb435ac6f9b1f12a9020c2b', '27b281d704dc40daeeb3f97b88a839e9'),
+    ('internal.run_retention(integer)', '135e5c77e403b724fdcd48844a994938', '55c133c8f2f031c62aac57eca13fb3b5'),
     ('internal.frontend_privacy_export_data(uuid)', 'e543b105fe264d5a683b5c570bf68cb5', '4aa0fa034c5c09e495530b5563ff3008'),
     ('private.post_copies', null, 'table'),
     ('internal.copy_my_post(uuid,uuid)', null, '2195159d14323575798a6ce2421e2c47'),

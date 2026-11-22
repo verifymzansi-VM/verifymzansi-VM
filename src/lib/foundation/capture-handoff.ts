@@ -1,7 +1,7 @@
 import "server-only";
 import { createHash, randomBytes } from "node:crypto";
-import { encode } from "uqr";
 import { z } from "zod";
+import { qrCode } from "@/lib/qr-code";
 
 /**
  * "Continue on your phone": the computer asks for a link, the website makes a
@@ -57,13 +57,5 @@ export function handoffLink(origin: string, token: string) {
  * service or script sees the link.
  */
 export function handoffQrCode(link: string) {
-  const qr = encode(link, { ecc: "M", border: 4 });
-  const size = qr.data.length;
-  let path = "";
-  qr.data.forEach((row, y) =>
-    row.forEach((dark, x) => {
-      if (dark) path += `M${x} ${y}h1v1h-1z`;
-    })
-  );
-  return { size, path };
+  return qrCode(link);
 }
