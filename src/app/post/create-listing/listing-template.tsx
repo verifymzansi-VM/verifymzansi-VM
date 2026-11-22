@@ -21,10 +21,8 @@ export type ListingStart<T> = {
 
 /**
  * Start from a template (SHOW_POST_TEMPLATES): reads the saved draft and, when
- * the address names one (/post/create-listing?template=<id>), the template,
- * then drops the template from the address, so a reload restores the form's
- * autosaved draft instead. The form applies the template when it loaded and
- * the draft otherwise.
+ * the address names one (/post/create-listing?template=<id>), the template.
+ * The form applies the template when it loaded and the draft otherwise.
  */
 export async function loadListingStart<T>(
   restoreDraft: () => Promise<DraftEnvelope<T> | null> | DraftEnvelope<T> | null
@@ -43,10 +41,16 @@ export async function loadListingStart<T>(
       body ? (parsePostTemplateList(body).templates.find((t) => t.id === id) ?? null) : null
     )
     .catch(() => null);
+  return { draft: await draftRead, template, templateFailed: template === null };
+}
+
+/** Drops the template from the address once the form settled, so a reload
+ * restores the form's autosaved draft instead. */
+export function dropTemplateFromAddress() {
   const url = new URL(window.location.href);
+  if (!url.searchParams.has("template")) return;
   url.searchParams.delete("template");
   window.history.replaceState(window.history.state, "", url);
-  return { draft: await draftRead, template, templateFailed: template === null };
 }
 
 /**

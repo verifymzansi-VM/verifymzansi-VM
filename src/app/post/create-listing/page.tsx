@@ -5,7 +5,7 @@ import { settleMediaUploads } from "@/app/post/_lib/settle-media-uploads";
 import { ListingQualityHint } from "@/components/post/listing-quality-hint";
 
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { usePostTransport } from "@/hooks/use-post-transport";
 import Link from "next/link";
 import { Camera, Check, Eye, FileText, Inbox, MessageCircle, Phone, Tag } from "lucide-react";
@@ -73,6 +73,7 @@ import { VIDEO_GUIDANCE, VIDEO_SOUND_OFF_TIP } from "@/lib/media/video-length";
 import {
   announceTemplate,
   announceTemplateFailed,
+  dropTemplateFromAddress,
   loadListingStart,
   type ListingStart,
 } from "./listing-template";
@@ -420,6 +421,8 @@ export default function CreateListingPage() {
   // names (SHOW_POST_TEMPLATES, ?template=<id>), else the autosaved draft. A
   // template that replaced a draft offers Undo, which puts the draft back.
   const started = useRef(false);
+  // A kept page (opened again from Create Post) settles again only for a template.
+  const templateParam = useSearchParams()?.get("template") ?? null;
   const applyDraft = (restored: DraftEnvelope<ListingDraftData>) => {
     const restoredData = restored.data;
     setStep(Math.min(Math.max(restored.step ?? 0, 0), STEPS.length - 1));
@@ -447,6 +450,7 @@ export default function CreateListingPage() {
     });
   };
   const settleStart = useEffectEvent((start: ListingStart<ListingDraftData>) => {
+    dropTemplateFromAddress();
     if (start.templateFailed) announceTemplateFailed(toast);
     const { draft, template } = start;
     if (!template) {
@@ -468,17 +472,18 @@ export default function CreateListingPage() {
   });
 
   useEffect(() => {
-    if (!user?.id || isLoading || submitSucceeded || started.current) return;
+    if (!user?.id || isLoading || submitSucceeded) return;
+    if (started.current && !templateParam) return;
     let cancelled = false;
     void loadListingStart<ListingDraftData>(restoreDraft).then((start) => {
-      if (cancelled || started.current) return;
+      if (cancelled) return;
       started.current = true;
       queueMicrotask(() => settleStart(start));
     });
     return () => {
       cancelled = true;
     };
-  }, [user?.id, isLoading, submitSucceeded, restoreDraft]);
+  }, [user?.id, isLoading, submitSucceeded, restoreDraft, templateParam]);
 
   useEffect(() => {
     if (!user?.id || isLoading || isSubmitting || submitSucceeded) return;
