@@ -33,6 +33,7 @@ export type NavIcon =
   | "handshake"
   | "receipt"
   | "user-plus"
+  | "gift"
   | "toggle";
 
 /** Keys of `staff_nav_counts()` shown as badges. */
@@ -272,6 +273,14 @@ export const ADMIN_NAV: readonly NavItem[] = [
     icon: "receipt",
     section: "commercial",
     capability: "payments:view",
+  },
+  // Free credits: free posts an admin gives an ID-verified member.
+  {
+    href: "/admin/free-credits",
+    label: "Free credits",
+    icon: "gift",
+    section: "commercial",
+    capability: "free_credit:view",
   },
 
   // Member invitations: one normal member account each, never staff access

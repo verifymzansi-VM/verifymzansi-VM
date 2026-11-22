@@ -17,7 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { withCsrfHeaders } from "@/lib/utils/csrf";
+import { postStaffCommand } from "@/lib/admin/post-staff-command";
 import { staffVerifyHref } from "@/lib/auth/staff-mfa-links";
 import {
   displayLink,
@@ -30,42 +30,17 @@ import {
 
 const PATH = "/admin/member-invitations";
 const ENDPOINT = "/api/admin/member-invitations";
+const send = (action: "invite" | "withdraw", email: string) =>
+  postStaffCommand(
+    ENDPOINT,
+    { action, email },
+    "The invitation could not be confirmed. Reload the page before trying again."
+  );
 
 type Notice =
   | { tone: "success"; email: string }
   | { tone: "renewed"; expiresAt: string }
   | { tone: "error"; reason: string | null; message: string };
-
-type Answer =
-  | { ok: true; data: Record<string, unknown> }
-  | { ok: false; reason: string | null; message: string; verifyUrl?: string };
-
-async function send(action: "invite" | "withdraw", email: string): Promise<Answer> {
-  try {
-    const response = await fetch(ENDPOINT, {
-      method: "POST",
-      headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ action, email }),
-    });
-    const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-    if (response.ok) return { ok: true, data };
-    return {
-      ok: false,
-      reason: typeof data.reason === "string" ? data.reason : null,
-      message:
-        typeof data.error === "string" ? data.error : "Something went wrong. Please try again.",
-      ...(data.code === "step_up_required"
-        ? { verifyUrl: typeof data.redirectUrl === "string" ? data.redirectUrl : "/staff/two-step" }
-        : {}),
-    };
-  } catch {
-    return {
-      ok: false,
-      reason: null,
-      message: "The invitation could not be confirmed. Reload the page before trying again.",
-    };
-  }
-}
 
 function CopyLink({ url }: { url: string }) {
   const [copied, setCopied] = useState(false);

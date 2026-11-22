@@ -51,7 +51,11 @@ export type Capability =
   | "payments:view"
   | "payments:refund"
   // Platform: lets one person create a normal member account (never staff).
-  | "member:invite";
+  | "member:invite"
+  /** Free credits (database capabilities free_credit:view and, with an
+   * authenticator code from the last 15 minutes, free_credit:give): admins. */
+  | "free_credit:view"
+  | "free_credit:give";
 
 const ROLE_CAPABILITIES: Record<StaffRole, ReadonlySet<Capability>> = {
   /* 3rd — Moderator: queue & case operations */
@@ -120,6 +124,9 @@ const ROLE_CAPABILITIES: Record<StaffRole, ReadonlySet<Capability>> = {
     "payments:refund",
     // Admin-exclusive: member invitations (database capability member:invite).
     "member:invite",
+    // Admin-exclusive: free credits for recruited businesses.
+    "free_credit:view",
+    "free_credit:give",
   ]),
 };
 
