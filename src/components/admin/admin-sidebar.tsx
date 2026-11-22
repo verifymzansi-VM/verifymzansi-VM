@@ -14,6 +14,7 @@ import {
   FileText,
   Flag,
   Gavel,
+  Gift,
   Handshake,
   Inbox,
   Landmark,
@@ -56,6 +57,7 @@ const ICONS: Record<NavIcon, React.ElementType> = {
   handshake: Handshake,
   receipt: Receipt,
   "user-plus": UserPlus,
+  gift: Gift,
   toggle: ToggleLeft,
 };
 
