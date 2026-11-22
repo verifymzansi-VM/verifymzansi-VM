@@ -8,10 +8,10 @@ import {
 } from "./support/test-copy";
 
 // Launch-configuration smoke (playwright.launch-config.config.ts only): the
-// test copy built with every switch that hides a feature set to its launch
-// value (LAUNCH_VALUES, src/lib/launch-config.ts). Each test opens one page
-// behind a switch that is on at launch, as the person who can see it, and
-// checks that
+// test copy built as on launch day (LAUNCH_VALUES, src/lib/launch-config.ts).
+// The switches that hid features are on in every build since 22 November 2026;
+// this spec still visits each page that sat behind one. Each test opens one
+// such page, as the person who can see it, and checks that
 //   - the page answers without a server error and is not sent elsewhere (a
 //     hidden staff or member page redirects to its home);
 //   - no console error and no uncaught page error happen while it loads;

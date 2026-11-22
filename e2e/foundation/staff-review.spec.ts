@@ -16,7 +16,6 @@ import {
 import { characterise, KnownBreak, requireOnlyKnownBreak } from "./support/known-break";
 import { isMultipartForm } from "./support/multipart";
 import { endedWithTest } from "./support/route-teardown";
-import { switchOn } from "./support/switches";
 import {
   browserSessionCookies,
   caughtMailFor,
@@ -1104,44 +1103,30 @@ test.describe("staff review with an authenticator", () => {
     expectNoOutboundSince(mark);
   });
 
-  test("the operations page is hidden, or shows job health in the launch build", async ({
-    context,
-    page,
-  }) => {
+  test("the operations page shows job health", async ({ context, page }) => {
     const mark = readOutboundAttempts().length;
     const { outside, failures } = await guard(context);
     await signInBrowser(context, "admin");
     await page.goto("/admin/operations");
-    if (!switchOn("SHOW_STAFF_OPERATIONS")) {
-      // Off until launch (SHOW_STAFF_OPERATIONS): the address leads to the
-      // staff home (its banner's only h1 says "Platform") and the menu does not
-      // list the page.
-      await expect(page.locator("h1").filter({ hasText: /^Platform$/ })).toBeVisible({
-        timeout: 20_000,
-      });
-      expect(new URL(page.url()).pathname).toBe("/admin");
-      await expect(page.getByRole("link", { name: "Operations health" })).toHaveCount(0);
-    } else {
-      // Launch build: the page reads the live backend's staff command
-      // (api.get_staff_operations_health) and shows every panel.
-      await expect(page.getByRole("heading", { name: "Operations health" })).toBeVisible({
-        timeout: 20_000,
-      });
-      await expect(page.getByRole("alert")).toHaveCount(0);
-      for (const panel of [
-        "Scheduled jobs",
-        "Stuck emails",
-        "Stuck notices",
-        "Payment problems",
-        "Blocked deletions",
-        "Evidence retention",
-        "Open incidents",
-      ])
-        await expect(page.getByText(panel, { exact: true }).first()).toBeVisible();
-      await expect(page.getByRole("row", { name: /Sponsored places/ })).toBeVisible();
-      await expect(page.getByRole("row", { name: /Partner commissions/ })).toBeVisible();
-      await expect(page.getByRole("row", { name: /Data retention/ })).toBeVisible();
-    }
+    // SHOW_STAFF_OPERATIONS is on: the page reads the live backend's staff command
+    // (api.get_staff_operations_health) and shows every panel.
+    await expect(page.getByRole("heading", { name: "Operations health" })).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    for (const panel of [
+      "Scheduled jobs",
+      "Stuck emails",
+      "Stuck notices",
+      "Payment problems",
+      "Blocked deletions",
+      "Evidence retention",
+      "Open incidents",
+    ])
+      await expect(page.getByText(panel, { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("row", { name: /Sponsored places/ })).toBeVisible();
+    await expect(page.getByRole("row", { name: /Partner commissions/ })).toBeVisible();
+    await expect(page.getByRole("row", { name: /Data retention/ })).toBeVisible();
     expect(failures).toEqual([]);
     expect(outside).toEqual([]);
     expectNoOutboundSince(mark);

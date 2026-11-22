@@ -4,9 +4,9 @@ import { createRequire } from "node:module";
 import { test } from "node:test";
 import { buildNextConfig as buildConfig } from "./lib/next-config-harness.mjs";
 
-// The launch-configuration test build (each switch at its launch value) can only be
-// made for the local browser-test copy; every production build keeps today's
-// values (scripts/lib/launch-config-build.cjs).
+// The launch-configuration test build (the pre-launch pop-up at its launch
+// value) can only be made for the local browser-test copy; every production
+// build keeps today's values (scripts/lib/launch-config-build.cjs).
 const require = createRequire(import.meta.url);
 const {
   LAUNCH_CONFIG_BUILD_DEFINE,

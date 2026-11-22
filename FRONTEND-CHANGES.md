@@ -149,6 +149,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 85. Business storefront (item 17b, first part) | approved by owner 2026-11-21 (with the group 85 part of 7 rows elsewhere) | Nothing today (switch off). Once on: a checked business with a running Multi-listing package and at least one live listing shows 'All stock' (search, filters that follow the trade, newest first, Show more) on its business page, and each of its listings names the business (logo or initials) with 'See all 18 cars'. |
 | 86. Copy a post (item 17b, second part) | approved by owner 2026-11-22 (with the group 86 part of 8 rows elsewhere) | Nothing today (switch off). Once on: a member whose Multi-listing package runs gets 'More', then 'Copy this post' on My posts; the copy opens in the 'Post an item' form with a note (everything but the video filled in, one new photo for vehicles and property), unfinished copies wait under 'Drafts' for 14 days, and reviewers see 'Copied from'. |
 | 89. Authority requests: only the four D9 request types (item 69) (no file rows: the group 89 part of 6 rows in group 77) | approved by owner 2026-11-22 | Governors and admins only: the authority request form offers only a subpoena, court order, search warrant or urgent life-risk request, and asks for the issuing court (or SAPS station), the official number called and who confirmed it; the record and print sheet show the request type, reference, issuer and check; an urgent request shows no selfie or ID photo. Members see nothing new. |
+| 90. Hide nothing before launch: every feature switch on (item 71) (no file rows: switches in `src/lib`) | awaiting owner (pictures on the pull request) | Every page and section that was hidden behind a compile-time switch is shown: view counts and likes, the Performance page, 'Detect province and city', staff Operations health, the organisation Performance tab and CSV links, 'Delete account', paid add-ons, the Business Sponsor offer, Multi-listing packages and package teams on Pricing and Advertise, the redesigned partner page, the business storefront and 'Copy this post'. The pre-launch pop-up stays until sign-up opens |
 
 Questions for the owner:
 
@@ -3535,6 +3536,31 @@ Pictures (synthetic test people only, not published):
 phone 375).
 
 Decision: approved by owner 2026-11-22 (after seeing the item 69 pictures; answer: 'Approve both', for the pictures and the database update).
+
+### 90. Hide nothing before launch: every feature switch on (item 71)
+
+Launch checklist item 71, owner decision of 22 November 2026: hide nothing
+while the site is pre-launch (sign-up is invite only, and the owner checks every
+function before inviting anyone), with no "coming soon" wording. No file rows:
+the switches live in `src/lib/hidden-features.ts` and `src/lib/constants/pricing.ts`
+(`PACKAGES_ON_SALE`), outside the frozen scope; no screen is redesigned, each one
+shows the version the owner approved in its own group.
+
+Every compile-time switch is now `true` in production: SHOW_ENGAGEMENT_TOTALS
+(group 61), SHOW_OWNER_METRICS (group 81), SHOW_LOCATION_DETECTION (group 58),
+SHOW_STAFF_OPERATIONS (group 70), SHOW_ORGANISATION_REPORT,
+SHOW_ACCOUNT_DELETION (group 43), SHOW_PAID_ADDONS, SHOW_SPONSOR_OFFER,
+SHOW_PACKAGE_TEAMS, SHOW_PARTNER_PAGE (group 80; on by the owner's new
+decision, although the partner agreement is not signed yet),
+SHOW_BUSINESS_STOREFRONT (group 85), SHOW_POST_COPY (group 86) and
+PACKAGES_ON_SALE (group 60). The pre-launch pop-up is unchanged: it stays until
+sign-up opens. Database switches (such as the packages sales switch and add-on
+sales, a website setting) are unchanged, so some buttons on these pages cannot
+complete yet; the pull request lists them.
+
+Pictures: the refreshed visual baselines on the pull request.
+
+Decision: awaiting owner (picture approval on the pull request).
 
 <!-- frontend-ledger:end -->
 

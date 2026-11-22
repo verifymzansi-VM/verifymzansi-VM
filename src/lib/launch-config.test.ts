@@ -1,7 +1,8 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// The switches that hide a feature keep today's values unless the build is the
+// The switches that hid features are on in every build (owner's decision of
+// 22 November 2026). Only the pre-launch pop-up differs in the
 // launch-configuration test build, whose value next.config.js fixes at build
 // time ("0" in every production build; scripts/launch-config-build.test.mjs).
 async function loadSwitches(buildValue: string | undefined) {
@@ -28,34 +29,22 @@ describe("launch configuration switches", () => {
       const { flag, hidden, pricing, banner } = await loadSwitches(value);
       expect(flag.LAUNCH_CONFIG_BUILD).toBe(false);
       const switches = Object.entries(hidden);
-      expect(switches.length).toBeGreaterThanOrEqual(9);
-      for (const [name, on] of switches) expect(on, name).toBe(false);
-      expect(pricing.PACKAGES_ON_SALE).toBe(false);
+      expect(switches.length).toBeGreaterThanOrEqual(12);
+      for (const [name, on] of switches) expect(on, name).toBe(true);
+      expect(pricing.PACKAGES_ON_SALE).toBe(true);
       expect(banner.PRELAUNCH_BANNER_ENABLED).toBe(true);
     });
 
-  it("give each switch its launch value in the launch-configuration test build", async () => {
+  it("turn only the pre-launch pop-up off in the launch-configuration test build", async () => {
     const { flag, hidden, pricing, banner } = await loadSwitches("1");
     expect(flag.LAUNCH_CONFIG_BUILD).toBe(true);
-    const values: Record<string, boolean> = flag.LAUNCH_VALUES;
-    for (const [name, on] of Object.entries(hidden)) expect(on, name).toBe(values[name]);
-    expect(pricing.PACKAGES_ON_SALE).toBe(flag.LAUNCH_VALUES.PACKAGES_ON_SALE);
-    expect(banner.PRELAUNCH_BANNER_ENABLED).toBe(flag.LAUNCH_VALUES.PRELAUNCH_BANNER_ENABLED);
+    for (const [name, on] of Object.entries(hidden)) expect(on, name).toBe(true);
+    expect(pricing.PACKAGES_ON_SALE).toBe(true);
+    expect(banner.PRELAUNCH_BANNER_ENABLED).toBe(false);
   });
 
-  it("list every switch once in the launch table, with the reviewed launch values", async () => {
-    const { flag, hidden } = await loadSwitches(undefined);
-    expect(Object.keys(flag.LAUNCH_VALUES).sort()).toEqual(
-      [...Object.keys(hidden), "PACKAGES_ON_SALE", "PRELAUNCH_BANNER_ENABLED"].sort()
-    );
-    // The pop-up is gone on launch day; every hidden feature is on except the
-    // partner page, which waits for the partner agreement.
-    expect(flag.LAUNCH_VALUES.PRELAUNCH_BANNER_ENABLED).toBe(false);
-    expect(
-      Object.entries(flag.LAUNCH_VALUES)
-        .filter(([, on]) => !on)
-        .map(([name]) => name)
-        .sort()
-    ).toEqual(["PRELAUNCH_BANNER_ENABLED", "SHOW_PARTNER_PAGE"]);
+  it("list only the pre-launch pop-up in the launch table", async () => {
+    const { flag } = await loadSwitches(undefined);
+    expect(flag.LAUNCH_VALUES).toEqual({ PRELAUNCH_BANNER_ENABLED: false });
   });
 });
