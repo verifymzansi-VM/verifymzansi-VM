@@ -2,6 +2,18 @@
 
 import { useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import {
+  FREE_CREDIT_DAYS,
+  FREE_CREDIT_POSTS,
+  FREE_CREDIT_REASON,
+  formatFreeCreditDate,
+  freeCreditReasonValid,
+  postsLabel,
+  type FreeCredit,
+} from "@/lib/admin/free-credits";
+import { postStaffCommand } from "@/lib/admin/post-staff-command";
+import { staffVerifyHref } from "@/lib/auth/staff-mfa-links";
+import { cn } from "@/lib/utils";
 import { AlertCircle, CheckCircle2, Gift, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,58 +28,17 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { cn } from "@/lib/utils";
-import { withCsrfHeaders } from "@/lib/utils/csrf";
-import { staffVerifyHref } from "@/lib/auth/staff-mfa-links";
-import {
-  FREE_CREDIT_DAYS,
-  FREE_CREDIT_POSTS,
-  FREE_CREDIT_REASON,
-  formatFreeCreditDate,
-  freeCreditReasonValid,
-  postsLabel,
-  type FreeCredit,
-} from "@/lib/admin/free-credits";
 
 const PATH = "/admin/free-credits";
 const ENDPOINT = "/api/admin/free-credits";
+const UNCONFIRMED = "The free credit could not be confirmed. Reload the page before trying again.";
+const send = (body: Record<string, unknown>) => postStaffCommand(ENDPOINT, body, UNCONFIRMED);
 const SELECT =
   "flex h-11 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 const POST_CHOICES = Array.from(
   { length: FREE_CREDIT_POSTS.max - FREE_CREDIT_POSTS.min + 1 },
   (_, i) => FREE_CREDIT_POSTS.min + i
 );
-
-type Answer =
-  | { ok: true; data: Record<string, unknown> }
-  | { ok: false; reason: string | null; message: string; verifyUrl?: string };
-
-async function send(body: Record<string, unknown>): Promise<Answer> {
-  try {
-    const response = await fetch(ENDPOINT, {
-      method: "POST",
-      headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify(body),
-    });
-    const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-    if (response.ok) return { ok: true, data };
-    return {
-      ok: false,
-      reason: typeof data.reason === "string" ? data.reason : null,
-      message:
-        typeof data.error === "string" ? data.error : "Something went wrong. Please try again.",
-      ...(data.code === "step_up_required"
-        ? { verifyUrl: typeof data.redirectUrl === "string" ? data.redirectUrl : "/staff/two-step" }
-        : {}),
-    };
-  } catch {
-    return {
-      ok: false,
-      reason: null,
-      message: "The free credit could not be confirmed. Reload the page before trying again.",
-    };
-  }
-}
 
 function daysValue(value: string): number | null {
   const days = Number(value);

@@ -27,6 +27,7 @@ import {
 import {
   applyAndProveRollback,
   assertDriftRefused,
+  postReviewHelpers,
   runTwoAdminUpdateCheck,
 } from "./lib/foundation-staff-payment-world.mjs";
 
@@ -105,28 +106,7 @@ await runTwoAdminUpdateCheck(SETUP, async ({ database, check, kit, world, admin,
       from private.free_credit_events f where f.entitlement_id='${id}';`);
   const near = (instant, expected) =>
     q(`select abs(extract(epoch from '${instant}'::timestamptz-(${expected})))<60;`);
-  const row = (id) =>
-    json(`select to_jsonb(p)-'description' from private.posts p where p.id='${id}';`);
-  const draft = (owner) => q(`select vmtest.draft('${owner.id}');`);
-  const submitSql = (owner, id) =>
-    member(owner, `select api.submit_post('${id}',${row(id).revision});`);
-  const fundedBy = (id) =>
-    q(
-      `select coalesce((select entitlement_id::text from private.post_activations where post_id='${id}' and released_at is null),'');`
-    );
-  const approveSql = (who, id) => {
-    const lease = json(staff(who, `select api.claim_queue_item('post','${id}');`));
-    return staff(
-      who,
-      `select api.moderate_post(p_post_id=>'${id}',p_expected_revision=>${row(id).revision},p_decision=>'approve',
-        p_reason=>null,p_claim_generation=>'${lease.claim_generation}',p_claim_nonce=>'${lease.claim_nonce}');`
-    );
-  };
-  const freeFirstPost = (person) => ({
-    requests: count(`private.intro_trial_requests where owner_id='${person.id}'`),
-    identities: count(`private.trial_identities where owner_id='${person.id}'`),
-    trials: count(`private.entitlements where owner_id='${person.id}' and source='intro_trial'`),
-  });
+  const { row, draft, submitSql, fundedBy, approveSql, freeFirstPost } = postReviewHelpers(kit);
   // The sales figures without their clock fields.
   const sales = () => {
     const summary = json(staff(admin, "select api.get_staff_sales_summary();"));
