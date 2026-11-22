@@ -105,18 +105,22 @@ ID-verified member free posts for a short time and may extend the gift.
     `free_credit:give`, an authenticator code from the last 15 minutes) finds
     the member by email (an active, confirmed account) and refuses: no such
     account (PT409, `free_credit_member_not_found`), no current accepted ID
-    review (`free_credit_identity_required`), the admin's own account or another
-    account of the same person (`free_credit_own_account`), posts outside 1 to 6
+    review (`free_credit_identity_required`), a member who already has a running
+    gift (`free_credit_active`: extend that one instead), posts outside 1 to 6
     (22023, `free_credit_posts_invalid`), days outside 1 to 30
     (`free_credit_days_invalid`), a reason that is not 5 to 200 characters of
     plain text on one line (`free_credit_reason_required`).
   - `api.extend_free_credit(gift, days, reason)` (`free_credit:give`, the same
     fresh code) adds 1 to 30 days from the gift's current end while it runs,
-    otherwise from now, as often as needed; the member must still be active,
-    ID-verified and not the admin; an unknown gift is refused (22023,
-    `free_credit_not_found`), one whose account was erased too (PT409,
-    `free_credit_closed`). The search end of its live posts follows
-    (`internal.refresh_slot_chain_documents`).
+    otherwise from now, as often as needed; the member must still be active and
+    ID-verified; an unknown gift is refused (22023, `free_credit_not_found`),
+    one whose account was erased too (PT409, `free_credit_closed`). The search
+    end of its live posts follows (`internal.refresh_slot_chain_documents`).
+  - Both follow the rule of staff money actions
+    (`internal.assert_staff_payment_actor`): the admin needs a current accepted
+    ID review of their own (42501, `staff_review_required`) and never acts for
+    their own account or an account ever reviewed as the same person, past
+    reviews included (42501, `staff_same_identity`).
   - `api.list_free_credits()` (`free_credit:view`, the 12-hour rule): the latest
     500 gifts, newest first: the member's masked email, posts, start, end,
     active or ended, and the all-time views of the posts each funded.

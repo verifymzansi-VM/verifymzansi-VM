@@ -57,7 +57,9 @@ export function freeCreditReasonValid(value: string): boolean {
 export type FreeCreditRefusal =
   | "free_credit_member_not_found"
   | "free_credit_identity_required"
-  | "free_credit_own_account"
+  | "free_credit_active"
+  | "staff_review_required"
+  | "staff_same_identity"
   | "free_credit_posts_invalid"
   | "free_credit_days_invalid"
   | "free_credit_reason_required"
@@ -69,7 +71,11 @@ export const FREE_CREDIT_MESSAGES: Record<FreeCreditRefusal, string> = {
   free_credit_member_not_found: "No active member account has this email.",
   free_credit_identity_required:
     "This member's ID review isn't accepted yet. Free credits are only for ID-verified members.",
-  free_credit_own_account: "Free credits can't go to your own account. House slots cover that.",
+  free_credit_active:
+    "This member already has free credits running. Use Extend on that gift instead.",
+  staff_review_required: "You need a current accepted ID review of your own to give free credits.",
+  staff_same_identity:
+    "Free credits can't go to your own account or another account of yours. House slots cover that.",
   free_credit_posts_invalid: "Choose 1 to 6 posts.",
   free_credit_days_invalid: "Choose 1 to 30 days.",
   free_credit_reason_required: "Write a reason of 5 to 200 characters on one line.",

@@ -135,7 +135,9 @@ describe("POST /api/admin/free-credits", () => {
     const cases: Array<[string, string, number]> = [
       ["PT409", "free_credit_member_not_found", 404],
       ["PT409", "free_credit_identity_required", 409],
-      ["PT409", "free_credit_own_account", 409],
+      ["PT409", "free_credit_active", 409],
+      ["42501", "staff_review_required", 403],
+      ["42501", "staff_same_identity", 403],
       ["22023", "free_credit_posts_invalid", 422],
       ["22023", "free_credit_days_invalid", 422],
       ["22023", "free_credit_reason_required", 422],

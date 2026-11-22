@@ -10,7 +10,6 @@ AS $function$
 declare
   actor uuid := internal.staff_actor('free_credit:give');
   v_gift private.entitlements;
-  v_identity text;
   v_ends timestamptz;
 begin
   if p_days is null or p_days not between 1 and 30 then
@@ -34,11 +33,8 @@ begin
     raise exception 'free credits: no active member account has this email' using errcode='PT409',
       detail='free_credit_member_not_found';
   end if;
-  v_identity := internal.current_verified_identity(v_gift.owner_id);
-  if v_gift.owner_id=actor or (v_identity is not null and v_identity=internal.current_verified_identity(actor)) then
-    raise exception 'free credits: not for your own account' using errcode='PT409', detail='free_credit_own_account';
-  end if;
-  if v_identity is null then
+  perform internal.assert_staff_payment_actor(actor, v_gift.owner_id);
+  if internal.current_verified_identity(v_gift.owner_id) is null then
     raise exception 'free credits: the member''s ID review must be accepted first' using errcode='PT409',
       detail='free_credit_identity_required';
   end if;

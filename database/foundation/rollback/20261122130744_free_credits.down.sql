@@ -26,9 +26,9 @@ begin
     if shape not in (
         'internal.get_my_frontend_post_manager() bf4e28d6a385e6823983ccb93f7315ad',
         'private.free_credit_events table',
-        'internal.give_free_credit(text,integer,integer,text) 47c8bb90ea95e2e675f5897536cf9919',
+        'internal.give_free_credit(text,integer,integer,text) e883d90c03704304dec1321f365c0f0a',
         'api.give_free_credit(text,integer,integer,text) a18653758dbfb3177404bd8b083115da',
-        'internal.extend_free_credit(uuid,integer,text) e2bd13cb1150afcc9aeeb5356f91535e',
+        'internal.extend_free_credit(uuid,integer,text) f932cc79bb3bda5fa606fad58d94e53b',
         'api.extend_free_credit(uuid,integer,text) 19c0634bbd5418e3eca8e2fb4032f166',
         'internal.list_free_credits() 3844d1a2876105f451a5267503380582',
         'api.list_free_credits() ef063d6b12ce7a9b30af3af33d792cfe') then

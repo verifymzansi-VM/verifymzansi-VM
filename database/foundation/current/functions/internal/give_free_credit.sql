@@ -10,7 +10,6 @@ AS $function$
 declare
   actor uuid := internal.staff_actor('free_credit:give');
   v_member uuid;
-  v_identity text;
   v_ends timestamptz;
   v_id uuid;
 begin
@@ -30,15 +29,23 @@ begin
     raise exception 'free credits: no active member account has this email' using errcode='PT409',
       detail='free_credit_member_not_found';
   end if;
-  v_identity := internal.current_verified_identity(v_member);
-  -- Not for the admin's own account, nor another account of the same person
-  -- (house slots cover the admin's own posts).
-  if v_member=actor or (v_identity is not null and v_identity=internal.current_verified_identity(actor)) then
-    raise exception 'free credits: not for your own account' using errcode='PT409', detail='free_credit_own_account';
-  end if;
-  if v_identity is null then
+  -- The rule of staff money actions: the admin has a current accepted ID
+  -- review of their own, and the member is not the admin's own account nor
+  -- an account ever reviewed as the same person (house slots cover the
+  -- admin's own posts).
+  perform internal.assert_staff_payment_actor(actor, v_member);
+  if internal.current_verified_identity(v_member) is null then
     raise exception 'free credits: the member''s ID review must be accepted first' using errcode='PT409',
       detail='free_credit_identity_required';
+  end if;
+  -- One running gift per member (extend it instead): concurrent gifts to the
+  -- same member wait for each other.
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('free-credit:'||v_member::text, 707));
+  actor := internal.staff_actor('free_credit:give'); -- authority after the wait
+  if exists(select 1 from private.entitlements e where e.owner_id=v_member and e.source='free_credit'
+      and e.status='active' and e.ends_at>statement_timestamp()) then
+    raise exception 'free credits: this member already has a running gift; extend it instead' using errcode='PT409',
+      detail='free_credit_active';
   end if;
   v_ends := statement_timestamp()+make_interval(days=>p_days);
   insert into private.entitlements(owner_id, source, area, granted_by, slot_capacity, activations_per_period,

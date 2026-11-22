@@ -3553,8 +3553,10 @@ never charged, never renewed, not in sales or VAT figures.
   to 30, default 30), a Reason (5 to 200 characters) and Give. On success:
   'Gave 1 post until 22 Dec 2026.' and the new row is highlighted. Refusals in
   plain words: no active account with that email, ID review not accepted yet,
-  the admin's own account ('House slots cover that'), not an admin, a bad
-  number or reason. A stale authenticator code sends the admin to verify again
+  the admin's own account or another account of theirs ('House slots cover
+  that'), an admin without an accepted ID review of their own, a member who
+  already has free credits running ('Use Extend on that gift instead'), not an
+  admin, a bad number or reason. A stale authenticator code sends the admin to verify again
   and back. Nobody is emailed.
 - 'Gifts', newest first (up to 500): the masked email ('t***@example.co.za',
   'Closed account' after erasure), Active or Ended, '1 post · until 22 Dec 2026

@@ -51,15 +51,6 @@ await runTwoAdminUpdateCheck(SETUP, async ({ database, check, kit, world, admin,
   const { q, json, fails, member, staff, preflight, count } = kit;
   const now = () => Math.floor(Date.now() / 1000);
 
-  // The world's stand-in for internal.current_verified_identity, with aliases:
-  // an alias gives an account another account's identity, which the real
-  // schema never allows, to check the same-person refusal.
-  q(`create table vmtest.identity_alias(owner_id uuid primary key, identity_hmac text not null);
-    create or replace function internal.current_verified_identity(p_owner uuid) returns text
-      language sql set search_path to 'pg_catalog' as $fn$
-      select coalesce((select x.identity_hmac from vmtest.identity_alias x where x.owner_id=p_owner),
-          (select f.identity_hmac from private.accepted_identity_facts f where f.owner_id=p_owner and f.revoked_at is null))
-        where exists(select 1 from private.current_account_access a where a.id=p_owner) $fn$;`);
   // Ready posting: the current posting terms accepted, a ready cover image,
   // the form contact channel; a draft Market listing.
   q(`create function vmtest.terms(p_owner uuid) returns void language sql as $$
@@ -264,7 +255,7 @@ await runTwoAdminUpdateCheck(SETUP, async ({ database, check, kit, world, admin,
     const e = gift(done.id);
     assert.deepEqual([e.slot_capacity, e.activations_per_period], [6, 24]);
     assert.equal(near(e.ends_at, "now()+interval '1 day'"), "t");
-    json(giveSql(admin, sipho.email, 1, 30, "five!"));
+    json(giveSql(admin, world.verified("fc-sipho2", admin).email, 1, 30, "five!"));
   });
 
   await check("refusals: member, own account, posts, days, reason, staff and second factor", () => {
@@ -287,14 +278,8 @@ await runTwoAdminUpdateCheck(SETUP, async ({ database, check, kit, world, admin,
     const banned = world.verified("fc-banned", admin);
     q(`update auth.users set banned_until=now()+interval '1 day' where id='${banned.id}';`);
     reason(giveSql(admin, banned.email, 1, 30), "PT409", "free_credit_member_not_found");
-    // The admin's own account, and another account of the same person.
-    reason(giveSql(admin, admin.email, 1, 30), "PT409", "free_credit_own_account");
-    const twin = world.verified("fc-twin", admin2);
-    q(
-      `insert into vmtest.identity_alias values('${twin.id}',internal.current_verified_identity('${admin.id}'));`
-    );
-    reason(giveSql(admin, twin.email, 1, 30), "PT409", "free_credit_own_account");
-    q(`delete from vmtest.identity_alias where owner_id='${twin.id}';`);
+    // The admin's own account (the rule of staff money actions).
+    reason(giveSql(admin, admin.email, 1, 30), "42501", "staff_same_identity");
     for (const posts of [0, 7, "null"])
       reason(giveSql(admin, thandi.email, posts, 30), "22023", "free_credit_posts_invalid");
     for (const days of [0, 31, "null"])
@@ -338,6 +323,67 @@ await runTwoAdminUpdateCheck(SETUP, async ({ database, check, kit, world, admin,
     );
   });
 
+  // The rule of staff money actions (internal.assert_staff_payment_actor).
+  await check("an admin without an ID review of their own is refused", () => {
+    const unreviewed = world.staffUser("fc-admin-noid", "admin");
+    const zola = world.verified("fc-zola", admin);
+    fails(giveSql(unreviewed, zola.email, 1, 30), "42501", /staff_review_required/);
+    const hers = give(zola.email).id;
+    const before = gift(hers).ends_at;
+    fails(extendSql(unreviewed, hers, 5), "42501", /staff_review_required/);
+    assert.equal(gift(hers).ends_at, before);
+    assert.equal(
+      count(`private.entitlements where owner_id='${zola.id}' and source='free_credit'`),
+      1
+    );
+  });
+
+  await check("an admin once reviewed as the member is refused for give and extend", () => {
+    // A staff account whose ended (revoked) review has the fingerprint of the
+    // member's current one: the same person, on another account.
+    const twin = world.verified("fc-twin", admin2);
+    const other = world.staffUser("fc-admin3", "admin");
+    world.review(other, admin2, "fc-admin3");
+    world.pastIdentity(other, admin2, twin.fingerprint);
+    assert.equal(
+      q(`select count(*) from private.accepted_identity_facts
+         where owner_id='${other.id}' and identity_hmac='${twin.fingerprint}' and revoked_at is not null;`),
+      "1"
+    );
+    fails(giveSql(other, twin.email, 1, 30), "42501", /staff_same_identity/);
+    assert.equal(
+      count(`private.entitlements where owner_id='${twin.id}' and source='free_credit'`),
+      0
+    );
+    const theirs = give(twin.email).id;
+    const before = gift(theirs).ends_at;
+    fails(extendSql(other, theirs, 5), "42501", /staff_same_identity/);
+    assert.equal(gift(theirs).ends_at, before);
+    // The same ID-verified admin can still give to a different verified member.
+    const sizwe = world.verified("fc-sizwe", admin);
+    const given = json(giveSql(other, sizwe.email, 2, 10));
+    assert.deepEqual(
+      [gift(given.id).owner_id, gift(given.id).granted_by, gift(given.id).slot_capacity],
+      [sizwe.id, other.id, 2]
+    );
+  });
+
+  await check("one running gift per member: a second gift waits until the first ends", () => {
+    const nomvula = world.verified("fc-nomvula", admin);
+    const running = give(nomvula.email, 3, 30).id;
+    fails(giveSql(admin, nomvula.email, 1, 30), "PT409", /free_credit_active/);
+    fails(giveSql(admin2, nomvula.email, 6, 30), "PT409", /free_credit_active/);
+    assert.equal(
+      count(`private.entitlements where owner_id='${nomvula.id}' and source='free_credit'`),
+      1
+    );
+    // Ended: a new gift may start.
+    q(`update private.entitlements set starts_at=now()-interval '10 days',ends_at=now()-interval '1 day'
+       where id='${running}';`);
+    const next = give(nomvula.email, 1, 30).id;
+    assert.notEqual(next, running);
+  });
+
   let post;
   await check("posting with the gift: reviewed and live; the free first post untouched", () => {
     post = draft(thandi);
@@ -369,7 +415,8 @@ await runTwoAdminUpdateCheck(SETUP, async ({ database, check, kit, world, admin,
     const done = extend(first, 10);
     assert.equal(near(done.ends_at, `'${before}'::timestamptz+interval '10 days'`), "t");
     const e = gift(first);
-    assert.equal(near(e.ends_at, "now()+interval '40 days'"), "t");
+    // 30 days from the gift's start, then 10 more.
+    assert.equal(near(e.ends_at, `'${e.starts_at}'::timestamptz+interval '40 days'`), "t");
     assert.equal(
       q(`select s.visible_until=e.ends_at from private.post_search_documents s, private.entitlements e
          where s.post_id='${post}' and e.id='${first}';`),
@@ -387,7 +434,8 @@ await runTwoAdminUpdateCheck(SETUP, async ({ database, check, kit, world, admin,
     // Again and again: no limit on the number of extensions.
     extend(first, 30);
     extend(first, 1);
-    assert.equal(near(gift(first).ends_at, "now()+interval '71 days'"), "t");
+    const later = gift(first);
+    assert.equal(near(later.ends_at, `'${later.starts_at}'::timestamptz+interval '71 days'`), "t");
   });
 
   await check("extending an ended gift counts from now", () => {

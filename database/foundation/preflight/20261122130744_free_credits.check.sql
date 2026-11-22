@@ -24,9 +24,9 @@ with bodies as (
   from (values
     ('internal.get_my_frontend_post_manager()', 'c408ccd9ee1a2cc4f135f2b4032f6583', 'bf4e28d6a385e6823983ccb93f7315ad'),
     ('private.free_credit_events', null, 'table'),
-    ('internal.give_free_credit(text,integer,integer,text)', null, '47c8bb90ea95e2e675f5897536cf9919'),
+    ('internal.give_free_credit(text,integer,integer,text)', null, 'e883d90c03704304dec1321f365c0f0a'),
     ('api.give_free_credit(text,integer,integer,text)', null, 'a18653758dbfb3177404bd8b083115da'),
-    ('internal.extend_free_credit(uuid,integer,text)', null, 'e2bd13cb1150afcc9aeeb5356f91535e'),
+    ('internal.extend_free_credit(uuid,integer,text)', null, 'f932cc79bb3bda5fa606fad58d94e53b'),
     ('api.extend_free_credit(uuid,integer,text)', null, '19c0634bbd5418e3eca8e2fb4032f166'),
     ('internal.list_free_credits()', null, '3844d1a2876105f451a5267503380582'),
     ('api.list_free_credits()', null, 'ef063d6b12ce7a9b30af3af33d792cfe')

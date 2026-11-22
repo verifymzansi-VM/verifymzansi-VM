@@ -33,13 +33,18 @@
 --    security invoker; authenticated only):
 --    - api.give_free_credit(email, posts, days, reason): finds the member by
 --      email (an active, confirmed account), refuses one without a current
---      accepted ID review (internal.current_verified_identity), the admin's
---      own account or another account of the same person, posts outside 1 to
---      6, days outside 1 to 30 and a missing reason; gives the gift from now.
+--      accepted ID review (internal.current_verified_identity), one who
+--      already has a running gift (extend that one instead), posts outside 1
+--      to 6, days outside 1 to 30 and a missing reason; gives the gift from
+--      now.
 --    - api.extend_free_credit(gift, days, reason): adds 1 to 30 days from the
 --      gift's current end while it runs, otherwise from now; the member must
 --      still be active and ID-verified; a gift of an erased account cannot be
---      extended. The search end of the gift's live posts follows
+--      extended.
+--    Both follow the rule of staff money actions
+--    (internal.assert_staff_payment_actor): the admin needs a current accepted
+--    ID review of their own, and never acts for their own account or an
+--    account ever reviewed as the same person. The search end of the gift's live posts follows
 --      (internal.refresh_slot_chain_documents, as for house slots).
 --    - api.list_free_credits(): the latest 500 gifts, newest first: the
 --      member's masked email, posts, start, end, active or ended, and the
@@ -80,11 +85,11 @@ begin
         'internal.get_my_frontend_post_manager() c408ccd9ee1a2cc4f135f2b4032f6583',
         'internal.get_my_frontend_post_manager() bf4e28d6a385e6823983ccb93f7315ad',
         'internal.give_free_credit(text,integer,integer,text) absent',
-        'internal.give_free_credit(text,integer,integer,text) 47c8bb90ea95e2e675f5897536cf9919',
+        'internal.give_free_credit(text,integer,integer,text) e883d90c03704304dec1321f365c0f0a',
         'api.give_free_credit(text,integer,integer,text) absent',
         'api.give_free_credit(text,integer,integer,text) a18653758dbfb3177404bd8b083115da',
         'internal.extend_free_credit(uuid,integer,text) absent',
-        'internal.extend_free_credit(uuid,integer,text) e2bd13cb1150afcc9aeeb5356f91535e',
+        'internal.extend_free_credit(uuid,integer,text) f932cc79bb3bda5fa606fad58d94e53b',
         'api.extend_free_credit(uuid,integer,text) absent',
         'api.extend_free_credit(uuid,integer,text) 19c0634bbd5418e3eca8e2fb4032f166',
         'internal.list_free_credits() absent',
@@ -152,7 +157,6 @@ as $function$
 declare
   actor uuid := internal.staff_actor('free_credit:give');
   v_member uuid;
-  v_identity text;
   v_ends timestamptz;
   v_id uuid;
 begin
@@ -172,15 +176,23 @@ begin
     raise exception 'free credits: no active member account has this email' using errcode='PT409',
       detail='free_credit_member_not_found';
   end if;
-  v_identity := internal.current_verified_identity(v_member);
-  -- Not for the admin's own account, nor another account of the same person
-  -- (house slots cover the admin's own posts).
-  if v_member=actor or (v_identity is not null and v_identity=internal.current_verified_identity(actor)) then
-    raise exception 'free credits: not for your own account' using errcode='PT409', detail='free_credit_own_account';
-  end if;
-  if v_identity is null then
+  -- The rule of staff money actions: the admin has a current accepted ID
+  -- review of their own, and the member is not the admin's own account nor
+  -- an account ever reviewed as the same person (house slots cover the
+  -- admin's own posts).
+  perform internal.assert_staff_payment_actor(actor, v_member);
+  if internal.current_verified_identity(v_member) is null then
     raise exception 'free credits: the member''s ID review must be accepted first' using errcode='PT409',
       detail='free_credit_identity_required';
+  end if;
+  -- One running gift per member (extend it instead): concurrent gifts to the
+  -- same member wait for each other.
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('free-credit:'||v_member::text, 707));
+  actor := internal.staff_actor('free_credit:give'); -- authority after the wait
+  if exists(select 1 from private.entitlements e where e.owner_id=v_member and e.source='free_credit'
+      and e.status='active' and e.ends_at>statement_timestamp()) then
+    raise exception 'free credits: this member already has a running gift; extend it instead' using errcode='PT409',
+      detail='free_credit_active';
   end if;
   v_ends := statement_timestamp()+make_interval(days=>p_days);
   insert into private.entitlements(owner_id, source, area, granted_by, slot_capacity, activations_per_period,
@@ -216,7 +228,6 @@ as $function$
 declare
   actor uuid := internal.staff_actor('free_credit:give');
   v_gift private.entitlements;
-  v_identity text;
   v_ends timestamptz;
 begin
   if p_days is null or p_days not between 1 and 30 then
@@ -240,11 +251,8 @@ begin
     raise exception 'free credits: no active member account has this email' using errcode='PT409',
       detail='free_credit_member_not_found';
   end if;
-  v_identity := internal.current_verified_identity(v_gift.owner_id);
-  if v_gift.owner_id=actor or (v_identity is not null and v_identity=internal.current_verified_identity(actor)) then
-    raise exception 'free credits: not for your own account' using errcode='PT409', detail='free_credit_own_account';
-  end if;
-  if v_identity is null then
+  perform internal.assert_staff_payment_actor(actor, v_gift.owner_id);
+  if internal.current_verified_identity(v_gift.owner_id) is null then
     raise exception 'free credits: the member''s ID review must be accepted first' using errcode='PT409',
       detail='free_credit_identity_required';
   end if;

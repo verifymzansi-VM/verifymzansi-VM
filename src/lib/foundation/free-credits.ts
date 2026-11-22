@@ -64,7 +64,9 @@ const changeResult = z.strictObject({
 const REFUSALS: ReadonlyArray<[FreeCreditRefusal & FoundationErrorReason, number]> = [
   ["free_credit_member_not_found", 404],
   ["free_credit_identity_required", 409],
-  ["free_credit_own_account", 409],
+  ["free_credit_active", 409],
+  ["staff_review_required", 403],
+  ["staff_same_identity", 403],
   ["free_credit_posts_invalid", 422],
   ["free_credit_days_invalid", 422],
   ["free_credit_reason_required", 422],
@@ -75,6 +77,9 @@ const REFUSALS: ReadonlyArray<[FreeCreditRefusal & FoundationErrorReason, number
 /** Throws the refusal a database error stands for; unknown errors stay as
  * they are (the route answers them with a generic 503 and a reference). */
 function refuse(error: NonNullable<DatabaseError>): never {
+  // First: the staff ID rules (42501 with a reason) are this screen's refusals.
+  for (const [reason, status] of REFUSALS)
+    if (hasDatabaseReason(error, reason)) throw new FreeCreditRefused(status, reason);
   if (error.code === "42501") {
     if (isStaffSecondFactorRefusal(error))
       throw new FoundationStaffCommandError(
@@ -89,8 +94,6 @@ function refuse(error: NonNullable<DatabaseError>): never {
       "Your staff access changed. Reload the page before continuing."
     );
   }
-  for (const [reason, status] of REFUSALS)
-    if (hasDatabaseReason(error, reason)) throw new FreeCreditRefused(status, reason);
   throw Object.assign(new Error("Free credit command failed"), { cause: error });
 }
 
