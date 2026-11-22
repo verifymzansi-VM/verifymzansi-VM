@@ -1630,13 +1630,13 @@
     {
       "id": "LIM-F-claim_supported_notification_outbox",
       "title": "internal.claim_supported_notification_outbox: supported mail kinds required",
-      "value": "1 to 21",
+      "value": "1 to 22",
       "category": "cap",
       "enforcedAt": [
         {
           "file": "database/foundation/current/functions/internal/claim_supported_notification_outbox.sql",
           "symbol": "internal.claim_supported_notification_outbox",
-          "contains": "if p_supported_kinds is null or cardinality(p_supported_kinds) not between 1 and 21 or coalesce(array_ndims(p_supported_kinds),0)<>1"
+          "contains": "if p_supported_kinds is null or cardinality(p_supported_kinds) not between 1 and 22 or coalesce(array_ndims(p_supported_kinds),0)<>1"
         }
       ],
       "tests": [

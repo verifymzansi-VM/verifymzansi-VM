@@ -219,6 +219,45 @@ describe("email service", () => {
     expect(message.text).toContain("https://verifymzansi.com/dashboard/slots");
     vi.unstubAllEnvs();
   });
+  it("tells a member a long paid term ends, that nothing renews, and how to buy again (item 68b)", async () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
+    await sendPlatformNotice(
+      "member@example.invalid",
+      "term_ending_notice",
+      "foundation-outbox/term",
+      undefined,
+      { termEndsAt: "2027-02-14T10:00:00Z", termKind: "individual" }
+    );
+    let [message, options] = mockSend.mock.calls.at(-1)!;
+    expect(message.subject).toBe("Your paid term is ending");
+    expect(message.text).toContain("Your Individual slot ends on 14 February 2027");
+    expect(message.text).toContain(
+      "Nothing renews automatically and you will not be charged again."
+    );
+    expect(message.text).toContain("renew this slot from My slots from 14 days before it ends");
+    expect(message.text).toContain("See my slots: https://verifymzansi.com/dashboard/slots");
+    expect(message.html).toContain("https://verifymzansi.com/dashboard/slots");
+    expect(options.idempotencyKey).toBe("foundation-outbox/term");
+    // A package: buy again on Billing.
+    await sendPlatformNotice(
+      "member@example.invalid",
+      "term_ending_notice",
+      "foundation-outbox/term-package",
+      undefined,
+      { termEndsAt: "2027-02-14T10:00:00Z", termKind: "package" }
+    );
+    [message] = mockSend.mock.calls.at(-1)!;
+    expect(message.text).toContain("Your Multi-listing package ends on 14 February 2027");
+    expect(message.text).toContain("To keep posting after that date, buy again on Billing.");
+    expect(message.text).toContain("Go to Billing: https://verifymzansi.com/billing");
+    expect(message.text).not.toContain("My slots");
+    // Without a date: the plain wording, still saying nothing renews.
+    await sendPlatformNotice("member@example.invalid", "term_ending_notice", "outbox/term-plain");
+    [message] = mockSend.mock.calls.at(-1)!;
+    expect(message.text).toContain("ends in about 12 weeks. Nothing renews automatically");
+    expect(message.text).toContain("Go to Billing: https://verifymzansi.com/billing");
+    vi.unstubAllEnvs();
+  });
   it("passes durable job keys to Resend for repeatable notices", async () => {
     await sendModerationNoticeEmail({
       email: "user@example.com",

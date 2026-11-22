@@ -147,6 +147,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 81. Performance page: real figures from the live backend (item 2) (and the group 81 part of 2 rows elsewhere) | approved by owner 2026-11-21 | Nothing today: the Performance page and the staff Operations health page stay off until launch. Once on: the Performance page looks as on 27 October with every section filled from the live backend; the staff 'Scheduled jobs' table lists an 18th job, 'Old view records removed'. |
 | 82. Automatic ID checks: hidden until it works (no file rows) | hidden until it works (approved by owner 2026-11-21) | Nothing. The database part of automatic ID checks (update 20261121094003) is in, with the switch at Manual; members keep the in-page camera and staff review. The database keeps the switch at Manual until the retention update (C1) is applied |
 | 85. Business storefront (item 17b, first part) | approved by owner 2026-11-21 (with the group 85 part of 7 rows elsewhere) | Nothing today (switch off). Once on: a checked business with a running Multi-listing package and at least one live listing shows 'All stock' (search, filters that follow the trade, newest first, Show more) on its business page, and each of its listings names the business (logo or initials) with 'See all 18 cars'. |
+| 91. Email before a long paid term ends (item 68b) (no file rows: email only) | awaiting owner | Members with a paid slot or package of 180 days or more get one email about 12 weeks before it ends: the end date, that nothing renews and nothing more is charged, and how to buy again (My slots for an Individual slot, otherwise Billing). Nothing changes on any page. |
 
 Questions for the owner:
 
@@ -3441,6 +3442,49 @@ Decision: approved by owner 2026-11-21 (after seeing the storefront pictures; an
 | `src/components/business/business-storefront.test.tsx` | test | Group 85: checks the heading, the filters per trade, a filtered read, Show more and a failed read. | Nothing (not part of a page) | keep | approved by owner 2026-11-21 | 2026-11-21 | 76827d2f86a3 |
 | `src/components/business/layouts/business-layout-router.tsx` | helper | Group 85: passes 'hide Live offers' to the business layout. | Nothing by itself (see unified-layout in group 85) | keep | approved by owner 2026-11-21 | 2026-11-21 | ca150fa1b64d |
 | `src/components/trust/business-stickers.tsx` | wording-behaviour | Group 85: the ID sticker's words can be set; a post's seller block says 'Poster ID reviewed' (plan notes for the build). | Only on a listing in a storefront: 'Poster ID reviewed'. Business pages keep 'ID reviewed'. | keep | approved by owner 2026-11-21 | 2026-11-21 | 42cb1b25bfab |
+
+### 91. Email before a long paid term ends (item 68b)
+
+Email only: no file in the checked scope changes, so this group has no file
+rows. Launch checklist item 68b (Consumer Protection Act s14(2)(c); owner's
+answer: terms of 180 days or more get a written notice about 60 business days
+before the end, and nothing renews automatically). Database update
+`20261122111209_term_ending_notice.sql` (pending, apply first) queues one email
+per paid term of 180 days or more, 63 to 84 days before it ends (about 60
+business days). The words are new (owner rule 4). Text outside the checked
+scope: `src/lib/services/email.ts` (`term_ending_notice`, `TERM_ENDING_BODY`).
+
+Subject: 'Your paid term is ending'.
+
+An Individual slot of 180 days:
+
+> Your Individual slot ends on 14 February 2027 at 12:00 (South African time).
+> Nothing renews automatically and you will not be charged again.
+>
+> To keep posting after that date, renew this slot from My slots from 14 days
+> before it ends (the new days start when the current ones end), or buy a new
+> slot on Billing. If you do nothing, the slot simply ends: its post is hidden
+> then and deleted 3 days later, with its photos and videos.
+
+Button 'See my slots' (to `/dashboard/slots`).
+
+A Multi-listing package of 180 days ('Your Multi-listing package ends on ...')
+or any other paid plan ('Your paid plan ends on ...'), same first paragraph,
+then:
+
+> To keep posting after that date, buy again on Billing. If you do nothing, it
+> simply ends: the posts it pays for are hidden then, unless another of your
+> slots takes them, and deleted 3 days later, with their photos and videos.
+
+Button 'Go to Billing' (to `/billing`).
+
+If the end date cannot be read: 'One of your paid slots or packages (a term of
+180 days or more) ends in about 12 weeks. Nothing renews automatically and you
+will not be charged again.', with the Billing paragraph and button. The footer
+line stays 'This is an operational update about your VerifyMzansi account.' No
+bell notice is added.
+
+Decision: awaiting owner.
 
 <!-- frontend-ledger:end -->
 

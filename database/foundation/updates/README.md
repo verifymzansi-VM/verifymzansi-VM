@@ -80,6 +80,47 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## A written notice before a long paid term ends, 22 November 2026
+
+`20261122111209_term_ending_notice.sql` is pending (see the applied register).
+Launch checklist item 68b. The Consumer Protection Act, s14(2)(c), asks for a
+written notice 40 to 80 business days before a fixed-term agreement ends. The
+owner's rule: a paid term of 180 days or more gets one written notice about 60
+business days before it ends; nothing ever renews automatically.
+
+- **Which terms.** A paid grant (`private.entitlements`, source `retail_paid`)
+  that runs 180 days or more from its own start to its own end: an Individual
+  slot of 180 days, each renewal of one (its own term), a Multi-listing package
+  of 180 days (its opening grant; slots added part-way run less than 180 days),
+  and any earlier 180-day plan still running. Free trials, sponsorships, staff
+  grants and house slots are not purchases and are left out. The grant must be
+  active, its payment complete and its line not refunded or charged back, no
+  renewal may already follow it and the account must not be closed
+  (`internal.term_ending_notice_due`; no API role can run it).
+- **When.** `internal.queue_term_ending_notices(p_limit)`, run by
+  `api.run_slot_renewals` (full body, the minute job; its result gains
+  `term_ending_notices`), queues one email (outbox kind `term_ending_notice`,
+  dedupe key `term_ending_notice:<grant id>`) once the term's end is 63 to 84
+  calendar days away. 84 days is 12 weeks, 60 weekdays, so about 60 business
+  days; 63 days still leaves at least 40 business days after public holidays.
+  The window also stops a second notice after retention removes the sent email
+  30 days after sending. A term already under 63 days from its end when the
+  update is applied gets no notice. Nothing is charged.
+- **The email.** `internal.claim_supported_notification_outbox` (full body, 22
+  kinds) gives the address only while the term still qualifies and the address
+  is confirmed (otherwise the job finishes it as skipped), with `term_ends_at`
+  and `term_kind` (`individual`, `package` or `other`). The website words it
+  (`src/lib/services/email.ts`, wording awaiting the owner in
+  `FRONTEND-CHANGES.md` group 91): the end date, that nothing renews and nothing
+  more is charged, and how to buy again (My slots for an Individual slot,
+  Billing otherwise). No in-app notice.
+- **Order.** Apply first, then merge. A website before the update drops the kind
+  (`laterKinds`); an earlier website never claims it, so queued notices wait.
+  Preflight: `../preflight/20261122111209_term_ending_notice.check.sql`;
+  rollback: `../rollback/20261122111209_term_ending_notice.down.sql` (refused
+  once any notice is queued). Behaviour test:
+  `scripts/test-foundation-term-ending-notice.mjs`.
+
 ## Single-administrator mode for house slots and own posts, 21 November 2026
 
 `20261121143000_one_person_admin_mode.sql` was applied on 22 November 2026 at
@@ -6994,5 +7035,7 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   11 bodies as updated, both new columns present; self-granted slot events: 0;
   self-approved decisions: 0); production fingerprint after it (fingerprint.sql)
   matched the full replay (except the known schema grant difference)
+
+- `20261122111209_term_ending_notice.sql`: pending
 
 <!-- applied-register:end -->

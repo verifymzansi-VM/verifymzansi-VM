@@ -127,11 +127,28 @@ const platformNotices = {
     "Your slot ends soon",
     "One of your Individual slots ends within 3 days. Renew it now and your new days start when the current ones end, so your post stays live without a break.",
   ],
+  // The written notice before a paid term of 180 days or more ends, about 60
+  // business days ahead (Consumer Protection Act s14(2)(c); update
+  // 20261122111209_term_ending_notice.sql); worded with its end date when the
+  // notification job knows it (postLifecycleIntro). Wording awaiting the
+  // owner's approval (FRONTEND-CHANGES.md group 91).
+  term_ending_notice: [
+    "Your paid term is ending",
+    "One of your paid slots or packages (a term of 180 days or more) ends in about 12 weeks. Nothing renews automatically and you will not be charged again.",
+  ],
 } as const;
 export type PlatformNoticeKind = keyof typeof platformNotices;
 /** The renewal reminder's second paragraph (awaiting the owner's approval). */
 const RENEWAL_REMINDER_BODY =
   "Nothing renews automatically. If you do not renew, the post in this slot is hidden when the slot ends and deleted 3 days later, with its photos and videos.";
+/** The term-ending notice's second paragraph: what happens next and how to
+ * buy again (awaiting the owner's approval). */
+const TERM_ENDING_BODY = {
+  individual:
+    "To keep posting after that date, renew this slot from My slots from 14 days before it ends (the new days start when the current ones end), or buy a new slot on Billing. If you do nothing, the slot simply ends: its post is hidden then and deleted 3 days later, with its photos and videos.",
+  other:
+    "To keep posting after that date, buy again on Billing. If you do nothing, it simply ends: the posts it pays for are hidden then, unless another of your slots takes them, and deleted 3 days later, with their photos and videos.",
+} as const;
 /** What the notification job knows about the post a lifecycle notice is about,
  * or, for trial_started, when the introductory trial ends and whether it
  * already pays for a post (a staff or service grant does not), or, for
@@ -147,6 +164,9 @@ export type PostLifecycleDetails = {
   renewSlotId?: string | null;
   slotEndsAt?: string | null;
   slotRenewAll?: boolean | null;
+  /** term_ending_notice: when the paid term ends, and what it is. */
+  termEndsAt?: string | null;
+  termKind?: "individual" | "package" | "other" | null;
 };
 function deletionTime(iso: string | null | undefined): string | null {
   const ms = iso ? Date.parse(iso) : Number.NaN;
@@ -176,6 +196,17 @@ function postLifecycleIntro(kind: PlatformNoticeKind, details?: PostLifecycleDet
     return details?.slotRenewAll
       ? `Your Individual slot ends on ${ends} (South African time), and another of your slots ends within 7 days. Renew them together in one payment: each slot's new days start when its current days end, so your posts stay live without a break.`
       : `Your Individual slot ends on ${ends} (South African time). Renew it now and your new days start when the current ones end, so your post stays live without a break.`;
+  }
+  if (kind === "term_ending_notice") {
+    const ends = deletionTime(details?.termEndsAt);
+    if (!ends) return null;
+    const what =
+      details?.termKind === "individual"
+        ? "Your Individual slot"
+        : details?.termKind === "package"
+          ? "Your Multi-listing package"
+          : "Your paid plan";
+    return `${what} ends on ${ends} (South African time). Nothing renews automatically and you will not be charged again.`;
   }
   const when = deletionTime(details?.deletesAt);
   if (!when) return null;
@@ -213,6 +244,10 @@ export async function sendPlatformNotice(
   // The renewal reminder links to the renewal checkout: that slot, or every
   // slot ending within 7 days ("Renew all").
   const renewal = kind === "slot_renewal_reminder";
+  // The term-ending notice links to My slots for an Individual slot (it can
+  // be renewed there), otherwise to Billing.
+  const termEnding = kind === "term_ending_notice";
+  const termSlot = termEnding && details?.termKind === "individual";
   const renewPath = details?.slotRenewAll
     ? "/billing/checkout?renew=soon"
     : details?.renewSlotId && /^[0-9a-f-]{36}$/i.test(details.renewSlotId)
@@ -235,18 +270,30 @@ export async function sendPlatformNotice(
                 ? "/verification"
                 : renewal
                   ? renewPath
-                  : "/dashboard";
+                  : termEnding
+                    ? termSlot
+                      ? "/dashboard/slots"
+                      : "/billing"
+                    : "/dashboard";
   const body =
     kind === "account_warning"
       ? noticeReason!
       : renewal
         ? RENEWAL_REMINDER_BODY
-        : "Sign in to your account to view the details.";
+        : termEnding
+          ? TERM_ENDING_BODY[termSlot ? "individual" : "other"]
+          : "Sign in to your account to view the details.";
   const cta = renewal
     ? details?.slotRenewAll
       ? "Renew all"
       : "Renew my slot"
-    : "View your account";
+    : termEnding
+      ? termSlot
+        ? "See my slots"
+        : "Go to Billing"
+      : "View your account";
+  const shownBody = kind === "account_warning" || renewal || termEnding;
+  const linkLabel = renewal || termEnding ? `${cta}: ` : "Sign in to view the details: ";
   return sendEmail({
     to,
     subject,
@@ -258,7 +305,7 @@ export async function sendPlatformNotice(
       cta: { label: cta, href: appUrl + path },
       reason: "This is an operational update about your VerifyMzansi account.",
     }),
-    text: `${subject}\n\n${intro}${kind === "account_warning" || renewal ? `\n\n${body}` : ""}\n\n${renewal ? `${cta}: ` : "Sign in to view the details: "}${appUrl}${path}`,
+    text: `${subject}\n\n${intro}${shownBody ? `\n\n${body}` : ""}\n\n${linkLabel}${appUrl}${path}`,
   });
 }
 
