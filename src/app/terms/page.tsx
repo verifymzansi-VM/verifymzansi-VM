@@ -42,7 +42,7 @@ export default async function TermsPage() {
   }
   const textSections = published?.sections ?? buildTermsTextSections(trustConfig);
   // ECTA s43(1): the details the registered identity rows do not already give.
-  // The registered address is a home address: it is named, never printed.
+  // The registered address is named (as recorded at CIPC), never printed.
   const registeredAddress = registeredAddressNote(trustConfig);
   const aboutRows = [
     ...legalRows,

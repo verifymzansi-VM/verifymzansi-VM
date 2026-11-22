@@ -26,7 +26,7 @@ describe("trust public config", () => {
       label: "CIPC registration number",
       value: "2026/155305/07",
     });
-    // The registered address is a home address: no page shows a street address.
+    // No page shows a street address; the registered address is only named.
     expect(rows.map((row) => row.label)).not.toContain("Registered address");
     expect(rows).toContainEqual({
       label: "Information Officer phone",

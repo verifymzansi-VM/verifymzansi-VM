@@ -117,8 +117,8 @@ export function getConfiguredContactRows(config = getTrustPublicConfig()) {
 }
 
 /**
- * Where legal documents reach us. The registered address is a home address,
- * so pages name it and never print the street address.
+ * Where legal documents reach us. Pages name the registered address as
+ * recorded at CIPC and never print a street address.
  */
 export function registeredAddressNote(config = getTrustPublicConfig()) {
   return `Our registered address, as recorded at CIPC (registration number ${config.cipcNumber ?? COMPANY_REGISTRATION_NUMBER})`;
