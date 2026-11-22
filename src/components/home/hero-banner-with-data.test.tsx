@@ -38,4 +38,23 @@ describe("HeroBannerWithData", () => {
       undefined
     );
   });
+
+  it("passes the New tag of a new post to its card", async () => {
+    const fresh = {
+      id: "l2",
+      type: "listing",
+      href: "/listing/l2",
+      title: "Fresh listing",
+      statusLabel: "New",
+      statusClassName: "bg-brand-gold-300 text-brand-green-900",
+    };
+    mockLoadShowroomItems.mockResolvedValue([fresh]);
+
+    render(await HeroBannerWithData());
+
+    expect(showroomCarouselMock).toHaveBeenCalledWith(
+      expect.objectContaining({ items: [fresh] }),
+      undefined
+    );
+  });
 });
