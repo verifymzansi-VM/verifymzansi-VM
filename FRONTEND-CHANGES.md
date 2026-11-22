@@ -147,6 +147,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 81. Performance page: real figures from the live backend (item 2) (and the group 81 part of 2 rows elsewhere) | approved by owner 2026-11-21 | Nothing today: the Performance page and the staff Operations health page stay off until launch. Once on: the Performance page looks as on 27 October with every section filled from the live backend; the staff 'Scheduled jobs' table lists an 18th job, 'Old view records removed'. |
 | 82. Automatic ID checks: hidden until it works (no file rows) | hidden until it works (approved by owner 2026-11-21) | Nothing. The database part of automatic ID checks (update 20261121094003) is in, with the switch at Manual; members keep the in-page camera and staff review. The database keeps the switch at Manual until the retention update (C1) is applied |
 | 85. Business storefront (item 17b, first part) | approved by owner 2026-11-21 (with the group 85 part of 7 rows elsewhere) | Nothing today (switch off). Once on: a checked business with a running Multi-listing package and at least one live listing shows 'All stock' (search, filters that follow the trade, newest first, Show more) on its business page, and each of its listings names the business (logo or initials) with 'See all 18 cars'. |
+| 91. Registered street address no longer shown (no file rows: data setting only) | awaiting owner | Trust & Safety (and the Terms and PAIA pages, which list the same company details) no longer show a 'Registered address' row with the street address. The other company details (registered name, trading name, CIPC number, officers, contacts) are unchanged. |
 
 Questions for the owner:
 
@@ -3441,6 +3442,22 @@ Decision: approved by owner 2026-11-21 (after seeing the storefront pictures; an
 | `src/components/business/business-storefront.test.tsx` | test | Group 85: checks the heading, the filters per trade, a filtered read, Show more and a failed read. | Nothing (not part of a page) | keep | approved by owner 2026-11-21 | 2026-11-21 | 76827d2f86a3 |
 | `src/components/business/layouts/business-layout-router.tsx` | helper | Group 85: passes 'hide Live offers' to the business layout. | Nothing by itself (see unified-layout in group 85) | keep | approved by owner 2026-11-21 | 2026-11-21 | ca150fa1b64d |
 | `src/components/trust/business-stickers.tsx` | wording-behaviour | Group 85: the ID sticker's words can be set; a post's seller block says 'Poster ID reviewed' (plan notes for the build). | Only on a listing in a storefront: 'Poster ID reviewed'. Business pages keep 'ID reviewed'. | keep | approved by owner 2026-11-21 | 2026-11-21 | 42cb1b25bfab |
+
+### 91. Registered street address no longer shown
+
+The owner decided that the company's registered street address is never shown
+on any page. Until now Trust & Safety, the Terms and the PAIA page listed a
+'Registered address' row with the street address among the company details.
+That row, its setting and its built-in value are removed
+(`src/lib/trust-public-config.ts`, outside the frozen folders, so no file rows).
+Every other company detail row stays as it is. A wider change still in review
+(the legal must-haves pull request) makes the same removal; this group ships it
+first.
+
+Pictures (not published): `screenshots/hide-address/` (desktop 1280 and phone
+375, before and after; the address is blurred in the before pictures).
+
+Decision: awaiting owner.
 
 <!-- frontend-ledger:end -->
 
