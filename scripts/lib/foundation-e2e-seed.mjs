@@ -479,6 +479,39 @@ export async function seedTestCopy({ root = process.cwd(), status, sql, log = ()
       })
     );
 
+  // Showroom turns, through the website server's own recording command: the
+  // fair showroom (20261121224857_fair_showroom.sql) puts the posts seen least
+  // first and varies the order of posts on level turns at random. Giving the
+  // seeded posts turns a whole fair share apart makes the order the same on
+  // every run (the visual pictures) and the same as publishing order, newest
+  // first: home 0, 2 and 4 appearances; tourism 0 and 2.
+  const turns = published
+    .slice()
+    .reverse()
+    .map((post, index) => ({
+      post,
+      home: 2 * index,
+      tourism: post.kind === "event" ? 2 * index : 0,
+    }));
+  for (let round = 0; round < 4; round += 1) {
+    const pairs = turns.flatMap(({ post, home, tourism }) => [
+      ...(round < home ? [[post.id, "showroom_home"]] : []),
+      ...(round < tourism ? [[post.id, "showroom_tourism"]] : []),
+    ]);
+    if (pairs.length > 0)
+      await api.call(
+        "record_post_activity",
+        {
+          p_post_ids: pairs.map(([id]) => id),
+          p_metrics: pairs.map(([, metric]) => metric),
+          p_device: null,
+          p_account: null,
+        },
+        null,
+        true
+      );
+  }
+
   return {
     version: 1,
     createdAt: new Date().toISOString(),

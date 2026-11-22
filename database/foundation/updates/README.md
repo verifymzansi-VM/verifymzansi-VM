@@ -80,6 +80,83 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Fair showroom for every post, 21 November 2026
+
+`20261121224857_fair_showroom.sql` is pending (see the applied register). Launch
+checklist item 66 (design approved by the owner on 21 November 2026). It adds
+one public read, `api.showroom_feed(p_request)` (visitors and members, security
+invoker over a security definer `internal` twin), which the home showroom and
+each area showroom use. Nothing is stored and nothing is replaced.
+
+- **Request:** `showroom` (`home`, `business`, `market` or `tourism`; `home`
+  when omitted), `province` (a province id) and `city` (a city id of that
+  province, only with it). Strings only, at most 1,024 bytes; anything else is
+  refused (22023). The website sends the visitor's rough area from Cloudflare's
+  request data for that page only; the database never stores it.
+- **Answer:** `{"items": [...]}`, at most 15 cards for home and 7 for an area,
+  in showroom order. Each card has the public search card fields (no `score`),
+  its `preview` (as `api.search_post_cards`) and `is_new`. Only publicly live
+  posts, as public search shows them.
+- **Turns:** the posts seen least go first. A post's score is
+  `(fair share - its appearances) / fair share` over the last 7 days of
+  `private.post_activity_days` for that showroom, where the fair share is the
+  one the Performance page shows (the showroom's appearances in the last 7 days
+  divided by its posts now, at least 1). One turn is one fair share.
+- **New:** for 72 hours after a post first went live it is `is_new` and gets one
+  extra turn that fades evenly to nothing. A post approved again after it was
+  live before (an earlier approval of the post itself in
+  `private.moderation_log`) is not new again; an unchanged reactivation keeps
+  its first `published_at`.
+- **Nudges** (each within a turn, so none jumps the queue): 0.15 of a turn for a
+  ready video; likes per view over the last 30 days, smoothed as 1 like in 20
+  views, at most 0.15 (reached at 1 like in 5 views); up to 0.3 of randomness.
+- **Area:** of every 7 places, 1, 4 and 6 go to the visitor's city, 2 and 5 to
+  the rest of the province, 3 and 7 to the rest of South Africa (home's 15: 7, 4
+  and 4). A group that runs out passes its places to the next one (city,
+  province, rest, then the city again). A post shown more than twice the fair
+  share this week loses its city and province places. Without a province every
+  place comes from one all-South-Africa queue.
+
+**Cost.** Each call reads the showroom's live posts, 7 days of activity rows, 30
+days of view days and likes, and the last 72 hours' approvals: for 2,000 live
+posts about 14,000 small activity rows. The website remembers each order for 60
+seconds per showroom and area on each server copy, so the database sees at most
+one call a minute per showroom and area per copy. No table or index is added.
+
+New command only (expand). ORDER: apply first, then merge: the deploy check
+probes every command in `../runtime-api-manifest.json`, and the website falls
+back to the newest posts if the read fails.
+
+**Applying.**
+
+1. Run `../preflight/20261121224857_fair_showroom.check.sql` unchanged in the
+   SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "fair showroom: update not applied; showroom posts: N"
+   (any count).
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "fair showroom: already applied; showroom posts: N".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is `../rollback/20261121224857_fair_showroom.down.sql`
+(only with the owner's decision; prefer a forward fix). It refuses (55000)
+unless both functions have the update's bodies, then drops them; the showroom
+then shows the newest posts. No data is removed (the update stores none).
+
+`node --import tsx scripts/test-foundation-fair-showroom.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; a premature rollback and a half-present
+update refused; apply, rollback and re-apply return the same fingerprints; the
+grants (visitors and members, never the server key; the api wrapper security
+invoker); the request rules and the 1,024-byte bound; 15 and 7 places; only
+publicly live posts with card fields only; the 3 / 2 / 2 mix and each group
+running out; deficit order with an unknown area; the busy-city cap at and above
+twice the fair share; the New tag at 1, 71 and 73 hours and never again after an
+earlier approval; the likes cap and the video nudge (each first about 80% and
+87% of the time on level turns, never half a turn behind); and that reads write
+nothing.
+
 ## Business storefront, 21 November 2026
 
 `20261121131915_business_storefront.sql` was applied on 21 November 2026 at
@@ -6867,5 +6944,7 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   new functions absent), after: already applied (the 5 bodies as updated);
   production fingerprint after it (fingerprint.sql) matched the full replay
   (except the known schema grant difference)
+
+- `20261121224857_fair_showroom.sql`: pending; apply-first
 
 <!-- applied-register:end -->

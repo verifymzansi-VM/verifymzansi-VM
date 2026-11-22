@@ -4,6 +4,7 @@ import { buildFoundationPostSearch, parseFoundationPostSearch } from "./post-sea
 import { foundationBusinessTypeSchema } from "./business-type";
 import { foundationEventWindowSchema } from "./event-window-dto";
 import { frontendPostPresentationSchema } from "./post-presentation";
+import { publicPostCoreSchema, validPublicPostCore } from "./public-post-contract";
 export { foundationMediaUrl } from "./public-media-url";
 const key = z
   .string()
@@ -78,4 +79,32 @@ export async function searchFoundationPresentedCards(api: FoundationPublicApi, i
       presentation: enriched.items[index]!.presentation,
     })),
   };
+}
+
+const showroomCard = z
+  .strictObject({
+    ...publicPostCoreSchema.shape,
+    summary: z.string().max(300),
+    is_new: z.boolean(),
+    preview: z.strictObject({ image_key: key, video_key: key }),
+  })
+  .refine(validPublicPostCore);
+const showroomPage = z
+  .strictObject({ items: z.array(showroomCard).max(15) })
+  .refine((page) => new Set(page.items.map((card) => card.id)).size === page.items.length);
+export type FoundationShowroomCard = z.infer<typeof showroomCard>;
+export interface FoundationShowroomRequest {
+  showroom: "home" | "business" | "market" | "tourism";
+  province?: string;
+  city?: string;
+}
+/** The fair showroom order for one visitor area (20261121224857_fair_showroom.sql):
+ * at most 15 cards (home) or 7 (an area), in showroom order, each with is_new. */
+export async function loadFoundationShowroom(
+  api: FoundationPublicApi,
+  request: FoundationShowroomRequest
+): Promise<FoundationShowroomCard[]> {
+  const { data, error } = await api.rpc("showroom_feed", { p_request: { ...request } });
+  if (error) throw new Error("Showroom could not be loaded");
+  return showroomPage.parse(data).items;
 }
