@@ -1015,7 +1015,7 @@ describe("CreateListingPage", () => {
         ],
       };
       const base = global.fetch;
-      const templateFetch = vi.fn(() =>
+      const templateFetch = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) =>
         Promise.resolve(new Response(JSON.stringify(list), { status: 200 }))
       );
       global.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
