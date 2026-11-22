@@ -1113,7 +1113,9 @@ test.describe("staff review with an authenticator", () => {
     await expect(page.getByRole("heading", { name: "Operations health" })).toBeVisible({
       timeout: 20_000,
     });
-    await expect(page.getByRole("alert")).toHaveCount(0);
+    // No error alert ("Operations health could not be loaded"). Only alerts
+    // with text count: Next.js's route announcer is an empty alert on every page.
+    await expect(page.getByRole("alert").filter({ hasText: /\S/ })).toHaveCount(0);
     for (const panel of [
       "Scheduled jobs",
       "Stuck emails",
