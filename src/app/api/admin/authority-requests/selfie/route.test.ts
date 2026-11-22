@@ -73,7 +73,14 @@ describe("/api/admin/authority-requests/selfie", () => {
 
   it("answers 404 when no selfie is kept, 410 once the record closed", async () => {
     vi.mocked(readIdentityDisclosureSelfie).mockResolvedValueOnce(null);
-    expect((await post({ disclosureId: DISCLOSURE, subject: SUBJECT })).status).toBe(404);
+    const none = await post({ disclosureId: DISCLOSURE, subject: SUBJECT });
+    expect(none.status).toBe(404);
+    expect((await none.json()).error).toBe("No selfie is kept for this person");
+    // An urgent request: the selfie is withheld, not missing.
+    vi.mocked(readIdentityDisclosureSelfie).mockResolvedValueOnce("withheld");
+    const withheld = await post({ disclosureId: DISCLOSURE, subject: SUBJECT });
+    expect(withheld.status).toBe(404);
+    expect((await withheld.json()).error).toBe("The selfie is never given for an urgent request.");
     vi.mocked(readIdentityDisclosureSelfie).mockRejectedValueOnce(
       new AuthorityRequestRefused(410, "disclosure_closed")
     );

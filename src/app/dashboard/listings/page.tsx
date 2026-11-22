@@ -58,7 +58,10 @@ import {
   type PromotionType,
 } from "@/types/enums";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
-import { SHOW_ENGAGEMENT_TOTALS } from "@/lib/hidden-features";
+import { SHOW_ENGAGEMENT_TOTALS, SHOW_POST_COPY } from "@/lib/hidden-features";
+import { readFoundationMySlotPackage } from "@/lib/foundation/billing-runtime";
+import { readMyCopyDrafts } from "@/lib/foundation/post-copy";
+import { PostMoreMenu } from "@/components/listings/post-more-menu";
 
 export const metadata = {
   title: "My posts",
@@ -265,6 +268,14 @@ export default async function ListingsPage({
     nativeSession.account.account_id
   );
   const [listingResponse, businessResponse, promotionResponse] = nativeData.responses;
+  // Copy a post (SHOW_POST_COPY): only while the member's Multi-listing package runs.
+  const canCopy = SHOW_POST_COPY
+    ? await readFoundationMySlotPackage(nativeSession.api)
+        .then((slots) => slots.package?.state === "active")
+        .catch(() => false)
+    : false;
+  // The member's unfinished copies and when each is deleted (SHOW_POST_COPY).
+  const copyDrafts = await readMyCopyDrafts(nativeSession.api);
 
   const baseItems = [
     ...toDashboardItems(listingResponse.data).map((listing) => ({
@@ -344,6 +355,8 @@ export default async function ListingsPage({
       (item.status === "hidden" && item.status_reason === OWNER_DEACTIVATED_REASON)
   );
   const rejected = items.filter((item) => item.status === "rejected");
+  // Unfinished copies (SHOW_POST_COPY): the drafts the 14-day rule deletes.
+  const drafts = items.filter((item) => item.status === "draft" && copyDrafts.has(item.id));
 
   const byArea = (list: DashboardItem[]) =>
     areaFilter ? list.filter((item) => item.area === areaFilter) : list;
@@ -352,6 +365,7 @@ export default async function ListingsPage({
   const filteredPending = byArea(pending);
   const filteredExpired = byArea(expired);
   const filteredRejected = byArea(rejected);
+  const filteredDrafts = byArea(drafts);
 
   const planTiers: Record<MarketplaceArea, PlanTier> = {
     MZANSI_MARKET: nativeData.tiers.MZANSI_MARKET,
@@ -418,6 +432,11 @@ export default async function ListingsPage({
               <TabsTrigger value="expired" className="h-10 rounded-xl px-3.5">
                 Ended ({filteredExpired.length})
               </TabsTrigger>
+              {filteredDrafts.length > 0 ? (
+                <TabsTrigger value="drafts" className="h-10 rounded-xl px-3.5">
+                  Drafts ({filteredDrafts.length})
+                </TabsTrigger>
+              ) : null}
             </TabsList>
           </div>
 
@@ -425,6 +444,7 @@ export default async function ListingsPage({
             <ListingList
               listings={filteredActive}
               planTiers={planTiers}
+              canCopy={canCopy}
               empty={
                 hasAnyItems
                   ? {
@@ -443,6 +463,7 @@ export default async function ListingsPage({
             <ListingList
               listings={filteredPending}
               planTiers={planTiers}
+              canCopy={canCopy}
               empty={{
                 title: `Nothing in review${inArea}`,
                 description: "Posts waiting for a check show here.",
@@ -456,6 +477,7 @@ export default async function ListingsPage({
             <ListingList
               listings={filteredExpired}
               planTiers={planTiers}
+              canCopy={canCopy}
               empty={{
                 title: `No ended posts${inArea}`,
                 description:
@@ -463,6 +485,11 @@ export default async function ListingsPage({
               }}
             />
           </TabsContent>
+          {filteredDrafts.length > 0 ? (
+            <TabsContent value="drafts" className="mt-4">
+              <DraftList drafts={filteredDrafts} deletesAt={copyDrafts} />
+            </TabsContent>
+          ) : null}
         </Tabs>
       </div>
     </div>
@@ -624,14 +651,85 @@ function RejectedListingList({ listings }: { listings: DashboardItem[] }) {
   );
 }
 
+/** Unfinished copies: continue in the "Post an item" form, or delete. */
+function DraftList({
+  drafts,
+  deletesAt,
+}: {
+  drafts: DashboardItem[];
+  deletesAt: Map<string, string>;
+}) {
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-muted-foreground">
+        Copies you have not sent for review yet. Each is deleted 14 days after your last change to
+        it.
+      </p>
+      <ul className="space-y-3">
+        {drafts.map((draft) => (
+          <li key={draft.id}>
+            <Card>
+              <CardContent className="flex flex-col gap-3 p-4 sm:p-5">
+                <div className="flex items-start gap-3 sm:gap-4">
+                  <Thumbnail item={draft} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="min-w-0 truncate text-sm font-semibold text-foreground sm:text-base">
+                        {draft.title}
+                      </h3>
+                      <Badge variant="draft" className="shrink-0 text-[11px]">
+                        Draft
+                      </Badge>
+                    </div>
+                    <p className="mt-0.5 text-sm font-semibold text-brand-green-700 dark:text-brand-gold-300">
+                      {getDisplayPrice(draft)}
+                    </p>
+                    {deletesAt.get(draft.id) ? (
+                      <p className="mt-1.5 text-xs text-muted-foreground">
+                        Will be deleted on {formatSaLongDate(deletesAt.get(draft.id)!)}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5 border-t border-border/60 pt-3">
+                  <Button asChild variant="outline" size="sm" className="h-11 gap-1.5 px-4">
+                    <Link
+                      href={`/post/create-listing?copy=${draft.id}`}
+                      aria-label={`Continue ${draft.title}`}
+                    >
+                      <Pencil aria-hidden="true" className="h-3.5 w-3.5" />
+                      Continue
+                    </Link>
+                  </Button>
+                  <div className="ml-auto">
+                    <DeletePostButton
+                      itemId={draft.id}
+                      area={draft.area}
+                      expectedRevision={draft.revision}
+                      contentType={draft.source}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function ListingList({
   listings,
   planTiers,
   empty,
+  canCopy = false,
 }: {
   listings: DashboardItem[];
   planTiers: Record<MarketplaceArea, PlanTier>;
   empty: { title: string; description: string; showCta?: boolean };
+  /** "More" with "Copy this post" on Market listings (SHOW_POST_COPY, running package). */
+  canCopy?: boolean;
 }) {
   if (!listings.length) {
     return <EmptyState {...empty} />;
@@ -765,6 +863,9 @@ function ListingList({
                       }
                     />
                   </div>
+                  {canCopy && listing.source === "listing" ? (
+                    <PostMoreMenu postId={listing.id} title={listing.title} />
+                  ) : null}
                   <DeletePostButton
                     itemId={listing.id}
                     area={listing.area}

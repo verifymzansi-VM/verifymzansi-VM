@@ -23,6 +23,9 @@ const DISCLOSURE = "00000000-0000-4000-8000-000000000001";
 const OPEN = {
   requestType: "subpoena",
   reference: " CAS 123/11/2026 ",
+  issuedBy: "Richards Bay Magistrate's Court",
+  confirmedNumber: "035 789 1234",
+  confirmedBy: "Ms T. Zulu, clerk of the court",
   reason: "Fraud investigation into a reported listing.",
   lookupKind: "post",
   lookupValue: "https://verifymzansi.co.za/listing/red-bicycle",
@@ -66,6 +69,9 @@ describe("POST /api/admin/authority-requests", () => {
     expect(openIdentityDisclosure).toHaveBeenCalledExactlyOnceWith(api, {
       requestType: "subpoena",
       reference: "CAS 123/11/2026",
+      issuedBy: "Richards Bay Magistrate's Court",
+      confirmedNumber: "035 789 1234",
+      confirmedBy: "Ms T. Zulu, clerk of the court",
       reason: "Fraud investigation into a reported listing.",
       lookupKind: "post",
       lookupValue: "https://verifymzansi.co.za/listing/red-bicycle",
@@ -80,6 +86,11 @@ describe("POST /api/admin/authority-requests", () => {
       { ...OPEN, surname: "Dlamini" },
       { ...OPEN, reason: "line\u0000break" },
       { ...OPEN, attested: "yes" },
+      // Rule D9: the earlier types are no longer offered, and each part is needed.
+      { ...OPEN, requestType: "police_case" },
+      { ...OPEN, requestType: "warrant" },
+      { ...OPEN, issuedBy: undefined },
+      { ...OPEN, confirmedNumber: " " },
     ]) {
       await expect(route.command(api, input)).rejects.toThrow();
       const thrown = await route.command(api, input).catch((error: unknown) => error);

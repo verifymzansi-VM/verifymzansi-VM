@@ -13,6 +13,9 @@ vi.mock("@/hooks/use-reduced-motion", () => ({
   useReducedMotion: () => reducedMotion.value,
 }));
 
+const { trackCommercialEvents } = vi.hoisted(() => ({ trackCommercialEvents: vi.fn() }));
+vi.mock("@/lib/analytics/commercial-events", () => ({ trackCommercialEvents }));
+
 vi.mock("@/components/listings/poster-card-shell", () => ({
   PosterCardShell: ({ href, title }: { href: string; title: string }) => (
     <a href={href} aria-label={`Open ${title}`}>
@@ -54,6 +57,24 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
+});
+
+describe("showroom appearances", () => {
+  it("sends each card's appearance once per page load, however often autoplay brings it round", () => {
+    trackCommercialEvents.mockClear();
+    render(<ShowroomCardCarousel items={items} imageDisplayMs={1_500} surface="showroom:home" />);
+    // Three cards, each at the front for 1.5 s: about three full rounds.
+    for (let step = 0; step < 56; step += 1)
+      act(() => {
+        vi.advanceTimersByTime(250);
+      });
+    const sent = trackCommercialEvents.mock.calls.flatMap(([events]) =>
+      (events as Array<{ id: string; type: string }>).filter(
+        (event) => event.type === "showroom_appearance"
+      )
+    );
+    expect(sent.map((event) => event.id).sort()).toEqual(["1", "2", "3"]);
+  });
 });
 
 describe("showroom rotation control", () => {

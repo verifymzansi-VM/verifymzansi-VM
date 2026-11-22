@@ -22,8 +22,12 @@ begin
   elsif tg_op='DELETE' then relevant:=true;
   else
     relevant:=(new.state,new.sha256,new.size_bytes) is distinct from (old.state,old.sha256,old.size_bytes)
-      and not (c.status<>'open' and new.state in('cleanup_required','deleted')
-        and (new.sha256,new.size_bytes) is not distinct from (old.sha256,old.size_bytes));
+      and not (new.state in('cleanup_required','deleted')
+        and (new.sha256,new.size_bytes) is not distinct from (old.sha256,old.size_bytes)
+        and (c.status<>'open'
+          or (c.kind='kyc' and not exists(select 1 from private.verification_current_submissions v
+            join private.verification_identity_submissions s on s.id=v.submission_id
+            where v.case_id=c.id and new.id in(s.id_artifact_id,s.selfie_artifact_id)))));
     if relevant and new.state in ('uploaded','clean','rejected') and
       (c.status<>'open' or exists(select 1 from private.account_closures x where x.user_id=subject)) then
       raise exception 'case no longer accepts evidence' using errcode='22023';

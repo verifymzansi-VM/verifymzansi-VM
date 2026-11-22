@@ -79,6 +79,7 @@ const MAIL_KINDS = [
   "post_kept",
   "verification_returned",
   "slot_renewal_reminder",
+  "term_ending_notice",
 ];
 const batch = (id, command, max, error) => ({
   id,
@@ -183,7 +184,7 @@ const ROWS = [
     error: /invalid payment summary request/,
   },
   {
-    // 21 kinds are supported; a 22nd (unknown) kind is refused by the count
+    // 22 kinds are supported; a 23rd (unknown) kind is refused by the count
     // before the unknown-kind rule ("unsupported mail kind") sees it.
     id: "LIM-F-claim_supported_notification_outbox",
     as: "service",
@@ -1022,10 +1023,10 @@ const ROWS = [
     error: /valid represented restriction required/,
   },
   {
-    id: "LIM-F-open_identity_disclosure",
+    id: "LIM-F-open_authority_request",
     as: "staff",
     sql: (n) =>
-      `select api.open_identity_disclosure('subpoena','REF-001','A synthetic disclosure reason','email',${lit(emailOfLength(n))},true)`,
+      `select api.open_authority_request('subpoena','REF-001','A synthetic court','035 789 1234','A synthetic clerk','A synthetic disclosure reason','email',${lit(emailOfLength(n))},true)`,
     at: [254],
     over: [255],
     error: /valid search value required/,

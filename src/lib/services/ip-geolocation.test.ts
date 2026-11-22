@@ -41,3 +41,18 @@ describe("only the request's own Cloudflare data", () => {
     expect(resolveIpGeolocation()).toBeNull();
   });
 });
+
+describe("nothing about the visitor's location is logged", () => {
+  it("reads a location outside South Africa without writing a log line", () => {
+    const spies = (["log", "info", "warn", "error", "debug"] as const).map((method) =>
+      vi.spyOn(console, method).mockImplementation(() => {})
+    );
+    try {
+      scope[key] = { cf: { country: "GB", regionCode: "ENG", city: "London" } };
+      expect(resolveIpGeolocation()).toMatchObject({ country: "GB", province: null });
+      for (const spy of spies) expect(spy).not.toHaveBeenCalled();
+    } finally {
+      for (const spy of spies) spy.mockRestore();
+    }
+  });
+});

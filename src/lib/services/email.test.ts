@@ -219,6 +219,91 @@ describe("email service", () => {
     expect(message.text).toContain("https://verifymzansi.com/dashboard/slots");
     vi.unstubAllEnvs();
   });
+  it("tells a member a long paid term ends, that nothing renews, and how to buy again (item 68b)", async () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
+    await sendPlatformNotice(
+      "member@example.invalid",
+      "term_ending_notice",
+      "foundation-outbox/term",
+      undefined,
+      { termEndsAt: "2027-02-14T10:00:00Z", termKind: "individual" }
+    );
+    let [message, options] = mockSend.mock.calls.at(-1)!;
+    expect(message.subject).toBe("Your paid term is ending");
+    expect(message.text).toContain("Your Individual slot ends on 14 February 2027");
+    expect(message.text).toContain(
+      "Nothing renews automatically and you will not be charged again."
+    );
+    expect(message.text).toContain("renew this slot from My slots from 14 days before it ends");
+    expect(message.text).toContain("See my slots: https://verifymzansi.com/dashboard/slots");
+    expect(message.html).toContain("https://verifymzansi.com/dashboard/slots");
+    expect(options.idempotencyKey).toBe("foundation-outbox/term");
+    // A package: buy again on Billing.
+    await sendPlatformNotice(
+      "member@example.invalid",
+      "term_ending_notice",
+      "foundation-outbox/term-package",
+      undefined,
+      { termEndsAt: "2027-02-14T10:00:00Z", termKind: "package" }
+    );
+    [message] = mockSend.mock.calls.at(-1)!;
+    expect(message.text).toContain("Your Multi-listing package ends on 14 February 2027");
+    expect(message.text).toContain("To keep posting after that date, buy again on Billing.");
+    expect(message.text).toContain("Go to Billing: https://verifymzansi.com/billing");
+    expect(message.text).not.toContain("My slots");
+    // Without a date nothing is sent (the job retries, then reports it).
+    const sent = mockSend.mock.calls.length;
+    await expect(
+      sendPlatformNotice("member@example.invalid", "term_ending_notice", "outbox/term-plain")
+    ).rejects.toThrow("Notice details unavailable");
+    expect(mockSend.mock.calls.length).toBe(sent);
+    vi.unstubAllEnvs();
+  });
+  it("tells a slot owner whose package outlasts the slot that its post moves in if a place is free, without renew or buy", async () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
+    await sendPlatformNotice(
+      "member@example.invalid",
+      "term_ending_notice",
+      "foundation-outbox/term-into-package",
+      undefined,
+      {
+        termEndsAt: "2027-02-14T10:00:00Z",
+        termKind: "individual",
+        termHasAccess: true,
+        termPackageContinues: true,
+      }
+    );
+    const [message] = mockSend.mock.calls.at(-1)!;
+    expect(message.text).toBe(
+      "Your paid term is ending\n\nYour Individual slot ends on 14 February 2027 at 12:00 (South African time). Nothing renews automatically and you will not be charged again.\n\nIts post then moves into your Multi-listing package if the package has a free place on that date. If it has none, the post is hidden then and deleted 3 days later, so keep a place free or add one from My slots.\n\nSee my slots: https://verifymzansi.com/dashboard/slots"
+    );
+    expect(message.html).toContain("https://verifymzansi.com/dashboard/slots");
+    expect(message.html).not.toContain("Billing");
+    expect(message.html).not.toContain("renew this slot");
+    vi.unstubAllEnvs();
+  });
+  it("tells a banned or suspended member only that the term ends, without renew or buy", async () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
+    await sendPlatformNotice(
+      "member@example.invalid",
+      "term_ending_notice",
+      "foundation-outbox/term-no-access",
+      undefined,
+      { termEndsAt: "2027-02-14T10:00:00Z", termKind: "individual", termHasAccess: false }
+    );
+    const [message] = mockSend.mock.calls.at(-1)!;
+    expect(message.subject).toBe("Your paid term is ending");
+    expect(message.text).toBe(
+      "Your paid term is ending\n\nYour Individual slot ends on 14 February 2027 at 12:00 (South African time). Nothing renews automatically and you will not be charged again.\n\nYou do not need to do anything."
+    );
+    expect(message.html).toContain("You do not need to do anything.");
+    expect(message.html).not.toContain("My slots");
+    expect(message.html).not.toContain("Billing");
+    expect(message.html).not.toContain("https://verifymzansi.com/dashboard/slots");
+    expect(message.html).not.toContain("https://verifymzansi.com/billing");
+    expect(message.html).not.toContain("vm-button");
+    vi.unstubAllEnvs();
+  });
   it("passes durable job keys to Resend for repeatable notices", async () => {
     await sendModerationNoticeEmail({
       email: "user@example.com",

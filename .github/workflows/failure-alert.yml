@@ -17,6 +17,8 @@ on:
       - Deploy
       - Foundation native
       - E2E foundation
+      # Advisory on pull requests; its nightly run alerts like any other.
+      - E2E WebKit (advisory)
       # Advisory (its job continues on error): alerts only if the workflow
       # itself breaks, never for launch-configuration test failures.
       - E2E launch config
