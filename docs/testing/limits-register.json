@@ -9158,6 +9158,62 @@
       ]
     },
     {
+      "id": "LIM-RL-verification-identity-check",
+      "title": "Shared rate limit for \"verification:identity-check\"",
+      "value": "10 per 600 s, 30 per day",
+      "category": "rate",
+      "action": "verification:identity-check",
+      "tiers": [
+        {
+          "limit": 10,
+          "ttl": 600
+        },
+        {
+          "limit": 30,
+          "ttl": 86400
+        }
+      ],
+      "enforcedAt": [
+        {
+          "file": "workers/rate-limiter.ts",
+          "symbol": "ACTION_LIMITS",
+          "contains": "\"verification:identity-check\": ["
+        }
+      ],
+      "tests": [
+        {
+          "kind": "register",
+          "file": "src/__tests__/limits/rate-limiter-limits.test.ts"
+        }
+      ]
+    },
+    {
+      "id": "LIM-RL-verification-identity-check-look",
+      "title": "Shared rate limit for \"verification:identity-check-look\"",
+      "value": "1 per 120 s",
+      "category": "rate",
+      "action": "verification:identity-check-look",
+      "tiers": [
+        {
+          "limit": 1,
+          "ttl": 120
+        }
+      ],
+      "enforcedAt": [
+        {
+          "file": "workers/rate-limiter.ts",
+          "symbol": "ACTION_LIMITS",
+          "contains": "\"verification:identity-check-look\": [{ limit: 1, ttl: 120 }],"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "register",
+          "file": "src/__tests__/limits/rate-limiter-limits.test.ts"
+        }
+      ]
+    },
+    {
       "id": "LIM-RL-verification-handoff",
       "title": "Shared rate limit for \"verification:handoff\"",
       "value": "10 per 600 s, 30 per hour",
@@ -9364,6 +9420,32 @@
           "file": "workers/rate-limiter.ts",
           "symbol": "ACTION_LIMITS",
           "contains": "\"webhook:ozow\": [{ limit: 100, ttl: 60 }], // webhooks can be bursty"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "register",
+          "file": "src/__tests__/limits/rate-limiter-limits.test.ts"
+        }
+      ]
+    },
+    {
+      "id": "LIM-RL-webhook-didit",
+      "title": "Shared rate limit for \"webhook:didit\"",
+      "value": "100 per minute",
+      "category": "rate",
+      "action": "webhook:didit",
+      "tiers": [
+        {
+          "limit": 100,
+          "ttl": 60
+        }
+      ],
+      "enforcedAt": [
+        {
+          "file": "workers/rate-limiter.ts",
+          "symbol": "ACTION_LIMITS",
+          "contains": "\"webhook:didit\": [{ limit: 100, ttl: 60 }],"
         }
       ],
       "tests": [

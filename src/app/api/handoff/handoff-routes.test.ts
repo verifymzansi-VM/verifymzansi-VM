@@ -20,8 +20,10 @@ import { createFoundationServiceApi } from "@/lib/foundation/service-api";
 import { FoundationSessionError } from "@/lib/foundation/request-api";
 import { putImmutableR2Bytes } from "@/lib/services/storage";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
-import { cleanEvidence } from "@/lib/foundation/verification-runtime";
+import { cleanEvidence, FoundationVerificationError } from "@/lib/foundation/verification-runtime";
 import { cameraJpegFile } from "@/test/fixtures/camera-jpeg";
+import { refuseWhileAutomaticCheckOpen } from "@/lib/foundation/identity-check";
+vi.mock("@/lib/foundation/identity-check", () => ({ refuseWhileAutomaticCheckOpen: vi.fn() }));
 
 vi.mock("@/lib/foundation/request-route", () => ({ createFoundationRouteContext: vi.fn() }));
 vi.mock("@/lib/foundation/runtime-connection", () => ({
@@ -386,6 +388,37 @@ describe("the phone's state, capture tokens and photos", () => {
     )![1];
     expect(completed.p_owner).toBe(owner);
     expect(completed.p_identity).toEqual(identity);
+  });
+
+  it("are closed, like the link itself, while the automatic ID check is open", async () => {
+    const closed = () =>
+      vi
+        .mocked(refuseWhileAutomaticCheckOpen)
+        .mockRejectedValueOnce(new FoundationVerificationError(409, "Use the ID check"));
+    closed();
+    const photo = await upload(
+      form(
+        {
+          docType: "id_document",
+          uploadRequestId: receipt,
+          captureMethod: "camera",
+          captureToken: phoneTokenFor("id_front"),
+        },
+        cameraJpegFile(),
+        grantCookie
+      )
+    );
+    expect(photo.status).toBe(409);
+    closed();
+    const link = await start(json("/api/verification/handoff", {}));
+    expect(link.status).toBe(409);
+    expect(refuseWhileAutomaticCheckOpen).toHaveBeenCalledTimes(2);
+    expect(rpc).not.toHaveBeenCalledWith("start_capture_handoff", expect.anything());
+    expect(serviceRpc).not.toHaveBeenCalledWith(
+      "reserve_handoff_verification_upload",
+      expect.anything()
+    );
+    expect(putImmutableR2Bytes).not.toHaveBeenCalled();
   });
 
   it("refuse photos without a fresh capture token for this grant, or not from the camera", async () => {

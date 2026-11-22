@@ -102,6 +102,7 @@ const METHODS = ["POST", "PUT", "PATCH", "DELETE"] as const;
 /** Routes outside this test: not called by signed-in pages with JSON. */
 const OUTSIDE = new Set([
   // Server-to-server, covered by their own tests.
+  "webhooks/didit",
   "webhooks/ozow",
   "webhooks/ozow/refunds",
   "webhooks/ops-jobs",
