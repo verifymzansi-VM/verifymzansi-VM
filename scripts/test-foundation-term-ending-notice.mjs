@@ -63,10 +63,12 @@ const UPDATED = {
 };
 const P90 = { id: "6a449457-2384-457e-9434-23c2b0e73127", cents: 20700 };
 const LABEL = "term ending notice";
-const summary = (state, running, within, queued) =>
-  new RegExp(
-    `^${LABEL}: ${state}; paid terms of 180 days or more running: ${running}; ending within 84 days: ${within}; notices queued: ${queued}$`
-  );
+// Literal patterns for the preflight summary (one 180-day term running, ending
+// within 84 days, no notice queued yet).
+const NOT_APPLIED =
+  /^term ending notice: update not applied; paid terms of 180 days or more running: 1; ending within 84 days: 1; notices queued: 0$/;
+const ALREADY_APPLIED =
+  /^term ending notice: already applied; paid terms of 180 days or more running: 1; ending within 84 days: 1; notices queued: 0$/;
 
 await runTwoAdminUpdateCheck(
   { update: UPDATE, label: "term", title: "Term ending notice" },
@@ -127,7 +129,7 @@ await runTwoAdminUpdateCheck(
           ["summary"],
           JSON.stringify(rows)
         );
-        assert.match(rows[0][1], summary("update not applied", 1, 1, 0));
+        assert.match(rows[0][1], NOT_APPLIED);
         assertReadOnlyPreflight(database, kit.preflightSql);
         // The renewal sweep queues no such notice yet.
         sweep();
@@ -148,15 +150,15 @@ await runTwoAdminUpdateCheck(
       );
       q(`alter table private.outbox_events drop constraint outbox_events_kind_check;
         alter table private.outbox_events add constraint outbox_events_kind_check ${live};`);
-      assert.match(preflight()[0][1], summary("update not applied", 1, 1, 0));
+      assert.match(preflight()[0][1], NOT_APPLIED);
     });
 
     // ------------------------------------------------------------- apply
     const grants = executeGrants(json, SIGNATURES);
     await applyAndProveRollback(kit, database, check, {
       label: LABEL,
-      applied: summary("already applied", 1, 1, 0),
-      notApplied: summary("update not applied", 1, 1, 0),
+      applied: ALREADY_APPLIED,
+      notApplied: NOT_APPLIED,
     });
     await check("after the update: the bodies are the update's", () => {
       for (const [signature, md5] of Object.entries(UPDATED))
