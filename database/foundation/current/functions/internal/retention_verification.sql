@@ -165,14 +165,19 @@ begin
   end loop;
 
   -- Authority-request logs: deleted 5 years after the search once every
-  -- named account closed more than 5 years ago and none has an open legal
-  -- hold (a search that named nobody: 5 years after the search).
+  -- named account is gone and none has an open legal hold (a search that
+  -- named nobody: 5 years after the search). An account is gone when it
+  -- closed more than 5 years ago, or when its Auth user no longer exists and
+  -- no erasure record is left either (the erasure record, kept 5 years after
+  -- the erasure, otherwise dates the closure).
   delete from private.identity_disclosures where id in(select d.id from private.identity_disclosures d
     where d.opened_at<statement_timestamp()-interval '5 years'
       and coalesce((select bool_and((exists(select 1 from private.account_closures x where x.user_id=a.id
             and x.closed_at<statement_timestamp()-interval '5 years')
           or exists(select 1 from private.account_erasures e where e.user_id=a.id
-            and e.closed_at<statement_timestamp()-interval '5 years'))
+            and e.closed_at<statement_timestamp()-interval '5 years')
+          or (not exists(select 1 from auth.users u where u.id=a.id)
+            and not exists(select 1 from private.account_erasures e where e.user_id=a.id)))
           and not exists(select 1 from private.legal_holds h where h.subject_id=a.id and h.released_at is null))
         from unnest(d.subject_ids) a(id)),true)
     order by d.opened_at,d.id limit p_limit for update skip locked);
@@ -182,11 +187,20 @@ begin
     where e.changed_at<statement_timestamp()-interval '5 years'
     order by e.changed_at,e.id limit p_limit for update skip locked);
   get diagnostics mode_events=row_count;
-  -- Partner deletions overdue by more than a day (holds excepted): a stalled
-  -- deletion job shows here.
+  -- Overdue partner deletions (holds excepted): a stalled or failing deletion
+  -- job shows here. Counted from dates the deletion job does not move (each
+  -- claim pushes provider_delete_due 5 minutes ahead): a day after the 30
+  -- days from the acceptance, otherwise 32 days after the check finished;
+  -- and only while the deletion is due (a claim's lease is at most 5 minutes
+  -- ahead) or, after an acceptance, never scheduled. A check waiting for a
+  -- person has no due date and is not counted.
   select count(*) into overdue from private.identity_checks k
+    cross join lateral (select max(f.reviewed_at) as accepted_at from private.accepted_identity_facts f
+      where f.submission_id=k.submission_id) f
     where k.session_id is not null and k.provider_deleted_at is null
-      and k.provider_delete_due<statement_timestamp()-interval '1 day'
+      and (k.provider_delete_due<=statement_timestamp()+interval '5 minutes'
+        or (k.provider_delete_due is null and f.accepted_at is not null))
+      and coalesce(f.accepted_at+interval '31 days',k.finished_at+interval '32 days')<statement_timestamp()
       and not exists(select 1 from private.legal_holds h where h.subject_id=k.owner_id and h.released_at is null)
       and not internal.evidence_fraud_held(k.case_id);
 

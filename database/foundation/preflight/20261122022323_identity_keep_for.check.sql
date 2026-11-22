@@ -6,7 +6,7 @@
 -- "summary" row, then one row per problem. Apply the update only when the
 -- summary is the only row and reads "update not applied".
 --
--- The summary says whether the 11 functions the update replaces have their
+-- The summary says whether the 12 functions the update replaces have their
 -- reviewed bodies and the helpers, the triggers and the new constraint are
 -- absent (update not applied), or everything is the update's (already
 -- applied), and counts:
@@ -31,8 +31,9 @@ with bodies as (
     ('internal.identity_check_summary(private.identity_checks)', '2ba0f50d74bc624d4a4e1d8caeca6fa1', '73fdd37368b8112a6e0af490a29e935c'),
     ('internal.return_identity_submission(uuid,integer,text,uuid,text)', 'bc4304d1f5191cae942d30780ce0c29c', 'be358fa7134821b7759a69d691e61aa6'),
     ('internal.claim_evidence_cleanup(integer)', '7b3da1337260bcd71a5c9f2fd55480a5', 'cbf7f8505087f2807fae496d2d5c6b59'),
-    ('internal.retention_verification(integer)', 'fe726b6672545b8b33901361eaf91226', '75df892c01832a48cc1ab60ab559499a'),
+    ('internal.retention_verification(integer)', 'fe726b6672545b8b33901361eaf91226', '6a7db601e6af1cfcc55f697f7d841dd2'),
     ('internal.evidence_artifact_submission_guard()', '2cf882f651413912b4d9cc67d8db01b7', '9bad086a99cfd7626dfc7253048dd5e7'),
+    ('internal.get_staff_operations_health()', '464a32f492d9cd7dcebae419a4b5d8e8', '538377ebf0adfeacdb59369b0924d31d'),
     ('internal.identity_record_kept(uuid)', null, 'f58077bf9fe3f87110ce4cbfb603b3a2'),
     ('internal.identity_check_clear_start()', null, 'cfc77851e58d5327eaccba09c6712f1e'),
     ('internal.identity_submission_waiting(uuid)', null, '39f84ff77d45ae7d667dcb3732ae565d'),

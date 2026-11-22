@@ -53,10 +53,12 @@ const REPLACED = [
   "internal.claim_evidence_cleanup(integer)",
   "internal.retention_verification(integer)",
   "internal.evidence_artifact_submission_guard()",
+  "internal.get_staff_operations_health()",
 ];
 
 const opened = await openUpdateCheck(PREFLIGHT);
-const { started, database, check, current, q, json, fails, member, staff, service } = opened;
+const { started, database, check, current, q, json, fails, member, staff, service, as, claims } =
+  opened;
 const { fingerprint, bodyMd5, syntheticMember, passed: checks } = opened;
 const preflight = opened.preflightRows;
 /** Synthetic identity values: a keyed fingerprint, an encrypted ID number and a file receipt. */
@@ -453,14 +455,26 @@ try {
     );
     shift(m, "29 days");
     assert.ok(!drainProviderDeletions().includes(m.check.check), "day 29");
-    shift(m, "2 days");
-    assert.ok(drainProviderDeletions().includes(m.check.check), "day 31");
-    // A deletion more than a day overdue is counted, so a stalled job shows.
+    shift(m, "1 day 12 hours");
+    assert.ok(drainProviderDeletions().includes(m.check.check), "day 30 and a half");
+    // A deletion that keeps failing is counted a day after it was due, from the
+    // acceptance date: each claim moving its lease 5 minutes ahead hides nothing.
     const before = retention().overdue_partner_deletions;
-    q(
-      `update private.identity_checks set provider_delete_due=now()-interval '2 days' where id='${m.check.check}';`
+    shift(m, "1 day");
+    assert.ok(drainProviderDeletions().includes(m.check.check), "claimed again after a failure");
+    assert.equal(
+      q(
+        `select provider_delete_due>now() from private.identity_checks where id='${m.check.check}';`
+      ),
+      "t",
+      "the claim moved the lease ahead"
     );
-    assert.equal(retention().overdue_partner_deletions, before + 1);
+    assert.equal(retention().overdue_partner_deletions, before + 1, "day 31 and a half");
+    assert.equal(
+      retention().overdue_partner_deletions,
+      before + 1,
+      "still counted on the next run"
+    );
     json(service(`select api.mark_identity_check_provider_deleted('${m.check.check}');`));
     assert.equal(retention().overdue_partner_deletions, before);
   });
@@ -686,6 +700,52 @@ try {
     }
   );
   await check(
+    "a failing partner deletion of a declined check counts 32 days after it finished; one waiting for a person does not",
+    () => {
+      setMode("automatic", "Fully automatic again.");
+      const declined = namedMember("overdue-declined");
+      const d = startWithSession(declined);
+      finish(d, "declined");
+      const asked = namedMember("overdue-asked");
+      const a = startWithSession(asked);
+      finish(a, "declined");
+      json(
+        member(
+          asked,
+          `select api.ask_person_identity_check('${a.check}','My ID is genuine, please check it by hand.');`
+        )
+      );
+      shift(declined, "6 days");
+      assert.ok(drainProviderDeletions().includes(d.check), "due 5 days after the decline");
+      const before = retention().overdue_partner_deletions;
+      // The deletion keeps failing: every retry moves its lease 5 minutes ahead.
+      shift(declined, "25 days 12 hours");
+      assert.ok(drainProviderDeletions().includes(d.check));
+      assert.equal(
+        retention().overdue_partner_deletions,
+        before,
+        "31 and a half days after it finished"
+      );
+      shift(declined, "1 day");
+      assert.ok(drainProviderDeletions().includes(d.check));
+      assert.equal(
+        retention().overdue_partner_deletions,
+        before + 1,
+        "32 and a half days after it finished"
+      );
+      shift(asked, "40 days");
+      drainProviderDeletions();
+      assert.equal(checkRow(a.check).provider_delete_due, null, "a person is still to decide");
+      assert.equal(
+        retention().overdue_partner_deletions,
+        before + 1,
+        "the waiting check is not counted"
+      );
+      json(service(`select api.mark_identity_check_provider_deleted('${d.check}');`));
+      assert.equal(retention().overdue_partner_deletions, before);
+    }
+  );
+  await check(
     "ask a person keeps the files until a person decides; a return then starts 5 days",
     () => {
       setMode("automatic", "Fully automatic again.");
@@ -869,6 +929,69 @@ try {
       fails(`delete from private.identity_disclosures where id='${rows.openOld}';`, "23514");
     }
   );
+  await check(
+    "authority-request logs: a request about an erased account goes 5 years after the request",
+    () => {
+      const run = () => json(service("select api.run_retention(5000);"));
+      const gone = syntheticMember("disclosed-erased");
+      const existing = syntheticMember("disclosed-existing");
+      const signedInAt = Math.floor(Date.now() / 1000) - 60;
+      json(
+        as(
+          { ...claims(gone), amr: [{ method: "password", timestamp: signedInAt }] },
+          "select api.close_my_account();"
+        )
+      );
+      // Closed 31 days ago: the erasure runs and the Auth user is removed.
+      q(`set session_replication_role=replica;
+        update private.account_erasures set closed_at=closed_at-interval '31 days',erase_after=erase_after-interval '31 days'
+          where user_id='${gone.id}';
+        update private.account_closures set closed_at=closed_at-interval '31 days',
+          evidence_delete_after=evidence_delete_after-interval '31 days' where user_id='${gone.id}';
+        set session_replication_role=origin;`);
+      const authLeft = () => q(`select count(*) from auth.users where id='${gone.id}';`);
+      run();
+      for (let n = 0; n < 3 && authLeft() !== "0"; n += 1) {
+        q(`update private.account_erasures set auth_checked_at=auth_checked_at-interval '2 days'
+          where user_id='${gone.id}';`);
+        run();
+      }
+      assert.equal(authLeft(), "0", "the Auth user is removed");
+      assert.equal(
+        q(`select count(*) from private.account_closures where user_id='${gone.id}';`),
+        "0"
+      );
+      // The request came 70 days after the closure, 5 years and 40 days ago; by
+      // now the erasure record (kept 5 years after the erasure) is gone too.
+      q(`set session_replication_role=replica;
+        update private.account_erasures set closed_at=closed_at-interval '5 years 79 days',
+          erase_after=erase_after-interval '5 years 79 days',erased_at=erased_at-interval '5 years 79 days',
+          auth_removed_at=auth_removed_at-interval '5 years 79 days',
+          auth_checked_at=auth_checked_at-interval '5 years 79 days'
+          where user_id='${gone.id}';
+        set session_replication_role=origin;`);
+      run();
+      assert.equal(
+        q(`select count(*) from private.account_erasures where user_id='${gone.id}';`),
+        "0"
+      );
+      const insert = (label, ago, who) =>
+        q(`insert into private.identity_disclosures(opened_by,opened_at,closes_at,request_type,request_reference,reason,
+            attested,lookup_kind,lookup_value,outcome,subject_ids,match_count)
+          values('${admin.id}',now()-interval '${ago}',now()-interval '${ago}'+interval '15 minutes','subpoena',
+            ${sqlLiteral(`ERASED-${label}`)},'Synthetic authority request.',true,'phone','+27830000000','record',
+            array['${who.id}']::uuid[],1);`);
+      insert("old", "5 years 40 days", gone);
+      insert("recent", "4 years 364 days", gone);
+      insert("existing", "5 years 40 days", existing);
+      run();
+      assert.equal(
+        q(`select string_agg(request_reference,',' order by request_reference) from private.identity_disclosures
+          where request_reference like 'ERASED-%';`),
+        "ERASED-existing,ERASED-recent"
+      );
+    }
+  );
   // LIM-SQL-IDENTITY-MODE-LOG: 5 years.
   await check("the setting's change log is kept 5 years", () => {
     q(`insert into private.identity_check_mode_events(from_mode,to_mode,changed_by,reason,changed_at) values
@@ -888,6 +1011,27 @@ try {
       "1"
     );
   });
+
+  await check(
+    "staff operations health: a kept selfie is not overdue; an overdue file still counts",
+    () => {
+      const overdue = () =>
+        json(staff(admin, "select api.get_staff_operations_health();")).deletions.evidence_overdue;
+      const members = ["health-1", "health-2", "health-3"].map((label) => accepted(label));
+      for (const m of members) shift(m, "40 days");
+      // The clean-up job takes every file due (the three ID photos among them).
+      drainCleanup();
+      for (const m of members) assert.equal(stateOf(filesOf(m, "selfie")[0]), "clean");
+      assert.equal(overdue(), 0, "three accepted members at day 40: their selfies are kept");
+      setMode("automatic", "Fully automatic again.");
+      const declined = namedMember("health-declined");
+      finish(startWithSession(declined), "declined");
+      shift(declined, "7 days");
+      assert.equal(overdue(), 2, "a declined attempt's two files, due 5 days after the decline");
+      assert.equal(drainCleanup().length, 2);
+      assert.equal(overdue(), 0);
+    }
+  );
 
   await check("holds keep a failed attempt's check, names and files", () => {
     setMode("automatic", "Fully automatic again.");

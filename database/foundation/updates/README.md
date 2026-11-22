@@ -128,9 +128,12 @@ or staff until an admin changes the setting, except the keep-for periods below.
   device kind) is cleared when it leaves `started` (trigger
   `identity_check_clear_start`, two constraints). The five-year sweep skips an
   account while a partner copy of one of its checks is not yet deleted. The
-  retention result's `verification.overdue_partner_deletions` counts partner
-  deletions overdue by more than a day (holds excepted), so a stalled deletion
-  job shows.
+  retention result's `verification.overdue_partner_deletions` counts overdue
+  partner deletions (holds excepted) from dates the deletion job does not move
+  (each claim pushes the due date 5 minutes ahead): a day after the 30 days from
+  an acceptance, otherwise 32 days after the check finished, while the deletion
+  is due. So a stalled or failing deletion job shows. A check waiting for a
+  person is not counted.
 - **Results:** `session_moved` always goes to the staff queue, on `automatic`
   too. A result whose names at start differ from the submission's names gets
   `names_differ` (staff on `manual` and `staff_final`, a decline on
@@ -140,9 +143,15 @@ or staff until an admin changes the setting, except the keep-for periods below.
   high risk score is never named).
 - **Logs:** authority-request logs (`private.identity_disclosures` with their
   events) are kept while a named account exists and 5 years after it closed, a
-  search that named nobody 5 years from the search; an open legal hold on a
-  named account keeps them. The setting's change log is kept 5 years. Both are
-  deleted by `internal.retention_verification` under `api.run_retention`.
+  search that named nobody 5 years from the search, and every log at least 5
+  years from the search; an open legal hold on a named account keeps them. An
+  account whose Auth user and erasure record are both gone counts as gone, so a
+  request made after an erasure is deleted 5 years after the request. The
+  setting's change log is kept 5 years. Both are deleted by
+  `internal.retention_verification` under `api.run_retention`.
+- **Staff operations health:** `internal.get_staff_operations_health` counts an
+  evidence file as overdue only when the clean-up claim would take it, so a
+  selfie kept with its identity record is not reported as past its purge date.
 - **The clean-up and the case version:** on an open identity case, deleting a
   file that no current submission uses no longer changes the case version
   (`internal.evidence_artifact_submission_guard`), so deleting a sent-back
@@ -183,7 +192,7 @@ the privacy notice (checklist item 41) and the privacy export follow-up.
 The reviewed rollback is `../rollback/20261122022323_identity_keep_for.down.sql`
 (only with the owner's decision; prefer a forward fix). It refuses (55000)
 unless every function has the update's body, the setting is `manual` and no
-check has finished since the update; then it puts back the 11 bodies byte for
+check has finished since the update; then it puts back the 12 bodies byte for
 byte, drops the two helpers and the two triggers and restores the check row's
 constraints. Data the retention job already deleted stays deleted.
 
@@ -194,18 +203,25 @@ refused; apply, rollback and re-apply return the same fingerprints; the three
 settings; `session_moved` and names at start on each setting; the cleared start
 context; each decline category; the ID photo at day 29 and 31, the selfie and ID
 number kept for an open account (also after 5 years); the partner's copy at day
-29 and 31 after an acceptance; good-standing closure (selfie and number kept at
-day 89 and gone at day 91, code, names and phone kept, a ban approved at day 60
-and an open report keeping them, the 90-day cap for unreviewed files, a replaced
-number and a number without an accepted identity still deleted); a replaced
-submission's files at 5 days; the five-year sweep waiting for the partner's copy
-(4 years 364 days, then 5 years 1 day); a ban keeping the selfie and number 5
-years from the ban; an automatic decline's files at 4 days 23 hours and 5 days 1
-hour, then only the fingerprint, and the check row at 6 and 8 days; "ask a
-person" answered by a return (5 days) and by an acceptance (30 days, the reason
-cleared 91 days after closure, not 89); a sent-back attempt's files deleted
-without making the newer submission stale; the authority-request logs and the
-change log at their 5-year edges; a legal hold keeping a failed attempt.
+29 and 31 after an acceptance, and a deletion that keeps failing counted from
+day 31 and a half (a declined check's from 32 and a half days after it finished,
+a check waiting for a person never); good-standing closure (selfie and number
+kept at day 89 and gone at day 91, code, names and phone kept, a ban approved at
+day 60 and an open report keeping them, the 90-day cap for unreviewed files, a
+replaced number and a number without an accepted identity still deleted); a
+replaced submission's files at 5 days; the five-year sweep waiting for the
+partner's copy (4 years 364 days, then 5 years 1 day); a ban keeping the selfie
+and number 5 years from the ban; an automatic decline's files at 4 days 23 hours
+and 5 days 1 hour, then only the fingerprint, and the check row at 6 and 8 days;
+"ask a person" answered by a return (5 days) and by an acceptance (30 days, the
+reason cleared 91 days after closure, not 89); a sent-back attempt's files
+deleted without making the newer submission stale; the authority-request logs
+and the change log at their 5-year edges, and a request made 70 days after a
+closure whose account was erased and removed from Auth at day 31, deleted 5
+years and 40 days after the request (kept at 4 years 364 days, as is one about
+an existing account); staff operations health showing no overdue file for three
+accepted members at day 40 and counting a declined attempt's two files at day 7;
+a legal hold keeping a failed attempt.
 
 ## Single-administrator mode for house slots and own posts, 21 November 2026
 
