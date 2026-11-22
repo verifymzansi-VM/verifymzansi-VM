@@ -23,6 +23,11 @@ name: E2E foundation
 # On a draft pull request (without the run-full-ci label) the browser projects
 # do not run and the aggregate job reports under another name, so the required
 # `e2e-foundation` check waits for the full run that "Ready for review" starts.
+#
+# On a pull request that changes only documents and ledgers (job `changes`
+# lists them) the browser lanes are skipped and `e2e-foundation` passes under
+# its required name. A workflow-level `paths:` filter is not used: it would
+# leave the required check waiting forever on such a pull request.
 on:
   workflow_call:
   pull_request:
@@ -46,25 +51,92 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # One job per Playwright project, each on its own runner with its own test
-  # copy (the copies never share data). Both projects in one step took about
-  # 12 minutes against a 14-minute limit, so one retried test or a slow runner
+  # Pull requests only: decides whether the pull request changes only
+  # documents and ledgers. Skipped on main (called from CI), nightly and manual
+  # runs, where the browser jobs always run.
+  changes:
+    name: Changed files (e2e)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      docs_only: ${{ steps.docs.outputs.only }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The merge commit and its first parent (the base), so this job can
+          # list exactly what the pull request changes.
+          fetch-depth: 2
+      - name: Decide whether only documents and ledgers changed
+        id: docs
+        run: |
+          # Checked out as the merge commit: parent 1 is the base branch tip.
+          # Anything else cannot be compared safely, so run in full.
+          if [ "$(git rev-list --parents -n 1 HEAD | wc -w)" -ne 3 ]; then
+            echo "only=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::HEAD is not the pull request merge commit; running the browser tests."
+            exit 0
+          fi
+          if ! changed="$(git diff --no-renames --name-only HEAD^1 HEAD)"; then
+            echo "only=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Could not list the changed files; running the browser tests."
+            exit 0
+          fi
+          # Documents and ledgers only: the same list in each workflow that
+          # skips work for them (scripts/branch-ruleset.test.mjs keeps the
+          # copies identical). The
+          # native suite's prototypes under docs/ never count as documents.
+          docs_only='^(database/foundation/updates/README\.md|database/foundation/fingerprint\.json|FRONTEND-CHANGES\.md|docs/.+|.+\.md)$'
+          code="$(printf '%s\n' "$changed" | grep -Ev "$docs_only" | grep -v '^$' || true)"
+          prototypes="$(printf '%s\n' "$changed" | grep -E '^docs/backend-foundation/prototypes/' || true)"
+          if [ -n "$changed" ] && [ -z "$code" ] && [ -z "$prototypes" ]; then
+            echo "only=true" >> "$GITHUB_OUTPUT"
+            echo "Only documents and ledgers changed; the browser tests are skipped:"
+            printf '%s\n' "$changed"
+          else
+            echo "only=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # One job per browser lane, each on its own runner with its own test copy
+  # (the copies never share data). Both projects in one step took about 12
+  # minutes against a 14-minute limit, so one retried test or a slow runner
   # timed the job out with no test failure recorded. Split, each project took
   # about 6.5 minutes of browser tests; with the backend-independent checks
   # moved here from the stub suite it is about 10 (e2e/foundation/PORTING.md).
+  # chromium, the slowest project (13 to 17 minutes of tests in November 2026),
+  # runs as two Playwright shards (--shard=1/2 and --shard=2/2) on two runners;
+  # together they run every chromium test exactly once.
+  #
+  # Not run on a draft pull request (without the run-full-ci label) or on a
+  # pull request that changes only documents and ledgers. `!cancelled()` lets
+  # the lanes run when `changes` is skipped (main, nightly and manual runs).
   browser:
-    name: e2e-foundation (${{ matrix.project }})
-    if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'run-full-ci')) }}
+    name: e2e-foundation (${{ matrix.lane }})
+    needs: changes
+    if: ${{ !cancelled() && !(github.event_name == 'pull_request' && github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'run-full-ci')) && needs.changes.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        project: [chromium, mobile-chrome]
+        lane: [chromium-1-of-2, chromium-2-of-2, mobile-chrome]
     # Roadmap budget: the browser tests finish within 25 minutes of wall time;
-    # the two projects run in parallel. Step ceilings: stack 5, build 10,
-    # tests 22 (Playwright stops itself at 20 and writes its report first).
+    # the lanes run in parallel. Step ceilings: stack 5, build 10, tests 22
+    # (Playwright stops itself at 20 and writes its report first).
     timeout-minutes: 45
     steps:
+      - name: Choose the browser project and shard
+        env:
+          LANE: ${{ matrix.lane }}
+        run: |
+          case "$LANE" in
+            chromium-1-of-2) project=chromium; shard=1/2 ;;
+            chromium-2-of-2) project=chromium; shard=2/2 ;;
+            mobile-chrome) project=mobile-chrome; shard="" ;;
+            *) echo "::error::Unknown browser lane $LANE"; exit 1 ;;
+          esac
+          echo "E2E_PROJECT=$project" >> "$GITHUB_ENV"
+          echo "E2E_SHARD=$shard" >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -94,63 +166,69 @@ jobs:
       # 2 times a clean run) ends the run with its reports written, so a slow
       # run reads "timed out" in the summary instead of being cut off; the step
       # limit is the backstop if Playwright itself hangs.
-      - name: Browser tests (${{ matrix.project }})
+      - name: Browser tests (${{ matrix.lane }})
         timeout-minutes: 22
         env:
           PLAYWRIGHT_SKIP_BUILD: "1"
           PLAYWRIGHT_GLOBAL_TIMEOUT_MS: "1200000"
-          PLAYWRIGHT_JSON_REPORT: test-results/foundation-${{ matrix.project }}.json
-          PROJECT: ${{ matrix.project }}
+          PLAYWRIGHT_JSON_REPORT: test-results/foundation-${{ matrix.lane }}.json
         run: >-
           pnpm exec playwright test --config=playwright.foundation.config.ts
-          --project="$PROJECT"
+          --project="$E2E_PROJECT" ${E2E_SHARD:+--shard="$E2E_SHARD"}
       - name: Summarise the browser tests
         if: always()
         env:
-          PROJECT: ${{ matrix.project }}
+          LANE: ${{ matrix.lane }}
         run: |
-          node scripts/e2e-foundation-summary.mjs "test-results/foundation-$PROJECT.json" "$PROJECT" "${E2E_TESTS_STARTED:-}" | tee -a "$GITHUB_STEP_SUMMARY"
+          node scripts/e2e-foundation-summary.mjs "test-results/foundation-$LANE.json" "$LANE" "${E2E_TESTS_STARTED:-}" | tee -a "$GITHUB_STEP_SUMMARY"
           if [ -n "${E2E_TESTS_STARTED:-}" ]; then
-            echo "Browser tests ($PROJECT) ran for $(( $(date +%s) - E2E_TESTS_STARTED )) seconds."
+            echo "Browser tests ($LANE) ran for $(( $(date +%s) - E2E_TESTS_STARTED )) seconds."
           fi
       - name: Keep the browser report
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: e2e-foundation-report-${{ matrix.project }}
+          name: e2e-foundation-report-${{ matrix.lane }}
           if-no-files-found: ignore
           retention-days: 7
           path: |
             playwright-report/foundation
             test-results/foundation
-            test-results/foundation-${{ matrix.project }}.json
+            test-results/foundation-${{ matrix.lane }}.json
       - name: Delete the test copy
         if: always()
         run: node --import tsx scripts/foundation-e2e.mjs down
 
   # The single check name for the whole workflow (the required one): green
-  # only when every browser project passed. A draft run reports under another
-  # name: this job is created only after the browser projects finish, so a
-  # draft-time pass under the required name would still count for that long
-  # after the pull request is marked ready.
+  # only when every browser lane passed (both chromium shards and
+  # mobile-chrome), or when the pull request changes only documents and
+  # ledgers and the lanes were skipped for that reason. A draft run reports
+  # under another name: this job is created only after the browser lanes
+  # finish, so a draft-time pass under the required name would still count for
+  # that long after the pull request is marked ready.
   e2e-foundation:
     name: ${{ (github.event_name == 'pull_request' && github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'run-full-ci')) && 'e2e-foundation (draft, not run)' || 'e2e-foundation' }}
     runs-on: ubuntu-latest
-    needs: browser
+    needs: [changes, browser]
     if: ${{ !cancelled() }}
     timeout-minutes: 5
     steps:
-      - name: Every browser project passed
+      - name: Every browser lane passed
         env:
           RESULT: ${{ needs.browser.result }}
+          DOCS_ONLY: ${{ needs.changes.outputs.docs_only }}
           DRAFT_NOT_RUN: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'run-full-ci') }}
         run: |
           if [ "$DRAFT_NOT_RUN" = "true" ]; then
             echo "Draft pull request: the browser tests run once it is marked ready for review (or with the run-full-ci label)."
             exit 0
           fi
-          echo "Browser projects: $RESULT"
+          if [ "$DOCS_ONLY" = "true" ] && [ "$RESULT" = "skipped" ]; then
+            echo "Only documents and ledgers changed: the browser tests were not needed."
+            exit 0
+          fi
+          echo "Browser lanes: $RESULT"
           if [ "$RESULT" != "success" ]; then
-            echo "::error::At least one browser project did not pass ($RESULT). Its job summary says whether tests failed or the run timed out."
+            echo "::error::At least one browser lane did not pass ($RESULT). Its job summary says whether tests failed or the run timed out."
             exit 1
           fi
