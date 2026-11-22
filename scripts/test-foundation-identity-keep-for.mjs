@@ -55,35 +55,32 @@ const REPLACED = [
   "internal.evidence_artifact_submission_guard()",
 ];
 
-const {
-  started,
-  database,
-  check,
-  current,
-  passed: checks,
-  q,
-  json,
-  fails,
-  member,
-  staff,
-  service,
-  fingerprint,
-  bodyMd5,
-  preflightRows: preflight,
-  syntheticMember,
-} = await openUpdateCheck(PREFLIGHT);
+const opened = await openUpdateCheck(PREFLIGHT);
+const { started, database, check, current, q, json, fails, member, staff, service } = opened;
+const { fingerprint, bodyMd5, syntheticMember, passed: checks } = opened;
+const preflight = opened.preflightRows;
+/** Synthetic identity values: a keyed fingerprint, an encrypted ID number and a file receipt. */
+const synthetic = {
+  hex: (bytes) => randomBytes(bytes).toString("hex"),
+  fingerprint: () =>
+    `${createHash("sha256").update(`keep-for-${randomUUID()}`).digest("base64url").slice(0, 42)}Q`,
+  number: () => ({
+    ciphertext: synthetic.hex(13),
+    iv: synthetic.hex(12),
+    tag: synthetic.hex(16),
+    key_id: "identity-number-v1",
+  }),
+  receipt: () => ({
+    stored_sha256: synthetic.hex(32),
+    content_sha256: synthetic.hex(32),
+    size: 98765,
+  }),
+};
 try {
   const { steps, index, step } = applyStepsBefore(database, UPDATE);
-  const hex = (bytes) => randomBytes(bytes).toString("hex");
-  const fp = () =>
-    `${createHash("sha256").update(`person-${randomUUID()}`).digest("base64url").slice(0, 42)}A`;
-  const encrypted = () => ({
-    ciphertext: hex(13),
-    iv: hex(12),
-    tag: hex(16),
-    key_id: "identity-number-v1",
-  });
-  const receipt = () => ({ stored_sha256: hex(32), content_sha256: hex(32), size: 123456 });
+  const fp = synthetic.fingerprint;
+  const encrypted = synthetic.number;
+  const receipt = synthetic.receipt;
 
   syntheticMember("setup");
   q(`create or replace function vmtest.staff_member(p_label text,p_role text) returns jsonb language plpgsql as $$
