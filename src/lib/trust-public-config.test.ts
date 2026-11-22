@@ -26,10 +26,8 @@ describe("trust public config", () => {
       label: "CIPC registration number",
       value: "2026/155305/07",
     });
-    expect(rows).toContainEqual({
-      label: "Registered address",
-      value: "Kwadlangezwa, Khandisa, Empangeni, KwaZulu-Natal, 3886",
-    });
+    // No page shows a street address; the registered address is only named.
+    expect(rows.map((row) => row.label)).not.toContain("Registered address");
     expect(rows).toContainEqual({
       label: "Information Officer phone",
       value: "0717484185",
@@ -64,9 +62,7 @@ describe("trust public config", () => {
       label: "CIPC registration number",
       value: "2026/123456/07",
     });
-    expect(rows).toContainEqual({
-      label: "Registered address",
-      value: "1 Main Road, Cape Town",
-    });
+    // Even when set, an address setting is never shown.
+    expect(JSON.stringify(rows)).not.toContain("Main Road");
   });
 });
