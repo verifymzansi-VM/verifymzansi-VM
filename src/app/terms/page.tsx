@@ -63,8 +63,7 @@ export default async function TermsPage() {
     { label: "Website", value: "verifymzansi.com" },
     {
       label: "Dispute resolution code",
-      value:
-        "None yet. We have asked the Consumer Goods and Services Ombud whether we must join; until then you can escalate a complaint to the National Consumer Commission.",
+      value: "None yet. You can escalate a complaint to the National Consumer Commission.",
     },
   ].filter((row) => row.value);
 
