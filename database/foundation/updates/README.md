@@ -82,10 +82,11 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Copy a post, 21 November 2026
 
-`20261121150309_copy_a_post.sql` is pending (see the applied register). Launch
-checklist item 17b, business tools plan section 3 (owner-approved 20 November
-2026 with all 10 recommendations): a member whose Multi-listing package runs
-makes a new Market listing from one of their own.
+`20261121150309_copy_a_post.sql` was applied on 22 November 2026 at 11:40 UTC
+(see the applied register). Launch checklist item 17b, business tools plan
+section 3 (owner-approved 20 November 2026 with all 10 recommendations): a
+member whose Multi-listing package runs makes a new Market listing from one of
+their own.
 
 - **The copy:** `api.copy_my_post(post, request)` (members) copies one of the
   caller's own Market listings that was submitted at least once (not a draft,
@@ -7079,6 +7080,12 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   self-approved decisions: 0); production fingerprint after it (fingerprint.sql)
   matched the full replay (except the known schema grant difference)
 
-- `20261121150309_copy_a_post.sql`: pending; apply-first
+- `20261121150309_copy_a_post.sql`: applied 2026-11-22 11:40 UTC;
+  owner-approved, apply-first, Supabase SQL editor (pull request #341); update
+  sha256 starting 1acd618f; preflight (sha256 starting 73f33a34) before: update
+  not applied (draft posts: 0, no problems), after: already applied (11 of 11
+  parts as updated; copies: 0); production fingerprint after it
+  (fingerprint.sql) matched the full replay (except the known schema grant
+  difference)
 
 <!-- applied-register:end -->
