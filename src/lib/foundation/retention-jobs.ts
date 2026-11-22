@@ -233,6 +233,7 @@ export async function runFoundationRetention(
       claimed: sessions.claimed,
       deleted: sessions.deleted,
       failed: sessions.failed,
+      ...(sessions.skipped ? { skipped: sessions.skipped } : {}),
     },
     accountErasureErrors: stuckErasures,
     subrequests: budget.used,
@@ -258,9 +259,19 @@ async function deleteIdentityCheckSessions(
   { service, limits, budget, signal }: RunContext,
   sessions: IdentityCheckSessions | null
 ) {
-  const result = { claimed: 0, deleted: 0, failed: 0, claimFailed: false };
+  const result = {
+    claimed: 0,
+    deleted: 0,
+    failed: 0,
+    claimFailed: false,
+    /** Why nothing was claimed, when that is a setting (for the run log). */
+    skipped: undefined as "didit_delete_skipped_no_key" | undefined,
+  };
+  // Without the partner key nothing can be deleted there: said in the run log
+  // (an info line; on the manual setting no check needs deleting).
+  if (!sessions) return { ...result, skipped: "didit_delete_skipped_no_key" as const };
   const limit = Math.min(limits.identityCheckClaim, Math.floor((budget.remaining - 1) / 2));
-  if (!sessions || limit < 1 || signal.aborted) return result;
+  if (limit < 1 || signal.aborted) return result;
   budget.take(1);
   let claimed;
   try {

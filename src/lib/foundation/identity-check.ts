@@ -4,10 +4,11 @@ import { z } from "zod";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import { createFoundationServiceApi, type FoundationServiceApi } from "./service-api";
 import { handleFoundationOwnerRoute, type FoundationRefusal } from "./owner-route";
-import { lookupDatabaseReason, type FoundationErrorReason } from "./error-reasons";
+import { hasDatabaseReason, type FoundationErrorReason } from "./error-reasons";
 import { FoundationVerificationError } from "./verification-runtime";
 import {
   createDiditSession,
+  deleteDiditSession,
   diditConfig,
   DiditError,
   type DiditUnavailableReason,
@@ -16,7 +17,7 @@ import { deviceOfUserAgent, networkHash } from "./identity-check-context";
 import { recordIdentityCheckResult } from "./identity-check-result";
 import { sendStaffOperationsEmail } from "../services/email";
 import { SUPPORT_CONTACT_EMAIL } from "../contact-email";
-import { getClientIp } from "../utils/rate-limit";
+import { checkRateLimit, getClientIp } from "../utils/rate-limit";
 import { createLogger } from "../utils/logger";
 
 /**
@@ -110,14 +111,14 @@ class IdentityCheckRefusal extends Error {
   }
 }
 
-const startReasons = new Map<FoundationErrorReason, string>([
-  ["identity_check_limit", "identity_check_limit"],
-  ["identity_check_paused", "identity_check_paused"],
-  ["identity_check_mode", "identity_check_mode"],
-  ["identity_check_with_person", "identity_check_with_person"],
-  ["verified_phone_required", "verified_phone_required"],
-  ["legal_name_required", "legal_name_required"],
-]);
+const START_REASONS: readonly FoundationErrorReason[] = [
+  "identity_check_limit",
+  "identity_check_paused",
+  "identity_check_mode",
+  "identity_check_with_person",
+  "verified_phone_required",
+  "legal_name_required",
+];
 const UNAVAILABLE =
   "The ID check isn't available right now. Take your photos on this page instead.";
 const started = z.object({
@@ -130,9 +131,11 @@ const started = z.object({
 const availability = route.passthrough().extend({
   check: z
     .object({
+      id: z.uuid(),
       status: z.string(),
       created_at: z.string(),
       session_id: z.uuid().nullable(),
+      session_url: z.string().nullable(),
     })
     .passthrough()
     .nullable(),
@@ -164,6 +167,13 @@ async function lookAgainIfStale(api: FoundationAuthenticatedApi, now = Date.now(
     now - Date.parse(check.created_at) < LOOK_AGAIN_AFTER_MS
   )
     return current;
+  // At most one look per check every 2 minutes, however often the page asks.
+  const throttle = await checkRateLimit({
+    key: check.id,
+    action: "verification:identity-check-look",
+    degradedMode: "local",
+  });
+  if (throttle.limited) return current;
   try {
     const result = await recordIdentityCheckResult(
       createFoundationServiceApi(),
@@ -180,13 +190,21 @@ async function lookAgainIfStale(api: FoundationAuthenticatedApi, now = Date.now(
 }
 
 async function startCheck(api: FoundationAuthenticatedApi, request: NextRequest) {
+  // Where the member started (compared with where the partner saw the check):
+  // a keyed hash of the network and the kind of device only. Made first, so a
+  // missing server secret creates no check and no partner session.
+  const startedFrom = {
+    p_network_hash: networkHash(getClientIp(request)),
+    p_device_kind: deviceOfUserAgent(request.headers.get("user-agent")),
+  };
   await lookAgainIfStale(api);
   const { data, error } = await api.rpc("start_my_identity_check", {}, { get: false });
   if (error) {
     if (error.code === "PT409")
       throw new IdentityCheckRefusal(
         409,
-        lookupDatabaseReason(startReasons, error) ?? "identity_check_unavailable",
+        START_REASONS.find((reason) => hasDatabaseReason(error, reason)) ??
+          "identity_check_unavailable",
         UNAVAILABLE
       );
     throw error;
@@ -201,13 +219,6 @@ async function startCheck(api: FoundationAuthenticatedApi, request: NextRequest)
     return new IdentityCheckRefusal(409, "identity_check_paused", UNAVAILABLE);
   };
   if (!config) throw await unavailable("not_configured");
-  // Where the member started (compared with where the partner saw the check):
-  // a keyed hash of the network and the kind of device only. Made before the
-  // partner session, so a missing server secret creates nothing there.
-  const startedFrom = {
-    p_network_hash: networkHash(getClientIp(request)),
-    p_device_kind: deviceOfUserAgent(request.headers.get("user-agent")),
-  };
   let session: Awaited<ReturnType<typeof createDiditSession>>;
   try {
     session = await createDiditSession(config, check.check_id);
@@ -221,6 +232,17 @@ async function startCheck(api: FoundationAuthenticatedApi, request: NextRequest)
     p_session_url: session.url,
     ...startedFrom,
   });
+  if (attached.error?.code === "PT409") {
+    // Another start won the race and attached its own session: this one is
+    // removed at the partner (best effort; unused, it holds no data) and the
+    // member carries on with the attached one.
+    await deleteDiditSession(config, session.sessionId).catch(() => {
+      log.warn("Unused identity check session was not deleted", { reason: "parallel_start" });
+    });
+    const winner = (await readAvailability(api)).check;
+    if (winner?.id === check.check_id && winner.status === "started" && winner.session_url)
+      return { checkId: check.check_id, url: winner.session_url };
+  }
   if (attached.error) throw new Error("Identity check session was not attached");
   return { checkId: check.check_id, url: session.url };
 }
@@ -249,18 +271,41 @@ export function handleIdentityCheckAvailability(request: NextRequest) {
   });
 }
 
+/**
+ * The start and "ask a person" limit is kept per account (many members can
+ * share one mobile network address); the shared owner route still applies its
+ * general per-address limit.
+ */
+async function limitAccount(accountId: string) {
+  const limit = await checkRateLimit({
+    key: accountId,
+    action: "verification:identity-check",
+    degradedMode: "block",
+  });
+  if (limit.degraded || limit.limited)
+    throw new IdentityCheckRefusal(
+      limit.degraded ? 503 : 429,
+      limit.degraded ? "protection_unavailable" : "rate_limited",
+      limit.degraded
+        ? "Protection is temporarily unavailable"
+        : "Too many requests; try again shortly"
+    );
+}
+
 /** POST: starts (or resumes) the member's automatic ID check. */
 export function handleIdentityCheckStart(request: NextRequest) {
   return handleFoundationOwnerRoute({
     request,
     log,
-    action: "verification:identity-check",
+    action: "verification:status",
     mutate: true,
+    requireCaller: true,
     unavailableMessage: "Verification is temporarily unavailable",
     signInMessage: "Sign in to manage verification",
-    command: async (api, input) => {
+    command: async (api, input, caller) => {
       if (!z.strictObject({}).safeParse(input).success)
         throw new IdentityCheckRefusal(400, "invalid_request", "Reload the page and try again");
+      await limitAccount(caller!.accountId);
       return startCheck(api, request);
     },
     refusal,
@@ -272,11 +317,13 @@ export function handleIdentityCheckAsk(request: NextRequest) {
   return handleFoundationOwnerRoute({
     request,
     log,
-    action: "verification:identity-check",
+    action: "verification:status",
     mutate: true,
+    requireCaller: true,
     unavailableMessage: "Verification is temporarily unavailable",
     signInMessage: "Sign in to manage verification",
-    command: async (api, input) => {
+    command: async (api, input, caller) => {
+      await limitAccount(caller!.accountId);
       const parsed = askInput.safeParse(input);
       if (!parsed.success)
         throw new IdentityCheckRefusal(

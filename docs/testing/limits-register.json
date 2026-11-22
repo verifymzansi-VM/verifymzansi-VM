@@ -9188,6 +9188,32 @@
       ]
     },
     {
+      "id": "LIM-RL-verification-identity-check-look",
+      "title": "Shared rate limit for \"verification:identity-check-look\"",
+      "value": "1 per 120 s",
+      "category": "rate",
+      "action": "verification:identity-check-look",
+      "tiers": [
+        {
+          "limit": 1,
+          "ttl": 120
+        }
+      ],
+      "enforcedAt": [
+        {
+          "file": "workers/rate-limiter.ts",
+          "symbol": "ACTION_LIMITS",
+          "contains": "\"verification:identity-check-look\": [{ limit: 1, ttl: 120 }],"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "register",
+          "file": "src/__tests__/limits/rate-limiter-limits.test.ts"
+        }
+      ]
+    },
+    {
       "id": "LIM-RL-verification-handoff",
       "title": "Shared rate limit for \"verification:handoff\"",
       "value": "10 per 600 s, 30 per hour",

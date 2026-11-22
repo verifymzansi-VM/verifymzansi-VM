@@ -219,6 +219,9 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
   "verification:capture-token": [{ limit: 30, ttl: 600 }],
   // Automatic ID check: start (or resume) and "ask a person". The database
   // also allows 3 checks per member in 7 days and 60 a day site-wide.
+  // Looking again at a check still unfinished after 10 minutes: once per
+  // check every 2 minutes, however often the page asks.
+  "verification:identity-check-look": [{ limit: 1, ttl: 120 }],
   "verification:identity-check": [
     { limit: 10, ttl: 600 },
     { limit: 30, ttl: 86400 },

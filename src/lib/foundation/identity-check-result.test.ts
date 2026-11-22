@@ -129,7 +129,15 @@ describe("names (typed versus the ID)", () => {
     ).toBe(true);
     expect(namesMatch(names, { first_name: "THANDO", last_name: "DLAMINI" })).toBe(false);
     expect(namesMatch(names, { first_name: null, last_name: "DLAMINI" })).toBe(false);
-    expect(comparableName(" Ａnna ")).toBe("anna");
+    // Full-width letters are a different form (NFC, not NFKC): no match.
+    const fullWidth = String.fromCodePoint(0xff21) + "nna";
+    expect(comparableName(` ${fullWidth} `)).toBe(String.fromCodePoint(0xff41) + "nna");
+    expect(
+      namesMatch(
+        { first_name: "Anna", last_name: "Dlamini" },
+        { first_name: fullWidth, last_name: "DLAMINI" }
+      )
+    ).toBe(false);
   });
 });
 
@@ -164,6 +172,30 @@ describe("recording a result", () => {
       `evidence/${caseId}/${idArtifact}`,
       expect.any(Buffer)
     );
+  });
+
+  it("checks every IP analysis: one that moved is enough", async () => {
+    vi.mocked(fetchDiditDecision).mockResolvedValue(
+      decision({
+        ip_analyses: [
+          { ip_address: "198.51.100.42", platform: "mobile" },
+          { ip_address: "203.0.113.9", platform: "mobile" },
+        ],
+      })
+    );
+    await recordIdentityCheckResult(service, config, session);
+    expect(completion()).toMatchObject({ p_outcome: "approved", p_reasons: ["session_moved"] });
+    rpc.mockClear();
+    vi.mocked(fetchDiditDecision).mockResolvedValue(
+      decision({
+        ip_analyses: [
+          { ip_address: "198.51.100.42", platform: "mobile" },
+          { ip_address: "198.51.100.43", platform: "mobile" },
+        ],
+      })
+    );
+    await recordIdentityCheckResult(service, config, session);
+    expect(completion()).toMatchObject({ p_reasons: [] });
   });
 
   it("adds session_moved when the check happened on another network or device (scam lure)", async () => {
@@ -291,6 +323,14 @@ describe("recording a result", () => {
     await expect(recordIdentityCheckResult(service, config, session)).rejects.toMatchObject({
       reason: "photo_unsupported",
     });
+    // An unusable photo closes the check at once, so the member can start again.
+    expect(completion()).toEqual({
+      p_check: check,
+      p_session_id: session,
+      p_outcome: "not_finished",
+      p_reasons: [],
+    });
+    rpc.mockClear();
     vi.mocked(putImmutableR2Bytes).mockImplementation(async () => Buffer.from("enc:other"));
     await expect(recordIdentityCheckResult(service, config, session)).rejects.toMatchObject({
       reason: "evidence_mismatch",

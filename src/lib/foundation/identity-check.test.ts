@@ -10,7 +10,8 @@ import {
   pauseAutomaticChecks,
   refuseWhileAutomaticCheckOpen,
 } from "./identity-check";
-import { createDiditSession, DiditError } from "./didit-client";
+import { createDiditSession, deleteDiditSession, DiditError } from "./didit-client";
+import { checkRateLimit } from "../utils/rate-limit";
 import { networkHash } from "./identity-check-context";
 import { FoundationVerificationError } from "./verification-runtime";
 import { sendStaffOperationsEmail } from "../services/email";
@@ -19,6 +20,7 @@ vi.mock("server-only", () => ({}));
 vi.mock("./didit-client", async (original) => ({
   ...(await original<Record<string, unknown>>()),
   createDiditSession: vi.fn(),
+  deleteDiditSession: vi.fn(),
 }));
 vi.mock("./identity-check-result", () => ({ recordIdentityCheckResult: vi.fn() }));
 vi.mock("../services/email", () => ({ sendStaffOperationsEmail: vi.fn() }));
@@ -43,7 +45,10 @@ vi.mock("./owner-route", () => ({
     }
   },
 }));
-vi.mock("../utils/rate-limit", () => ({ getClientIp: () => "198.51.100.7" }));
+vi.mock("../utils/rate-limit", () => ({
+  getClientIp: () => "198.51.100.7",
+  checkRateLimit: vi.fn(),
+}));
 
 const owner = "11111111-1111-4111-8111-111111111111";
 const check = "22222222-2222-4222-8222-222222222222";
@@ -70,6 +75,8 @@ beforeEach(() => {
   vi.stubEnv("DIDIT_API_KEY", "fixture-key");
   vi.stubEnv("DIDIT_WORKFLOW_ID", "77777777-7777-4777-8777-777777777777");
   vi.mocked(sendStaffOperationsEmail).mockResolvedValue({ success: true } as never);
+  vi.mocked(checkRateLimit).mockResolvedValue({ limited: false, retryAfter: 0 });
+  vi.mocked(deleteDiditSession).mockResolvedValue(undefined);
   serviceRpc.mockImplementation(async (name: string) =>
     name === "report_identity_check_unavailable"
       ? {
@@ -160,11 +167,62 @@ describe("starting a check", () => {
       return first;
     });
 
-  it("makes the start record before the partner session, so a missing secret creates nothing there", async () => {
+  it("makes the start record first, so a missing secret creates no check and no partner session", async () => {
     memberRpc(started());
     vi.stubEnv("HMAC_SECRET", "");
     await expect(start()).rejects.toBeInstanceOf(FoundationVerificationError);
+    expect(rpc).not.toHaveBeenCalledWith(
+      "start_my_identity_check",
+      expect.anything(),
+      expect.anything()
+    );
     expect(createDiditSession).not.toHaveBeenCalled();
+  });
+
+  it("limits starts per account, not per network address", async () => {
+    memberRpc(started("https://verify.didit.me/session/old"));
+    await start();
+    expect(checkRateLimit).toHaveBeenCalledWith(
+      expect.objectContaining({ key: owner, action: "verification:identity-check" })
+    );
+    vi.mocked(checkRateLimit).mockResolvedValueOnce({ limited: true, retryAfter: 60 });
+    expect((await start()).refused).toMatchObject({ status: 429, code: "rate_limited" });
+  });
+
+  it("keeps the attached session when two starts race, and removes the extra one", async () => {
+    const attachedUrl = "https://verify.didit.me/session/first";
+    rpc.mockImplementation(async (name: string) =>
+      name === "start_my_identity_check"
+        ? started()
+        : {
+            data: {
+              route: "automatic",
+              reason: null,
+              check: {
+                id: check,
+                status: "started",
+                created_at: new Date().toISOString(),
+                session_id: "44444444-4444-4444-8444-444444444444",
+                session_url: attachedUrl,
+              },
+            },
+            error: null,
+          }
+    );
+    vi.mocked(createDiditSession).mockResolvedValue({
+      sessionId: session,
+      url: "https://verify.didit.me/session/second",
+    });
+    serviceRpc.mockImplementation(async (name: string) =>
+      name === "attach_identity_check_session"
+        ? { data: null, error: { code: "PT409" } }
+        : { data: null, error: null }
+    );
+    expect(await start()).toEqual({ data: { checkId: check, url: attachedUrl } });
+    expect(deleteDiditSession).toHaveBeenCalledWith(expect.anything(), session);
+    // A failed clean-up does not change the answer.
+    vi.mocked(deleteDiditSession).mockRejectedValueOnce(new DiditError("outage"));
+    expect(await start()).toEqual({ data: { checkId: check, url: attachedUrl } });
   });
 
   it("creates the partner session with the check id only, and records where the member started", async () => {
@@ -237,6 +295,7 @@ describe("a check whose result was lost", () => {
       status,
       created_at: new Date(Date.now() - minutesAgo * 60_000).toISOString(),
       session_id: status === "started" ? session : null,
+      session_url: status === "started" ? "https://verify.didit.me/session/abc" : null,
     },
   });
   const read = () =>
@@ -255,6 +314,22 @@ describe("a check whose result was lost", () => {
       expect.objectContaining({ apiKey: "fixture-key" }),
       session
     );
+  });
+
+  it("is looked at no more than once per check every 2 minutes", async () => {
+    rpc.mockResolvedValue({ data: availability(30), error: null });
+    vi.mocked(recordIdentityCheckResult).mockResolvedValue({
+      recorded: false,
+      status: "In Progress",
+    });
+    vi.mocked(checkRateLimit).mockResolvedValueOnce({ limited: true, retryAfter: 100 });
+    expect((await read()).data?.check?.status).toBe("started");
+    expect(recordIdentityCheckResult).not.toHaveBeenCalled();
+    expect(checkRateLimit).toHaveBeenCalledWith(
+      expect.objectContaining({ key: check, action: "verification:identity-check-look" })
+    );
+    await read();
+    expect(recordIdentityCheckResult).toHaveBeenCalledTimes(1);
   });
 
   it("is left alone when younger than 10 minutes, finished, or when looking again fails", async () => {

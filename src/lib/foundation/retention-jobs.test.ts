@@ -734,6 +734,8 @@ it("skips partner deletions without the partner key, and fails the run when the 
     }
   );
   expect(world.rpc).not.toHaveBeenCalledWith("claim_identity_check_deletions", expect.anything());
+  // Said in the run log with a reason code, not skipped silently.
+  expect(logLine().line).toContain("didit_delete_skipped_no_key");
   info.mockClear();
   warn.mockClear();
   world.overrides.claim_identity_check_deletions = () => ({

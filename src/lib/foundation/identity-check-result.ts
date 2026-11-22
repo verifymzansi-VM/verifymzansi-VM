@@ -48,10 +48,12 @@ export function outcomeOf(status: string): Outcome | null {
   }
 }
 
-/** Names compared without regard to case, Unicode form or spacing (the ID
- * prints names in capitals). */
+/** Names compared without regard to case or spacing, composed to one Unicode
+ * form (NFC: the same letters typed as one character or as letter plus mark).
+ * Look-alike forms such as full-width letters stay different. The ID prints
+ * names in capitals. */
 export const comparableName = (value: string | null | undefined) =>
-  (value ?? "").normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();
+  (value ?? "").normalize("NFC").toLowerCase().replace(/\s+/g, " ").trim();
 
 export function namesMatch(
   typed: { first_name: string; last_name: string },
@@ -86,7 +88,6 @@ const reserved = z.strictObject({
 const stored = /^evidence\/[a-f0-9-]{36}\/[a-f0-9-]{36}$/;
 const sha256 = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
 
-/** A photo copied into our own encrypted storage, as the manual route stores it. */
 /**
  * A failure that the same delivery can never get past (the partner should
  * stop retrying): the reason is a short code for the logs.
@@ -98,6 +99,7 @@ export class PermanentResultError extends Error {
   }
 }
 
+/** A photo copied into our own encrypted storage, as the manual route stores it. */
 async function storePhoto(key: string, url: string, selfie: boolean) {
   const original = await fetchDiditImage(url);
   const mime = detectMimeFromMagicBytes(original) ?? "application/octet-stream";
@@ -198,11 +200,20 @@ export async function recordIdentityCheckResult(
   if (document.issuing_state !== "ZAF") reasons.push("document_not_accepted");
   // The link was opened on another network or kind of device: the result
   // goes to a person (or is declined, with "ask a person", when automatic).
-  if (sessionMoved(start, decision.ip_analyses?.[0])) reasons.push("session_moved");
+  // Every IP analysis the partner reports must match; none at all counts as moved.
+  const analyses = decision.ip_analyses ?? [];
+  if (analyses.length === 0 || analyses.some((seen) => sessionMoved(start, seen)))
+    reasons.push("session_moved");
   const [idFront, selfie] = await Promise.all([
     storePhoto(targets.id_front.object_key, document.front_image, false),
     storePhoto(targets.selfie.object_key, face.reference_image, true),
-  ]);
+  ]).catch(async (error: unknown) => {
+    // A photo we can never use: close the check now (the member can start
+    // again) instead of leaving it open until it expires.
+    if (error instanceof PermanentResultError && error.reason === "photo_unsupported")
+      await complete({ outcome: "not_finished" });
+    throw error;
+  });
   const identity = processIdentityNumber(targets.owner_id, number, {
     identityMatchKey: verificationSecret("HMAC_SECRET").toString("hex"),
     numberEncryptionKey: verificationSecret("ID_ENCRYPTION_KEY").toString("hex"),
