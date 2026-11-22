@@ -8,7 +8,12 @@ CREATE OR REPLACE FUNCTION internal.queue_conflict(p_actor uuid, p_post_id uuid,
  SET search_path TO 'pg_catalog'
 AS $function$
   select case when p_post_id is not null
-    then exists(select 1 from private.posts p where p.id=p_post_id and p.owner_id=p_actor)
+    -- Staff review posts only with an accepted ID review of their own.
+    then internal.current_verified_identity(p_actor) is null
+      or (exists(select 1 from private.posts p where p.id=p_post_id and p.owner_id=p_actor)
+        -- Single-administrator mode: the only ID-verified staff member may
+        -- review any of their own posts and edits.
+        and not internal.single_administrator(p_actor))
     else exists(select 1 from private.reports r where r.id=p_report_id and
       (r.reporter_id=p_actor or r.subject_account_id=p_actor
        or r.duplicate_owner_b=p_actor or r.duplicate_created_by=p_actor))

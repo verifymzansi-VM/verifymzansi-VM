@@ -6177,6 +6177,62 @@
         "service_role": false
       },
       "authority": "Public: for a publicly live business with a storefront (current CIPC sticker, its owner's package running, the owner's first such business) or a live listing holding that package's slot, the business id and name, the listing count, categories, vehicle makes and property areas; null for any other post. Card facts only: no owner, package, slot, account or contact."
+    },
+    {
+      "name": "copy_my_post",
+      "updates": ["updates/20261121150309_copy_a_post.sql"],
+      "arguments": [
+        {
+          "name": "p_post",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_request",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current live owner of a Market listing submitted at least once and not held by staff, while the owner's Multi-listing package runs: a new draft through the draft allowance with the listing's fields, contact buttons (never numbers), photos and logo (the same stored files), never the video; a repeated request returns the same copy."
+    },
+    {
+      "name": "get_frontend_staff_copy_facts",
+      "updates": ["updates/20261121150309_copy_a_post.sql"],
+      "arguments": [
+        {
+          "name": "p_posts",
+          "sqlType": "uuid[]",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Staff with queue:view (fresh authenticator code), only for copies under review that the caller has claimed (up to 25): the post each was copied from (id, title, status; status deleted and no title once it is gone)."
+    },
+    {
+      "name": "list_my_copy_drafts",
+      "updates": ["updates/20261121150309_copy_a_post.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current live member: the ids of their own unfinished copies (drafts made by api.copy_my_post) and when each will be deleted (14 days after its last change); nothing else."
     }
   ]
 }

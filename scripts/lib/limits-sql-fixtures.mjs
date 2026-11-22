@@ -59,8 +59,12 @@ export async function acceptIdentity(h, user) {
 /** A staff member (h.staff) whose own ID review is accepted in full. */
 export async function verifiedStaff(h, label, role = "admin") {
   const user = await h.staff(label, role);
+  // The harness's staff already hold a synthetic ID review (with a phone and
+  // an area); replace it with the full one below.
   await h.seed(
-    `update private.accepted_identity_facts set revoked_at=now() where owner_id=${lit(user.id)};`
+    `update private.accepted_identity_facts set revoked_at=now() where owner_id=${lit(user.id)};
+    update private.verification_phone_proofs set revoked_at=now() where owner_id=${lit(user.id)} and revoked_at is null;
+    delete from private.verification_localities where owner_id=${lit(user.id)};`
   );
   await acceptIdentity(h, user);
   return user;

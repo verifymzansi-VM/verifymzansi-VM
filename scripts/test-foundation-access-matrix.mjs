@@ -292,6 +292,8 @@ const OWNER_TABLES = [
     "identity_disclosure_events",
     "subject_id=$1 or staff_id=$1 or disclosure_id in (select id from private.identity_disclosures where $1=any(subject_ids) or opened_by=$1)",
   ],
+  // Copy a post (20261121150309_copy_a_post): which of A's posts a copy came from.
+  ["post_copies", ownPosts],
   ["listing_price_drafts", "owner_id=$1"],
   ["moderation_log", ownPosts],
   [
@@ -890,7 +892,10 @@ try {
         call,
         sql,
         owner,
-        reviewer,
+        // Staff review posts only with an accepted ID review of their own
+        // (20261121143000_one_person_admin_mode.sql): the verified governor
+        // approves the post; the identity reviewer stays unverified.
+        reviewer: staff.governor,
         admin: staff.admin,
         orgAdmin,
         orgAdminEmail: orgAdmin.email,

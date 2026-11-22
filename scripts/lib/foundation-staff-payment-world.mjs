@@ -207,6 +207,10 @@ export function ozowNoticeSql({ json, service }, paymentId) {
 export const sqlValue = (value) =>
   value === null || value === undefined ? "null" : `'${String(value).replace(/'/g, "''")}'`;
 
+/** internal.grant_house_slots as SQL; a person is named by their email. */
+export const grantHouseSlotsSql = (recipient, slots, days, reason, approver) =>
+  `select internal.grant_house_slots(${sqlValue(recipient?.email ?? recipient)},${slots ?? "null"},${days ?? "null"},${sqlValue(reason)},${sqlValue(approver?.email ?? approver)});`;
+
 /**
  * The staff bank transfer commands as SQL (record, confirm, decline) for a
  * staff member, with every record argument overridable; the amount defaults to

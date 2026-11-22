@@ -189,6 +189,7 @@ export const ROUTE_ACCESS: Record<string, Partial<Record<RouteMethod, RouteAcces
   "api/listings": { GET: "public", POST: "signed-in" },
   "api/listings/[id]": { GET: "signed-in", PUT: "signed-in" },
   "api/listings/[id]/boost": { POST: "signed-in" },
+  "api/listings/[id]/copy": { POST: "signed-in" },
   "api/listings/[id]/featured": { POST: "signed-in" },
   "api/listings/[id]/urgent": { POST: "signed-in" },
   "api/media/serve/[...key]": { GET: "public" },
