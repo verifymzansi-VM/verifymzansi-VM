@@ -37,13 +37,16 @@ type Change = { kind: "rename" | "delete"; template: PostTemplate };
  * "Start from a template" on Create Post (business tools plan picture bt-08,
  * SHOW_POST_TEMPLATES): one card per template with "Use", which opens the
  * "Post an item" form filled in, and its own menu with Rename and Delete.
- * Shown only once a template exists.
+ * Shown only once a template exists. After the Multi-listing package ends, Use
+ * is off (a template is part of the package) but Rename and Delete still work.
  */
 export function TemplatePicker({
   templates,
+  packageRunning,
   verificationStatus,
 }: {
   templates: PostTemplate[];
+  packageRunning: boolean;
   verificationStatus: AccountVerificationStatus | null;
 }) {
   const [change, setChange] = useState<Change | null>(null);
@@ -60,10 +63,20 @@ export function TemplatePicker({
           {templates.length} of {POST_TEMPLATE_LIMIT}
         </p>
       </div>
-      <p className="text-sm text-muted-foreground">
-        Category, details, description and contact choices are filled in. You add the photos, title
-        and price.
-      </p>
+      {packageRunning ? (
+        <p className="text-sm text-muted-foreground">
+          Category, details, description and contact choices are filled in. You add the photos,
+          title and price.
+        </p>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          Your Multi-listing package has ended.{" "}
+          <Link href="/dashboard/slots" className="font-semibold text-foreground underline">
+            Renew
+          </Link>{" "}
+          to use templates.
+        </p>
+      )}
       <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {templates.map((template) => (
           <li key={template.id} className="surface-card flex flex-col gap-3 p-4">
@@ -109,17 +122,28 @@ export function TemplatePicker({
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-            <Button asChild variant="outline" className="h-11 w-full rounded-xl">
-              <Link
-                href={buildPostCategoryHref(
-                  `/post/create-listing?template=${template.id}`,
-                  verificationStatus
-                )}
+            {packageRunning ? (
+              <Button asChild variant="outline" className="h-11 w-full rounded-xl">
+                <Link
+                  href={buildPostCategoryHref(
+                    `/post/create-listing?template=${template.id}`,
+                    verificationStatus
+                  )}
+                  aria-label={`Use ${template.name}`}
+                >
+                  Use
+                </Link>
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                className="h-11 w-full rounded-xl"
+                disabled
                 aria-label={`Use ${template.name}`}
               >
                 Use
-              </Link>
-            </Button>
+              </Button>
+            )}
           </li>
         ))}
       </ul>

@@ -36,18 +36,16 @@ async function readInitialVerificationStatus(
   }
 }
 
-/** Post templates (SHOW_POST_TEMPLATES), only while the Multi-listing package
- * runs; none when they cannot be read (the section cards still work). */
-async function readUsableTemplates(
-  session: Awaited<ReturnType<typeof readFoundationServerSession>>
-) {
-  if (!SHOW_POST_TEMPLATES) return [];
+/** Post templates (SHOW_POST_TEMPLATES) and whether the Multi-listing
+ * package runs; none when they cannot be read (the section cards still work). */
+async function readTemplates(session: Awaited<ReturnType<typeof readFoundationServerSession>>) {
+  const none = { package_running: false, templates: [] };
+  if (!SHOW_POST_TEMPLATES) return none;
   try {
-    const list = await readMyPostTemplates(session.api);
-    return list.package_running ? list.templates : [];
+    return await readMyPostTemplates(session.api);
   } catch {
     log.warn("Post templates unavailable", { reason: "read_failed" });
-    return [];
+    return none;
   }
 }
 
@@ -66,9 +64,9 @@ export default async function PostCreatePage() {
   // redirect() throws, so it stays outside the try block above.
   if (!session) redirect("/login?returnUrl=%2Fpost%2Fcreate");
 
-  const [initialVerificationStatus, templates] = await Promise.all([
+  const [initialVerificationStatus, templateList] = await Promise.all([
     readInitialVerificationStatus(session),
-    readUsableTemplates(session),
+    readTemplates(session),
   ]);
 
   return (
@@ -127,8 +125,12 @@ export default async function PostCreatePage() {
         </BrandSurface>
 
         <div className="container-page flex flex-1 flex-col gap-5 py-5">
-          {templates.length > 0 ? (
-            <TemplatePicker templates={templates} verificationStatus={initialVerificationStatus} />
+          {templateList.templates.length > 0 ? (
+            <TemplatePicker
+              templates={templateList.templates}
+              packageRunning={templateList.package_running}
+              verificationStatus={initialVerificationStatus}
+            />
           ) : null}
           <PostCreateClient initialVerificationStatus={initialVerificationStatus} isAuthenticated />
         </div>

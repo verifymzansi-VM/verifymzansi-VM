@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import CreateListingPage from "./page";
 import { useRouter } from "next/navigation";
@@ -210,6 +210,7 @@ describe("CreateListingPage", () => {
     vi.clearAllMocks();
     localStorage.clear();
     (useRouter as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ push: mockPush });
+    mockToast.mockReturnValue({ id: "toast", dismiss: vi.fn(), update: vi.fn() });
     (useToast as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ toast: mockToast });
     global.URL.createObjectURL = vi.fn(() => "blob:logo-preview");
     global.URL.revokeObjectURL = vi.fn();
@@ -989,6 +990,73 @@ describe("CreateListingPage", () => {
           expect.objectContaining({ title: "Draft restored" })
         );
         expect(window.location.search).toBe("");
+      } finally {
+        switches.SHOW_POST_TEMPLATES = false;
+        global.fetch = base;
+        window.history.replaceState(null, "", "/");
+      }
+    });
+
+    it("post templates: Undo puts back the draft the template replaced", async () => {
+      const id = "00000000-0000-4000-8000-0000000000e1";
+      const list = {
+        package_running: true,
+        templates: [
+          {
+            id,
+            kind: "listing",
+            name: "Used phone",
+            data: {
+              category: "electronics",
+              description: "Template wording that every phone post repeats.",
+            },
+            updated_at: "2026-11-21T10:00:00Z",
+          },
+        ],
+      };
+      const base = global.fetch;
+      const templateFetch = vi.fn(() =>
+        Promise.resolve(new Response(JSON.stringify(list), { status: 200 }))
+      );
+      global.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+        String(input).includes("/api/post-templates")
+          ? templateFetch(input, init)
+          : base(input, init)
+      ) as typeof fetch;
+      switches.SHOW_POST_TEMPLATES = true;
+      seedDraft();
+      window.history.replaceState(null, "", `/post/create-listing?template=${id}`);
+      try {
+        render(<CreateListingPage />);
+        await waitFor(() => {
+          expect(screen.getByLabelText("Description (Required)")).toHaveValue(
+            "Template wording that every phone post repeats."
+          );
+        });
+        // The template's read gives up after a while (then the draft opens).
+        expect(templateFetch.mock.calls[0][1]).toMatchObject({ signal: expect.any(AbortSignal) });
+        const started = mockToast.mock.calls.find(
+          ([shown]) => shown.title === 'Started from "Used phone"'
+        );
+        expect(started?.[0].action).toBeTruthy();
+        act(() => started?.[0].action.props.onClick());
+        await waitFor(() => {
+          expect(screen.getByLabelText("Title (Required)")).toHaveValue("Saved iPhone 15");
+        });
+        expect(screen.getByLabelText("Description (Required)")).toHaveValue(
+          "A draft description from last session."
+        );
+        expect(mockToast).toHaveBeenCalledWith(
+          expect.objectContaining({ title: "Draft restored" })
+        );
+        // And in storage: the autosave keeps the draft again.
+        await waitFor(
+          () =>
+            expect(localStorage.getItem(`vm-draft:listing:${DRAFT_USER_ID}`)).toContain(
+              "Saved iPhone 15"
+            ),
+          { timeout: 3000 }
+        );
       } finally {
         switches.SHOW_POST_TEMPLATES = false;
         global.fetch = base;

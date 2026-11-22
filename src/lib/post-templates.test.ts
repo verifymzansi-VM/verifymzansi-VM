@@ -126,4 +126,22 @@ describe("post templates", () => {
     expect(parsed.dropped).toBe(1);
     expect(() => parsePostTemplateList({ templates: [] })).toThrow();
   });
+
+  it("refuses control characters in names and the NUL character in data", () => {
+    expect(postTemplateName.safeParse("Used\u0000bakkie").success).toBe(false);
+    expect(postTemplateName.safeParse("Used\tbakkie").success).toBe(false);
+    expect(postTemplateName.safeParse("Used\u0085bakkie").success).toBe(false);
+    expect(
+      postTemplateData.safeParse({ category: "vehicles", description: "a\u0000b" }).success
+    ).toBe(false);
+    expect(
+      postTemplateData.safeParse({ category: "vehicles", categoryAttributes: { make: "\u0000" } })
+        .success
+    ).toBe(false);
+    // New lines in a description are fine.
+    expect(
+      postTemplateData.safeParse({ category: "vehicles", description: "Line one\nLine two" })
+        .success
+    ).toBe(true);
+  });
 });

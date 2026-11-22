@@ -4,7 +4,7 @@ import { PostSelect } from "@/components/post/post-select";
 import { settleMediaUploads } from "@/app/post/_lib/settle-media-uploads";
 import { ListingQualityHint } from "@/components/post/listing-quality-hint";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { usePostTransport } from "@/hooks/use-post-transport";
 import Link from "next/link";
@@ -65,12 +65,18 @@ import {
 import { CATEGORIES } from "@/lib/constants/categories";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 import { checkUploadServiceReachable } from "@/lib/utils/upload-preflight";
-import type { ListingDraftData } from "@/lib/post-drafts/storage";
+import type { DraftEnvelope, ListingDraftData } from "@/lib/post-drafts/storage";
 import { LISTING_CONDITIONS } from "@/lib/constants/listing-condition";
 import { ListingDetailContent } from "@/components/listings/listing-detail-content";
 import { readMediaDimensions } from "@/lib/utils/media-metadata";
 import { VIDEO_GUIDANCE, VIDEO_SOUND_OFF_TIP } from "@/lib/media/video-length";
-import { useListingTemplate } from "./listing-template";
+import {
+  announceTemplate,
+  announceTemplateFailed,
+  loadListingStart,
+  type ListingStart,
+} from "./listing-template";
+import { formFieldsFromTemplate } from "@/lib/post-templates";
 
 const STEPS: PostFormStep[] = [
   {
@@ -410,8 +416,45 @@ export default function CreateListingPage() {
     });
   }, []);
 
-  // Start from a template (SHOW_POST_TEMPLATES): ?template=<id> fills the form.
-  const fromTemplate = useListingTemplate((fields) => {
+  // The form's starting point, settled once in order: a template the address
+  // names (SHOW_POST_TEMPLATES, ?template=<id>), else the autosaved draft. A
+  // template that replaced a draft offers Undo, which puts the draft back.
+  const started = useRef(false);
+  const applyDraft = (restored: DraftEnvelope<ListingDraftData>) => {
+    const restoredData = restored.data;
+    setStep(Math.min(Math.max(restored.step ?? 0, 0), STEPS.length - 1));
+    setTitle(restoredData.title ?? "");
+    setDescription(restoredData.description ?? "");
+    setPrice(restoredData.price ?? "");
+    setNegotiable(Boolean(restoredData.negotiable));
+    setCategory((restoredData.category as ListingCategory | "") ?? "");
+    setCondition((restoredData.condition as ListingCondition | "") ?? "");
+    setCategoryAttributes(restoredData.categoryAttributes ?? {});
+    setProvince(restoredData.province ?? "");
+    setCity(restoredData.city ?? "");
+    setTown(restoredData.town ?? "");
+    setAddress(restoredData.address ?? "");
+    setContactMethods(
+      Array.isArray(restoredData.contactMethods) && restoredData.contactMethods.length > 0
+        ? withListingEnquiry(restoredData.contactMethods)
+        : DEFAULT_LISTING_CONTACT_METHODS
+    );
+    setLastSavedAt(restored.savedAt ?? null);
+    toast({
+      title: "Draft restored",
+      description: "You can continue from where you left off.",
+      variant: "success",
+    });
+  };
+  const settleStart = useEffectEvent((start: ListingStart<ListingDraftData>) => {
+    if (start.templateFailed) announceTemplateFailed(toast);
+    const { draft, template } = start;
+    if (!template) {
+      if (draft) applyDraft(draft);
+      return;
+    }
+    const fields = formFieldsFromTemplate(template.data);
+    setStep(0);
     setCategory(fields.category as ListingCategory);
     setCondition(fields.condition as ListingCondition | "");
     setCategoryAttributes(fields.categoryAttributes);
@@ -421,43 +464,21 @@ export default function CreateListingPage() {
     setTown(fields.town);
     setAddress(fields.address);
     setContactMethods(fields.contactMethods);
+    announceTemplate(toast, template, draft ? () => applyDraft(draft) : null);
   });
 
   useEffect(() => {
-    if (!user?.id || isLoading || submitSucceeded) return;
-
-    void Promise.resolve(restoreDraft()).then(async (restored) => {
-      // Opened with a template: an older draft only when the template failed.
-      if (!restored || (await fromTemplate.current)) return;
-
-      const restoredData = restored.data;
-      queueMicrotask(() => {
-        setStep(Math.min(Math.max(restored.step ?? 0, 0), STEPS.length - 1));
-        setTitle(restoredData.title ?? "");
-        setDescription(restoredData.description ?? "");
-        setPrice(restoredData.price ?? "");
-        setNegotiable(Boolean(restoredData.negotiable));
-        setCategory((restoredData.category as ListingCategory | "") ?? "");
-        setCondition((restoredData.condition as ListingCondition | "") ?? "");
-        setCategoryAttributes(restoredData.categoryAttributes ?? {});
-        setProvince(restoredData.province ?? "");
-        setCity(restoredData.city ?? "");
-        setTown(restoredData.town ?? "");
-        setAddress(restoredData.address ?? "");
-        setContactMethods(
-          Array.isArray(restoredData.contactMethods) && restoredData.contactMethods.length > 0
-            ? withListingEnquiry(restoredData.contactMethods)
-            : DEFAULT_LISTING_CONTACT_METHODS
-        );
-        setLastSavedAt(restored.savedAt ?? null);
-        toast({
-          title: "Draft restored",
-          description: "You can continue from where you left off.",
-          variant: "success",
-        });
-      });
+    if (!user?.id || isLoading || submitSucceeded || started.current) return;
+    let cancelled = false;
+    void loadListingStart<ListingDraftData>(restoreDraft).then((start) => {
+      if (cancelled || started.current) return;
+      started.current = true;
+      queueMicrotask(() => settleStart(start));
     });
-  }, [user?.id, isLoading, submitSucceeded, restoreDraft, toast, fromTemplate]);
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, isLoading, submitSucceeded, restoreDraft]);
 
   useEffect(() => {
     if (!user?.id || isLoading || isSubmitting || submitSucceeded) return;

@@ -96,7 +96,7 @@ describe("/api/post-templates", () => {
 
   it("explains each refusal of the database", async () => {
     const cases: Array<[string, number, string]> = [
-      ["PT402", 403, "package_required"],
+      ["PT402", 409, "package_required"],
       ["PT429", 409, "template_limit"],
       ["22023", 422, "template_invalid"],
     ];

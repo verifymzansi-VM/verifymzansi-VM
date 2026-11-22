@@ -41,7 +41,9 @@ const PER_ITEM_DETAILS = new Set([
 ]);
 const CONTACT_BUTTONS = ["call", "whatsapp", "in_app"] as const;
 
-const detailValue = z.union([z.string(), z.boolean(), z.array(z.string())]);
+/** Text the database can store: jsonb refuses the NUL character. */
+const text = z.string().refine((value) => !value.includes("\u0000"));
+const detailValue = z.union([text, z.boolean(), z.array(text)]);
 
 /** A name as the database counts it: 1 to 60 characters (code points), trimmed. */
 export const postTemplateName = z
@@ -49,21 +51,22 @@ export const postTemplateName = z
   .trim()
   .refine((name) => {
     const length = [...name].length;
-    return length >= 1 && length <= POST_TEMPLATE_NAME_MAX;
+    // No control characters, as the database's [[:cntrl:]] rule.
+    return length >= 1 && length <= POST_TEMPLATE_NAME_MAX && !/\p{Cc}/u.test(name);
   });
 
 export const postTemplateData = z.strictObject({
-  category: z.string().min(1),
-  condition: z.string().optional(),
+  category: text.pipe(z.string().min(1)),
+  condition: text.optional(),
   categoryAttributes: z
-    .record(z.string(), detailValue)
+    .record(text, detailValue)
     .refine((details) => Object.keys(details).every((key) => !PER_ITEM_DETAILS.has(key)))
     .optional(),
-  description: z.string().optional(),
-  province: z.string().optional(),
-  city: z.string().optional(),
-  town: z.string().optional(),
-  address: z.string().optional(),
+  description: text.optional(),
+  province: text.optional(),
+  city: text.optional(),
+  town: text.optional(),
+  address: text.optional(),
   contactMethods: z.array(z.enum(CONTACT_BUTTONS)).optional(),
 });
 export type PostTemplateData = z.infer<typeof postTemplateData>;
@@ -127,16 +130,16 @@ export function templateDataFromForm(
       .filter(([key, value]) => !PER_ITEM_DETAILS.has(key) && isFilled(value))
       .map(([key, value]) => [key, typeof value === "number" ? String(value) : value])
   );
-  const text = (value: string | undefined) => value?.trim() || undefined;
+  const trimmed = (value: string | undefined) => value?.trim() || undefined;
   const data: PostTemplateData = {
     category: form.category,
-    condition: text(form.condition),
+    condition: trimmed(form.condition),
     categoryAttributes: Object.keys(details).length ? details : undefined,
-    description: text(form.description),
-    province: text(form.province),
-    city: text(form.city),
-    town: text(form.town),
-    address: text(form.address),
+    description: trimmed(form.description),
+    province: trimmed(form.province),
+    city: trimmed(form.city),
+    town: trimmed(form.town),
+    address: trimmed(form.address),
     contactMethods: form.contactMethods.filter((method) =>
       (CONTACT_BUTTONS as readonly string[]).includes(method)
     ) as PostTemplateData["contactMethods"],

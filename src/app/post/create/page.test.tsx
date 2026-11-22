@@ -176,24 +176,33 @@ describe("CreatePostPage", () => {
     expect(screen.getByRole("heading", { name: "Mzansi Market" })).toBeInTheDocument();
   });
 
-  it("post templates: nothing new without templates, a running package or the switch", async () => {
+  it("post templates: after the package ends, the templates stay but Use is off", async () => {
+    switches.SHOW_POST_TEMPLATES = true;
+    vi.mocked(readMyPostTemplates).mockResolvedValue({
+      package_running: false,
+      templates: [template],
+    });
+    render(await CreatePostPage());
+    expect(screen.getByRole("heading", { name: "Start from a template" })).toBeInTheDocument();
+    expect(screen.getByText(/Your Multi-listing package has ended\./)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Renew" })).toHaveAttribute("href", "/dashboard/slots");
+    expect(screen.getByRole("button", { name: "Use Used bakkie" })).toBeDisabled();
+    expect(screen.queryByRole("link", { name: "Use Used bakkie" })).not.toBeInTheDocument();
+    // Rename and Delete keep working.
+    expect(screen.getByRole("button", { name: "More actions for Used bakkie" })).toBeEnabled();
+  });
+
+  it("post templates: nothing new without templates, when the read fails or with the switch off", async () => {
     switches.SHOW_POST_TEMPLATES = true;
     vi.mocked(readMyPostTemplates).mockResolvedValue({ package_running: true, templates: [] });
     const first = render(await CreatePostPage());
     expect(screen.queryByText("Start from a template")).not.toBeInTheDocument();
     first.unmount();
-    vi.mocked(readMyPostTemplates).mockResolvedValue({
-      package_running: false,
-      templates: [template],
-    });
+    vi.mocked(readMyPostTemplates).mockRejectedValue(new Error("unavailable"));
     const second = render(await CreatePostPage());
     expect(screen.queryByText("Start from a template")).not.toBeInTheDocument();
-    second.unmount();
-    vi.mocked(readMyPostTemplates).mockRejectedValue(new Error("unavailable"));
-    const third = render(await CreatePostPage());
-    expect(screen.queryByText("Start from a template")).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Mzansi Market" })).toBeInTheDocument();
-    third.unmount();
+    second.unmount();
     switches.SHOW_POST_TEMPLATES = false;
     vi.mocked(readMyPostTemplates).mockClear();
     render(await CreatePostPage());

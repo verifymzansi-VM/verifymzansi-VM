@@ -26,9 +26,10 @@ class TemplateRefusal extends Error {
 
 function refuse(error: DatabaseError): never {
   const code = error.code;
+  // 409, not 403: a package that ended is a state, not a permission refusal.
   if (code === "PT402")
     throw new TemplateRefusal({
-      status: 403,
+      status: 409,
       error: "Templates are part of the Multi-listing package.",
       reason: "package_required",
     });
