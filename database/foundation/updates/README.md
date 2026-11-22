@@ -164,6 +164,125 @@ list of unfinished copies; the 14-day deletion (and its bounds, the legal hold,
 other drafts and submitted copies kept); and `copied_from` in the privacy
 export.
 
+## Single-administrator mode for house slots and own posts, 21 November 2026
+
+`20261121143000_one_person_admin_mode.sql` was applied on 22 November 2026 at
+06:40 UTC (see the applied register). Launch checklist item 67 (owner's
+decisions of 21 November 2026, "Option A", cap 25, and 22 November 2026, "Yes,
+all my posts"). The owner has two admin accounts but one ID, so the two-person
+rules for house slots could not be met: a house-slot grant needs a second
+ID-verified administrator, and staff never review their own posts.
+
+- **The mode.** `internal.single_administrator(account)` (no API role can run
+  it) is true while the account holds an active admin role and an accepted ID
+  review, and no other account with an active staff role has one. It is worked
+  out at every call; nothing is stored. As soon as a second staff member's ID
+  review is accepted (any staff role), the normal two-person rules apply again,
+  also to an item already claimed. A suspended staff member does not count
+  (their ID review is not current while the account is not active).
+- **Self-grant (database owner only).** `internal.grant_house_slots` keeps its
+  signature and every rule; in this mode `p_approved_by_email` may name the
+  recipient's own account (otherwise 42501 `house_slots_self_approval`, as
+  before). The owner's second admin account, which has no ID review, can neither
+  receive nor approve (`house_slots_identity_required`,
+  `house_slots_approver_identity_required`). Each event it records is marked
+  `self_granted` (new column of the append-only `private.house_slot_events`,
+  check: only on `granted` and `extended`), and the result has
+  `self_granted: true`.
+- **Cap 25 in total.** The cap is on the account's total house slots: a grant
+  makes the recipient hold 1 to 25 house slots in all (was 15); outside that,
+  22023 `house_slots_count_invalid`. LIM-SQL-house-slots-count in
+  `docs/testing/limits-register.json` follows.
+- **Staff review posts only with an ID review.** `internal.queue_conflict`
+  counts every post as a conflict for a staff member without an accepted ID
+  review of their own (`internal.current_verified_identity`), so such an account
+  (the owner's second admin account, for one) can neither list, claim, open,
+  renew nor decide (approve or reject) posts. The per-item commands
+  (`claim_queue_item`, `staff_review_post`, `renew_queue_claim` for posts and
+  `moderate_post` for every decision) refuse through the new
+  `internal.assert_post_reviewer`: 42501 "ID verification required to review
+  posts" (detail `staff_identity_required`), otherwise "self-review is not
+  allowed" on a conflict. A moderator whose ID review ends while holding a claim
+  can no longer renew or decide it. Reports are unchanged.
+- **Self-approval of all own posts** (owner's decision of 22 November 2026,
+  "Yes, all my posts"). While the mode holds, `internal.queue_conflict` no
+  longer counts any of the administrator's own pending posts or edits as a
+  conflict, whatever funds them (house slot, free first post, paid or package
+  slot, an event), so the moderation queue lists them and `claim_queue_items`
+  (which now asks `queue_conflict` instead of comparing the owner),
+  `claim_queue_item`, `staff_review_post` and
+  `assert_posting_verification_ready` and `assert_event_duplicate_absent`
+  (likewise) accept them. The owner reviews members' posts and their own from
+  the verified account; the second account sees an empty queue.
+  `internal.moderate_post` lets them approve their own post, never reject it
+  ("self-review is not allowed"). The admin role's `post:moderate` already needs
+  an authenticator code from the last 15 minutes (`internal.staff_actor`); the
+  update refuses to run unless it still does. The decision is recorded with
+  `self_approved` (new column of the append-only `private.moderation_log`,
+  check: approvals only) and the staff Audit log shows it as
+  `post:self_approved` (`post_self_approved` on the page). House-slot grants
+  keep their own rules (above). Identity reviews, refunds, business checks,
+  reports and every other two-person rule are unchanged.
+
+No API command, argument, grant or result field changes (internal functions, two
+columns with a default, one branch of
+`private.frontend_staff_nonpayment_audit_events`). ORDER: apply first, then
+merge. No screen changes: the queue and the Audit log already show what the
+database returns.
+
+**Applying.**
+
+1. Run `../preflight/20261121143000_one_person_admin_mode.check.sql` unchanged
+   in the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "one-person admin mode: update not applied; ID-verified
+   staff: N; house slots: N; post claims by staff without an ID review: N" (any
+   counts). ID-verified staff 1 means the mode will apply; post claims by staff
+   without an ID review can no longer be decided or renewed after the update and
+   expire within 15 minutes.
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "one-person admin mode: already applied; ID-verified
+   staff: N; house slots: N; post claims by staff without an ID review: N;
+   self-granted slot events: 0; self-approved decisions: 0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+**Granting afterwards (the owner, in the SQL editor).** With the ID-verified
+admin account's own address in both places:
+`select internal.grant_house_slots('<verified admin email>', <1 to 25>, <7 to 180 days>, '<written reason, 5 to 500 characters>', '<verified admin email>');`
+
+The reviewed rollback is
+`../rollback/20261121143000_one_person_admin_mode.down.sql` (only with the
+owner's decision; prefer a forward fix). It refuses unless the update is applied
+and the nine functions still have its bodies (both records are locked first,
+access exclusive), and while any event is `self_granted` or any decision
+`self_approved` (those records are kept). Otherwise it puts back the nine
+function bodies and the audit view, drops `internal.single_administrator`,
+`internal.assert_post_reviewer` and the two columns.
+
+`node --import tsx scripts/test-foundation-one-person-admin-mode.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; drifted bodies and a premature rollback
+refused; apply, rollback and re-apply return the same fingerprints; no API role
+can run the grant, the mode check or the conflict check; with two ID-verified
+staff the mode is off and the cap is 25 (26 and a count below the slots held
+refused); with one, the self-grant needs a reason, the verified account itself
+(not the second account) and at most 25, and its events are marked and
+append-only; the own house-slot post is listed, claimed, opened, refused with a
+16-minute-old code and as a rejection, approved with a 14-minute-old code,
+logged `self_approved` and shown as `post_self_approved`; the own
+free-first-post, paid-slot and event posts and an edit are each refused as a
+rejection and self-approved, marked; another member's post is approved as
+before, unmarked; a second ID-verified staff member ends the mode for grants and
+for every kind of own post (house slot, event, edits of the free-first-post and
+paid-slot posts: listing, claims and items already claimed), and removing or
+suspending them brings it back; the second admin account without an ID review
+can neither claim the owner's post nor, with a lease written directly, open,
+approve, reject or renew it (`staff_identity_required`), and the preflight
+counts that claim; the owner's own ID review ending turns the mode off; the
+rollback refuses a changed function and once a marked record exists; and after
+every later update a 16-minute-old code is still refused.
+
 ## Business storefront, 21 November 2026
 
 `20261121131915_business_storefront.sql` was applied on 21 November 2026 at
@@ -6951,6 +7070,14 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   new functions absent), after: already applied (the 5 bodies as updated);
   production fingerprint after it (fingerprint.sql) matched the full replay
   (except the known schema grant difference)
+
+- `20261121143000_one_person_admin_mode.sql`: applied 2026-11-22 06:40 UTC;
+  owner-approved, apply-first, Supabase SQL editor (pull request #343); update
+  sha256 starting 3cceed8f; preflight (sha256 starting 7074a32b) before: update
+  not applied (ID-verified staff 1, no problems), after: already applied (11 of
+  11 bodies as updated, both new columns present; self-granted slot events: 0;
+  self-approved decisions: 0); production fingerprint after it (fingerprint.sql)
+  matched the full replay (except the known schema grant difference)
 
 - `20261121150309_copy_a_post.sql`: pending; apply-first
 

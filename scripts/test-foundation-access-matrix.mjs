@@ -892,7 +892,10 @@ try {
         call,
         sql,
         owner,
-        reviewer,
+        // Staff review posts only with an accepted ID review of their own
+        // (20261121143000_one_person_admin_mode.sql): the verified governor
+        // approves the post; the identity reviewer stays unverified.
+        reviewer: staff.governor,
         admin: staff.admin,
         orgAdmin,
         orgAdminEmail: orgAdmin.email,

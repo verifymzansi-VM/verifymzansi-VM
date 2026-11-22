@@ -42,10 +42,10 @@ import {
   applyAndProveRollback,
   fingerprintOf,
   functionBodyMd5,
+  grantHouseSlotsSql,
   P30,
   psqlSessions,
   runTwoAdminUpdateCheck,
-  sqlValue,
 } from "./lib/foundation-staff-payment-world.mjs";
 
 const UPDATE = "20261119082834_house_slots.sql";
@@ -67,6 +67,12 @@ const EXPORT_LATER = [
   "e543b105fe264d5a683b5c570bf68cb5",
   // 20261121150309_copy_a_post.sql (the posts rows gain copied_from)
   "4aa0fa034c5c09e495530b5563ff3008",
+];
+/** The grant after later reviewed updates. */
+const GRANT_LATER = [
+  ADDED[GRANT],
+  // 20261121143000_one_person_admin_mode.sql (up to 25; single-administrator mode)
+  "6d72e0bc6a5f2bee76a43563f19278ac",
 ];
 const LIFECYCLE = "internal.run_post_lifecycle(integer)";
 const LIFECYCLE_BEFORE = "cb5770e3e71e9e6ed31d1eff3e06e3fc";
@@ -153,8 +159,7 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
   ready(admin);
   ready(admin2);
 
-  const grantSql = (recipient, slots, days, reason, approver) =>
-    `select internal.grant_house_slots(${sqlValue(recipient?.email ?? recipient)},${slots ?? "null"},${days ?? "null"},${sqlValue(reason)},${sqlValue(approver?.email ?? approver)});`;
+  const grantSql = grantHouseSlotsSql;
   const grant = (recipient, slots = 1, days = 90, approver = admin2, reason = REASON) =>
     json(grantSql(recipient, slots, days, reason, approver));
   const houseSlots = (person) =>
@@ -817,7 +822,8 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
     applySteps(database, later);
     await check("later updates keep the house slots", () => {
       for (const [signature, md5] of Object.entries(ADDED))
-        assert.equal(bodyMd5(signature), md5, signature);
+        if (signature !== GRANT) assert.equal(bodyMd5(signature), md5, signature);
+      assert.ok(GRANT_LATER.includes(bodyMd5(GRANT)), bodyMd5(GRANT));
       // 20261119172135_post_views_and_likes.sql adds the like datasets to the
       // export; house_slot_events stays.
       assert.ok(EXPORT_LATER.includes(bodyMd5(EXPORT)), bodyMd5(EXPORT));
