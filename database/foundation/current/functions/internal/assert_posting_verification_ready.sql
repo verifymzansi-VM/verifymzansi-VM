@@ -16,7 +16,9 @@ begin
   -- current facts and rederive the real caller before a data-dependent refusal.
   actor:=case when p_staff then internal.staff_actor('post:moderate') else internal.price_draft_actor() end;
   if owner is null then raise exception 'post unavailable' using errcode='22023'; end if;
-  if (not p_staff and owner<>actor) or (p_staff and owner=actor) then
+  -- Staff never publish their own post, except in single-administrator mode
+  -- (internal.queue_conflict).
+  if (not p_staff and owner<>actor) or (p_staff and internal.queue_conflict(actor, p_post_id, null)) then
     raise exception 'caller cannot publish this post' using errcode='42501';
   end if;
   if not ready then
