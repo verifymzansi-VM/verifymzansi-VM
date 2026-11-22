@@ -11,6 +11,7 @@ declare
   today date := (statement_timestamp() at time zone 'Africa/Johannesburg')::date;
   viewer uuid := p_account; moved integer := 0; engaged integer := 0;
   salt_today bytea; salt_before bytea; pid uuid; seen bytea; again bytea;
+  showroom_marks bytea[] := '{}'::bytea[];
 begin
   if p_post_ids is null or p_metrics is null or cardinality(p_post_ids) not between 1 and 50
     or cardinality(p_metrics) <> cardinality(p_post_ids)
@@ -30,6 +31,24 @@ begin
   -- Staff activity is never counted.
   if viewer is not null and exists(select 1 from private.staff_roles r where r.user_id=viewer and r.revoked_at is null) then
     return jsonb_build_object('posts', 0, 'engaged', 0);
+  end if;
+
+  -- Showroom appearances count at most once per browser, post and showroom a
+  -- day: a mark under the day's salt, as views use (deleted after 24 hours
+  -- by the engagement clean-up). Without a browser they do not count.
+  if p_device is not null and exists(select 1 from unnest(p_metrics) m where m like 'showroom\_%') then
+    insert into private.post_view_salts(day, salt)
+      values (today, decode(replace(gen_random_uuid()::text,'-','')||replace(gen_random_uuid()::text,'-',''),'hex'))
+      on conflict (day) do nothing;
+    select s.salt into salt_today from private.post_view_salts s where s.day = today;
+    with fresh as (
+      insert into private.post_view_marks(mark)
+      select distinct sha256(salt_today || convert_to('showroom:' || e.metric || ':' || p_device::text || '|' || e.post_id::text, 'UTF8'))
+      from unnest(p_post_ids, p_metrics) e(post_id, metric)
+      where e.metric like 'showroom\_%'
+      on conflict (mark) do nothing
+      returning mark)
+    select coalesce(array_agg(f.mark), '{}'::bytea[]) into showroom_marks from fresh f;
   end if;
 
   -- The day's counters of each publicly live post the viewer does not own;
@@ -64,6 +83,8 @@ begin
   join private.posts p on p.id = e.post_id
   join private.post_search_documents d on d.post_id = p.id
   where e.metric <> 'engaged_views' and d.is_visible
+    and (e.metric not like 'showroom\_%' or sha256(salt_today || convert_to('showroom:' || e.metric || ':'
+      || p_device::text || '|' || e.post_id::text, 'UTF8')) = any (showroom_marks))
     and (d.visible_until is null or d.visible_until > statement_timestamp())
     and exists(select 1 from private.public_eligible_posts x where x.id = p.id)
     and p.owner_id is distinct from viewer

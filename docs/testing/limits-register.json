@@ -10157,6 +10157,25 @@
       ]
     },
     {
+      "id": "LIM-SQL-showroom-appearance-cap",
+      "title": "Fair showroom: a post's appearances count up to 3 fair shares",
+      "value": 3,
+      "category": "cap",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/showroom_feed.sql",
+          "symbol": "internal.showroom_feed",
+          "contains": "cross join lateral (select least(coalesce(s.n, 0), 3 * f.share) as n) seen"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-fair-showroom.mjs"
+        }
+      ]
+    },
+    {
       "id": "LIM-SQL-showroom-busy-cap",
       "title": "Fair showroom: a post shown more than twice the fair share this week loses its city and province places",
       "value": 2,
@@ -10165,7 +10184,7 @@
         {
           "file": "database/foundation/current/functions/internal/showroom_feed.sql",
           "symbol": "internal.showroom_feed",
-          "contains": "when v_province is null or coalesce(s.n, 0) > 2 * f.share then 3"
+          "contains": "case when v_province is null or seen.n > 2 * f.share then 3"
         }
       ],
       "tests": [
@@ -10177,14 +10196,14 @@
     },
     {
       "id": "LIM-SQL-showroom-like-nudge",
-      "title": "Fair showroom: the likes nudge is at most 0.15 of a turn (likes per view, from 1 like in 20 views)",
+      "title": "Fair showroom: the likes nudge is at most 0.15 of a turn (lifetime likes per view, from 1 like in 20 views)",
       "value": 0.15,
       "category": "cap",
       "enforcedAt": [
         {
           "file": "database/foundation/current/functions/internal/showroom_feed.sql",
           "symbol": "internal.showroom_feed",
-          "contains": "+ least(0.15, 0.75 * (coalesce(lk.n, 0) + 1)::numeric / (coalesce(vw.n, 0) + 20))"
+          "contains": "+ least(0.15, 0.75 * (coalesce(t.likes, 0) + 1)::numeric / (coalesce(t.views, 0) + 20)))"
         }
       ],
       "tests": [

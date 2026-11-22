@@ -1,7 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { COMMERCIAL_EVENT_TYPES } from "@/lib/analytics/commercial-events";
-import { engagementCaller, engagementClientKey, isCountableRequest } from "@/lib/engagement-route";
+import {
+  engagementCaller,
+  engagementClientKey,
+  isCountableRequest,
+  readViewerId,
+} from "@/lib/engagement-route";
 import {
   activityCounter,
   MAX_ACTIVITY_EVENTS,
@@ -40,6 +45,8 @@ const accepted = () => new NextResponse(null, { status: 204 });
 
 /** Events of a post's own page: a detail view (by source), a tap or a share. */
 const isPageEvent = (counter: ActivityCounter) => /^views_|_taps$|^shares$/.test(counter);
+/** A showroom appearance: it moves the post's place in the fair showroom. */
+const isShowroom = (counter: ActivityCounter) => counter.startsWith("showroom_");
 
 /**
  * POST /api/analytics/events
@@ -53,17 +60,24 @@ const isPageEvent = (counter: ActivityCounter) => /^views_|_taps$|^shares$/.test
  * counters for the day (api.record_post_activity); a save (the page shows
  * likes), a sponsor click and organisation events are not counted here.
  *
- * No sign-in or cookie needed. Each (post, counter) pair counts at most once
- * per request. Never counted: a crawler or headless browser, a prefetch,
- * requests over the per-source limit (`engagement:activity` per IPv4 address
- * or IPv6 /48), a post's page events (detail views, taps, shares) over its
- * per-source daily limit (`engagement:activity:post`, one per request with
- * such an event for the post; dropped silently; appearances are not checked
- * against it, so a page left open never uses it up), and (in the database) the
- * signed-in owner's own
- * events, staff events and posts that are not publicly live. Nothing about
- * the visitor is sent to the database except the GoTrue-verified account,
- * which only decides whether the event counts.
+ * No sign-in or cookie needed, except for showroom appearances. Each (post,
+ * counter) pair counts at most once per request. Never counted: a crawler or
+ * headless browser, a prefetch, requests over the per-source limit
+ * (`engagement:activity` per IPv4 address or IPv6 /48), a post's page events
+ * (detail views, taps, shares) and showroom appearances over its per-source
+ * daily limit (`engagement:activity:post`, one per request with such an event
+ * for the post; dropped silently; list, search, home and directory
+ * appearances are not checked against it, so a page left open never uses it
+ * up), and (in the database) the signed-in owner's own events, staff events
+ * and posts that are not publicly live.
+ *
+ * Showroom appearances decide each post's place in the fair showroom, so they
+ * count only from a browser this website signed (the `vmz_viewer` identifier
+ * views use, given after a Turnstile check), and the database counts each at
+ * most once per browser, post and showroom a day. Without the identifier they
+ * are dropped. Nothing about the visitor is sent to the database except the
+ * GoTrue-verified account, which only decides whether the event counts, and
+ * that identifier when the request holds a showroom appearance.
  *
  * While SHOW_ENGAGEMENT_TOTALS is off the route answers 204 No Content without
  * reading the request, calling a database or setting a cookie.
@@ -83,6 +97,11 @@ export async function POST(request: NextRequest) {
     if (counter) pairs.set(`${event.id}|${counter}`, { postId: event.id, counter });
   }
   if (pairs.size === 0) return accepted();
+  const viewer = [...pairs.values()].some((pair) => isShowroom(pair.counter))
+    ? await readViewerId(request)
+    : null;
+  if (!viewer) for (const [key, pair] of pairs) if (isShowroom(pair.counter)) pairs.delete(key);
+  if (pairs.size === 0) return accepted();
 
   const client = engagementClientKey(request);
   const limit = await checkRateLimit({
@@ -91,12 +110,14 @@ export async function POST(request: NextRequest) {
     degradedMode: "local",
   });
   if (limit.limited) return accepted();
-  // Each post's page events (detail views, taps, shares): at most a few hundred
-  // requests per address and day. Appearances come many posts at a time and
-  // rely on the per-request dedupe and the address limit above.
+  // Each post's page events (detail views, taps, shares) and showroom
+  // appearances: at most a few hundred requests per address and day. Other
+  // appearances come many posts at a time and rely on the per-request dedupe
+  // and the address limit above.
+  const limited = (counter: ActivityCounter) => isPageEvent(counter) || isShowroom(counter);
   const posts = [
     ...new Set(
-      [...pairs.values()].filter((pair) => isPageEvent(pair.counter)).map((pair) => pair.postId)
+      [...pairs.values()].filter((pair) => limited(pair.counter)).map((pair) => pair.postId)
     ),
   ];
   const allowed = new Set(
@@ -114,7 +135,7 @@ export async function POST(request: NextRequest) {
     ).filter((id): id is string => id !== null)
   );
   const events = [...pairs.values()].filter(
-    (pair) => !isPageEvent(pair.counter) || allowed.has(pair.postId)
+    (pair) => !limited(pair.counter) || allowed.has(pair.postId)
   );
   if (events.length === 0) return accepted();
 
@@ -122,7 +143,7 @@ export async function POST(request: NextRequest) {
   try {
     await recordFoundationPostActivity(createFoundationServiceApi(), {
       events,
-      device: null,
+      device: viewer?.id ?? null,
       account: caller.account,
     });
     return caller.respond(accepted());

@@ -19,15 +19,20 @@
 // likes cap (LIM-SQL-showroom-like-nudge) and the video nudge; only publicly
 // live posts, card fields only; with no appearances yet, no video or likes
 // nudge, so photo posts get their share; all nudges together under one turn;
-// the approvals index; and that a read stores nothing. Posts are
-// events written directly as the database owner (a live event is public until
-// it ends, with no plan needed); appearances, views and likes are written into
-// their tables directly. Any later updates are applied at the end.
+// the approvals index; a showroom appearance recorded once per browser, post
+// and showroom a day and never without a browser; appearances counted up to 3
+// fair shares (LIM-SQL-showroom-appearance-cap); a drifted recording body
+// refused; and that a read stores nothing. Posts are events written directly
+// as the database owner (a live event is public until it ends, with no plan
+// needed); appearances and view and like totals are written into their tables
+// directly, except where the recording command itself is tested. Any later
+// updates are applied at the end.
 //
 //   node --import tsx scripts/test-foundation-fair-showroom.mjs
 //
 // Needs a local Docker daemon; it takes no connection settings at all.
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import {
   applyStepsBefore,
@@ -142,6 +147,25 @@ try {
     q(`delete from private.posts where id in (${made.map((id) => `'${id}'`).join(",")});`);
     made.length = 0;
   };
+  /** A post's lifetime view and like totals (what the likes nudge reads). */
+  const totals = (id, views, likes) =>
+    q(`insert into private.post_engagement_totals(post_id,views,likes) values('${id}',${views},${likes})
+      on conflict (post_id) do update set views=excluded.views, likes=excluded.likes;`);
+  /** Records appearances as the website's server does (one call). */
+  const appear = (pairs, device) =>
+    json(
+      service(
+        `select api.record_post_activity(array[${pairs.map(([id]) => `'${id}'`).join(",")}]::uuid[],` +
+          `array[${pairs.map(([, m]) => `'${m}'`).join(",")}]::text[],` +
+          `${device ? `'${device}'` : "null"},null);`
+      )
+    );
+  /** A post's counter for today. */
+  const today = (id, metric) =>
+    Number(
+      q(`select coalesce((select ${metric} from private.post_activity_days where post_id='${id}'
+          and day=(now() at time zone 'Africa/Johannesburg')::date),0);`)
+    );
   const feedSql = (request) =>
     anon(`select api.showroom_feed(${sqlLiteral(JSON.stringify(request))}::jsonb);`);
   const feed = (request) => json(feedSql(request)).items;
@@ -186,10 +210,21 @@ try {
     assert.match(rows[0][1], /unexpected state/);
     assert.match(
       rows[1][1],
-      /^api\.showroom_feed\(jsonb\) exists but is not the update's definition/
+      /^api\.showroom_feed\(jsonb\) is neither as before the update nor the update's definition/
     );
     assert.match(fails(step.sql, "55000"), /1 of 3 parts exist/);
     q(`drop function api.showroom_feed(jsonb);`);
+    // A drifted recording body: named by the preflight, refused by the update.
+    const recording = "internal.record_post_activity(uuid[],text[],uuid,uuid)";
+    const live = q(`select pg_get_functiondef('${recording}'::regprocedure);`);
+    q(
+      `do $$begin execute replace(pg_get_functiondef('${recording}'::regprocedure),'AS $function$','AS $function$ '); end$$;`
+    );
+    const drifted = preflight();
+    assert.equal(drifted.length, 2, JSON.stringify(drifted));
+    assert.ok(drifted[1][1].startsWith(`${recording} is neither as before`), drifted[1][1]);
+    assert.match(fails(step.sql, "55000"), /record_post_activity is not a reviewed body/);
+    q(`${live};`);
     assert.equal(fingerprint(), before);
   });
 
@@ -368,19 +403,16 @@ try {
   });
 
   await check("likes help a little and never jump the queue (LIM-SQL-showroom-like-nudge)", () => {
-    // Level turns: 50 likes in 50 views reach the cap (0.15 of a turn), against
-    // 0.0375 without likes, so the liked post is first about 80% of the time.
+    // Level turns: 50 likes in 50 views (the post's totals) reach the cap
+    // (0.15 of a turn), against 0.0375 without likes, so the liked post is
+    // first about 80% of the time.
     const liked = post("kzn_durban", { shown: 10 });
     const plain = post("kzn_durban", { shown: 10 });
-    q(`insert into private.post_view_days(post_id,day,views)
-        values('${liked}',(now() at time zone 'Africa/Johannesburg')::date-1,50);
-      insert into private.post_likes(post_id,device_mark,waiting,counts_from)
-        select '${liked}',sha256(convert_to(g::text||'${liked}','UTF8')),false,now()-interval '1 day'
-        from generate_series(1,50) g;
-      -- Likes still waiting and likes older than 30 days do not count.
-      insert into private.post_likes(post_id,device_mark,waiting,counts_from)
-        select '${plain}',sha256(convert_to(g::text||'${plain}','UTF8')),g<=50,now()-case when g<=50 then interval '0' else interval '40 days' end
-        from generate_series(1,100) g;`);
+    totals(liked, 50, 50);
+    // Likes still waiting are not in the totals, so they do not count.
+    q(`insert into private.post_likes(post_id,device_mark,waiting,counts_from)
+        select '${plain}',sha256(convert_to(g::text||'${plain}','UTF8')),true,now()
+        from generate_series(1,50) g;`);
     const firsts = firstCount(tourism(), liked);
     assert.ok(firsts > 120 && firsts < 200, `liked first ${firsts} of 200`);
     clear();
@@ -388,11 +420,7 @@ try {
     // 0.1125 (likes) + 0.3 (randomness) < 0.5. Fair share 20 (40 over 2).
     const behind = post("kzn_durban", { shown: 25 });
     const ahead = post("kzn_durban", { shown: 15 });
-    q(`insert into private.post_view_days(post_id,day,views)
-        values('${behind}',(now() at time zone 'Africa/Johannesburg')::date-1,1000);
-      insert into private.post_likes(post_id,device_mark,waiting,counts_from)
-        select '${behind}',sha256(convert_to(g::text||'${behind}','UTF8')),false,now()
-        from generate_series(1,1000) g;`);
+    totals(behind, 1000, 1000);
     assert.equal(firstCount(tourism(), ahead), 200);
     clear();
   });
@@ -416,11 +444,7 @@ try {
     // ahead of an empty fair share; only randomness orders them.
     const videos = [0, 1, 2, 3].map(() => post("kzn_durban", { video: true }));
     const photos = [0, 1, 2, 3].map(() => post("kzn_durban"));
-    q(`insert into private.post_view_days(post_id,day,views)
-        values('${videos[0]}',(now() at time zone 'Africa/Johannesburg')::date-1,50);
-      insert into private.post_likes(post_id,device_mark,waiting,counts_from)
-        select '${videos[0]}',sha256(convert_to(g::text||'${videos[0]}','UTF8')),false,now()
-        from generate_series(1,50) g;`);
+    totals(videos[0], 50, 50);
     const photoFirst = Number(
       q(
         anon(`select count(*) from generate_series(1,400) g
@@ -439,16 +463,76 @@ try {
     // (0.15) and randomness (up to 0.3) never carry the post behind past it.
     const behind = post("kzn_durban", { shown: 30, video: true });
     const ahead = post("kzn_durban", { shown: 10 });
-    q(`insert into private.post_view_days(post_id,day,views)
-        values('${behind}',(now() at time zone 'Africa/Johannesburg')::date-1,1000);
-      insert into private.post_likes(post_id,device_mark,waiting,counts_from)
-        select '${behind}',sha256(convert_to(g::text||'${behind}','UTF8')),false,now()
-        from generate_series(1,1000) g;`);
+    totals(behind, 1000, 1000);
     assert.equal(firstCount(tourism(), ahead), 200);
     assert.equal(
       q(`select pg_get_indexdef('private.moderation_log_post_approvals_idx'::regclass);`),
       "CREATE INDEX moderation_log_post_approvals_idx ON private.moderation_log USING btree (post_id) WHERE ((edit_id IS NULL) AND (decision = 'approve'::text))"
     );
+    clear();
+  });
+
+  await check("a showroom appearance counts once per browser, post and showroom a day", () => {
+    const shown = post("kzn_durban");
+    const [browser, other] = [randomUUID(), randomUUID()];
+    const marks = () =>
+      Number(
+        q(`select count(*) from private.post_view_marks where seen_at > now() - interval '1 hour';`)
+      );
+    const before = marks();
+    appear(
+      [
+        [shown, "showroom_home"],
+        [shown, "showroom_tourism"],
+      ],
+      browser
+    );
+    appear(
+      [
+        [shown, "showroom_home"],
+        [shown, "showroom_tourism"],
+      ],
+      browser
+    );
+    assert.equal(today(shown, "showroom_home"), 1, "the same browser again counts nothing");
+    assert.equal(today(shown, "showroom_tourism"), 1, "each showroom once");
+    appear([[shown, "showroom_home"]], other);
+    assert.equal(today(shown, "showroom_home"), 2, "another browser counts");
+    // Without a browser no showroom appearance counts; other counters still do.
+    appear(
+      [
+        [shown, "showroom_home"],
+        [shown, "list_impressions"],
+      ],
+      null
+    );
+    assert.equal(today(shown, "showroom_home"), 2);
+    assert.equal(today(shown, "list_impressions"), 1);
+    // One mark per browser, post and showroom, as views keep (the engagement
+    // clean-up deletes them after 24 hours).
+    assert.equal(marks() - before, 3);
+    clear();
+  });
+
+  await check("appearances count up to 3 fair shares (LIM-SQL-showroom-appearance-cap)", () => {
+    // 1,500 appearances over 10 posts: fair share 150, cap 450. Both flooded
+    // posts count as 450 and are level with each other, so either can lead;
+    // without the cap the one shown 500 would always lead the one shown 1,000.
+    const flooded = post("kzn_durban", { shown: 1000 });
+    const less = post("kzn_durban", { shown: 500 });
+    for (let i = 0; i < 8; i += 1) post("kzn_durban");
+    // The read refers to the draw (g), so it runs again for each one.
+    const floodedFirst = Number(
+      q(
+        anon(`select count(*) from generate_series(1,200) g,
+          lateral (select api.showroom_feed('{"showroom":"home"}')->'items' as items where g > 0) f
+          where (select min(e.i) from jsonb_array_elements(f.items) with ordinality e(v,i) where e.v->>'id'='${flooded}')
+            < (select min(e.i) from jsonb_array_elements(f.items) with ordinality e(v,i) where e.v->>'id'='${less}');`)
+      )
+    );
+    assert.ok(floodedFirst > 60 && floodedFirst < 140, `flooded first ${floodedFirst} of 200`);
+    // Both still come after every post seen less.
+    assert.deepEqual(ids({ showroom: "home" }).slice(-2).sort(), [flooded, less].sort());
     clear();
   });
 

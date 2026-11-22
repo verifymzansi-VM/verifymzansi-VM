@@ -63,6 +63,14 @@ const db = vi.hoisted(() => {
       const metrics = args.p_metrics as string[];
       let engaged = 0;
       posts.forEach((post, n) => {
+        // A showroom appearance counts once per browser, post and showroom
+        // (a day), and never without a browser.
+        if (metrics[n]!.startsWith("showroom_")) {
+          const key = `showroom|${args.p_device}|${post}|${metrics[n]}`;
+          if (!args.p_device || state.seen.has(key)) return;
+          state.seen.add(key);
+          return state.activity.push([post, metrics[n]!]);
+        }
         if (metrics[n] !== "engaged_views") return state.activity.push([post, metrics[n]!]);
         // Counted once per browser, and only after its view was counted.
         const key = `${args.p_device}|${post}`;
@@ -287,25 +295,30 @@ describe("Performance page events (/api/analytics/events)", () => {
     ...extra,
   });
 
-  it("maps each event to its daily counter, without a cookie or sign-in", async () => {
-    const response = await events([
-      card("impression", { surface: "business_list" }),
-      card("search_appearance", { surface: "site_search" }),
-      card("homepage_appearance", { surface: "home_business" }),
-      card("showroom_appearance", { surface: "showroom:home" }),
-      card("showroom_appearance", { surface: "showroom:tourism" }),
-      card("showroom_appearance", { surface: "programme:home" }),
-      card("organisation_directory_appearance", { surface: "org:x" }),
-      card("detail_view", { surface: "detail" }),
-      card("detail_view", { surface: "detail", source: "social" }),
-      card("whatsapp_click"),
-      card("phone_click"),
-      card("website_click"),
-      card("directions_click"),
-      card("booking_click"),
-      card("ticket_click"),
-      card("share"),
-    ]);
+  it("maps each event to its daily counter; only showroom appearances need the identifier", async () => {
+    const cookie = await minutesAgo(30);
+    const response = await events(
+      [
+        card("impression", { surface: "business_list" }),
+        card("search_appearance", { surface: "site_search" }),
+        card("homepage_appearance", { surface: "home_business" }),
+        card("showroom_appearance", { surface: "showroom:home" }),
+        card("showroom_appearance", { surface: "showroom:tourism" }),
+        card("showroom_appearance", { surface: "programme:home" }),
+        card("organisation_directory_appearance", { surface: "org:x" }),
+        card("detail_view", { surface: "detail" }),
+        card("detail_view", { surface: "detail", source: "social" }),
+        card("whatsapp_click"),
+        card("phone_click"),
+        card("website_click"),
+        card("directions_click"),
+        card("booking_click"),
+        card("ticket_click"),
+        card("share"),
+      ],
+      {},
+      cookie
+    );
     expect(response.status).toBe(204);
     expect(db.state.activity.map(([, counter]) => counter)).toEqual([
       "list_impressions",
@@ -325,8 +338,36 @@ describe("Performance page events (/api/analytics/events)", () => {
       "ticket_taps",
       "shares",
     ]);
-    // Nothing about the visitor but the account check reaches the database.
+    // Nothing about the visitor but the account check and, for the showroom
+    // appearances, the signed identifier reaches the database.
+    expect(Object.keys(db.state.calls[0]!.args).sort()).toEqual([
+      "p_device",
+      "p_metrics",
+      "p_post_ids",
+    ]);
+    expect(db.state.calls[0]!.args.p_device).toBe(cookie.split(".")[1]);
+    // Without showroom appearances no identifier is read or sent.
+    db.state.calls.length = 0;
+    await events([card("share")], {}, cookie);
     expect(Object.keys(db.state.calls[0]!.args).sort()).toEqual(["p_metrics", "p_post_ids"]);
+  });
+
+  it("a showroom appearance counts once per browser; without a signed identifier it counts nothing", async () => {
+    const appearance = card("showroom_appearance", { surface: "showroom:home" });
+    // No identifier: dropped before the database; the other events still count.
+    expect((await events([appearance, card("share")])).status).toBe(204);
+    expect(db.state.activity).toEqual([[POST_ID, "shares"]]);
+    // A made-up identifier counts nothing either.
+    const token = (await issueViewerToken())!;
+    const forged = `v1.${crypto.randomUUID()}.${Math.floor(Date.now() / 1000)}.${token.value.split(".")[3]}`;
+    await events([appearance], {}, forged);
+    expect(db.state.activity).toEqual([[POST_ID, "shares"]]);
+    // The same browser again: once; another browser: counted.
+    const cookie = await minutesAgo(30);
+    await events([appearance], {}, cookie);
+    await events([appearance], {}, cookie);
+    await events([appearance], {}, await minutesAgo(40));
+    expect(db.state.activity.filter(([, counter]) => counter === "showroom_home")).toHaveLength(2);
   });
 
   it("passes the verified account so the owner and staff are not counted", async () => {
@@ -391,18 +432,23 @@ describe("Performance page events (/api/analytics/events)", () => {
     expect(db.rpc).not.toHaveBeenCalled();
   });
 
-  it("the per-post limit covers page events only: appearances are never checked or dropped by it", async () => {
-    mocks.rate.mockImplementation(async ({ action }: { action: string }) => ({
-      limited: action === "engagement:activity:post",
+  it("the per-post limit covers page events and showroom appearances, not other appearances", async () => {
+    mocks.rate.mockImplementation(async ({ action, key }: { action: string; key: string }) => ({
+      limited: action === "engagement:activity:post" && key.endsWith(POST_ID),
     }));
-    await events([
-      card("impression", { surface: "market_list" }),
-      card("showroom_appearance", { surface: "showroom:home" }, OTHER_ID),
-      card("detail_view", { surface: "detail" }),
-      card("whatsapp_click"),
-    ]);
-    // The post's page events are over the limit; its appearance and the other
-    // post's showroom turn still count.
+    await events(
+      [
+        card("impression", { surface: "market_list" }),
+        card("showroom_appearance", { surface: "showroom:home" }),
+        card("showroom_appearance", { surface: "showroom:home" }, OTHER_ID),
+        card("detail_view", { surface: "detail" }),
+        card("whatsapp_click"),
+      ],
+      {},
+      await minutesAgo(30)
+    );
+    // The post is over its limit: its page events and its showroom appearance
+    // are dropped; its list appearance and the other post's showroom turn count.
     expect(db.state.activity).toEqual([
       [POST_ID, "list_impressions"],
       [OTHER_ID, "showroom_home"],
@@ -410,7 +456,9 @@ describe("Performance page events (/api/analytics/events)", () => {
     const perPost = mocks.rate.mock.calls
       .map(([options]) => options as { action: string; key: string })
       .filter((options) => options.action === "engagement:activity:post");
-    expect(perPost.map((options) => options.key.split("|")[1])).toEqual([POST_ID]);
+    expect(perPost.map((options) => options.key.split("|")[1]).sort()).toEqual(
+      [POST_ID, OTHER_ID].sort()
+    );
     // A batch of appearances alone makes one limiter call, for the address.
     mocks.rate.mockClear();
     await events(

@@ -83,37 +83,26 @@ begin
     join candidates c on c.post_id = m.post_id
     where c.published_at > statement_timestamp() - interval '72 hours'
       and m.edit_id is null and m.decision = 'approve' and m.decided_at < c.published_at
-  ), likes as (
-    select l.post_id, count(*) as n
-    from private.post_likes l
-    join candidates c on c.post_id = l.post_id
-    where not l.waiting and l.counts_from >= statement_timestamp() - interval '30 days'
-    group by l.post_id
-  ), views as (
-    select v.post_id, sum(v.views) as n
-    from private.post_view_days v
-    join candidates c on c.post_id = v.post_id
-    where v.day >= today - 29
-    group by v.post_id
   ), scored as (
     select c.post_id, x.is_new,
-      case when v_province is null or coalesce(s.n, 0) > 2 * f.share then 3
+      case when v_province is null or seen.n > 2 * f.share then 3
         when v_city is not null and c.city_id = v_city then 1
         when c.province_id = v_province then 2
         else 3 end as grp,
-      (f.share - coalesce(s.n, 0)) / f.share
+      (f.share - seen.n) / f.share
         + case when x.is_new
             then 1 - extract(epoch from statement_timestamp() - c.published_at) / 259200 else 0 end
         + f.nudge * (case when exists (select 1 from private.post_media pm
             join private.media_objects m on m.id = pm.object_id
             where pm.post_id = c.post_id and m.state = 'ready' and m.kind = 'video') then 0.15 else 0 end
-          + least(0.15, 0.75 * (coalesce(lk.n, 0) + 1)::numeric / (coalesce(vw.n, 0) + 20)))
+          + least(0.15, 0.75 * (coalesce(t.likes, 0) + 1)::numeric / (coalesce(t.views, 0) + 20)))
         + (random() * 0.3)::numeric as score
     from candidates c
     cross join fair f
     left join shown s on s.post_id = c.post_id
-    left join likes lk on lk.post_id = c.post_id
-    left join views vw on vw.post_id = c.post_id
+    left join private.post_engagement_totals t on t.post_id = c.post_id
+    -- Appearances count up to 3 fair shares, so no flood can bury a post deeper.
+    cross join lateral (select least(coalesce(s.n, 0), 3 * f.share) as n) seen
     cross join lateral (select c.published_at > statement_timestamp() - interval '72 hours'
       and not exists (select 1 from approved_before b where b.post_id = c.post_id) as is_new) x
   ), ranked as (

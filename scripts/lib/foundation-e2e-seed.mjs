@@ -505,7 +505,8 @@ export async function seedTestCopy({ root = process.cwd(), status, sql, log = ()
         {
           p_post_ids: pairs.map(([id]) => id),
           p_metrics: pairs.map(([, metric]) => metric),
-          p_device: null,
+          // A showroom appearance counts once per browser a day: one per round.
+          p_device: randomUUID(),
           p_account: null,
         },
         null,

@@ -86,7 +86,8 @@ preflight then reports the database ahead, and a forward fix is preferred.
 checklist item 66 (design approved by the owner on 21 November 2026). It adds
 one public read, `api.showroom_feed(p_request)` (visitors and members, security
 invoker over a security definer `internal` twin), which the home showroom and
-each area showroom use. Nothing is stored and nothing is replaced.
+each area showroom use, and replaces `internal.record_post_activity` so a
+showroom appearance counts at most once per browser, post and showroom a day.
 
 - **Request:** `showroom` (`home`, `business`, `market` or `tourism`; `home`
   when omitted), `province` (a province id) and `city` (a city id of that
@@ -101,39 +102,56 @@ each area showroom use. Nothing is stored and nothing is replaced.
   `(fair share - its appearances) / fair share` over the last 7 days of
   `private.post_activity_days` for that showroom, where the fair share is the
   one the Performance page shows (the showroom's appearances in the last 7 days
-  divided by its posts now, at least 1). One turn is one fair share.
+  divided by its posts now, at least 1). One turn is one fair share. A post's
+  appearances count up to 3 fair shares, so a flood of them cannot bury it more
+  than 2 turns behind.
 - **New:** for 72 hours after a post first went live it is `is_new` and gets one
   extra turn that fades evenly to nothing. A post approved again after it was
   live before (an earlier approval of the post itself in
   `private.moderation_log`) is not new again; an unchanged reactivation keeps
   its first `published_at`.
 - **Nudges** (all together under one turn, so none carries a post past one a
-  whole turn ahead): 0.15 of a turn for a ready video; likes per view over the
-  last 30 days, smoothed as 1 like in 20 views, at most 0.15 (reached at 1 like
-  in 5 views); up to 0.3 of randomness. The video and likes nudges grow with the
-  showroom's appearances in the last 7 days: none while it has had none (every
-  post is then level, and randomness shares the places; this is the case while
-  the website does not record appearances), in full once its posts average one
-  appearance each.
+  whole turn ahead): 0.15 of a turn for a ready video; likes per view (the
+  post's lifetime totals in `private.post_engagement_totals`), smoothed as 1
+  like in 20 views, at most 0.15 (reached at 1 like in 5 views); up to 0.3 of
+  randomness. The video and likes nudges grow with the showroom's appearances in
+  the last 7 days: none while it has had none (every post is then level, and
+  randomness shares the places; this is the case while the website does not
+  record appearances), in full once its posts average one appearance each.
 - **Area:** of every 7 places, 1, 4 and 6 go to the visitor's city, 2 and 5 to
   the rest of the province, 3 and 7 to the rest of South Africa (home's 15: 7, 4
   and 4). A group that runs out passes its places to the next one (city,
   province, rest, then the city again). A post shown more than twice the fair
   share this week loses its city and province places. Without a province every
   place comes from one all-South-Africa queue.
+- **Recording** (`internal.record_post_activity`, full body; it was
+  `20261121100028_post_performance_stats.sql`'s): a showroom appearance
+  (`showroom_home`, `_business`, `_market`, `_tourism`, `_programme`) counts at
+  most once per browser, post and showroom a day, through a mark under the day's
+  salt in `private.post_view_marks`, as views use (the engagement clean-up
+  deletes it after 24 hours), and never without a browser (`p_device`). The
+  website sends the browser's signed `vmz_viewer` identifier for showroom
+  appearances only, and drops them without one; they are also under the per-post
+  daily limit (`engagement:activity:post`). Every other counter, the arguments
+  and the answer are unchanged.
 
-**Cost.** Each call reads the showroom's live posts, 7 days of activity rows, 30
-days of view days and likes, and the last 72 hours' approvals: for 2,000 live
-posts about 14,000 small activity rows. The website remembers each order for 60
-seconds per showroom and area on each server copy, so the database sees at most
-one call a minute per showroom and area per copy. No table is added. One partial
-index, `private.moderation_log_post_approvals_idx` (`post_id`, a post's own
-approvals only), serves the "went live before" lookup; views and likes are read
-through their existing `post_id` indexes.
+**Cost.** Each call reads the showroom's live posts, 7 days of activity rows
+(for 2,000 live posts about 14,000 small rows), one view and like totals row per
+post, and the last 72 hours' approvals through one partial index,
+`private.moderation_log_post_approvals_idx` (`post_id`, a post's own approvals
+only). On a seed of 2,000 live posts, a year of view days (730,000 rows) and
+20,000 likes, a call takes about 23 ms in the throwaway Postgres 17 container
+(about 75 ms when likes and views were read from the day rows). The website
+remembers each order for 60 seconds per showroom and area on each server copy,
+so the database sees at most one call a minute per showroom and area per copy.
+No table is added. Recording adds one 32-byte mark per browser, post and
+showroom a day to `private.post_view_marks` (deleted after 24 hours), within the
+existing per-address and per-post limits.
 
-New command and index only (expand). ORDER: apply first, then merge: the deploy
-check probes every command in `../runtime-api-manifest.json`, and the website
-falls back to the newest posts if the read fails.
+New command and index, and one replaced function body (expand). ORDER: apply
+first, then merge: the deploy check probes every command in
+`../runtime-api-manifest.json`, and the website falls back to the newest posts
+if the read fails.
 
 **Applying.**
 
@@ -149,24 +167,28 @@ falls back to the newest posts if the read fails.
 
 The reviewed rollback is `../rollback/20261121224857_fair_showroom.down.sql`
 (only with the owner's decision; prefer a forward fix). It refuses (55000)
-unless both functions and the index are the update's, then drops them; the
-showroom then shows the newest posts. No data is removed (the update stores
-none).
+unless all four parts are the update's, then drops the new function, the read
+and the index and puts back `internal.record_post_activity` byte for byte; the
+showroom then shows the newest posts. No data is removed (the showroom marks
+already stored go with the engagement clean-up within 24 hours).
 
 `node --import tsx scripts/test-foundation-fair-showroom.mjs` (part of
 `pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
-preflight before and after, read only; a premature rollback and a half-present
-update refused; apply, rollback and re-apply return the same fingerprints; the
-grants (visitors and members, never the server key; the api wrapper security
-invoker); the request rules and the 1,024-byte bound; 15 and 7 places; only
-publicly live posts with card fields only; the 3 / 2 / 2 mix and each group
-running out; deficit order with an unknown area; the busy-city cap at and above
-twice the fair share; the New tag at 1, 71 and 73 hours and never again after an
-earlier approval; the likes cap and the video nudge (each first about 80% and
-87% of the time on level turns); with no appearances yet, no video or likes
-nudge (photo posts first about half the time against video posts); all nudges
-together under one turn (a post a turn behind with a video and farmed likes
-never first); the index; and that reads write nothing.
+preflight before and after, read only; a premature rollback, a half-present
+update and a drifted recording body refused; apply, rollback and re-apply return
+the same fingerprints; the grants (visitors and members, never the server key;
+the api wrapper security invoker); the request rules and the 1,024-byte bound;
+15 and 7 places; only publicly live posts with card fields only; the 3 / 2 / 2
+mix and each group running out; deficit order with an unknown area; the
+busy-city cap at and above twice the fair share; the New tag at 1, 71 and 73
+hours and never again after an earlier approval; the likes cap and the video
+nudge (each first about 80% and 87% of the time on level turns); with no
+appearances yet, no video or likes nudge (photo posts first about half the time
+against video posts); all nudges together under one turn (a post a turn behind
+with a video and farmed likes never first); the index; a showroom appearance
+recorded once per browser, post and showroom, and never without a browser;
+appearances counted up to 3 fair shares (two flooded posts level); and that
+reads write nothing.
 
 ## Business storefront, 21 November 2026
 
