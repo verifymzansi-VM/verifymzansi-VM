@@ -71,6 +71,8 @@ describe("authority request helpers", () => {
     expect(requestTypeLabel("unknown")).toBe("Authority request");
     // Records opened before rule D9 keep their label.
     expect(requestTypeLabel("police_case")).toBe("Written police request with a case number");
+    expect(requestTypeLabel("warrant")).toBe("Search warrant (earlier)");
+    expect(requestTypeLabel("search_warrant")).toBe("Search warrant");
     expect(formatIdNumber("8001015009087")).toBe("800101 5009 08 7");
     expect(formatDisclosurePhone("+27712345678")).toBe("+27 71 234 5678");
     expect(minutesLeft("2026-11-21T10:15:00Z", Date.parse("2026-11-21T10:03:10Z"))).toBe(12);

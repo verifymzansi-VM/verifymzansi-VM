@@ -162,7 +162,7 @@ export function AuthorityRequestForm() {
                 value={confirmedNumber}
                 onChange={(e) => setConfirmedNumber(e.target.value)}
                 inputMode="tel"
-                maxLength={20}
+                maxLength={40}
                 required
                 autoComplete="off"
                 aria-invalid={invalid("authority-confirmed-number") || undefined}

@@ -11,14 +11,16 @@
 --    called) and confirmed_by (who confirmed the request on that call). Rows
 --    opened before this update keep them empty and keep their request type
 --    (warrant, police_case and regulator stay readable); nothing is rewritten.
---    A check makes every row either an earlier one (no confirmation, an
---    earlier type) or a D9 one (all three filled, one of the four D9 types).
+--    A check makes a search_warrant or urgent_life_risk row carry all three
+--    (only api.open_authority_request writes the table, and it checks them).
 -- 2. New api.open_authority_request(type, reference, issued_by,
 --    confirmed_number, confirmed_by, reason, lookup kind, lookup value,
 --    attested): the type is subpoena, court_order, search_warrant or
 --    urgent_life_risk; the reference is the subpoena, warrant or case number
 --    (3 to 100 characters); issued_by and confirmed_by take 3 to 120
---    characters, the number 5 to 20 digits and spaces (an optional leading +).
+--    characters; each of the three needs at least one letter or digit; the
+--    number is 5 to 20 digits with single spaces between them (an optional
+--    leading +).
 --    Each missing part is refused with 22023 and its own detail:
 --    disclosure_issued_by_required, disclosure_confirmed_number_required,
 --    disclosure_confirmed_by_required. Everything else (staff rule, search,
@@ -87,11 +89,8 @@ alter table private.identity_disclosures add constraint identity_disclosures_req
   check (request_type in ('subpoena','court_order','warrant','police_case','regulator','search_warrant','urgent_life_risk'));
 alter table private.identity_disclosures drop constraint if exists identity_disclosures_confirmation_check;
 alter table private.identity_disclosures add constraint identity_disclosures_confirmation_check check (
-  case when issued_by is null and confirmed_number is null and confirmed_by is null
-    then request_type in ('subpoena','court_order','warrant','police_case','regulator')
-    else coalesce(request_type in ('subpoena','court_order','search_warrant','urgent_life_risk')
-      and length(issued_by) between 3 and 120 and length(confirmed_by) between 3 and 120
-      and confirmed_number ~ '^[+]?[0-9][0-9 ]{3,18}[0-9]$', false) end);
+  request_type not in ('search_warrant','urgent_life_risk')
+  or (issued_by is not null and confirmed_number is not null and confirmed_by is not null));
 
 -- 2. Open a record under rule D9: check the request and its confirmation,
 -- find the person, log, then answer with the log row's id only.
@@ -108,16 +107,17 @@ begin
   -- search warrant; or an urgent written SAPS request where a life is at risk.
   if p_request_type is null or p_request_type not in ('subpoena','court_order','search_warrant','urgent_life_risk') then
     raise exception 'valid request type required' using errcode='22023',detail='disclosure_request_type_invalid'; end if;
-  if not internal.identity_disclosure_text_ok(p_reference,3,100) then
+  -- Each text needs a letter or digit (never only spaces or invisible marks).
+  if not internal.identity_disclosure_text_ok(p_reference,3,100) or p_reference !~ '[[:alnum:]]' then
     raise exception 'request reference required' using errcode='22023',detail='disclosure_reference_required'; end if;
   -- Checked with whoever issued it (the court or prosecutor, or the SAPS
   -- station) on an official number: who issued it, the number, who confirmed.
-  if not internal.identity_disclosure_text_ok(p_issued_by,3,120) then
+  if not internal.identity_disclosure_text_ok(p_issued_by,3,120) or p_issued_by !~ '[[:alnum:]]' then
     raise exception 'issuing court or police station required' using errcode='22023',detail='disclosure_issued_by_required'; end if;
-  if not internal.identity_disclosure_text_ok(p_confirmed_number,5,20)
-      or btrim(p_confirmed_number) !~ '^[+]?[0-9][0-9 ]{3,18}[0-9]$' then
+  -- 5 to 20 digits, single spaces between them, an optional leading +.
+  if p_confirmed_number is null or btrim(p_confirmed_number) !~ '^[+]?[0-9]( ?[0-9]){4,19}$' then
     raise exception 'official number called required' using errcode='22023',detail='disclosure_confirmed_number_required'; end if;
-  if not internal.identity_disclosure_text_ok(p_confirmed_by,3,120) then
+  if not internal.identity_disclosure_text_ok(p_confirmed_by,3,120) or p_confirmed_by !~ '[[:alnum:]]' then
     raise exception 'who confirmed the request required' using errcode='22023',detail='disclosure_confirmed_by_required'; end if;
   if not internal.identity_disclosure_text_ok(p_reason,10,2000) then
     raise exception 'reason required' using errcode='22023',detail='disclosure_reason_required'; end if;

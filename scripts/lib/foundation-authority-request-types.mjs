@@ -31,6 +31,17 @@ const REPLACED = [
   "internal.identity_disclosure_record(private.identity_disclosures,uuid)",
   "internal.identity_disclosure_material(uuid,uuid)",
 ];
+/** Texts with no letter or digit: zero-width, direction marks, combining
+ * marks, line breaks and tabs, no-break and ideographic spaces. */
+const INVISIBLE = [
+  [0x200b, 0x200b, 0x200b],
+  [0x200e, 0x200f, 0x200e],
+  [0x301, 0x301, 0x301],
+  [0x0a, 0x09, 0x0a],
+  [0xa0, 0xa0, 0xa0],
+  [0x3000, 0x3000, 0x3000],
+  [0x2e, 0x2d, 0x2e],
+].map((points) => String.fromCodePoint(...points));
 const D9_TYPES = ["subpoena", "court_order", "search_warrant", "urgent_life_risk"];
 
 /** A D9 request: subpoena by default, every part present. */
@@ -182,18 +193,38 @@ export async function checkAuthorityRequestTypes(ctx, { database, current, step,
       [{ number: "called the court" }, "disclosure_confirmed_number_required"],
       [{ number: "035 789 1234 ext 5" }, "disclosure_confirmed_number_required"],
       [{ number: "0".repeat(21) }, "disclosure_confirmed_number_required"],
+      // Digits are counted, not characters: single spaces only.
+      [{ number: "1   1" }, "disclosure_confirmed_number_required"],
+      [{ number: "035  789 1234" }, "disclosure_confirmed_number_required"],
+      [{ number: "1 2 3 4" }, "disclosure_confirmed_number_required"],
+      [{ number: `+${"1 ".repeat(20)}1` }, "disclosure_confirmed_number_required"],
       [{ confirmedBy: null }, "disclosure_confirmed_by_required"],
       [{ confirmedBy: "  " }, "disclosure_confirmed_by_required"],
       [{ confirmedBy: "x".repeat(121) }, "disclosure_confirmed_by_required"],
       [{ reason: "short" }, "disclosure_reason_required"],
       [{ attested: false }, "disclosure_attestation_required"],
     ];
+    for (const text of INVISIBLE)
+      refused.push(
+        [{ reference: text }, "disclosure_reference_required"],
+        [{ issuedBy: text }, "disclosure_issued_by_required"],
+        [{ confirmedBy: text }, "disclosure_confirmed_by_required"]
+      );
     for (const type of D9_TYPES)
       for (const [change, reason] of refused) {
         const stderr = fails(staff(admin, d9OpenSql(d9Request({ type, ...change }))), "22023");
         assert.match(stderr, new RegExp(`DETAIL:\\s+${reason}`), `${type} ${reason}: ${stderr}`);
       }
     assert.equal(logCount(), before, "nothing is logged for an incomplete request");
+  });
+
+  await check("D9: 5 to 20 digits and any script's letters are accepted", () => {
+    const accented = `Ho${String.fromCodePoint(0xeb)}r Hof`;
+    for (const number of ["10111", `+${"1 ".repeat(19)}1`])
+      assert.equal(
+        open(d9Request({ number, issuedBy: accented, value: thando.phones.at(-1) })).outcome,
+        "record"
+      );
   });
 
   await check("D9: each type opens with its reference, kept on the log row and the record", () => {
@@ -242,25 +273,23 @@ export async function checkAuthorityRequestTypes(ctx, { database, current, step,
       );
   });
 
-  await check("D9: the table refuses a row that breaks the rule, even from the owner", () => {
-    const insert = (type, confirmation) =>
-      `insert into private.identity_disclosures(opened_by,opened_at,closes_at,request_type,request_reference,
+  await check(
+    "D9: the table refuses a new-type row without its confirmation, even from the owner",
+    () => {
+      const insert = (type, confirmation) =>
+        `insert into private.identity_disclosures(opened_by,opened_at,closes_at,request_type,request_reference,
         ${confirmation ? "issued_by,confirmed_number,confirmed_by," : ""}reason,attested,lookup_kind,lookup_value,outcome,subject_ids,match_count)
        values('${admin.id}',now(),now()+interval '15 minutes','${type}','REF-001',
         ${confirmation ? "'Durban High Court','031 123 4567','Ms T. Zulu'," : ""}'A synthetic reason here',true,'phone','+27820000000','no_match','{}',0);`;
-    // The two new types never exist without a confirmation, the three earlier
-    // ones never with one. (A subpoena or court order without one is an
-    // earlier row; the command refuses a new one.)
-    for (const type of ["search_warrant", "urgent_life_risk"])
-      fails(insert(type, false), "23514", /confirmation_check/);
-    for (const type of ["warrant", "police_case", "regulator"])
-      fails(insert(type, true), "23514", /confirmation_check/);
-    fails(
-      insert("subpoena", true).replace("'031 123 4567'", "'call the court'"),
-      "23514",
-      /confirmation_check/
-    );
-  });
+      // The two new types never exist without all three. (A subpoena or court
+      // order without them is an earlier row; the command refuses a new one,
+      // and only the command writes the table.)
+      for (const type of ["search_warrant", "urgent_life_risk"]) {
+        fails(insert(type, false), "23514", /confirmation_check/);
+        fails(insert(type, true).replace("'Ms T. Zulu'", "null"), "23514", /confirmation_check/);
+      }
+    }
+  );
 
   await check("D9: an urgent request gives names, ID number and phones, never the selfie", () => {
     const opened = open(urgentRequest);

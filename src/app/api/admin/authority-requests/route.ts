@@ -23,7 +23,7 @@ const body = z.strictObject({
   requestType: z.enum(["subpoena", "court_order", "search_warrant", "urgent_life_risk"]),
   reference: text(1, 100),
   issuedBy: text(1, 120),
-  confirmedNumber: text(1, 20),
+  confirmedNumber: text(1, 40),
   confirmedBy: text(1, 120),
   reason: text(1, 2000),
   lookupKind: z.enum(["post", "id_number", "phone", "email"]),

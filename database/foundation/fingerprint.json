@@ -33,7 +33,9 @@
       "row_level_security": "287fedeb91e1ed0d3c4322fcfced4039",
       "triggers": "0b81a3de04dfca42c0cb4331a846c985"
     },
-    "pendingApplication": ["20261122013616_authority_request_types.sql"]
+    "pendingApplication": [
+      "20261122013616_authority_request_types.sql"
+    ]
   },
   "knownDifferences": [
     "Reference data is not fingerprinted. candidate.sql seeds posting-terms version posting-v2, which production does not hold: production has posting-v1 and posting-v3 (current since 20261109173012_posting_terms_v3.sql), and posting-v4 once 20261112122001_publish_posting_terms_v4.sql is applied (current from 20261112173841_switch_posting_terms_v4.sql).",
@@ -52,7 +54,7 @@
     },
     "constraints": {
       "items": 1307,
-      "fingerprint": "3c1f8d6175e97aa22bd06246ac0f1e53"
+      "fingerprint": "3ce080e2eb4a6eb8efc39b5f56687125"
     },
     "event_triggers": {
       "items": 1,
@@ -60,7 +62,7 @@
     },
     "function_bodies": {
       "items": 1143,
-      "fingerprint": "ef414446d0a4e96884fa07c4ded4c0a0"
+      "fingerprint": "e48af70b7c50f4fed55bf6c027deb6a6"
     },
     "function_grants": {
       "items": 833,

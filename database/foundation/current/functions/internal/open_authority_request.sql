@@ -14,16 +14,17 @@ begin
   -- search warrant; or an urgent written SAPS request where a life is at risk.
   if p_request_type is null or p_request_type not in ('subpoena','court_order','search_warrant','urgent_life_risk') then
     raise exception 'valid request type required' using errcode='22023',detail='disclosure_request_type_invalid'; end if;
-  if not internal.identity_disclosure_text_ok(p_reference,3,100) then
+  -- Each text needs a letter or digit (never only spaces or invisible marks).
+  if not internal.identity_disclosure_text_ok(p_reference,3,100) or p_reference !~ '[[:alnum:]]' then
     raise exception 'request reference required' using errcode='22023',detail='disclosure_reference_required'; end if;
   -- Checked with whoever issued it (the court or prosecutor, or the SAPS
   -- station) on an official number: who issued it, the number, who confirmed.
-  if not internal.identity_disclosure_text_ok(p_issued_by,3,120) then
+  if not internal.identity_disclosure_text_ok(p_issued_by,3,120) or p_issued_by !~ '[[:alnum:]]' then
     raise exception 'issuing court or police station required' using errcode='22023',detail='disclosure_issued_by_required'; end if;
-  if not internal.identity_disclosure_text_ok(p_confirmed_number,5,20)
-      or btrim(p_confirmed_number) !~ '^[+]?[0-9][0-9 ]{3,18}[0-9]$' then
+  -- 5 to 20 digits, single spaces between them, an optional leading +.
+  if p_confirmed_number is null or btrim(p_confirmed_number) !~ '^[+]?[0-9]( ?[0-9]){4,19}$' then
     raise exception 'official number called required' using errcode='22023',detail='disclosure_confirmed_number_required'; end if;
-  if not internal.identity_disclosure_text_ok(p_confirmed_by,3,120) then
+  if not internal.identity_disclosure_text_ok(p_confirmed_by,3,120) or p_confirmed_by !~ '[[:alnum:]]' then
     raise exception 'who confirmed the request required' using errcode='22023',detail='disclosure_confirmed_by_required'; end if;
   if not internal.identity_disclosure_text_ok(p_reason,10,2000) then
     raise exception 'reason required' using errcode='22023',detail='disclosure_reason_required'; end if;

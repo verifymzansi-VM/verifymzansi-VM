@@ -96,11 +96,13 @@ gives only the minimum, never the selfie.
   stay as they are and read as before; no row is rewritten.
 - **The confirmation:** `private.identity_disclosures` gains `issued_by` (the
   court or prosecutor's office, or the SAPS station; 3 to 120 characters),
-  `confirmed_number` (the official number that was called; 5 to 20 digits and
-  spaces, an optional leading +) and `confirmed_by` (who confirmed it on that
-  call; 3 to 120 characters). The reference (3 to 100) is the subpoena, warrant
-  or case number. A table check keeps every row either an earlier one (no
-  confirmation, an earlier type) or a D9 one (all three, a D9 type).
+  `confirmed_number` (the official number that was called; 5 to 20 digits with
+  single spaces between them, an optional leading +) and `confirmed_by` (who
+  confirmed it on that call; 3 to 120 characters). The reference (3 to 100) is
+  the subpoena, warrant or case number. The reference, issuer and confirmer each
+  need at least one letter or digit. A table check makes every `search_warrant`
+  and `urgent_life_risk` row carry all three; the command, the table's only
+  writer, checks the rest.
 - **Opening:** the new
   `api.open_authority_request(type, reference, issued_by, confirmed_number, confirmed_by, reason, lookup kind, lookup value, attested)`
   refuses each missing part with 22023 and its own detail
@@ -154,11 +156,12 @@ refused, logging nothing; the three earlier and any other types refused; for
 each of the four types, each missing or malformed reference, issuer, number,
 confirmer, reason and confirmation refused with its own detail and nothing
 logged; each type opening with its trimmed reference and confirmation on the row
-and the record; the table check refusing a row that breaks the rule; an urgent
-request showing names, ID number state and phones without the selfie or ID photo
-(view and print), its selfie read refused before logging and its server material
-without the selfie; a court order still showing the selfie; and the rollback
-refused while a D9 record is kept.
+and the record; text of only spaces or invisible marks refused; the table check
+refusing a new-type row without its confirmation; an urgent request showing
+names, ID number state and phones without the selfie or ID photo (view and
+print), its selfie read refused before logging and its server material without
+the selfie; a court order still showing the selfie; and the rollback refused
+while a D9 record is kept.
 
 ## Business storefront, 21 November 2026
 

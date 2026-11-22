@@ -30,7 +30,7 @@ export type RequestType = (typeof REQUEST_TYPES)[number]["value"];
 
 /** Types of records opened before rule D9: shown on those records, never offered. */
 const EARLIER_REQUEST_TYPES = [
-  { value: "warrant", label: "Search warrant" },
+  { value: "warrant", label: "Search warrant (earlier)" },
   { value: "police_case", label: "Written police request with a case number" },
   { value: "regulator", label: "Information Regulator or another body by law" },
 ] as const;

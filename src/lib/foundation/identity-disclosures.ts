@@ -190,7 +190,7 @@ const readResult = z.strictObject({
     match_count: z.number().int().nonnegative(),
     // Only on records opened under rule D9.
     issued_by: z.string().min(3).max(120).optional(),
-    confirmed_number: z.string().min(5).max(20).optional(),
+    confirmed_number: z.string().min(5).max(40).optional(),
     confirmed_by: z.string().min(3).max(120).optional(),
   }),
   records: z.array(z.union([keptRecord, attempts, noRecord])).max(5),
