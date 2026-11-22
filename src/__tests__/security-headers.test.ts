@@ -22,6 +22,7 @@ import {
   shouldUseStrictNonceCsp,
   buildCsp,
   DEFAULT_PERMISSIONS_POLICY,
+  IDENTITY_CHECK_PERMISSIONS_POLICY,
   applySecurityHeaders,
   withSecurityHeaders,
 } from "@/lib/middleware/security-headers";
@@ -249,7 +250,33 @@ describe("withSecurityHeaders", () => {
     const proxyResponse = NextResponse.next();
     const response = withSecurityHeaders(request, proxyResponse);
 
-    expect(response.headers.get("Permissions-Policy")).toContain("camera=(self)");
+    expect(response.headers.get("Permissions-Policy")).toContain("camera=(self ");
+  });
+
+  it("lets only the verification page frame the ID check and lend it the camera", () => {
+    for (const path of ["/verification", "/verification/step-1"]) {
+      const response = withSecurityHeaders(createRequest(path), NextResponse.next());
+      expect(response.headers.get("Permissions-Policy")).toBe(IDENTITY_CHECK_PERMISSIONS_POLICY);
+      expect(response.headers.get("Content-Security-Policy")).toContain(
+        "frame-src https://challenges.cloudflare.com blob: https://verify.didit.me;"
+      );
+    }
+    // The camera only: the microphone stays off for the frame too.
+    expect(IDENTITY_CHECK_PERMISSIONS_POLICY).toBe(
+      DEFAULT_PERMISSIONS_POLICY.replace("camera=(self)", 'camera=(self "https://verify.didit.me")')
+    );
+    expect(IDENTITY_CHECK_PERMISSIONS_POLICY).toContain("microphone=()");
+    for (const path of [
+      "/",
+      "/verify/continue",
+      "/verificationx",
+      "/dashboard",
+      "/api/verification/status",
+    ]) {
+      const response = withSecurityHeaders(createRequest(path), NextResponse.next());
+      expect(response.headers.get("Permissions-Policy")).toBe(DEFAULT_PERMISSIONS_POLICY);
+      expect(response.headers.get("Content-Security-Policy")).not.toContain("verify.didit.me");
+    }
   });
 
   it("keeps same-origin camera access available on non-verification app documents", () => {
