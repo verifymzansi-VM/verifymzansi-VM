@@ -6,7 +6,7 @@ import { PACKAGES_ON_SALE, RETAIL_OFFERS } from "@/lib/constants/pricing";
 import { PACKAGE_SLOT_PRICE_CENTS_PER_30_DAYS } from "@/lib/billing/slot-packages";
 import { buildCommercialCatalog, buildFoundationCommercialCatalog } from "@/lib/commercial/plans";
 import { POSTS_PER_SLOT_PER_30_DAYS } from "@/lib/billing/slot-checkout";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 
 const text = (version: string) =>
   getPublishedPostingTerms(version)!
@@ -91,6 +91,62 @@ it("keeps the site's price constants in step with the active Terms", () => {
       expect(stated, `package slot price ${slotPrice}`).toBe(slotPrice);
   // With no plan on sale in the database, nothing links to checkout.
   expect(buildCommercialCatalog([]).onSale).toBe(false);
+});
+
+/** Whether SQL turns the packages sales switch on
+ * (private.slot_package_sales.on_sale), comments left out. */
+function turnsPackagesOnSale(sql: string): boolean {
+  return sql
+    .split("\n")
+    .map((line) => line.replace(/--.*$/, ""))
+    .join("\n")
+    .split(";")
+    .filter((statement) => /slot_package_sales/i.test(statement))
+    .some(
+      (statement) =>
+        /\bon_sale\s*=\s*(true|excluded\.on_sale)\b/i.test(statement) ||
+        /insert\s+into\s+private\.slot_package_sales[\s\S]*values\s*\(\s*true\s*,\s*true\b/i.test(
+          statement
+        )
+    );
+}
+
+it("recognises an update that puts packages on sale", () => {
+  expect(turnsPackagesOnSale("update private.slot_package_sales set on_sale = true;")).toBe(true);
+  expect(
+    turnsPackagesOnSale(
+      "insert into private.slot_package_sales (singleton, on_sale, reason) values (true, true, 'go');"
+    )
+  ).toBe(true);
+  expect(
+    turnsPackagesOnSale(
+      "insert into private.slot_package_sales (singleton, on_sale, reason) values (true, false, 'off');"
+    )
+  ).toBe(false);
+  expect(turnsPackagesOnSale("-- update private.slot_package_sales set on_sale = true;")).toBe(
+    false
+  );
+});
+
+// Multi-listing prices are shown before they are sold (owner's decision of 22
+// November 2026), but packages may go on sale only under Terms that state their
+// rules: a reviewed update that turns the packages sales switch on fails this
+// test until the active Terms cover Multi-listing packages.
+it("puts packages on sale only under Terms that state the package rules", () => {
+  const folder = "database/foundation/updates";
+  const updates = readdirSync(folder)
+    .filter((name) => name.endsWith(".sql"))
+    .filter((name) => turnsPackagesOnSale(readFileSync(`${folder}/${name}`, "utf8")));
+  const content = text(manifest.active_version);
+  const slotPrice = `R${(PACKAGE_SLOT_PRICE_CENTS_PER_30_DAYS / 100).toLocaleString("en-US")} per slot`;
+  const covered =
+    content.includes("Multi-listing plans bought online follow these Terms") ||
+    content.includes(slotPrice);
+  for (const update of updates)
+    expect(
+      covered,
+      `${update} puts packages on sale; the active Terms must state their rules`
+    ).toBe(true);
 });
 
 // What the database puts on sale (the reviewed update that sells the R69

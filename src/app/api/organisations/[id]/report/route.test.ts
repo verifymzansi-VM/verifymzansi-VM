@@ -8,18 +8,10 @@ const { createClient, createAdminClient } = vi.hoisted(() => ({
 vi.mock("@/lib/supabase/server", () => ({ createClient }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient }));
 import { GET } from "./route";
-import type * as HiddenFeatures from "@/lib/hidden-features";
 
-// Tested with the report switched off, the branch kept for turning it off
-// again. It is on in production (owner's decision of 22 November 2026).
-vi.mock("@/lib/hidden-features", async (importOriginal) => ({
-  ...(await importOriginal<typeof HiddenFeatures>()),
-  SHOW_ORGANISATION_REPORT: false,
-}));
-
-// The organisation report and its CSV downloads, if switched off
-// (SHOW_ORGANISATION_REPORT in src/lib/hidden-features.ts).
-describe("GET /api/organisations/:id/report while switched off", () => {
+// The organisation report and its CSV downloads are hidden until they work on
+// the live backend (SHOW_ORGANISATION_REPORT in src/lib/hidden-features.ts).
+describe("GET /api/organisations/:id/report while hidden", () => {
   it("answers 404 before any other check", async () => {
     const id = "00000000-0000-4000-8000-000000000001";
     const res = await GET(

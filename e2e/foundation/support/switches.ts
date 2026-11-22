@@ -5,7 +5,8 @@ import { LAUNCH_CONFIG_SETTINGS } from "../../../scripts/lib/foundation-e2e-webs
 // production) and the launch lane (playwright.launch-config.config.ts). The
 // compile-time switches that hid features (src/lib/hidden-features.ts and
 // PACKAGES_ON_SALE) are on in every build since the owner's decision of
-// 22 November 2026, so specs expect them on in both lanes.
+// 22 November 2026 (apart from two not yet built), so specs expect them on in
+// both lanes.
 
 /** True in the launch-configuration lane, whose config sets it for the specs. */
 export const LAUNCH_LANE = process.env.VERIFYMZANSI_LAUNCH_CONFIG === "1";

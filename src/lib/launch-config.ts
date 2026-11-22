@@ -22,7 +22,9 @@ export const LAUNCH_CONFIG_BUILD: boolean = process.env.VERIFYMZANSI_LAUNCH_CONF
  * The switches that hid features (src/lib/hidden-features.ts and
  * PACKAGES_ON_SALE in src/lib/constants/pricing.ts) are on in production and
  * every build since the owner's decision of 22 November 2026 (hide nothing
- * before launch), so they are no longer listed here.
+ * before launch), apart from two whose features are not built
+ * (SHOW_ORGANISATION_REPORT and SHOW_PACKAGE_TEAMS, off in every build), so
+ * they are no longer listed here.
  *
  * Changing a launch value here changes only that test build; changing what
  * production shows is a frontend change for the owner.

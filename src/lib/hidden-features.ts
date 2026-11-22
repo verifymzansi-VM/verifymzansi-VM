@@ -5,7 +5,9 @@
  * Every switch is on (true) in production and in every build, by the owner's
  * decision of 22 November 2026: hide nothing while the site is pre-launch (sign-up
  * is invite only and the owner checks each function before inviting anyone).
- * Turning one off again is a frontend change that needs the owner's approval.
+ * Two stay off because what they show is not built (the review of launch
+ * checklist item 71): SHOW_ORGANISATION_REPORT and SHOW_PACKAGE_TEAMS.
+ * Changing a switch is a frontend change that needs the owner's approval.
  *
  * Typed as `boolean`, not as the literal, so the code on both sides of each
  * switch still type-checks and a switch can be turned off without other edits.
@@ -48,10 +50,11 @@ export const SHOW_STAFF_OPERATIONS: boolean = true;
 /**
  * The "Performance" tab of an organisation's dashboard, with its two "CSV"
  * download links, and the route behind them (/api/organisations/<id>/report).
- * The live backend has no programme report yet, so the tab holds only the
- * links and the downloads may fail. If switched off, the route answers 404.
+ * Off: the report is not built on the live database yet; checklist item 74.
+ * Its route still reads the retired backend, so the downloads would fail.
+ * While off, the tab is hidden and the route answers 404.
  */
-export const SHOW_ORGANISATION_REPORT: boolean = true;
+export const SHOW_ORGANISATION_REPORT: boolean = false;
 
 /**
  * "Delete account" on the profile's Account tab, its confirmation dialog, and
@@ -85,9 +88,10 @@ export const SHOW_SPONSOR_OFFER: boolean = true;
 
 /**
  * "You + 1 person (you + 4 from 50 slots)" on the Multi-listing page.
- * Package teams are not built yet (roadmap P4c), so a package has one person.
+ * Off: package teams are not built yet (checklist item 15; roadmap P4c), so a
+ * package has one person.
  */
-export const SHOW_PACKAGE_TEAMS: boolean = true;
+export const SHOW_PACKAGE_TEAMS: boolean = false;
 
 /**
  * The redesigned partner page (/dashboard/partner, frontend ledger group 80):

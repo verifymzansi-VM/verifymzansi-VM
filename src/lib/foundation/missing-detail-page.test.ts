@@ -12,7 +12,6 @@ function reads(overrides: Partial<MissingDetailPageReads> = {}): MissingDetailPa
   return {
     postKind: vi.fn(async () => null),
     organisationListed: vi.fn(async () => false),
-    packagesOnSale: vi.fn(async () => false),
     ...overrides,
   };
 }
@@ -24,7 +23,6 @@ describe("matchDetailPage", () => {
     [`/tourism-events/${POST}`, { area: "tourism", id: POST }],
     ["/organisation/some-org", { area: "organisation", slug: "some-org" }],
     ["/organisation/some%2Dorg", { area: "organisation", slug: "some-org" }],
-    ["/pricing/multi-listing", { area: "multi-listing" }],
   ])("%s", (path, page) => {
     expect(matchDetailPage(path)).toEqual(page);
   });
@@ -39,6 +37,8 @@ describe("matchDetailPage", () => {
     "/organisation",
     "/dashboard/organisation/some-org",
     "/pricing",
+    // The multi-listing page is always shown, so its status is the page's own.
+    "/pricing/multi-listing",
     "/pricing/multi-listing/extra",
   ])("ignores %s", (path) => {
     expect(matchDetailPage(path)).toBeNull();
@@ -62,7 +62,6 @@ describe("detailPageKeyIsMalformed", () => {
     [{ area: "organisation", slug: "ab" }, true],
     [{ area: "organisation", slug: "a".repeat(61) }, true],
     [{ area: "organisation", slug: "some--org" }, true],
-    [{ area: "multi-listing" }, false],
   ] as const)("%j → %s", (page, malformed) => {
     expect(detailPageKeyIsMalformed(page)).toBe(malformed);
   });
@@ -101,13 +100,9 @@ describe("isMissingDetailPage", () => {
       organisationListed: vi.fn(async () => {
         throw new Error("down");
       }),
-      packagesOnSale: vi.fn(async () => {
-        throw new Error("down");
-      }),
     });
     expect(await isMissingDetailPage({ area: "listing", id: POST }, failing)).toBe(false);
     expect(await isMissingDetailPage({ area: "organisation", slug: "x-org" }, failing)).toBe(false);
-    expect(await isMissingDetailPage({ area: "multi-listing" }, failing)).toBe(false);
   });
 
   it("lets the page decide when the read is slow", async () => {
@@ -155,19 +150,5 @@ describe("isMissingDetailPage", () => {
       false
     );
     expect(organisationListed).toHaveBeenCalledTimes(2);
-  });
-
-  it("hides the multi-listing page while packages are not on sale, read once a minute", async () => {
-    let at = 0;
-    const now = () => at;
-    let onSale = false;
-    const packagesOnSale = vi.fn(async () => onSale);
-    const source = reads({ packagesOnSale });
-    expect(await isMissingDetailPage({ area: "multi-listing" }, source, now)).toBe(true);
-    onSale = true;
-    expect(await isMissingDetailPage({ area: "multi-listing" }, source, now)).toBe(true);
-    at += 60_001;
-    expect(await isMissingDetailPage({ area: "multi-listing" }, source, now)).toBe(false);
-    expect(packagesOnSale).toHaveBeenCalledTimes(2);
   });
 });

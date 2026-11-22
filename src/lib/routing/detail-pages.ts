@@ -1,16 +1,14 @@
 import { z } from "zod";
 
 /**
- * Public pages whose address names one record (a post, an organisation) or
- * that are hidden by a switch (the multi-listing page). Each page calls
+ * Public pages whose address names one record (a post, an organisation). Each
+ * page calls
  * notFound() when its record is missing, but by then streaming has already
  * sent "200 OK", so the proxy answers these addresses' status before rendering
  * (see proxy-handler.ts). Matching here is pure: no database read.
  */
 export type DetailPage =
-  | { area: "listing" | "business" | "tourism"; id: string }
-  | { area: "organisation"; slug: string }
-  | { area: "multi-listing" };
+  { area: "listing" | "business" | "tourism"; id: string } | { area: "organisation"; slug: string };
 
 const POST_PAGES: ReadonlyArray<readonly [RegExp, "listing" | "business" | "tourism"]> = [
   [/^\/listing\/([^/]+)$/, "listing"],
@@ -39,7 +37,6 @@ function decodeSegment(segment: string): string | null {
 
 /** The detail page an address opens, or null for any other address. */
 export function matchDetailPage(pathname: string): DetailPage | null {
-  if (pathname === "/pricing/multi-listing") return { area: "multi-listing" };
   for (const [pattern, area] of POST_PAGES) {
     const match = pattern.exec(pathname);
     if (match) return { area, id: decodeSegment(match[1]) ?? "" };
@@ -51,7 +48,6 @@ export function matchDetailPage(pathname: string): DetailPage | null {
 
 /** True when the address cannot name any record: the page is certainly "not found". */
 export function detailPageKeyIsMalformed(page: DetailPage): boolean {
-  if (page.area === "multi-listing") return false;
   if (page.area === "organisation") return !organisationSlug.safeParse(page.slug).success;
   return !postId.safeParse(page.id).success;
 }
