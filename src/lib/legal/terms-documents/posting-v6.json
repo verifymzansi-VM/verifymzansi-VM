@@ -94,7 +94,7 @@
         "Renewing early: if you renew an Individual slot before it ends, the new days start when its current days end, so you lose no days.",
         "The slot can be reused once the post in it is deleted, and a new post in the slot runs only for the slot's remaining days.",
         "When a slot ends, or a refund or chargeback withdraws it, the post it paid for is hidden and we notify you by email. You may buy a slot and reactivate such a post within 3 days; after that the post and its media are deleted. If a slot payment is still being confirmed when the 3 days end, deletion waits up to 24 hours more; once a payment is confirmed, the post is kept for 3 days after that payment.",
-        "If a slot or package runs for 180 days or more, we email you about 60 business days before it ends to say when it ends and what you can do then. Nothing renews automatically.",
+        "If a slot or package runs for 180 days or more, we email you about 60 business days before it ends to say when it ends and what you can do then.",
         "Price changes apply only to new purchases. Slots and packages you have already paid for keep their price and their days.",
         "Organisation and sponsor programmes are governed by their written agreement and do not renew automatically."
       ]

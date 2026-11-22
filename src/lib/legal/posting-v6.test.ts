@@ -165,7 +165,7 @@ describe("posting-v6", () => {
 
   it("is the site's one set of Terms, with its pinned hash", () => {
     expect(manifest.active_version).toBe("posting-v6");
-    expect(v6.document_hash).toBe("loAwnttBi08l1tpiOaAxtsufqNIdeaQPnXKMma0lhSs");
+    expect(v6.document_hash).toBe("5cAClZNQXGLoMM17BDDA3QGCJvwSRcfbC4NEcDH5EJM");
     expect(text).not.toMatch(/version/i);
   });
 

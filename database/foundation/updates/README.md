@@ -84,7 +84,7 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 `20261122181738_posting_terms_v6.sql` (launch checklist item 27) publishes
 posting terms `posting-v6` (`src/lib/legal/terms-documents/posting-v6.json`,
-canonical hash `loAwnttBi08l1tpiOaAxtsufqNIdeaQPnXKMma0lhSs`, also in
+canonical hash `5cAClZNQXGLoMM17BDDA3QGCJvwSRcfbC4NEcDH5EJM`, also in
 `catalogue.json`) and makes it current, in one transaction. posting-v6 is
 posting-v5 plus:
 

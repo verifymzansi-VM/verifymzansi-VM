@@ -140,7 +140,7 @@ export function GoogleOAuthButton({ mode }: GoogleOAuthButtonProps) {
         >
           Privacy Policy
         </Link>
-        , and that you are 18 or older.
+        .
       </p>
     </div>
   );
