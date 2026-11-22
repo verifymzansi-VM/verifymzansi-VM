@@ -288,7 +288,10 @@ await runTwoAdminUpdateCheck(SETUP, async ({ database, check, kit, world, admin,
   });
 
   await check("refusals: member, own account, posts, days, reason, staff and second factor", () => {
-    const reason = (sql, state, detail) => assert.match(fails(sql, state), new RegExp(detail));
+    const reason = (sql, state, detail) => {
+      const refusal = fails(sql, state);
+      assert.ok(refusal.includes(detail), refusal);
+    };
     reason(
       giveSql(admin, world.user("fc-unverified").email, 1, 30),
       "PT409",
@@ -427,7 +430,10 @@ await runTwoAdminUpdateCheck(SETUP, async ({ database, check, kit, world, admin,
 
   // LIM-SQL-free-credit-extension-days and LIM-SQL-free-credit-reason (extensions).
   await check("extension refusals", () => {
-    const reason = (sql, state, detail) => assert.match(fails(sql, state), new RegExp(detail));
+    const reason = (sql, state, detail) => {
+      const refusal = fails(sql, state);
+      assert.ok(refusal.includes(detail), refusal);
+    };
     const before = gift(first).ends_at;
     for (const days of [0, 31, "null"])
       reason(extendSql(admin, first, days), "22023", "free_credit_days_invalid");
