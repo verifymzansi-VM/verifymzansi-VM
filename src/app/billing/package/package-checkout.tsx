@@ -30,6 +30,7 @@ import {
   usePendingPayment,
   type PendingPayment,
 } from "@/components/billing/pending-payment-actions";
+import { CheckoutTermsLinks } from "@/components/billing/checkout-terms-links";
 
 /** One package term on sale (api.get_slot_package_offer). */
 export interface PackageCheckoutTerm {
@@ -505,15 +506,7 @@ export function PackageCheckout({
                     htmlFor={`${ids}-invoice-consent`}
                     className="cursor-pointer text-sm leading-6 text-foreground/80"
                   >
-                    {INVOICE_COOLING_OFF_CONSENT}{" "}
-                    <Link
-                      href="/terms#refunds"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-medium text-brand-green-700 underline underline-offset-2 dark:text-brand-gold-300"
-                    >
-                      Refunds
-                    </Link>
+                    {INVOICE_COOLING_OFF_CONSENT} <CheckoutTermsLinks />
                   </label>
                 </div>
               )}
@@ -531,15 +524,7 @@ export function PackageCheckout({
                 htmlFor={`${ids}-consent`}
                 className="cursor-pointer text-sm leading-6 text-foreground/80"
               >
-                {PACKAGE_COOLING_OFF_CONSENT}{" "}
-                <Link
-                  href="/terms#refunds"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-medium text-brand-green-700 underline underline-offset-2 dark:text-brand-gold-300"
-                >
-                  Refunds
-                </Link>
+                {PACKAGE_COOLING_OFF_CONSENT} <CheckoutTermsLinks />
               </label>
             </div>
           ) : null}

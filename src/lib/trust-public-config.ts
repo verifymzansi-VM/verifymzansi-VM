@@ -5,6 +5,7 @@ import {
   SECURITY_CONTACT_EMAIL,
   SUPPORT_CONTACT_EMAIL,
 } from "@/lib/contact-email";
+import { COMPANY_LEGAL_NAME, COMPANY_REGISTRATION_NUMBER } from "@/lib/legal/company-identity";
 
 export interface TrustPublicConfig {
   legalName?: string;
@@ -78,9 +79,9 @@ function getConfiguredRows(config: TrustPublicConfig, group: PublicConfigRowGrou
 
 export function getTrustPublicConfig(): TrustPublicConfig {
   return {
-    legalName: envOrDefault("VERIFYMZANSI_LEGAL_NAME", "VERIFYMZANSI (PTY) LTD"),
+    legalName: envOrDefault("VERIFYMZANSI_LEGAL_NAME", COMPANY_LEGAL_NAME),
     tradingName: envOrDefault("VERIFYMZANSI_TRADING_NAME", "VerifyMzansi"),
-    cipcNumber: envOrDefault("VERIFYMZANSI_CIPC_NUMBER", "2026/155305/07"),
+    cipcNumber: envOrDefault("VERIFYMZANSI_CIPC_NUMBER", COMPANY_REGISTRATION_NUMBER),
     businessAddress: envOrDefault(
       "VERIFYMZANSI_BUSINESS_ADDRESS",
       "Kwadlangezwa, Khandisa, Empangeni, KwaZulu-Natal, 3886"

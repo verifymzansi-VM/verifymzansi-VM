@@ -380,6 +380,21 @@ export default function ContactPage() {
               </div>
 
               <div className="surface-card p-5 sm:p-6">
+                <h2 className="font-body text-base font-semibold text-foreground">Complaints</h2>
+                <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                  Email{" "}
+                  <a
+                    className="break-all font-semibold text-brand-green-700 underline underline-offset-4 hover:text-brand-green-800 dark:text-brand-gold-300 dark:hover:text-brand-gold-100"
+                    href={`mailto:${SUPPORT_CONTACT_EMAIL}?subject=Complaint`}
+                  >
+                    {SUPPORT_CONTACT_EMAIL}
+                  </a>{" "}
+                  with &lsquo;Complaint&rsquo; in the subject. We reply within 10 business days. If
+                  we can&apos;t resolve it, you can take it to the National Consumer Commission.
+                </p>
+              </div>
+
+              <div className="surface-card p-5 sm:p-6">
                 <h2 className="font-body text-base font-semibold text-foreground">Quick help</h2>
                 <ul className="mt-3 divide-y divide-border/60">
                   {HELP_LINKS.map(({ href, label, icon: Icon }) => (

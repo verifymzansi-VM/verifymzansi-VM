@@ -1,6 +1,7 @@
 export type EmailTone = "success" | "info" | "warning" | "danger" | "neutral";
 
 import { SUPPORT_CONTACT_EMAIL } from "@/lib/contact-email";
+import { COMPANY_LEGAL_NAME, COMPANY_REGISTRATION_NUMBER } from "@/lib/legal/company-identity";
 
 interface EmailCta {
   label: string;
@@ -274,6 +275,7 @@ export function brandedEmail(params: BrandedEmailParams): string {
             <p style="margin:0 0 8px;">${escapeHtml(footerNote)}</p>
             <p style="margin:0 0 8px;">Questions? Email <a href="mailto:${SUPPORT_EMAIL}" style="color:${C.gold300};font-weight:700;text-decoration:none;">${SUPPORT_EMAIL}</a></p>
             <p style="margin:0;color:#ffffff;font-weight:700;">${BRAND_NAME} <span style="color:rgba(255,255,255,0.55);font-weight:400;">· Discover, connect and do business with confidence · <a href="${escapeHtml(appUrl)}/help/business-verification" style="color:${C.gold300};text-decoration:none;">What we check</a></span></p>
+            <p style="margin:8px 0 0;color:rgba(255,255,255,0.55);font-size:12px;">${COMPANY_LEGAL_NAME} · Registration number ${COMPANY_REGISTRATION_NUMBER}</p>
           </td></tr>
         </table>
       </td></tr>

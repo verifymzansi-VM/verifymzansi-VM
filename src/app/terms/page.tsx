@@ -37,6 +37,26 @@ export default async function TermsPage() {
       );
   }
   const textSections = published?.sections ?? buildTermsTextSections(trustConfig);
+  // ECTA s43(1): the details the registered identity rows do not already give.
+  const aboutRows = [
+    ...legalRows,
+    {
+      label: "Legal status",
+      value: "Private company, registered in South Africa with CIPC",
+    },
+    { label: "Directors", value: "[[OWNER: full names of every director]]" },
+    { label: "Address for legal notices", value: "Our registered address" },
+    {
+      label: "Phone",
+      value: trustConfig.supportPhone ?? trustConfig.informationOfficerPhone ?? "",
+    },
+    { label: "Email", value: trustConfig.supportEmail },
+    { label: "Website", value: "verifymzansi.com" },
+    {
+      label: "Dispute resolution code",
+      value: "[[OWNER: the code we subscribe to and where to read it, or 'None']]",
+    },
+  ].filter((row) => row.value);
 
   const sections: LegalSection[] = [
     ...textSections.map((section) => ({
@@ -51,7 +71,7 @@ export default async function TermsPage() {
       title: "Who we are",
       content: (
         <dl className="grid max-w-prose gap-x-6 gap-y-2 text-[15px] leading-7 sm:grid-cols-[auto_1fr]">
-          {legalRows.map((row) => (
+          {aboutRows.map((row) => (
             <div key={row.label} className="contents">
               <dt className="font-semibold text-foreground">{row.label}</dt>
               <dd className="text-foreground/80">{row.value}</dd>
@@ -61,13 +81,31 @@ export default async function TermsPage() {
       ),
     },
     {
+      id: "reporting",
+      navLabel: "Reporting a post",
+      title: "Reporting a post",
+      content: (
+        <LegalBlocks
+          paragraphs={[
+            "To report a post that is unlawful, infringes your rights or breaks these Terms, use Report on the post, or email abuse@verifymzansi.com with the post's link, what is wrong and how to contact you.",
+            "We act on a report within 2 business days. We may remove a post on a credible complaint and restrict the account that posted it.",
+            "We keep a record of every report and notice we receive and what we did about it.",
+          ]}
+        />
+      ),
+    },
+    {
       id: "privacy-contact",
       navLabel: "Privacy & contact",
       title: "Privacy & contact",
       content: (
         <div className="max-w-prose space-y-4">
           <p className="text-[15px] leading-7 text-foreground/80">
-            Your use of VerifyMzansi is also governed by our Privacy Policy.
+            Your use of VerifyMzansi is also governed by our Privacy Policy, which also explains how
+            we keep your information secure.
+          </p>
+          <p className="text-[15px] leading-7 text-foreground/80">
+            To keep a copy of these Terms, use your browser&apos;s Print or Save as PDF.
           </p>
           <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap">
             <Link
