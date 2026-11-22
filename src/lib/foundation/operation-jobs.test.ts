@@ -878,9 +878,9 @@ it("declares and delivers the sold-post notice within the database's kind limit"
   expect(await run()).toMatchObject({ succeeded: 1 });
   const lists = calls("claim_supported_notification_outbox").map(([, a]) => a.p_supported_kinds);
   expect(lists.flat()).toEqual(expect.arrayContaining(["post_sold", "post_kept"]));
-  // 21 kinds since the renewal reminder (20261114093742), each claim within it.
-  expect(new Set(lists.flat()).size).toBe(21);
-  for (const list of lists) expect(list.length).toBeLessThanOrEqual(21);
+  // 22 kinds since the term-ending notice (20261122111209), each claim within it.
+  expect(new Set(lists.flat()).size).toBe(22);
+  for (const list of lists) expect(list.length).toBeLessThanOrEqual(22);
   expect(deliver).toHaveBeenCalledExactlyOnceWith(
     "synthetic@example.invalid",
     "post_sold",
@@ -927,6 +927,55 @@ it("passes the renewal reminder's slot, end date and Renew all to the email", as
     `foundation-outbox/${id}`,
     undefined,
     { slotEndsAt: "2026-11-17T12:00:00+00:00", slotRenewAll: true, renewSlotId: slot }
+  );
+});
+it("passes the term-ending notice's end date, kind of term and access to the email", async () => {
+  queue(
+    job({
+      kind: "term_ending_notice",
+      subject_id: "00000000-0000-4000-8000-0000000000a2",
+      term_ends_at: "2027-02-14T10:00:00+00:00",
+      term_kind: "package",
+      term_has_access: false,
+    })
+  );
+  expect(await run()).toMatchObject({ succeeded: 1 });
+  expect(deliver).toHaveBeenCalledExactlyOnceWith(
+    "synthetic@example.invalid",
+    "term_ending_notice",
+    `foundation-outbox/${id}`,
+    undefined,
+    {
+      termEndsAt: "2027-02-14T10:00:00+00:00",
+      termKind: "package",
+      termHasAccess: false,
+      termPackageContinues: null,
+    }
+  );
+});
+it("passes whether a Multi-listing package outlasts the Individual slot", async () => {
+  queue(
+    job({
+      kind: "term_ending_notice",
+      subject_id: "00000000-0000-4000-8000-0000000000a3",
+      term_ends_at: "2027-02-14T10:00:00+00:00",
+      term_kind: "individual",
+      term_has_access: true,
+      term_package_continues: true,
+    })
+  );
+  expect(await run()).toMatchObject({ succeeded: 1 });
+  expect(deliver).toHaveBeenCalledExactlyOnceWith(
+    "synthetic@example.invalid",
+    "term_ending_notice",
+    `foundation-outbox/${id}`,
+    undefined,
+    {
+      termEndsAt: "2027-02-14T10:00:00+00:00",
+      termKind: "individual",
+      termHasAccess: true,
+      termPackageContinues: true,
+    }
   );
 });
 it("finishes a renewal reminder the database no longer addresses without sending it", async () => {
@@ -979,22 +1028,39 @@ describe("a database without the newer kinds", () => {
     refuse("unsupported mail kind");
     expect(await run()).toMatchObject({ succeeded: 1 });
     const lists = calls("claim_supported_notification_outbox").map(([, a]) => a.p_supported_kinds);
-    // The newest kinds are dropped first (the renewal reminder, then the
-    // ID-returned notice), then the sold and kept notices.
-    expect(lists.map((l) => l.length)).toEqual([3, 18, 17, 16, 14, 14]);
-    expect(lists[2]).not.toContain("slot_renewal_reminder");
-    expect(lists[2]).toContain("verification_returned");
-    expect(lists[3]).not.toContain("verification_returned");
-    expect(lists[3]).toContain("post_sold");
-    expect(lists[4]).not.toContain("post_sold");
-    expect(lists[4]).not.toContain("post_kept");
+    // The newest kinds are dropped first (the term-ending notice, the renewal
+    // reminder, then the ID-returned notice), then the sold and kept notices.
+    expect(lists.map((l) => l.length)).toEqual([3, 19, 18, 17, 16, 14, 14]);
+    expect(lists[2]).not.toContain("term_ending_notice");
+    expect(lists[2]).toContain("slot_renewal_reminder");
+    expect(lists[3]).not.toContain("slot_renewal_reminder");
+    expect(lists[3]).toContain("verification_returned");
+    expect(lists[4]).not.toContain("verification_returned");
+    expect(lists[4]).toContain("post_sold");
+    expect(lists[5]).not.toContain("post_sold");
+    expect(lists[5]).not.toContain("post_kept");
   });
   it("claims the earlier kinds after a list-length refusal, and keeps using them", async () => {
     refuse("supported mail kinds required");
     expect(await run()).toMatchObject({ succeeded: 1 });
     const lists = calls("claim_supported_notification_outbox").map(([, a]) => a.p_supported_kinds);
     // The follow-up claim keeps the earlier list instead of asking again.
-    expect(lists.map((l) => l.length)).toEqual([3, 18, 17, 16, 14, 14]);
+    expect(lists.map((l) => l.length)).toEqual([3, 19, 18, 17, 16, 14, 14]);
+  });
+  it("drops only the term-ending notice for a database without that update", async () => {
+    queue(job({ kind: "slot_renewal_reminder", subject_id: id }));
+    const base = rpc.getMockImplementation()!;
+    rpc.mockImplementation(async (name, args) =>
+      name === "claim_supported_notification_outbox" &&
+      args.p_supported_kinds.includes("term_ending_notice")
+        ? { data: null, error: { code: "22023", message: "unsupported mail kind" } }
+        : base(name, args)
+    );
+    expect(await run()).toMatchObject({ succeeded: 1 });
+    const lists = calls("claim_supported_notification_outbox").map(([, a]) => a.p_supported_kinds);
+    expect(lists.map((l) => l.length)).toEqual([3, 19, 18, 18]);
+    expect(lists[3]).toContain("slot_renewal_reminder");
+    expect(lists[3]).not.toContain("term_ending_notice");
   });
   it("drops only the renewal reminder for a database without that update", async () => {
     queue(job({ kind: "verification_returned" }));
@@ -1007,9 +1073,9 @@ describe("a database without the newer kinds", () => {
     );
     expect(await run()).toMatchObject({ succeeded: 1 });
     const lists = calls("claim_supported_notification_outbox").map(([, a]) => a.p_supported_kinds);
-    expect(lists.map((l) => l.length)).toEqual([3, 18, 17, 17]);
-    expect(lists[3]).toContain("verification_returned");
-    expect(lists[3]).not.toContain("slot_renewal_reminder");
+    expect(lists.map((l) => l.length)).toEqual([3, 19, 18, 17, 17]);
+    expect(lists[4]).toContain("verification_returned");
+    expect(lists[4]).not.toContain("slot_renewal_reminder");
   });
   it("drops only the ID-returned notice for a database without that update", async () => {
     queue(job({ kind: "post_kept" }));
@@ -1022,9 +1088,9 @@ describe("a database without the newer kinds", () => {
     );
     expect(await run()).toMatchObject({ succeeded: 1 });
     const lists = calls("claim_supported_notification_outbox").map(([, a]) => a.p_supported_kinds);
-    expect(lists.map((l) => l.length)).toEqual([3, 18, 17, 16, 16]);
-    expect(lists[4]).toContain("post_kept");
-    expect(lists[4]).not.toContain("verification_returned");
+    expect(lists.map((l) => l.length)).toEqual([3, 19, 18, 17, 16, 16]);
+    expect(lists[5]).toContain("post_kept");
+    expect(lists[5]).not.toContain("verification_returned");
   });
   it("does not retry the claim after another invalid-parameter refusal", async () => {
     rpc.mockImplementation(async (name) =>

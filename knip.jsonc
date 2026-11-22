@@ -29,6 +29,9 @@
     "scripts/build-foundation-baseline.mjs",
     "scripts/generate-person-name-rule.mjs",
     "scripts/probe-foundation-staff-adapter.mjs",
+    // Run by hand on a pull request branch to merge main and regenerate the
+    // replay outputs (header of the script).
+    "scripts/resync-branch.mjs",
     // Generators named in the headers of the SQL files they produce.
     "scripts/build-taxonomy-sql.mjs",
     // Offline checker recorded by docs/backend-foundation/tools/record-implementation-run.mjs.
