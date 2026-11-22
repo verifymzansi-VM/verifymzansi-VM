@@ -259,7 +259,7 @@ describe("email service", () => {
     expect(mockSend.mock.calls.length).toBe(sent);
     vi.unstubAllEnvs();
   });
-  it("tells a slot owner whose package outlasts the slot that its post moves in, without renew or buy", async () => {
+  it("tells a slot owner whose package outlasts the slot that its post moves in if a place is free, without renew or buy", async () => {
     vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
     await sendPlatformNotice(
       "member@example.invalid",
@@ -275,11 +275,11 @@ describe("email service", () => {
     );
     const [message] = mockSend.mock.calls.at(-1)!;
     expect(message.text).toBe(
-      "Your paid term is ending\n\nYour Individual slot ends on 14 February 2027 at 12:00 (South African time). Nothing renews automatically and you will not be charged again.\n\nIts post then moves into your Multi-listing package, so you do not need to do anything.\n\nSee my slots: https://verifymzansi.com/dashboard/slots"
+      "Your paid term is ending\n\nYour Individual slot ends on 14 February 2027 at 12:00 (South African time). Nothing renews automatically and you will not be charged again.\n\nIts post then moves into your Multi-listing package if the package has a free place on that date. If it has none, the post is hidden then and deleted 3 days later, so keep a place free or add one from My slots.\n\nSee my slots: https://verifymzansi.com/dashboard/slots"
     );
     expect(message.html).toContain("https://verifymzansi.com/dashboard/slots");
     expect(message.html).not.toContain("Billing");
-    expect(message.html).not.toContain("deleted 3 days later");
+    expect(message.html).not.toContain("renew this slot");
     vi.unstubAllEnvs();
   });
   it("tells a banned or suspended member only that the term ends, without renew or buy", async () => {

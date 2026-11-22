@@ -3601,10 +3601,13 @@ Button 'See my slots' (to `/dashboard/slots`).
 
 An Individual slot whose owner's Multi-listing package runs past the slot's
 end (renewing and buying a slot are closed while it runs; its post moves into
-the package when the slot ends): the same first paragraph, then only:
+the package when the slot ends if the package has a free place then, and is
+otherwise hidden and deleted 3 days later): the same first paragraph, then
+only:
 
-> Its post then moves into your Multi-listing package, so you do not need to
-> do anything.
+> Its post then moves into your Multi-listing package if the package has a free
+> place on that date. If it has none, the post is hidden then and deleted 3 days
+> later, so keep a place free or add one from My slots.
 
 Button 'See my slots' (to `/dashboard/slots`).
 

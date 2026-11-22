@@ -149,7 +149,7 @@ const TERM_ENDING_BODY = {
   individual:
     "To keep posting after that date, renew this slot from My slots from 14 days before it ends (the new days start when the current ones end), or buy a new slot on Billing. If you do nothing, the slot simply ends: its post is hidden then and deleted 3 days later, with its photos and videos.",
   individualIntoPackage:
-    "Its post then moves into your Multi-listing package, so you do not need to do anything.",
+    "Its post then moves into your Multi-listing package if the package has a free place on that date. If it has none, the post is hidden then and deleted 3 days later, so keep a place free or add one from My slots.",
   other:
     "To keep posting after that date, buy again on Billing. If you do nothing, it simply ends: the posts it pays for are hidden then, unless another of your slots takes them, and deleted 3 days later, with their photos and videos.",
   noAccess: "You do not need to do anything.",
