@@ -31,7 +31,7 @@ const REPLACED = [
   "internal.identity_disclosure_record(private.identity_disclosures,uuid)",
   "internal.identity_disclosure_material(uuid,uuid)",
 ];
-export const D9_TYPES = ["subpoena", "court_order", "search_warrant", "urgent_life_risk"];
+const D9_TYPES = ["subpoena", "court_order", "search_warrant", "urgent_life_risk"];
 
 /** A D9 request: subpoena by default, every part present. */
 export const d9Request = (overrides = {}) => ({

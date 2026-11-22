@@ -5,7 +5,7 @@
 // request; the log row is written before anything is shown, a search that
 // finds nobody is logged too, people are never looked up by name, a record
 // closes after 15 minutes, and both logs are append-only. Then, with
-// scripts/lib/authority-request-types-checks.mjs, rule D9
+// scripts/lib/foundation-authority-request-types.mjs, rule D9
 // (20261122013616_authority_request_types.sql): only a subpoena, court order,
 // search warrant or urgent life-risk request, each with its confirmation, and
 // never the selfie for an urgent one.
@@ -41,7 +41,7 @@ import {
   checkAuthorityRequestTypes,
   d9OpenSql,
   d9Request,
-} from "./lib/authority-request-types-checks.mjs";
+} from "./lib/foundation-authority-request-types.mjs";
 
 const UPDATE = "20261121043124_identity_record_disclosure.sql";
 const [PREFLIGHT, ROLLBACK] = [

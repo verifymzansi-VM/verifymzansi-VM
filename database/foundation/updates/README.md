@@ -145,18 +145,18 @@ the three columns and the check.
 
 `node --import tsx scripts/test-foundation-identity-record-disclosure.mjs` (part
 of `pnpm db:foundation:lifecycle-test`) now also runs
-`scripts/lib/authority-request-types-checks.mjs` on the throwaway database: the
-preflight before and after, read only; drifted bodies and a premature rollback
-refused; apply, rollback and re-apply return the same fingerprints; the new
-command's grants; records opened under the first rule (subpoena, warrant, police
-case) read as they did and stay listed; the earlier command always refused,
-logging nothing; the three earlier and any other types refused; for each of the
-four types, each missing or malformed reference, issuer, number, confirmer,
-reason and confirmation refused with its own detail and nothing logged; each
-type opening with its trimmed reference and confirmation on the row and the
-record; the table check refusing a row that breaks the rule; an urgent request
-showing names, ID number state and phones without the selfie or ID photo (view
-and print), its selfie read refused before logging and its server material
+`scripts/lib/foundation-authority-request-types.mjs` on the throwaway database:
+the preflight before and after, read only; drifted bodies and a premature
+rollback refused; apply, rollback and re-apply return the same fingerprints; the
+new command's grants; records opened under the first rule (subpoena, warrant,
+police case) read as they did and stay listed; the earlier command always
+refused, logging nothing; the three earlier and any other types refused; for
+each of the four types, each missing or malformed reference, issuer, number,
+confirmer, reason and confirmation refused with its own detail and nothing
+logged; each type opening with its trimmed reference and confirmation on the row
+and the record; the table check refusing a row that breaks the rule; an urgent
+request showing names, ID number state and phones without the selfie or ID photo
+(view and print), its selfie read refused before logging and its server material
 without the selfie; a court order still showing the selfie; and the rollback
 refused while a D9 record is kept.
 
