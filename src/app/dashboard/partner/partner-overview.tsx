@@ -56,7 +56,7 @@ export function PartnerOverview({
               {formatPlanPrice(earned.cents)}
             </dd>
             <dd className="mt-1 text-xs text-white/60">
-              Includes commission still in its 30-day wait.
+              Includes commission still in its waiting period.
             </dd>
             {earned.complete ? null : (
               <dd className="text-xs text-white/60">From your latest 50 commissions.</dd>
@@ -137,8 +137,8 @@ export function PartnerOverview({
               ]}
             />
             <p className="text-sm text-muted-foreground">
-              {partner.rateBps / 100}% of each qualifying payment. Commission is pending for 30
-              days, then approved if the payment stands.
+              You earn a share of each qualifying payment. Commission is pending for a waiting
+              period, then approved if the payment stands.
             </p>
           </CardContent>
         </Card>
