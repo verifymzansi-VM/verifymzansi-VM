@@ -28,8 +28,6 @@ if (args.length > 0) {
   process.exit(2);
 }
 
-const isWindows = process.platform === "win32";
-
 function git(gitArgs, { allowFailure = false } = {}) {
   const result = spawnSync("git", gitArgs, { encoding: "utf8", windowsHide: true });
   if (result.error) throw result.error;
@@ -45,14 +43,12 @@ function stop(message) {
   process.exit(1);
 }
 
-function step(title, command, commandArgs) {
-  console.log(`\n== ${title}\n$ ${[command, ...commandArgs].join(" ")}`);
-  // pnpm is a .cmd file on Windows, which needs a shell; every argument here
-  // is a fixed word, so nothing needs quoting.
-  const result = spawnSync(command, commandArgs, {
+// Runs a repository script with this Node binary, never through a shell.
+function step(title, script, scriptArgs = []) {
+  console.log(`\n== ${title}\n$ node ${[script, ...scriptArgs].join(" ")}`);
+  const result = spawnSync(process.execPath, [script, ...scriptArgs], {
     stdio: "inherit",
     windowsHide: true,
-    shell: isWindows && command === "pnpm",
   });
   if (result.error) throw result.error;
   if (result.status !== 0)
@@ -106,16 +102,19 @@ if (merge.status !== 0) {
   process.exit(1);
 }
 
-step("Record the replay fingerprint", "pnpm", ["db:foundation:replay", "--", "--write"]);
-step("Regenerate the readable schema snapshot", "pnpm", ["db:foundation:snapshot"]);
-step("Check the API manifests and runtime types", "pnpm", ["db:foundation:api-check"]);
-step("Check the API contracts", "node", ["scripts/check-foundation-api-contracts.mjs"]);
-step("Check the update register and API removals against main", "node", [
+// The commands behind the package.json scripts named in database/foundation/
+// README.md, run with node directly (no shell): pnpm db:foundation:replay --
+// --write, pnpm db:foundation:snapshot and pnpm db:foundation:api-check.
+step("Record the replay fingerprint", "scripts/replay-foundation-schema.mjs", ["--write"]);
+step("Regenerate the readable schema snapshot", "scripts/generate-foundation-snapshot.mjs");
+step("Check the API manifests and runtime types", "scripts/check-foundation-api-drift.mjs");
+step("Check the API contracts", "scripts/check-foundation-api-contracts.mjs");
+step(
+  "Check the update register and API removals against main",
   "scripts/check-foundation-update-order.mjs",
-  "--base",
-  "origin/main",
-]);
-step("Check the frontend freeze ledger", "node", ["scripts/check-frontend-freeze.mjs"]);
+  ["--base", "origin/main"]
+);
+step("Check the frontend freeze ledger", "scripts/check-frontend-freeze.mjs");
 
 const changed = git(["status", "--porcelain"]).stdout.trim();
 console.log(
