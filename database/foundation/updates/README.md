@@ -107,9 +107,14 @@ each area showroom use. Nothing is stored and nothing is replaced.
   live before (an earlier approval of the post itself in
   `private.moderation_log`) is not new again; an unchanged reactivation keeps
   its first `published_at`.
-- **Nudges** (each within a turn, so none jumps the queue): 0.15 of a turn for a
-  ready video; likes per view over the last 30 days, smoothed as 1 like in 20
-  views, at most 0.15 (reached at 1 like in 5 views); up to 0.3 of randomness.
+- **Nudges** (all together under one turn, so none carries a post past one a
+  whole turn ahead): 0.15 of a turn for a ready video; likes per view over the
+  last 30 days, smoothed as 1 like in 20 views, at most 0.15 (reached at 1 like
+  in 5 views); up to 0.3 of randomness. The video and likes nudges grow with the
+  showroom's appearances in the last 7 days: none while it has had none (every
+  post is then level, and randomness shares the places; this is the case while
+  the website does not record appearances), in full once its posts average one
+  appearance each.
 - **Area:** of every 7 places, 1, 4 and 6 go to the visitor's city, 2 and 5 to
   the rest of the province, 3 and 7 to the rest of South Africa (home's 15: 7, 4
   and 4). A group that runs out passes its places to the next one (city,
@@ -121,11 +126,14 @@ each area showroom use. Nothing is stored and nothing is replaced.
 days of view days and likes, and the last 72 hours' approvals: for 2,000 live
 posts about 14,000 small activity rows. The website remembers each order for 60
 seconds per showroom and area on each server copy, so the database sees at most
-one call a minute per showroom and area per copy. No table or index is added.
+one call a minute per showroom and area per copy. No table is added. One partial
+index, `private.moderation_log_post_approvals_idx` (`post_id`, a post's own
+approvals only), serves the "went live before" lookup; views and likes are read
+through their existing `post_id` indexes.
 
-New command only (expand). ORDER: apply first, then merge: the deploy check
-probes every command in `../runtime-api-manifest.json`, and the website falls
-back to the newest posts if the read fails.
+New command and index only (expand). ORDER: apply first, then merge: the deploy
+check probes every command in `../runtime-api-manifest.json`, and the website
+falls back to the newest posts if the read fails.
 
 **Applying.**
 
@@ -141,8 +149,9 @@ back to the newest posts if the read fails.
 
 The reviewed rollback is `../rollback/20261121224857_fair_showroom.down.sql`
 (only with the owner's decision; prefer a forward fix). It refuses (55000)
-unless both functions have the update's bodies, then drops them; the showroom
-then shows the newest posts. No data is removed (the update stores none).
+unless both functions and the index are the update's, then drops them; the
+showroom then shows the newest posts. No data is removed (the update stores
+none).
 
 `node --import tsx scripts/test-foundation-fair-showroom.mjs` (part of
 `pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
@@ -154,8 +163,10 @@ publicly live posts with card fields only; the 3 / 2 / 2 mix and each group
 running out; deficit order with an unknown area; the busy-city cap at and above
 twice the fair share; the New tag at 1, 71 and 73 hours and never again after an
 earlier approval; the likes cap and the video nudge (each first about 80% and
-87% of the time on level turns, never half a turn behind); and that reads write
-nothing.
+87% of the time on level turns); with no appearances yet, no video or likes
+nudge (photo posts first about half the time against video posts); all nudges
+together under one turn (a post a turn behind with a video and farmed likes
+never first); the index; and that reads write nothing.
 
 ## Business storefront, 21 November 2026
 

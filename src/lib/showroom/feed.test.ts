@@ -139,14 +139,29 @@ describe("loadShowroomItems", () => {
     ]);
   });
 
-  it("keeps the order on the browser test copy, whose pictures need one order", async () => {
-    vi.stubEnv("PLAYWRIGHT_TEST_MODE", "1");
+  it("remembers a failed fair read for a minute: one database read per visit", async () => {
+    vi.useFakeTimers();
     try {
-      loadFoundationShowroom.mockResolvedValue([1, 2, 3].map((n) => card(ID(n))));
-      const items = await loadShowroomItems("tourism", () => 0.99);
-      expect(items.map((item) => item.id)).toEqual([ID(1), ID(2), ID(3)]);
+      resolveIpGeolocation.mockReturnValue({
+        country: "ZA",
+        regionCode: "GP",
+        province: "Gauteng",
+        city: "Sandton",
+      });
+      loadFoundationShowroom.mockRejectedValue(new Error("Synthetic timeout"));
+      searchFoundationCards.mockResolvedValue({ items: [card(ID(6))] });
+      await loadShowroomItems("market", first);
+      await loadShowroomItems("market", first);
+      expect(loadFoundationShowroom).toHaveBeenCalledTimes(1);
+      expect(searchFoundationCards).toHaveBeenCalledTimes(2);
+      vi.advanceTimersByTime(60_000);
+      loadFoundationShowroom.mockResolvedValue([card(ID(7))]);
+      const items = await loadShowroomItems("market", first);
+      expect(items.map((item) => item.id)).toEqual([ID(7)]);
+      expect(loadFoundationShowroom).toHaveBeenCalledTimes(2);
+      expect(searchFoundationCards).toHaveBeenCalledTimes(2);
     } finally {
-      vi.unstubAllEnvs();
+      vi.useRealTimers();
     }
   });
 

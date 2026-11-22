@@ -68,9 +68,14 @@ begin
     from private.post_activity_days a
     where a.day >= today - 6
     group by a.post_id
+  ), average as (
+    select coalesce((select sum(s.n) from shown s), 0)::numeric
+      / nullif((select count(*) from candidates), 0) as n
   ), fair as (
-    select greatest(coalesce((select sum(s.n) from shown s), 0)::numeric
-      / nullif((select count(*) from candidates), 0), 1) as share
+    -- The fair share (at least 1), and how much of the video and likes
+    -- nudges applies: none without appearances, all from 1 per post.
+    select greatest(a.n, 1) as share, least(coalesce(a.n, 0), 1) as nudge
+    from average a
   ), approved_before as (
     -- Recent posts that an earlier approval already put live once.
     select distinct m.post_id
@@ -99,10 +104,10 @@ begin
       (f.share - coalesce(s.n, 0)) / f.share
         + case when x.is_new
             then 1 - extract(epoch from statement_timestamp() - c.published_at) / 259200 else 0 end
-        + case when exists (select 1 from private.post_media pm
+        + f.nudge * (case when exists (select 1 from private.post_media pm
             join private.media_objects m on m.id = pm.object_id
             where pm.post_id = c.post_id and m.state = 'ready' and m.kind = 'video') then 0.15 else 0 end
-        + least(0.15, 0.75 * (coalesce(lk.n, 0) + 1)::numeric / (coalesce(vw.n, 0) + 20))
+          + least(0.15, 0.75 * (coalesce(lk.n, 0) + 1)::numeric / (coalesce(vw.n, 0) + 20)))
         + (random() * 0.3)::numeric as score
     from candidates c
     cross join fair f

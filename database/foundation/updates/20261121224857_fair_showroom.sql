@@ -17,12 +17,16 @@
 --    approval of the post itself in private.moderation_log) is not new again
 --    when it is approved again; an unchanged reactivation keeps its first
 --    published_at anyway.
--- 3. Nudges, each capped so it never jumps the queue: 0.15 of a turn for a
---    ready video; likes per view over the last 30 days, smoothed as if every
---    post started with 1 like in 20 views, at 0.75 of a turn per like-rate up
---    to 0.15 (reached at 1 like in 5 views); and up to 0.3 of a turn of
---    randomness so two visitors never get identical showrooms and nobody can
---    predict the order.
+-- 3. Nudges, all together under one turn, so none jumps a post a whole turn
+--    behind: 0.15 of a turn for a ready video; likes per view over the last
+--    30 days, smoothed as if every post started with 1 like in 20 views, at
+--    0.75 of a turn per like-rate up to 0.15 (reached at 1 like in 5 views);
+--    and up to 0.3 of a turn of randomness so two visitors never get
+--    identical showrooms and nobody can predict the order. The video and
+--    likes nudges grow with the showroom's appearances: nothing while the
+--    showroom has had none in the last 7 days (then every post is level and
+--    the randomness shares the places), in full once its posts average one
+--    appearance each.
 -- 4. Area. The request may name the visitor's province, and with it the
 --    visitor's city (the website reads them from the request; nothing about the
 --    visitor is stored). Of every 7 places, 1, 4 and 6 go to posts in the
@@ -45,8 +49,11 @@
 --   price_negotiable, province, city, locality, condition, published_at), its
 --   preview (image_key, video_key) and is_new. No score, counts, owner or
 --   account. The read is volatile (random order) and writes nothing.
+-- - Index private.moderation_log_post_approvals_idx: a post's own approvals,
+--   for the "went live before" lookup.
 --
--- Expand only: one new API command; nothing is replaced, removed or stored.
+-- Expand only: one new API command and one index; nothing is replaced,
+-- removed or stored.
 -- ORDER: apply first, then merge (the website's deploy check probes every
 -- command in the runtime manifest; the showroom falls back to the newest posts
 -- if the read fails).
@@ -56,21 +63,26 @@ begin;
 -- Never wait more than 5 seconds for anything this update needs.
 set local lock_timeout='5s';
 
--- Precondition: the two functions are both absent or both present, and the
--- activity counters it reads exist.
+-- Precondition: the two functions and the index are all absent or all
+-- present, and the activity counters it reads exist.
 do $$
 declare present integer;
 begin
   select (to_regprocedure('internal.showroom_feed(jsonb)') is not null)::integer
     + (to_regprocedure('api.showroom_feed(jsonb)') is not null)::integer
+    + (to_regclass('private.moderation_log_post_approvals_idx') is not null)::integer
   into present;
-  if present not in (0, 2) then
-    raise exception 'fair showroom precondition: % of 2 functions exist', present using errcode='55000';
+  if present not in (0, 3) then
+    raise exception 'fair showroom precondition: % of 3 parts exist', present using errcode='55000';
   end if;
   if to_regclass('private.post_activity_days') is null then
     raise exception 'fair showroom precondition: private.post_activity_days is missing' using errcode='55000';
   end if;
 end$$;
+
+-- The "went live before" lookup: a post's own approvals (not its edits').
+create index if not exists moderation_log_post_approvals_idx on private.moderation_log
+  using btree (post_id) where edit_id is null and decision = 'approve';
 
 create or replace function internal.showroom_feed(p_request jsonb)
 returns jsonb
@@ -139,9 +151,14 @@ begin
     from private.post_activity_days a
     where a.day >= today - 6
     group by a.post_id
+  ), average as (
+    select coalesce((select sum(s.n) from shown s), 0)::numeric
+      / nullif((select count(*) from candidates), 0) as n
   ), fair as (
-    select greatest(coalesce((select sum(s.n) from shown s), 0)::numeric
-      / nullif((select count(*) from candidates), 0), 1) as share
+    -- The fair share (at least 1), and how much of the video and likes
+    -- nudges applies: none without appearances, all from 1 per post.
+    select greatest(a.n, 1) as share, least(coalesce(a.n, 0), 1) as nudge
+    from average a
   ), approved_before as (
     -- Recent posts that an earlier approval already put live once.
     select distinct m.post_id
@@ -170,10 +187,10 @@ begin
       (f.share - coalesce(s.n, 0)) / f.share
         + case when x.is_new
             then 1 - extract(epoch from statement_timestamp() - c.published_at) / 259200 else 0 end
-        + case when exists (select 1 from private.post_media pm
+        + f.nudge * (case when exists (select 1 from private.post_media pm
             join private.media_objects m on m.id = pm.object_id
             where pm.post_id = c.post_id and m.state = 'ready' and m.kind = 'video') then 0.15 else 0 end
-        + least(0.15, 0.75 * (coalesce(lk.n, 0) + 1)::numeric / (coalesce(vw.n, 0) + 20))
+          + least(0.15, 0.75 * (coalesce(lk.n, 0) + 1)::numeric / (coalesce(vw.n, 0) + 20)))
         + (random() * 0.3)::numeric as score
     from candidates c
     cross join fair f

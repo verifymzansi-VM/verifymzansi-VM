@@ -17,7 +17,9 @@
 // (LIM-SQL-showroom-busy-cap); the New tag and head start
 // (LIM-SQL-showroom-new-window), never again for a post approved before; the
 // likes cap (LIM-SQL-showroom-like-nudge) and the video nudge; only publicly
-// live posts, card fields only; and that a read stores nothing. Posts are
+// live posts, card fields only; with no appearances yet, no video or likes
+// nudge, so photo posts get their share; all nudges together under one turn;
+// the approvals index; and that a read stores nothing. Posts are
 // events written directly as the database owner (a live event is public until
 // it ends, with no plan needed); appearances, views and likes are written into
 // their tables directly. Any later updates are applied at the end.
@@ -182,8 +184,11 @@ try {
     const rows = preflight();
     assert.equal(rows.length, 2, JSON.stringify(rows));
     assert.match(rows[0][1], /unexpected state/);
-    assert.match(rows[1][1], /^api\.showroom_feed\(jsonb\) exists but is not the update's body/);
-    assert.match(fails(step.sql, "55000"), /1 of 2 functions exist/);
+    assert.match(
+      rows[1][1],
+      /^api\.showroom_feed\(jsonb\) exists but is not the update's definition/
+    );
+    assert.match(fails(step.sql, "55000"), /1 of 3 parts exist/);
     q(`drop function api.showroom_feed(jsonb);`);
     assert.equal(fingerprint(), before);
   });
@@ -403,6 +408,47 @@ try {
     const ahead = post("kzn_durban", { shown: 15 });
     assert.equal(firstCount(tourism(), ahead), 200);
     assert.ok(photo && behind);
+    clear();
+  });
+
+  await check("no appearances yet: no video or likes nudge, so photo posts get their share", () => {
+    // Counting off (or a new showroom): every post is level, a whole turn
+    // ahead of an empty fair share; only randomness orders them.
+    const videos = [0, 1, 2, 3].map(() => post("kzn_durban", { video: true }));
+    const photos = [0, 1, 2, 3].map(() => post("kzn_durban"));
+    q(`insert into private.post_view_days(post_id,day,views)
+        values('${videos[0]}',(now() at time zone 'Africa/Johannesburg')::date-1,50);
+      insert into private.post_likes(post_id,device_mark,waiting,counts_from)
+        select '${videos[0]}',sha256(convert_to(g::text||'${videos[0]}','UTF8')),false,now()
+        from generate_series(1,50) g;`);
+    const photoFirst = Number(
+      q(
+        anon(`select count(*) from generate_series(1,400) g
+          where api.showroom_feed('{"showroom":"tourism"}')->'items'->0->>'id'
+            = any(array[${photos.map((id) => `'${id}'`).join(",")}]);`)
+      )
+    );
+    // Half of 400 on average (sd 10); with a 0.15 video nudge, photos would
+    // lead far less often.
+    assert.ok(photoFirst > 150 && photoFirst < 250, `photo first ${photoFirst} of 400`);
+    clear();
+  });
+
+  await check("all nudges together stay under one turn", () => {
+    // Fair share 20 (40 over 2): one turn apart. Video (0.15), farmed likes
+    // (0.15) and randomness (up to 0.3) never carry the post behind past it.
+    const behind = post("kzn_durban", { shown: 30, video: true });
+    const ahead = post("kzn_durban", { shown: 10 });
+    q(`insert into private.post_view_days(post_id,day,views)
+        values('${behind}',(now() at time zone 'Africa/Johannesburg')::date-1,1000);
+      insert into private.post_likes(post_id,device_mark,waiting,counts_from)
+        select '${behind}',sha256(convert_to(g::text||'${behind}','UTF8')),false,now()
+        from generate_series(1,1000) g;`);
+    assert.equal(firstCount(tourism(), ahead), 200);
+    assert.equal(
+      q(`select pg_get_indexdef('private.moderation_log_post_approvals_idx'::regclass);`),
+      "CREATE INDEX moderation_log_post_approvals_idx ON private.moderation_log USING btree (post_id) WHERE ((edit_id IS NULL) AND (decision = 'approve'::text))"
+    );
     clear();
   });
 

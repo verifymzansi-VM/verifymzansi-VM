@@ -27,12 +27,13 @@ const SHOWROOM_LIMITS: Record<ShowroomSurface, number> = {
   tourism: 7,
 };
 
-/** Each server copy remembers a showroom order for a minute per showroom and
- * area, so a visit never waits on more than one database read a minute. */
+/** Each server copy remembers a showroom order (or that reading it failed) for
+ * a minute per showroom and area, so a visit never waits on more than one
+ * fair-order read a minute. */
 const CACHE_MS = 60_000;
 /** At most this many remembered orders (4 showrooms x areas); the oldest goes first. */
 const CACHE_ENTRIES = 400;
-const cache = new Map<string, { at: number; items: CarouselItem[] }>();
+const cache = new Map<string, { at: number; items: CarouselItem[] | null }>();
 
 /** "New" in the card's badge spot: gold with dark green text (brand accents). */
 const NEW_TAG = "New";
@@ -97,17 +98,26 @@ function carouselItem(post: {
   };
 }
 
-/** The fair order for the showroom and area, remembered for a minute. */
-async function fairOrder(surface: ShowroomSurface, area: Area): Promise<CarouselItem[]> {
+/** The fair order for the showroom and area, or null when it cannot be read;
+ * either is remembered for a minute. */
+async function fairOrder(surface: ShowroomSurface, area: Area): Promise<CarouselItem[] | null> {
   const key = `${surface}|${area.province ?? ""}|${area.city ?? ""}`;
   const now = Date.now();
   const kept = cache.get(key);
   if (kept && now - kept.at < CACHE_MS) return kept.items;
-  const cards = await loadFoundationShowroom(foundationServerPublicApi(), {
-    showroom: surface,
-    ...area,
-  });
-  const items = cards.map(carouselItem);
+  let items: CarouselItem[] | null = null;
+  try {
+    const cards = await loadFoundationShowroom(foundationServerPublicApi(), {
+      showroom: surface,
+      ...area,
+    });
+    items = cards.map(carouselItem);
+  } catch (error) {
+    log.warn("Fair showroom unavailable; showing the newest posts for a minute", {
+      surface,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
   cache.delete(key);
   cache.set(key, { at: now, items });
   if (cache.size > CACHE_ENTRIES) cache.delete(cache.keys().next().value!);
@@ -123,10 +133,8 @@ async function newestFirst(surface: ShowroomSurface): Promise<CarouselItem[]> {
   return page.items.map(carouselItem);
 }
 
-/** A different one of the first three at the front on each visit; the rest keep their order.
- * Not on the browser test copy, whose pictures need one order every run. */
-function rotateFront(items: CarouselItem[], random = Math.random): CarouselItem[] {
-  if (process.env.PLAYWRIGHT_TEST_MODE === "1") return items;
+/** A different one of the first three at the front on each visit; the rest keep their order. */
+function rotateFront(items: CarouselItem[], random: () => number): CarouselItem[] {
   const front = Math.floor(random() * Math.min(3, items.length));
   if (front === 0) return items;
   return [items[front]!, ...items.filter((_, index) => index !== front)];
@@ -141,14 +149,8 @@ export async function loadShowroomItems(
   surface: ShowroomSurface,
   random: () => number = Math.random
 ): Promise<CarouselItem[]> {
-  try {
-    return rotateFront(await fairOrder(surface, showroomVisitorArea()), random);
-  } catch (error) {
-    log.warn("Fair showroom unavailable; showing the newest posts", {
-      surface,
-      error: error instanceof Error ? error.message : "Unknown error",
-    });
-  }
+  const fair = await fairOrder(surface, showroomVisitorArea());
+  if (fair) return rotateFront(fair, random);
   try {
     return await newestFirst(surface);
   } catch (error) {

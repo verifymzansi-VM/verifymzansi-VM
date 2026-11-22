@@ -4,9 +4,6 @@
  */
 
 import { normalizeProvinceName } from "@/lib/constants/sa-provinces";
-import { createLogger } from "@/lib/utils/logger";
-
-const log = createLogger("IpGeolocation");
 
 export interface IpGeoSignal {
   country: string | null;
@@ -58,7 +55,8 @@ function readRequestCf(): CloudflareRequestCf | null {
 /**
  * Resolve IP geolocation for the current request from Cloudflare's request
  * data. Returns null when not running on the Worker (local server, tests) or
- * when the request carries no location.
+ * when the request carries no location. Nothing about the location is logged
+ * or stored: the showroom reads it on every page view.
  */
 export function resolveIpGeolocation(): IpGeoSignal | null {
   const cf = readRequestCf();
@@ -70,10 +68,6 @@ export function resolveIpGeolocation(): IpGeoSignal | null {
   const regionCode = cf.regionCode?.toUpperCase().replace(/^ZA-/, "") ?? null;
   const province =
     (regionCode ? CF_REGION_TO_PROVINCE[regionCode] : null) ?? normalizeProvinceName(cf.region);
-
-  if (cf.country && cf.country !== "ZA") {
-    log.info("IP geolocation resolved outside South Africa", { country: cf.country });
-  }
 
   return {
     country: cf.country ?? null,

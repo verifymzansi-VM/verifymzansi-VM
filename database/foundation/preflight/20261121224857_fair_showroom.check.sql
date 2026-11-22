@@ -6,35 +6,38 @@
 -- "summary" row, then one row per problem. Apply the update only when the
 -- summary is the only row and reads "update not applied".
 --
--- The summary says whether the two new functions are absent (update not
--- applied) or both have the update's bodies (already applied), and counts
--- "showroom posts": the publicly live posts the home showroom takes turns
--- between.
+-- The summary says whether the update's three parts (two functions and one
+-- index) are absent (update not applied) or all have the update's definitions
+-- (already applied), and counts "showroom posts": the publicly live posts the
+-- home showroom takes turns between.
 do $$begin
   set transaction read only;
 end$$;
-with bodies as (
-  select v.sig, v.updated,
-    (select md5(replace(p.prosrc, E'\r\n', E'\n')) from pg_proc p where p.oid = to_regprocedure(v.sig)) as body
+with parts as (
+  select v.part, v.updated,
+    case when v.part like '%(jsonb)'
+      then (select md5(replace(p.prosrc, E'\r\n', E'\n')) from pg_proc p where p.oid = to_regprocedure(v.part))
+      else (select md5(pg_get_indexdef(to_regclass(v.part)))) end as body
   from (values
-    ('internal.showroom_feed(jsonb)', 'f4c4e91aa56bd9f3bb985c01d0c3d280'),
-    ('api.showroom_feed(jsonb)', '20563a7dac3f7a15e63b08d6f00460da')
-  ) v(sig, updated)
+    ('internal.showroom_feed(jsonb)', 'cf403604b9ccbc8d68267acdb41970c7'),
+    ('api.showroom_feed(jsonb)', '20563a7dac3f7a15e63b08d6f00460da'),
+    ('private.moderation_log_post_approvals_idx', '355001da88e9af5134655e1717eaea25')
+  ) v(part, updated)
 ),
 state as (
   select count(*) filter (where body is null) as absent,
     count(*) filter (where body = updated) as updated,
     count(*) as total
-  from bodies
+  from parts
 ),
 problems as (
-  select 'problem' as kind, sig || ' exists but is not the update''s body (md5 ' || body
+  select 'problem' as kind, part || ' exists but is not the update''s definition (md5 ' || body
       || '); do not apply the update' as detail
-    from bodies where body is not null and body <> updated
+    from parts where body is not null and body <> updated
   union all
   select 'problem', 'only part of the update is present'
     from state
-    where not exists (select 1 from bodies where body is not null and body <> updated)
+    where not exists (select 1 from parts where body is not null and body <> updated)
       and absent <> total and updated <> total
   union all
   select 'problem', 'private.post_activity_days is missing; apply 20261121100028_post_performance_stats.sql first'
