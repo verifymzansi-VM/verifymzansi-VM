@@ -82,12 +82,12 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Single-administrator mode for house slots and own posts, 21 November 2026
 
-`20261121143000_one_person_admin_mode.sql` is pending (see the applied
-register). Launch checklist item 67 (owner's decisions of 21 November 2026,
-"Option A", cap 25, and 22 November 2026, "Yes, all my posts"). The owner has
-two admin accounts but one ID, so the two-person rules for house slots could not
-be met: a house-slot grant needs a second ID-verified administrator, and staff
-never review their own posts.
+`20261121143000_one_person_admin_mode.sql` was applied on 22 November 2026 at
+06:40 UTC (see the applied register). Launch checklist item 67 (owner's
+decisions of 21 November 2026, "Option A", cap 25, and 22 November 2026, "Yes,
+all my posts"). The owner has two admin accounts but one ID, so the two-person
+rules for house slots could not be met: a house-slot grant needs a second
+ID-verified administrator, and staff never review their own posts.
 
 - **The mode.** `internal.single_administrator(account)` (no API role can run
   it) is true while the account holds an active admin role and an accepted ID
@@ -6987,6 +6987,12 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   production fingerprint after it (fingerprint.sql) matched the full replay
   (except the known schema grant difference)
 
-- `20261121143000_one_person_admin_mode.sql`: pending; apply-first
+- `20261121143000_one_person_admin_mode.sql`: applied 2026-11-22 06:40 UTC;
+  owner-approved, apply-first, Supabase SQL editor (pull request #343); update
+  sha256 starting 3cceed8f; preflight (sha256 starting 7074a32b) before: update
+  not applied (ID-verified staff 1, no problems), after: already applied (11 of
+  11 bodies as updated, both new columns present; self-granted slot events: 0;
+  self-approved decisions: 0); production fingerprint after it (fingerprint.sql)
+  matched the full replay (except the known schema grant difference)
 
 <!-- applied-register:end -->
