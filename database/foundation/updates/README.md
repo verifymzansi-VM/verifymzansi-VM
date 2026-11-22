@@ -80,15 +80,134 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Fair showroom for every post, 21 November 2026
+
+`20261122023000_fair_showroom.sql` was applied on 22 November 2026 at 15:45 UTC
+(see the applied register). Launch checklist item 66 (design approved by the
+owner on 21 November 2026). It adds one public read,
+`api.showroom_feed(p_request)` (visitors and members, security invoker over a
+security definer `internal` twin), which the home showroom and each area
+showroom use, and replaces `internal.record_post_activity` so a showroom
+appearance counts at most once per browser, post and showroom a day.
+
+- **Request:** `showroom` (`home`, `business`, `market` or `tourism`; `home`
+  when omitted), `province` (a province id) and `city` (a city id of that
+  province, only with it). Strings only, at most 1,024 bytes; anything else is
+  refused (22023). The website sends the visitor's rough area from Cloudflare's
+  request data for that page only; the database never stores it.
+- **Answer:** `{"items": [...]}`, at most 15 cards for home and 7 for an area,
+  in showroom order. Each card has the public search card fields (no `score`),
+  its `preview` (as `api.search_post_cards`) and `is_new`. Only publicly live
+  posts, as public search shows them.
+- **Turns:** the posts seen least go first. A post's score is
+  `(fair share - its appearances) / fair share` over the last 7 days of
+  `private.post_activity_days` for that showroom, where the fair share is the
+  one the Performance page shows (the showroom's appearances in the last 7 days
+  divided by its posts now, at least 1). One turn is one fair share. A post's
+  appearances count up to 3 fair shares, so a flood of them cannot bury it more
+  than 2 turns behind.
+- **New:** for 72 hours after a post first went live it is `is_new` and gets one
+  extra turn that fades evenly to nothing. A post approved again after it was
+  live before (an earlier approval of the post itself in
+  `private.moderation_log`) is not new again; an unchanged reactivation keeps
+  its first `published_at`.
+- **Nudges** (all together under one turn, so none carries a post past one a
+  whole turn ahead): 0.15 of a turn for a ready video; likes per view (the
+  post's lifetime totals in `private.post_engagement_totals`), smoothed as 1
+  like in 20 views, at most 0.15 (reached at 1 like in 5 views); up to 0.3 of
+  randomness. The video and likes nudges grow with the showroom's appearances in
+  the last 7 days: none while it has had none (every post is then level, and
+  randomness shares the places; this is the case while the website does not
+  record appearances), in full once its posts average one appearance each.
+- **Area:** of every 7 places, 1, 4 and 6 go to the visitor's city, 2 and 5 to
+  the rest of the province, 3 and 7 to the rest of South Africa (home's 15: 7, 4
+  and 4). A group that runs out passes its places to the next one (city,
+  province, rest, then the city again). A post shown more than twice the fair
+  share this week loses its city and province places. Without a province every
+  place comes from one all-South-Africa queue.
+- **Recording** (`internal.record_post_activity`, full body; it was
+  `20261121100028_post_performance_stats.sql`'s): a showroom appearance
+  (`showroom_home`, `_business`, `_market`, `_tourism`, `_programme`) counts at
+  most once per browser, post and showroom a day, through a mark under the day's
+  salt in `private.post_view_marks`, as views use (the engagement clean-up
+  deletes it after 24 hours). Marks are stored only for posts that would count
+  (publicly live, not the viewer's own; `showroom_business`, `_market` and
+  `_tourism` only for a post of that area), never without a browser
+  (`p_device`). They add to the views' daily count (once per request and last,
+  like views), and stop at 200,000 of it, so showroom traffic alone never closes
+  the views' 300,000 storage valve. The website sends the browser's signed
+  `vmz_viewer` identifier for showroom appearances only, and only when it is at
+  least a day old; it drops them otherwise. They have their own per-post daily
+  limit (`engagement:activity:showroom`), and the carousel sends each card's
+  appearance once per page load. Every other counter, the arguments and the
+  answer are unchanged.
+
+**Cost.** Each call reads the showroom's live posts, 7 days of activity rows
+(for 2,000 live posts about 14,000 small rows), one view and like totals row per
+post, and the last 72 hours' approvals through one partial index,
+`private.moderation_log_post_approvals_idx` (`post_id`, a post's own approvals
+only). On a seed of 2,000 live posts, a year of view days (730,000 rows) and
+20,000 likes, a call takes about 23 ms in the throwaway Postgres 17 container
+(about 75 ms when likes and views were read from the day rows). The website
+remembers each order for 60 seconds per showroom and area on each server copy,
+so the database sees at most one call a minute per showroom and area per copy.
+No table is added. Recording adds one 32-byte mark per browser, post and
+showroom a day to `private.post_view_marks` (deleted after 24 hours), within the
+existing per-address and per-post limits.
+
+New command and index, and one replaced function body (expand). ORDER: apply
+first, then merge: the deploy check probes every command in
+`../runtime-api-manifest.json`, and the website falls back to the newest posts
+if the read fails.
+
+**Applying.**
+
+1. Run `../preflight/20261122023000_fair_showroom.check.sql` unchanged in the
+   SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "fair showroom: update not applied; showroom posts: N"
+   (any count).
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "fair showroom: already applied; showroom posts: N".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is `../rollback/20261122023000_fair_showroom.down.sql`
+(only with the owner's decision; prefer a forward fix). It refuses (55000)
+unless all four parts are the update's, then drops the new function, the read
+and the index and puts back `internal.record_post_activity` byte for byte; the
+showroom then shows the newest posts. No data is removed (the showroom marks
+already stored go with the engagement clean-up within 24 hours).
+
+`node --import tsx scripts/test-foundation-fair-showroom.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; a premature rollback, a half-present
+update and a drifted recording body refused; apply, rollback and re-apply return
+the same fingerprints; the grants (visitors and members, never the server key;
+the api wrapper security invoker); the request rules and the 1,024-byte bound;
+15 and 7 places; only publicly live posts with card fields only; the 3 / 2 / 2
+mix and each group running out; deficit order with an unknown area; the
+busy-city cap at and above twice the fair share; the New tag at 1, 71 and 73
+hours and never again after an earlier approval; the likes cap and the video
+nudge (each first about 80% and 87% of the time on level turns); with no
+appearances yet, no video or likes nudge (photo posts first about half the time
+against video posts); all nudges together under one turn (a post a turn behind
+with a video and farmed likes never first); the index; a showroom appearance
+recorded once per browser, post and showroom, and never without a browser;
+appearances counted up to 3 fair shares (two flooded posts level); no mark for
+random ids, a draft or an own post; the marks under the views' daily valve; and
+that reads write nothing.
+
 ## Identity keep-for periods, 22 November 2026
 
-`20261122022323_identity_keep_for.sql` is pending (see the applied register).
-Didit plan C1 (checklist item 61, part 3): how long identity check data is kept,
-and the last database rules before automatic ID checks may leave `manual`.
-**Order: apply-first** (the default). No command is added or removed; the
-website shows the new `decline_reason` only once the screens part ships, and its
-reader of the member's check accepts extra fields. Nothing changes for members
-or staff until an admin changes the setting, except the keep-for periods below.
+`20261122022323_identity_keep_for.sql` was applied on 22 November 2026 at 15:44
+UTC (see the applied register). Didit plan C1 (checklist item 61, part 3): how
+long identity check data is kept, and the last database rules before automatic
+ID checks may leave `manual`. **Order: apply-first** (the default). No command
+is added or removed; the website shows the new `decline_reason` only once the
+screens part ships, and its reader of the member's check accepts extra fields.
+Nothing changes for members or staff until an admin changes the setting, except
+the keep-for periods below.
 
 - **The setting:** `api.set_identity_check_mode` accepts `manual`, `staff_final`
   and `automatic` (it refused all but `manual` with PT409
@@ -7374,7 +7493,20 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   disclosures 0); production fingerprint after it (fingerprint.sql) matched the
   full replay (except the known schema grant difference)
 
-- `20261122022323_identity_keep_for.sql`: pending; apply-first
+- `20261122022323_identity_keep_for.sql`: applied 2026-11-22 15:44 UTC;
+  owner-approved, apply-first (pull request #347); update sha256 starting
+  cc0a7d59; preflight after: already applied; applied in one sitting with
+  `20261122023000_fair_showroom.sql` a minute later and no production
+  fingerprint captured between the two, so it is checked by the capture after
+  that update (the full replay through both matched, except the known schema
+  grant difference)
+
+- `20261122023000_fair_showroom.sql`: applied 2026-11-22 15:45 UTC;
+  owner-approved, apply-first (pull request #344); update sha256 starting
+  0c6ae7a6; preflight after: already applied; production fingerprint after it
+  and `20261122022323_identity_keep_for.sql` (fingerprint.sql) matched the full
+  replay (except the known schema grant difference)
+
 - `20261122111209_term_ending_notice.sql`: pending
 
 <!-- applied-register:end -->

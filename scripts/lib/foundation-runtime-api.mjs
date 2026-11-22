@@ -26,6 +26,23 @@ const publicBusinessProjections = new Map([
 // the storefront of a public business or listing, card facts only). The
 // probe's unknown post id answers exactly null.
 const publicPostReads = new Map([["get_public_storefront", (data) => data === null]]);
+// Reviewed public feeds (20261122023000_fair_showroom.sql): the showroom order
+// of publicly live posts, card facts only. Volatile for its random variety; it
+// writes nothing. The probe's empty request is the home showroom: at most 15
+// cards, each with is_new.
+const publicFeedReads = new Map([
+  [
+    "showroom_feed",
+    (data) =>
+      data !== null &&
+      typeof data === "object" &&
+      !Array.isArray(data) &&
+      Object.keys(data).join() === "items" &&
+      Array.isArray(data.items) &&
+      data.items.length <= 15 &&
+      data.items.every((card) => typeof card?.is_new === "boolean"),
+  ],
+]);
 // Reviewed public settings (20261117082020_online_payment_limit.sql): no
 // arguments, no account data, readable by visitors like the price catalogue.
 const publicSettingReads = new Map([
@@ -78,6 +95,11 @@ function validateRuntimeAudience(fn) {
     assert.equal(fn.volatility, "s");
     assert.equal(fn.returns, "jsonb");
     assert.deepEqual(fn.arguments, [{ name: "p_post_id", sqlType: "uuid", optional: false }]);
+  } else if (publicFeedReads.has(fn.name)) {
+    assert.deepEqual(fn.execute, { anon: true, authenticated: true, service_role: false });
+    assert.equal(fn.volatility, "v");
+    assert.equal(fn.returns, "jsonb");
+    assert.deepEqual(fn.arguments, [{ name: "p_request", sqlType: "jsonb", optional: false }]);
   } else if (publicSettingReads.has(fn.name)) {
     assert.deepEqual(fn.execute, { anon: true, authenticated: true, service_role: false });
     assert.equal(fn.volatility, "s");
@@ -159,7 +181,10 @@ export async function probeFoundationRuntimeApi(
       signal: AbortSignal.timeout(5000),
     });
     const data = await response.json().catch(() => null);
-    const publicSetting = publicSettingReads.get(fn.name) ?? publicPostReads.get(fn.name);
+    const publicSetting =
+      publicSettingReads.get(fn.name) ??
+      publicPostReads.get(fn.name) ??
+      publicFeedReads.get(fn.name);
     const emptyProjection = publicBusinessProjections.get(fn.name);
     const publicProjection = emptyProjection !== undefined || publicSetting !== undefined;
     let state = "unexpected";

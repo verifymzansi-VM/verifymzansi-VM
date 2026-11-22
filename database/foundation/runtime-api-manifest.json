@@ -6233,6 +6233,25 @@
         "service_role": false
       },
       "authority": "Current live member: the ids of their own unfinished copies (drafts made by api.copy_my_post) and when each will be deleted (14 days after its last change); nothing else."
+    },
+    {
+      "name": "showroom_feed",
+      "updates": ["updates/20261122023000_fair_showroom.sql"],
+      "arguments": [
+        {
+          "name": "p_request",
+          "sqlType": "jsonb",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": true,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Public: the fair showroom order of publicly live posts for one showroom (home when omitted, business, market or tourism) and an optional province and city of the visitor, which are not stored; at most 15 or 7 public cards with their preview and is_new. Card facts only: no score, counts, owner or account. Writes nothing (volatile only for its random variety)."
     }
   ]
 }
