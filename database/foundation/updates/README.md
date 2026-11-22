@@ -82,12 +82,13 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Fair showroom for every post, 21 November 2026
 
-`20261122023000_fair_showroom.sql` is pending (see the applied register). Launch
-checklist item 66 (design approved by the owner on 21 November 2026). It adds
-one public read, `api.showroom_feed(p_request)` (visitors and members, security
-invoker over a security definer `internal` twin), which the home showroom and
-each area showroom use, and replaces `internal.record_post_activity` so a
-showroom appearance counts at most once per browser, post and showroom a day.
+`20261122023000_fair_showroom.sql` was applied on 22 November 2026 at 15:45 UTC
+(see the applied register). Launch checklist item 66 (design approved by the
+owner on 21 November 2026). It adds one public read,
+`api.showroom_feed(p_request)` (visitors and members, security invoker over a
+security definer `internal` twin), which the home showroom and each area
+showroom use, and replaces `internal.record_post_activity` so a showroom
+appearance counts at most once per browser, post and showroom a day.
 
 - **Request:** `showroom` (`home`, `business`, `market` or `tourism`; `home`
   when omitted), `province` (a province id) and `city` (a city id of that
@@ -199,13 +200,14 @@ that reads write nothing.
 
 ## Identity keep-for periods, 22 November 2026
 
-`20261122022323_identity_keep_for.sql` is pending (see the applied register).
-Didit plan C1 (checklist item 61, part 3): how long identity check data is kept,
-and the last database rules before automatic ID checks may leave `manual`.
-**Order: apply-first** (the default). No command is added or removed; the
-website shows the new `decline_reason` only once the screens part ships, and its
-reader of the member's check accepts extra fields. Nothing changes for members
-or staff until an admin changes the setting, except the keep-for periods below.
+`20261122022323_identity_keep_for.sql` was applied on 22 November 2026 at 15:44
+UTC (see the applied register). Didit plan C1 (checklist item 61, part 3): how
+long identity check data is kept, and the last database rules before automatic
+ID checks may leave `manual`. **Order: apply-first** (the default). No command
+is added or removed; the website shows the new `decline_reason` only once the
+screens part ships, and its reader of the member's check accepts extra fields.
+Nothing changes for members or staff until an admin changes the setting, except
+the keep-for periods below.
 
 - **The setting:** `api.set_identity_check_mode` accepts `manual`, `staff_final`
   and `automatic` (it refused all but `manual` with PT409
@@ -7445,8 +7447,18 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   disclosures 0); production fingerprint after it (fingerprint.sql) matched the
   full replay (except the known schema grant difference)
 
-- `20261122022323_identity_keep_for.sql`: pending; apply-first
+- `20261122022323_identity_keep_for.sql`: applied 2026-11-22 15:44 UTC;
+  owner-approved, apply-first (pull request #347); update sha256 starting
+  cc0a7d59; preflight after: already applied; applied in one sitting with
+  `20261122023000_fair_showroom.sql` a minute later and no production
+  fingerprint captured between the two, so it is checked by the capture after
+  that update (the full replay through both matched, except the known schema
+  grant difference)
 
-- `20261122023000_fair_showroom.sql`: pending; apply-first
+- `20261122023000_fair_showroom.sql`: applied 2026-11-22 15:45 UTC;
+  owner-approved, apply-first (pull request #344); update sha256 starting
+  0c6ae7a6; preflight after: already applied; production fingerprint after it
+  and `20261122022323_identity_keep_for.sql` (fingerprint.sql) matched the full
+  replay (except the known schema grant difference)
 
 <!-- applied-register:end -->
