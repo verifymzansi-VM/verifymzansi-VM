@@ -3,7 +3,11 @@ import { Mail } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { LegalBlocks, LegalDocument, type LegalSection } from "@/components/safety/legal-document";
-import { getConfiguredLegalIdentityRows, getTrustPublicConfig } from "@/lib/trust-public-config";
+import {
+  getConfiguredLegalIdentityRows,
+  getTrustPublicConfig,
+  registeredAddressNote,
+} from "@/lib/trust-public-config";
 
 export const metadata = {
   title: "PAIA Manual",
@@ -126,13 +130,15 @@ export default function PaiaManualPage() {
     { label: "Information Officer email", value: trustConfig.informationOfficerEmail },
     {
       label: "Deputy Information Officer",
-      value:
-        "[[OWNER: name, phone and email of the Deputy Information Officer, or 'None appointed']]",
+      value: "None appointed",
     },
-    { label: "Physical address", value: "Our registered address" },
+    {
+      label: "Physical address",
+      value: registeredAddressNote(trustConfig),
+    },
     {
       label: "Postal address",
-      value: "[[OWNER: postal address, or 'Same as the registered address']]",
+      value: "Same as the registered address",
     },
     { label: "General email", value: trustConfig.supportEmail },
     { label: "Website", value: "verifymzansi.com" },

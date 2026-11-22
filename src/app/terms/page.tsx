@@ -5,7 +5,11 @@ import { Mail } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { LegalBlocks, LegalDocument, type LegalSection } from "@/components/safety/legal-document";
-import { getConfiguredLegalIdentityRows, getTrustPublicConfig } from "@/lib/trust-public-config";
+import {
+  getConfiguredLegalIdentityRows,
+  getTrustPublicConfig,
+  registeredAddressNote,
+} from "@/lib/trust-public-config";
 
 export const metadata = {
   title: "Terms of Service",
@@ -38,14 +42,19 @@ export default async function TermsPage() {
   }
   const textSections = published?.sections ?? buildTermsTextSections(trustConfig);
   // ECTA s43(1): the details the registered identity rows do not already give.
+  // The registered address is a home address: it is named, never printed.
+  const registeredAddress = registeredAddressNote(trustConfig);
   const aboutRows = [
     ...legalRows,
     {
       label: "Legal status",
       value: "Private company, registered in South Africa with CIPC",
     },
-    { label: "Directors", value: "[[OWNER: full names of every director]]" },
-    { label: "Address for legal notices", value: "Our registered address" },
+    { label: "Directors", value: "Senzo Mqondisi Mhlongo" },
+    {
+      label: "Address for legal notices",
+      value: `${registeredAddress}. Legal notices may also be sent by email to ${trustConfig.supportEmail}; we confirm receipt.`,
+    },
     {
       label: "Phone",
       value: trustConfig.supportPhone ?? trustConfig.informationOfficerPhone ?? "",
@@ -54,7 +63,8 @@ export default async function TermsPage() {
     { label: "Website", value: "verifymzansi.com" },
     {
       label: "Dispute resolution code",
-      value: "[[OWNER: the code we subscribe to and where to read it, or 'None']]",
+      value:
+        "None yet. We have asked the Consumer Goods and Services Ombud whether we must join; until then you can escalate a complaint to the National Consumer Commission.",
     },
   ].filter((row) => row.value);
 

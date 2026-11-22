@@ -129,6 +129,10 @@ describe("public trust pages", () => {
       screen.getByText("Private company, registered in South Africa with CIPC")
     ).toBeInTheDocument();
     expect(screen.getByText("verifymzansi.com")).toBeInTheDocument();
+    expect(
+      screen.getByText(/as recorded at CIPC \(registration number 2026\/155305\/07\)/)
+    ).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/Kwadlangezwa|Khandisa/i);
     expect(screen.getByRole("heading", { name: "Reporting a post" })).toBeInTheDocument();
     expect(screen.getByText(/We act on a report within 2 business days/)).toBeInTheDocument();
     expect(screen.getByText(/use your browser's Print or Save as PDF/)).toBeInTheDocument();
