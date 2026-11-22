@@ -32,7 +32,8 @@
 --    contract step.
 -- 4. For an urgent_life_risk request:
 --    - api.read_identity_disclosure leaves the selfie and ID photo out of each
---      record (only the names, ID number state, verified phones and dates),
+--      record and shows only the current verified phone numbers (only the
+--      names, ID number state, current phones and dates),
 --      and refuses the purpose 'selfie' with 22023 detail
 --      disclosure_selfie_withheld before anything is logged;
 --    - api.identity_disclosure_material never returns the selfie's object
@@ -59,7 +60,7 @@ begin
   for fn in select * from (values
       ('internal.open_identity_disclosure(text,text,text,text,text,boolean)','b72391179f1d942af39f268d5a8a812c','1e94be28e68801c02330175c4b28135d'),
       ('internal.read_identity_disclosure(uuid,text,uuid)','7f80eff0035ca2abfdaea6cf32712e2c','63782df66dd597f8ab846179fdeb60d0'),
-      ('internal.identity_disclosure_record(private.identity_disclosures,uuid)','28da9a89df24f4b133f1419725fbd084','5a0e0e7fff209f40dd93f8fdc71ecccd'),
+      ('internal.identity_disclosure_record(private.identity_disclosures,uuid)','28da9a89df24f4b133f1419725fbd084','d3059f65a766c2f37e70edbca7623b2d'),
       ('internal.identity_disclosure_material(uuid,uuid)','83fa3856da8d655a03cc5137c75c1625','31e6fa632182fb300b5a8ba511ca2208')
     ) v(sig,reviewed,updated) loop
     if coalesce((select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure(fn.sig)),'missing')
@@ -211,7 +212,8 @@ revoke all on function internal.open_identity_disclosure(text,text,text,text,tex
 grant execute on function internal.open_identity_disclosure(text,text,text,text,text,boolean) to authenticated;
 
 -- 4a. What a disclosure shows about one named account; an urgent request
--- leaves out the selfie and the ID photo.
+-- leaves out the selfie and the ID photo, and shows only the current
+-- verified phone numbers (no removed numbers).
 CREATE OR REPLACE FUNCTION internal.identity_disclosure_record(p_disclosure private.identity_disclosures, p_subject uuid)
  RETURNS jsonb
  LANGUAGE sql
@@ -242,7 +244,9 @@ AS $function$
       'phones',coalesce((select jsonb_agg(jsonb_build_object('phone',v.phone,'verified_at',v.verified_at,
           'revoked_at',v.revoked_at) order by v.verified_at desc)
         from (select y.phone,y.verified_at,y.revoked_at from private.verification_phone_proofs y
-          where y.owner_id=p_subject order by y.verified_at desc limit 20) v),'[]'::jsonb))
+          where y.owner_id=p_subject
+            and (p_disclosure.request_type<>'urgent_life_risk' or y.revoked_at is null)
+          order by y.verified_at desc limit 20) v),'[]'::jsonb))
       from private.accepted_identity_facts f
       join private.verification_identity_submissions s on s.id=f.submission_id and s.owner_id=f.owner_id
       left join private.identity_submission_names n on n.submission_id=s.id

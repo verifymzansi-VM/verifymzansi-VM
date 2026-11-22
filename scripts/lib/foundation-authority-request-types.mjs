@@ -291,42 +291,54 @@ export async function checkAuthorityRequestTypes(ctx, { database, current, step,
     }
   );
 
-  await check("D9: an urgent request gives names, ID number and phones, never the selfie", () => {
-    const opened = open(urgentRequest);
-    const events = eventCount();
-    const shown = read(admin, opened.disclosure_id);
-    assert.equal(eventCount(), events + 1);
-    const [record] = shown.records;
-    assert.equal(record.account_id, thando.id);
-    assert.equal(record.legal_first_name, "Thando Sipho");
-    assert.equal(record.legal_last_name, "Dlamini-thando");
-    assert.equal(record.id_number_kept, true);
-    assert.ok(record.phones.length >= 1);
-    assert.ok(!("selfie" in record) && !("id_photo" in record), JSON.stringify(record));
-    const printed = read(admin, opened.disclosure_id, "print");
-    assert.ok(!("selfie" in printed.records[0]) && !("id_photo" in printed.records[0]));
-    // The selfie is refused before anything is logged.
-    const before = eventCount();
-    assert.match(
-      fails(staff(admin, readSql(opened.disclosure_id, "selfie", thando.id)), "22023"),
-      /DETAIL:\s+disclosure_selfie_withheld/
-    );
-    assert.equal(eventCount(), before);
-    // The server gets the encrypted ID number, never the selfie's object.
-    const material = json(
-      service(`select api.identity_disclosure_material('${opened.disclosure_id}','${admin.id}');`)
-    );
-    assert.equal(material.records.length, 1);
-    assert.ok(material.records[0].encrypted_number);
-    assert.equal(material.records[0].selfie, null);
-    const text = JSON.stringify([shown, printed, material]);
-    assert.ok(!text.includes("evidence/") && !text.includes(thando.selfie), text);
-  });
+  await check(
+    "D9: an urgent request gives names, ID number and current phones, never the selfie",
+    () => {
+      const opened = open(urgentRequest);
+      const events = eventCount();
+      const shown = read(admin, opened.disclosure_id);
+      assert.equal(eventCount(), events + 1);
+      const [record] = shown.records;
+      assert.equal(record.account_id, thando.id);
+      assert.equal(record.legal_first_name, "Thando Sipho");
+      assert.equal(record.legal_last_name, "Dlamini-thando");
+      assert.equal(record.id_number_kept, true);
+      // Only the current verified phone: no removed number, no history.
+      assert.deepEqual(
+        record.phones.map((p) => [p.phone, p.revoked_at]),
+        [[thando.phones.at(-1), null]]
+      );
+      assert.ok(!("selfie" in record) && !("id_photo" in record), JSON.stringify(record));
+      const printed = read(admin, opened.disclosure_id, "print");
+      assert.ok(!("selfie" in printed.records[0]) && !("id_photo" in printed.records[0]));
+      // The selfie is refused before anything is logged.
+      const before = eventCount();
+      assert.match(
+        fails(staff(admin, readSql(opened.disclosure_id, "selfie", thando.id)), "22023"),
+        /DETAIL:\s+disclosure_selfie_withheld/
+      );
+      assert.equal(eventCount(), before);
+      // The server gets the encrypted ID number, never the selfie's object.
+      const material = json(
+        service(`select api.identity_disclosure_material('${opened.disclosure_id}','${admin.id}');`)
+      );
+      assert.equal(material.records.length, 1);
+      assert.ok(material.records[0].encrypted_number);
+      assert.equal(material.records[0].selfie, null);
+      const text = JSON.stringify([shown, printed, material]);
+      assert.ok(!text.includes("evidence/") && !text.includes(thando.selfie), text);
+    }
+  );
 
   await check("D9: a subpoena, court order or warrant still shows the selfie", () => {
     const opened = open(d9Request({ type: "court_order", value: thando.phones.at(-1) }));
     const [record] = read(admin, opened.disclosure_id).records;
     assert.equal(record.selfie.kept, true);
+    // Earlier numbers too (with their dates), as before rule D9.
+    assert.deepEqual(
+      record.phones.map((p) => p.phone),
+      [...thando.phones].reverse()
+    );
     assert.ok(record.id_photo);
     assert.equal(read(admin, opened.disclosure_id, "selfie", thando.id).records.length, 1);
     const material = json(

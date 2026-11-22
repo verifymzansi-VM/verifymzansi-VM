@@ -159,6 +159,23 @@ describe("Authority request record and disclosure sheet", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("never draws or fetches a selfie for an urgent record, even if one arrives", async () => {
+    readIdentityDisclosure.mockResolvedValue({
+      disclosure: { ...disclosure, request_type: "urgent_life_risk" },
+      records: [record],
+    });
+    render(await RecordPage({ params }));
+    expect(screen.getByText("Thando Sipho Dlamini")).toBeVisible();
+    expect(screen.queryByRole("img", { name: /Selfie/ })).toBeNull();
+    expect(screen.queryByText(/Selfie from the ID check/)).toBeNull();
+    expect(screen.queryByText("Photo of the ID document")).toBeNull();
+    const { container } = render(await SheetPage({ params }));
+    const sheet = container.querySelector("article")!;
+    expect(within(sheet).queryByRole("img", { name: /Selfie/ })).toBeNull();
+    expect(within(sheet).queryByText("Photo of the ID document")).toBeNull();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("still shows a record opened before rule D9 with its type", async () => {
     readIdentityDisclosure.mockResolvedValue({
       disclosure: { ...disclosure, request_type: "police_case" },

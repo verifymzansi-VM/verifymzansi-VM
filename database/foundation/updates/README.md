@@ -112,9 +112,10 @@ gives only the minimum, never the selfie.
   keeps its signature but now runs the same rule with no confirmation, so it is
   always refused; a later contract step removes it.
 - **Urgent requests, in the database:** the record leaves out the selfie and the
-  ID photo (names, ID number state, verified phones and dates only); reading the
-  selfie is refused with `disclosure_selfie_withheld` before anything is logged;
-  the server material never carries the selfie's stored object (the encrypted ID
+  ID photo and lists only the current verified phone numbers, never removed ones
+  (names, ID number state, current phones and dates only); reading the selfie is
+  refused with `disclosure_selfie_withheld` before anything is logged; the
+  server material never carries the selfie's stored object (the encrypted ID
   number still).
 - **Reading:** `api.read_identity_disclosure` adds `issued_by`,
   `confirmed_number` and `confirmed_by` only when the row has them, so the live
@@ -140,10 +141,11 @@ before read as they did.
 
 The reviewed rollback is
 `../rollback/20261122013616_authority_request_types.down.sql` (only with the
-owner's decision; prefer a forward fix). It refuses unless the update is
-applied, and refuses while any record opened under rule D9 is kept. Otherwise it
-puts back the four functions byte for byte, drops the new command and removes
-the three columns and the check.
+owner's decision; prefer a forward fix). It first locks the disclosure log
+against new openings, refuses unless the update is applied, and refuses while
+any record opened under rule D9 is kept. Otherwise it puts back the four
+functions byte for byte, drops the new command and removes the three columns and
+the check.
 
 `node --import tsx scripts/test-foundation-identity-record-disclosure.mjs` (part
 of `pnpm db:foundation:lifecycle-test`) now also runs
@@ -158,10 +160,10 @@ confirmer, reason and confirmation refused with its own detail and nothing
 logged; each type opening with its trimmed reference and confirmation on the row
 and the record; text of only spaces or invisible marks refused; the table check
 refusing a new-type row without its confirmation; an urgent request showing
-names, ID number state and phones without the selfie or ID photo (view and
-print), its selfie read refused before logging and its server material without
-the selfie; a court order still showing the selfie; and the rollback refused
-while a D9 record is kept.
+names, ID number state and only the current phone without the selfie or ID photo
+(view and print), its selfie read refused before logging and its server material
+without the selfie; a court order still showing the selfie and the earlier phone
+numbers; and the rollback refused while a D9 record is kept.
 
 ## Business storefront, 21 November 2026
 

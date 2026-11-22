@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import {
   AUTHORITY_REQUESTS_PATH,
   OUTCOME_LABELS,
+  URGENT_REQUEST,
   disclosureNumber,
 } from "@/lib/admin/authority-requests";
 import { formatDateTime } from "@/lib/utils/format";
@@ -78,7 +79,11 @@ export default async function AuthorityRequestRecordPage({
           <div className="divide-y">
             {records.map((record) => (
               <div key={record.account_id} className="py-4 first:pt-0 last:pb-0">
-                <DisclosureRecordView disclosureId={disclosure.id} record={record} />
+                <DisclosureRecordView
+                  disclosureId={disclosure.id}
+                  record={record}
+                  withhold={disclosure.request_type === URGENT_REQUEST}
+                />
               </div>
             ))}
           </div>

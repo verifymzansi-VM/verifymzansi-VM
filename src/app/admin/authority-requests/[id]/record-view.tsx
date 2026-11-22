@@ -66,9 +66,12 @@ export function DisclosureRequestRows({
 export function DisclosureRecordView({
   disclosureId,
   record,
+  withhold,
 }: {
   disclosureId: string;
   record: DisclosureRecord;
+  /** An urgent request: never the selfie or the ID photo, whatever arrives. */
+  withhold: boolean;
 }) {
   if ("attempts" in record)
     return (
@@ -96,7 +99,8 @@ export function DisclosureRecordView({
     );
   const name = [record.legal_first_name, record.legal_last_name].filter(Boolean).join(" ");
   const [current, ...earlier] = record.phones;
-  const { selfie, id_photo: idPhoto } = record;
+  const selfie = withhold ? undefined : record.selfie;
+  const idPhoto = withhold ? undefined : record.id_photo;
   return (
     <div className={selfie ? "grid gap-6 md:grid-cols-[minmax(0,15rem)_minmax(0,1fr)]" : ""}>
       {selfie && (

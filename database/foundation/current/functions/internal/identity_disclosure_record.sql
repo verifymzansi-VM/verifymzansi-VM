@@ -31,7 +31,9 @@ AS $function$
       'phones',coalesce((select jsonb_agg(jsonb_build_object('phone',v.phone,'verified_at',v.verified_at,
           'revoked_at',v.revoked_at) order by v.verified_at desc)
         from (select y.phone,y.verified_at,y.revoked_at from private.verification_phone_proofs y
-          where y.owner_id=p_subject order by y.verified_at desc limit 20) v),'[]'::jsonb))
+          where y.owner_id=p_subject
+            and (p_disclosure.request_type<>'urgent_life_risk' or y.revoked_at is null)
+          order by y.verified_at desc limit 20) v),'[]'::jsonb))
       from private.accepted_identity_facts f
       join private.verification_identity_submissions s on s.id=f.submission_id and s.owner_id=f.owner_id
       left join private.identity_submission_names n on n.submission_id=s.id

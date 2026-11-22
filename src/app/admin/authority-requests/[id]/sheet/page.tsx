@@ -4,6 +4,7 @@ import { BrandLogo } from "@/components/shared/brand-logo";
 import {
   AUTHORITY_REQUESTS_PATH,
   OUTCOME_LABELS,
+  URGENT_REQUEST,
   disclosureNumber,
   lookupKindLabel,
 } from "@/lib/admin/authority-requests";
@@ -129,7 +130,11 @@ export default async function DisclosureSheetPage({ params }: { params: Promise<
                   key={record.account_id}
                   className="break-inside-avoid border-t border-slate-200 pt-4"
                 >
-                  <DisclosureRecordView disclosureId={disclosure.id} record={record} />
+                  <DisclosureRecordView
+                    disclosureId={disclosure.id}
+                    record={record}
+                    withhold={disclosure.request_type === URGENT_REQUEST}
+                  />
                 </div>
               ))
             )}

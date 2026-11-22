@@ -3703,7 +3703,7 @@
         {
           "file": "database/foundation/current/functions/internal/identity_disclosure_record.sql",
           "symbol": "internal.identity_disclosure_record",
-          "contains": "where y.owner_id=p_subject order by y.verified_at desc limit 20) v),'[]'::jsonb))"
+          "contains": "order by y.verified_at desc limit 20) v),'[]'::jsonb))"
         }
       ],
       "tests": [

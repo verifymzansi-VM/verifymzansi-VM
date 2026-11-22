@@ -329,6 +329,48 @@ describe("authority requests: reading a record", () => {
     expect(result.records[0]).toMatchObject({ id_number: ID_NUMBER });
   });
 
+  it("strips a selfie or ID photo from an urgent record, even if the answer carried one", async () => {
+    rpc.mockResolvedValue({
+      data: {
+        disclosure: {
+          ...disclosure(),
+          request_type: "urgent_life_risk",
+          issued_by: "Richards Bay SAPS",
+          confirmed_number: "035 901 7000",
+          confirmed_by: "W/O N. Mthembu",
+        },
+        records: [keptRecord],
+      },
+      error: null,
+    });
+    const result = await readIdentityDisclosure(api, service, STAFF, DISCLOSURE, "print");
+    expect(result.records[0]).not.toHaveProperty("selfie");
+    expect(result.records[0]).not.toHaveProperty("id_photo");
+    expect(result.records[0]).toMatchObject({ id_number: ID_NUMBER });
+  });
+
+  it("never reads the selfie of an urgent record", async () => {
+    rpc.mockResolvedValue({
+      data: {
+        disclosure: { ...disclosure(), request_type: "urgent_life_risk" },
+        records: [keptRecord],
+      },
+      error: null,
+    });
+    await expect(
+      readIdentityDisclosureSelfie(api, service, STAFF, DISCLOSURE, OWNER)
+    ).resolves.toBeNull();
+    rpc.mockResolvedValue({
+      data: null,
+      error: { code: "22023", message: "x", details: "disclosure_selfie_withheld" },
+    });
+    await expect(
+      readIdentityDisclosureSelfie(api, service, STAFF, DISCLOSURE, OWNER)
+    ).resolves.toBeNull();
+    expect(machine).not.toHaveBeenCalled();
+    expect(getR2ObjectBytes).not.toHaveBeenCalled();
+  });
+
   it("still reads a record opened before rule D9 (earlier request type)", async () => {
     rpc.mockResolvedValue({
       data: { disclosure: { ...disclosure(), request_type: "police_case" }, records: [keptRecord] },

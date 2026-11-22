@@ -21,6 +21,7 @@ import {
   AUTHORITY_REQUEST_MESSAGES,
   AUTHORITY_REQUESTS_PATH,
   RECORDED_REQUEST_TYPES,
+  URGENT_REQUEST,
   emailForLookup,
   phoneForLookup,
   postReferenceFromLink,
@@ -354,6 +355,9 @@ export async function readIdentityDisclosure(
   purpose: "view" | "print"
 ): Promise<{ disclosure: DisclosureRead["disclosure"]; records: DisclosureRecord[] }> {
   const shown = await readDisclosure(api, id, purpose);
+  // An urgent request never shows the selfie or the ID photo (rule D9). The
+  // database already leaves them out; this keeps it so on the website too.
+  const withhold = shown.disclosure.request_type === URGENT_REQUEST;
   const kept = shown.records.filter((record) => "verified_at" in record);
   const material = kept.length ? await readMaterial(service, id, staffId) : [];
   return {
@@ -373,12 +377,16 @@ export async function readIdentityDisclosure(
           createLogger("AuthorityRequests").error("Kept ID number could not be decrypted");
         }
       }
-      return { ...record, id_number: number, id_number_unreadable: unreadable };
+      const shownRecord = withhold
+        ? (({ selfie: _selfie, id_photo: _idPhoto, ...rest }) => rest)(record)
+        : record;
+      return { ...shownRecord, id_number: number, id_number_unreadable: unreadable };
     }),
   };
 }
 
-/** The selfie of one person a disclosure names, decrypted for the screen. */
+/** The selfie of one person a disclosure names, decrypted for the screen.
+ * Null for an urgent request (rule D9): the database refuses it too. */
 export async function readIdentityDisclosureSelfie(
   api: FoundationAuthenticatedApi,
   service: FoundationServiceApi,
@@ -386,7 +394,15 @@ export async function readIdentityDisclosureSelfie(
   id: string,
   subject: string
 ) {
-  await readDisclosure(api, id, "selfie", subject);
+  let shown: DisclosureRead;
+  try {
+    shown = await readDisclosure(api, id, "selfie", subject);
+  } catch (error) {
+    if (error instanceof AuthorityRequestRefused && error.reason === "disclosure_selfie_withheld")
+      return null;
+    throw error;
+  }
+  if (shown.disclosure.request_type === URGENT_REQUEST) return null;
   const record = (await readMaterial(service, id, staffId)).find(
     (item) => item.account_id === subject
   );

@@ -25,7 +25,7 @@ with bodies as (
     ('internal.read_identity_disclosure(uuid,text,uuid)',
       '7f80eff0035ca2abfdaea6cf32712e2c', '63782df66dd597f8ab846179fdeb60d0'),
     ('internal.identity_disclosure_record(private.identity_disclosures,uuid)',
-      '28da9a89df24f4b133f1419725fbd084', '5a0e0e7fff209f40dd93f8fdc71ecccd'),
+      '28da9a89df24f4b133f1419725fbd084', 'd3059f65a766c2f37e70edbca7623b2d'),
     ('internal.identity_disclosure_material(uuid,uuid)',
       '83fa3856da8d655a03cc5137c75c1625', '31e6fa632182fb300b5a8ba511ca2208')
   ) v(sig, reviewed, updated)
