@@ -748,6 +748,8 @@ try {
       governor,
       moderator,
       thando,
+      tried,
+      person,
       logCount,
       eventCount,
       openSql,

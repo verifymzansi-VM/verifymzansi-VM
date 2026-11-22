@@ -50,7 +50,8 @@ begin
     select coalesce(array_agg(x.owner_id order by x.last_at desc, x.owner_id),'{}') into matched
       from (select f.owner_id,max(f.reviewed_at) last_at from private.accepted_identity_facts f
         where f.identity_hmac=v_value group by f.owner_id) x;
-    if cardinality(matched)=0 then
+    -- An urgent request never falls back to numbers that were only tried.
+    if cardinality(matched)=0 and p_request_type<>'urgent_life_risk' then
       select coalesce(array_agg(x.owner_id order by x.last_at desc, x.owner_id),'{}') into matched
         from (select s.owner_id,max(s.created_at) last_at from private.verification_identity_submissions s
           where s.identity_hmac=v_value group by s.owner_id) x;
@@ -59,7 +60,10 @@ begin
   elsif p_lookup_kind='phone' then
     select coalesce(array_agg(x.owner_id order by x.last_at desc, x.owner_id),'{}') into matched
       from (select v.owner_id,max(v.verified_at) last_at from private.verification_phone_proofs v
-        where v.phone=v_value group by v.owner_id) x;
+        where v.phone=v_value
+          -- An urgent request finds only the number's current holder.
+          and (p_request_type<>'urgent_life_risk' or v.revoked_at is null)
+        group by v.owner_id) x;
   else
     select coalesce(array_agg(u.id order by u.id),'{}') into matched from auth.users u where lower(u.email)=v_value;
   end if;

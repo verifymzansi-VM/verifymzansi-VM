@@ -377,16 +377,21 @@ export async function readIdentityDisclosure(
           createLogger("AuthorityRequests").error("Kept ID number could not be decrypted");
         }
       }
+      // Urgent: no selfie, no ID photo and only the current phone numbers.
       const shownRecord = withhold
-        ? (({ selfie: _selfie, id_photo: _idPhoto, ...rest }) => rest)(record)
+        ? (({ selfie: _selfie, id_photo: _idPhoto, ...rest }) => ({
+            ...rest,
+            phones: rest.phones.filter((phone) => phone.revoked_at === null),
+          }))(record)
         : record;
       return { ...shownRecord, id_number: number, id_number_unreadable: unreadable };
     }),
   };
 }
 
-/** The selfie of one person a disclosure names, decrypted for the screen.
- * Null for an urgent request (rule D9): the database refuses it too. */
+/** The selfie of one person a disclosure names, decrypted for the screen;
+ * null when none is kept, and "withheld" for an urgent request (rule D9: the
+ * database refuses it too). */
 export async function readIdentityDisclosureSelfie(
   api: FoundationAuthenticatedApi,
   service: FoundationServiceApi,
@@ -399,10 +404,10 @@ export async function readIdentityDisclosureSelfie(
     shown = await readDisclosure(api, id, "selfie", subject);
   } catch (error) {
     if (error instanceof AuthorityRequestRefused && error.reason === "disclosure_selfie_withheld")
-      return null;
+      return "withheld" as const;
     throw error;
   }
-  if (shown.disclosure.request_type === URGENT_REQUEST) return null;
+  if (shown.disclosure.request_type === URGENT_REQUEST) return "withheld" as const;
   const record = (await readMaterial(service, id, staffId)).find(
     (item) => item.account_id === subject
   );

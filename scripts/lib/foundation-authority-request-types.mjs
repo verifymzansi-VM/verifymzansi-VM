@@ -79,7 +79,7 @@ export const d9OpenSql = (r) =>
  */
 export async function checkAuthorityRequestTypes(ctx, { database, current, step, earlier }) {
   const { check, q, json, fails, staff, service, fingerprint, admin, governor, moderator } = ctx;
-  const { thando, logCount, eventCount, openSql, request, readSql, read } = ctx;
+  const { thando, tried, person, logCount, eventCount, openSql, request, readSql, read } = ctx;
   const { preflightRows: preflight } = updateCheckViews(database, current, {
     preflight: PREFLIGHT,
   });
@@ -329,6 +329,38 @@ export async function checkAuthorityRequestTypes(ctx, { database, current, step,
       assert.ok(!text.includes("evidence/") && !text.includes(thando.selfie), text);
     }
   );
+
+  await check(
+    "D9: an urgent search finds a number's current holder only, never a removed one",
+    () => {
+      const [removed] = thando.phones; // Thando's earlier number, proof removed
+      const subjects = (r) =>
+        json(`select to_jsonb(d.subject_ids) from private.identity_disclosures d
+      where d.id='${open(r).disclosure_id}';`);
+      const urgent = (value) => ({ ...urgentRequest, value });
+      const court = (value) => d9Request({ type: "court_order", value });
+      assert.equal(open(urgent(removed)).outcome, "no_match");
+      assert.deepEqual(subjects(court(removed)), [thando.id]);
+      // The number is verified again by someone else: urgent finds only them.
+      const reuser = person("reuser", { phones: [removed] });
+      assert.deepEqual(subjects(urgent(removed)), [reuser.id]);
+      assert.deepEqual(new Set(subjects(court(removed))), new Set([reuser.id, thando.id]));
+    }
+  );
+
+  await check("D9: an urgent search never falls back to an ID number that was only tried", () => {
+    const urgent = open({ ...urgentRequest, kind: "id_number", value: tried.fingerprint });
+    assert.equal(urgent.outcome, "no_match");
+    const court = open(
+      d9Request({ type: "court_order", kind: "id_number", value: tried.fingerprint })
+    );
+    assert.equal(court.outcome, "attempt_only");
+    // And an urgent row never lists attempts, however it was written.
+    const record = json(`select internal.identity_disclosure_record(jsonb_populate_record(
+        null::private.identity_disclosures, jsonb_build_object('outcome','attempt_only',
+        'request_type','urgent_life_risk','lookup_value','${tried.fingerprint}')),'${tried.id}');`);
+    assert.deepEqual(record.attempts, []);
+  });
 
   await check("D9: a subpoena, court order or warrant still shows the selfie", () => {
     const opened = open(d9Request({ type: "court_order", value: thando.phones.at(-1) }));

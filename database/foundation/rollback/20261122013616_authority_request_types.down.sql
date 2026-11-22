@@ -19,7 +19,7 @@ begin
   for fn in select * from (values
       ('internal.open_identity_disclosure(text,text,text,text,text,boolean)','1e94be28e68801c02330175c4b28135d'),
       ('internal.read_identity_disclosure(uuid,text,uuid)','63782df66dd597f8ab846179fdeb60d0'),
-      ('internal.identity_disclosure_record(private.identity_disclosures,uuid)','a881662b9968512d3bd52719f5956b6f'),
+      ('internal.identity_disclosure_record(private.identity_disclosures,uuid)','9b87eb6989c9c4c1ae4c524f71ab948f'),
       ('internal.identity_disclosure_material(uuid,uuid)','31e6fa632182fb300b5a8ba511ca2208')
     ) v(sig,updated) loop
     if coalesce((select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure(fn.sig)),'missing')

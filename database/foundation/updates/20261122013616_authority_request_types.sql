@@ -36,6 +36,9 @@
 --      names, ID number state, current phones and dates),
 --      and refuses the purpose 'selfie' with 22023 detail
 --      disclosure_selfie_withheld before anything is logged;
+--    - api.open_authority_request finds a phone number's current holder only
+--      (never someone whose proof of that number was removed) and never falls
+--      back to ID numbers that were only tried (no attempt_only outcome);
 --    - api.identity_disclosure_material never returns the selfie's object
 --      (the encrypted ID number still, for the website to show the number).
 -- 5. api.read_identity_disclosure adds issued_by, confirmed_number and
@@ -60,7 +63,7 @@ begin
   for fn in select * from (values
       ('internal.open_identity_disclosure(text,text,text,text,text,boolean)','b72391179f1d942af39f268d5a8a812c','1e94be28e68801c02330175c4b28135d'),
       ('internal.read_identity_disclosure(uuid,text,uuid)','7f80eff0035ca2abfdaea6cf32712e2c','63782df66dd597f8ab846179fdeb60d0'),
-      ('internal.identity_disclosure_record(private.identity_disclosures,uuid)','28da9a89df24f4b133f1419725fbd084','a881662b9968512d3bd52719f5956b6f'),
+      ('internal.identity_disclosure_record(private.identity_disclosures,uuid)','28da9a89df24f4b133f1419725fbd084','9b87eb6989c9c4c1ae4c524f71ab948f'),
       ('internal.identity_disclosure_material(uuid,uuid)','83fa3856da8d655a03cc5137c75c1625','31e6fa632182fb300b5a8ba511ca2208')
     ) v(sig,reviewed,updated) loop
     if coalesce((select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure(fn.sig)),'missing')
@@ -144,7 +147,8 @@ begin
     select coalesce(array_agg(x.owner_id order by x.last_at desc, x.owner_id),'{}') into matched
       from (select f.owner_id,max(f.reviewed_at) last_at from private.accepted_identity_facts f
         where f.identity_hmac=v_value group by f.owner_id) x;
-    if cardinality(matched)=0 then
+    -- An urgent request never falls back to numbers that were only tried.
+    if cardinality(matched)=0 and p_request_type<>'urgent_life_risk' then
       select coalesce(array_agg(x.owner_id order by x.last_at desc, x.owner_id),'{}') into matched
         from (select s.owner_id,max(s.created_at) last_at from private.verification_identity_submissions s
           where s.identity_hmac=v_value group by s.owner_id) x;
@@ -153,7 +157,10 @@ begin
   elsif p_lookup_kind='phone' then
     select coalesce(array_agg(x.owner_id order by x.last_at desc, x.owner_id),'{}') into matched
       from (select v.owner_id,max(v.verified_at) last_at from private.verification_phone_proofs v
-        where v.phone=v_value group by v.owner_id) x;
+        where v.phone=v_value
+          -- An urgent request finds only the number's current holder.
+          and (p_request_type<>'urgent_life_risk' or v.revoked_at is null)
+        group by v.owner_id) x;
   else
     select coalesce(array_agg(u.id order by u.id),'{}') into matched from auth.users u where lower(u.email)=v_value;
   end if;
@@ -226,6 +233,7 @@ AS $function$
       'attempts',coalesce((select jsonb_agg(t.created_at order by t.created_at desc)
         from (select x.created_at from private.verification_identity_submissions x
           where x.owner_id=p_subject and x.identity_hmac=p_disclosure.lookup_value
+            and p_disclosure.request_type is distinct from 'urgent_life_risk'
           order by x.created_at desc limit 20) t),'[]'::jsonb))
     else coalesce((select jsonb_build_object(
       'account_id',p_subject,'kept',true,

@@ -339,13 +339,25 @@ describe("authority requests: reading a record", () => {
           confirmed_number: "035 901 7000",
           confirmed_by: "W/O N. Mthembu",
         },
-        records: [keptRecord],
+        records: [
+          {
+            ...keptRecord,
+            phones: [
+              ...keptRecord.phones,
+              { phone: "+27825550101", verified_at: AT, revoked_at: AT },
+            ],
+          },
+        ],
       },
       error: null,
     });
     const result = await readIdentityDisclosure(api, service, STAFF, DISCLOSURE, "print");
     expect(result.records[0]).not.toHaveProperty("selfie");
     expect(result.records[0]).not.toHaveProperty("id_photo");
+    // Only the current phone numbers, even if a removed one arrived.
+    expect(result.records[0]).toMatchObject({
+      phones: [{ phone: "+27821234567", revoked_at: null }],
+    });
     expect(result.records[0]).toMatchObject({ id_number: ID_NUMBER });
   });
 
@@ -359,14 +371,14 @@ describe("authority requests: reading a record", () => {
     });
     await expect(
       readIdentityDisclosureSelfie(api, service, STAFF, DISCLOSURE, OWNER)
-    ).resolves.toBeNull();
+    ).resolves.toBe("withheld");
     rpc.mockResolvedValue({
       data: null,
       error: { code: "22023", message: "x", details: "disclosure_selfie_withheld" },
     });
     await expect(
       readIdentityDisclosureSelfie(api, service, STAFF, DISCLOSURE, OWNER)
-    ).resolves.toBeNull();
+    ).resolves.toBe("withheld");
     expect(machine).not.toHaveBeenCalled();
     expect(getR2ObjectBytes).not.toHaveBeenCalled();
   });

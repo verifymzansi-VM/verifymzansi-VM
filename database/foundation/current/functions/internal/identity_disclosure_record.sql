@@ -13,6 +13,7 @@ AS $function$
       'attempts',coalesce((select jsonb_agg(t.created_at order by t.created_at desc)
         from (select x.created_at from private.verification_identity_submissions x
           where x.owner_id=p_subject and x.identity_hmac=p_disclosure.lookup_value
+            and p_disclosure.request_type is distinct from 'urgent_life_risk'
           order by x.created_at desc limit 20) t),'[]'::jsonb))
     else coalesce((select jsonb_build_object(
       'account_id',p_subject,'kept',true,

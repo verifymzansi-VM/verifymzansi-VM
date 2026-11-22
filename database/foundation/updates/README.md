@@ -116,7 +116,9 @@ gives only the minimum, never the selfie.
   (names, ID number state, current phones and dates only); reading the selfie is
   refused with `disclosure_selfie_withheld` before anything is logged; the
   server material never carries the selfie's stored object (the encrypted ID
-  number still).
+  number still). An urgent search by phone finds only the number's current
+  holder (never someone whose proof of it was removed), and an urgent search by
+  ID number never falls back to numbers that were only tried.
 - **Reading:** `api.read_identity_disclosure` adds `issued_by`,
   `confirmed_number` and `confirmed_by` only when the row has them, so the live
   website still reads every earlier row.
@@ -163,7 +165,9 @@ refusing a new-type row without its confirmation; an urgent request showing
 names, ID number state and only the current phone without the selfie or ID photo
 (view and print), its selfie read refused before logging and its server material
 without the selfie; a court order still showing the selfie and the earlier phone
-numbers; and the rollback refused while a D9 record is kept.
+numbers; an urgent phone search finding no removed holder, only a number's
+current holder, while a court order still finds both; an urgent ID number search
+never giving attempts; and the rollback refused while a D9 record is kept.
 
 ## Business storefront, 21 November 2026
 
