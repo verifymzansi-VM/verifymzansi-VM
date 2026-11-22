@@ -82,9 +82,10 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Free credits for businesses VerifyMzansi recruits, 22 November 2026
 
-`20261122130744_free_credits.sql` is pending (see the applied register). Launch
-checklist item 70, the owner's design of 22 November 2026: an admin gives an
-ID-verified member free posts for a short time and may extend the gift.
+`20261122130744_free_credits.sql` was applied on 22 November 2026 at 17:35 UTC
+(see the applied register). Launch checklist item 70, the owner's design of 22
+November 2026: an admin gives an ID-verified member free posts for a short time
+and may extend the gift.
 
 - **The gift.** An entitlement (`private.entitlements`) with the new source
   `free_credit`: every section (area null), 1 to 6 posts (slot capacity), the
@@ -607,11 +608,12 @@ export.
 
 ## A written notice before a long paid term ends, 22 November 2026
 
-`20261122111209_term_ending_notice.sql` is pending (see the applied register).
-Launch checklist item 68b. The Consumer Protection Act, s14(2)(c), asks for a
-written notice 40 to 80 business days before a fixed-term agreement ends. The
-owner's rule: a paid term of 180 days or more gets one written notice about 60
-business days before it ends; nothing ever renews automatically.
+`20261122111209_term_ending_notice.sql` was applied on 22 November 2026 at
+17:33 UTC (see the applied register). Launch checklist item 68b. The Consumer
+Protection Act, s14(2)(c), asks for a written notice 40 to 80 business days
+before a fixed-term agreement ends. The owner's rule: a paid term of 180 days or
+more gets one written notice about 60 business days before it ends; nothing ever
+renews automatically.
 
 - **Which terms.** A paid grant (`private.entitlements`, source `retail_paid`)
   that runs 180 days or more from its own start to its own end: an Individual
@@ -7596,8 +7598,18 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   and `20261122022323_identity_keep_for.sql` (fingerprint.sql) matched the full
   replay (except the known schema grant difference)
 
-- `20261122111209_term_ending_notice.sql`: pending
+- `20261122111209_term_ending_notice.sql`: applied 2026-11-22 17:33 UTC;
+  owner-approved, apply-first (pull request #349); update sha256 starting
+  ec2ffdb0; preflight after: already applied; applied in one sitting with
+  `20261122130744_free_credits.sql` two minutes later and no production
+  fingerprint captured between the two, so it is checked by the capture after
+  that update (the full replay through both matched, except the known schema
+  grant difference)
 
-- `20261122130744_free_credits.sql`: pending
+- `20261122130744_free_credits.sql`: applied 2026-11-22 17:35 UTC;
+  owner-approved, apply-first (pull request #352); update sha256 starting
+  2cbdd9ab; preflight after: already applied; production fingerprint after it
+  and `20261122111209_term_ending_notice.sql` (fingerprint.sql) matched the full
+  replay (except the known schema grant difference)
 
 <!-- applied-register:end -->
