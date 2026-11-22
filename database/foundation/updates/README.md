@@ -268,9 +268,9 @@ business days before it ends; nothing ever renews automatically.
   of 180 days (its opening grant; slots added part-way run less than 180 days),
   and any earlier 180-day plan still running. Free trials, sponsorships, staff
   grants and house slots are not purchases and are left out. The grant must be
-  active, its payment complete and its line not refunded or charged back, no
-  renewal may already follow it and the account must not be closed
-  (`internal.term_ending_notice_due`; no API role can run it).
+  active, its payment complete and its line not refunded or charged back, and
+  the account must not be closed (`internal.term_ending_notice_due`; no API role
+  can run it). A banned or suspended member still gets the notice.
 - **When.** `internal.queue_term_ending_notices(p_limit)`, run by
   `api.run_slot_renewals` (full body, the minute job; its result gains
   `term_ending_notices`), queues one email (outbox kind `term_ending_notice`,
@@ -282,12 +282,14 @@ business days before it ends; nothing ever renews automatically.
   update is applied gets no notice. Nothing is charged.
 - **The email.** `internal.claim_supported_notification_outbox` (full body, 22
   kinds) gives the address only while the term still qualifies and the address
-  is confirmed (otherwise the job finishes it as skipped), with `term_ends_at`
-  and `term_kind` (`individual`, `package` or `other`). The website words it
-  (`src/lib/services/email.ts`, wording awaiting the owner in
+  is confirmed (otherwise the job finishes it as skipped), with `term_ends_at`,
+  `term_kind` (`individual`, `package` or `other`) and `term_has_access`
+  (whether `private.current_account_access` has the member). The website words
+  it (`src/lib/services/email.ts`, wording awaiting the owner in
   `FRONTEND-CHANGES.md` group 91): the end date, that nothing renews and nothing
   more is charged, and how to buy again (My slots for an Individual slot,
-  Billing otherwise). No in-app notice.
+  Billing otherwise); a member who cannot sign in is told only that nothing more
+  is needed. No in-app notice.
 - **Order.** Apply first, then merge. A website before the update drops the kind
   (`laterKinds`); an earlier website never claims it, so queued notices wait.
   Preflight: `../preflight/20261122111209_term_ending_notice.check.sql`;

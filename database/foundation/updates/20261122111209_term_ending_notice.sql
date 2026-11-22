@@ -15,8 +15,8 @@
 -- end with the package, run less than 180 days and get no notice of their
 -- own), and any earlier 180-day plan still running. The grant must still be
 -- active, its payment complete and its payment line not refunded or charged
--- back, no renewal may already follow it, and the account must not be closed
--- (internal.term_ending_notice_due).
+-- back, and the account must not be closed (internal.term_ending_notice_due).
+-- A banned or suspended member still gets the notice (the term still runs).
 --
 -- From this update, in one transaction:
 -- 1. New outbox kind term_ending_notice (the kind check gains it).
@@ -37,8 +37,10 @@
 --    kind (22 kinds, each once), hands it out only to a confirmed,
 --    non-anonymous address and only while the term still qualifies
 --    (otherwise it is finished as skipped without a send), with the term's
---    end (term_ends_at) and what it is (term_kind: 'individual' for an
---    Individual slot, 'package' for a Multi-listing package, 'other'). The
+--    end (term_ends_at), what it is (term_kind: 'individual' for an
+--    Individual slot, 'package' for a Multi-listing package, 'other') and
+--    whether the member can sign in now (term_has_access: false while banned
+--    or suspended, and the email then offers no renewal or new purchase). The
 --    notice is a service notice about the member's own paid term; the
 --    optional marketing choices do not apply. No in-app notice is added.
 --
@@ -67,11 +69,11 @@ begin
   loop
     if shape not in (
         'internal.claim_supported_notification_outbox(text[],integer) c7206aab3ac04b1f9d9b6ce2dc47bd0f',
-        'internal.claim_supported_notification_outbox(text[],integer) d7bce6d6994095f93fb3ca5dac54e3e6',
+        'internal.claim_supported_notification_outbox(text[],integer) 05047312026b82e77bfade4a82dee03b',
         'api.run_slot_renewals(integer) b78dc0ac9c98fd46da971c17a3f07a43',
         'api.run_slot_renewals(integer) 64c3c57229ca6fe6b8163fd8d57dbfcc',
         'internal.term_ending_notice_due(uuid,uuid) absent',
-        'internal.term_ending_notice_due(uuid,uuid) db5cfe64a62f97b249b9348d34599ce8',
+        'internal.term_ending_notice_due(uuid,uuid) ded26ab2db3448a183eeeddd7c8cd467',
         'internal.queue_term_ending_notices(integer) absent',
         'internal.queue_term_ending_notices(integer) 70a197a68c46e8cb4a1fbc53056e0d86') then
       raise exception 'term ending notice precondition: % is not a reviewed body', shape
@@ -95,8 +97,8 @@ alter table private.outbox_events add constraint outbox_events_kind_check check 
   'post_sold','post_kept','verification_returned','slot_renewal_reminder','term_ending_notice']));
 
 -- 2. Whether a grant is a paid term of 180 days or more that still ends as
--- bought: active, paid, not refunded or charged back, not yet followed by a
--- renewal, of an account that is not closed.
+-- bought: active, paid, not refunded or charged back, of an account that is
+-- not closed.
 CREATE OR REPLACE FUNCTION internal.term_ending_notice_due(p_entitlement uuid, p_owner uuid)
  RETURNS boolean
  LANGUAGE sql
@@ -110,8 +112,6 @@ AS $function$
       and pay.status='complete' and pay.owner_id=g.owner_id
       and (g.payment_line_id is null or exists(select 1 from private.payment_lines l
         where l.id=g.payment_line_id and l.payment_id=g.payment_id and l.status='open'))
-      and not exists(select 1 from private.entitlements n where n.slot_id=coalesce(g.slot_id,g.id)
-        and n.id<>g.id and n.status='active' and n.starts_at<=g.ends_at and n.ends_at>g.ends_at)
       and not exists(select 1 from private.account_closures c where c.user_id=g.owner_id));
 $function$;
 alter function internal.term_ending_notice_due(uuid,uuid) owner to postgres;
@@ -203,8 +203,10 @@ begin
     'slot_renew_all',case when sg.id is not null then (select count(*)>1 from private.entitlements x
       where x.owner_id=o.owner_id and x.status='active' and x.ends_at<=statement_timestamp()+interval '7 days'
         and internal.slot_renewal_due(x.id,o.owner_id)) end,
-    -- The term-ending notice: when the term ends, and what it is.
+    -- The term-ending notice: when the term ends, what it is, and whether the
+    -- member can sign in now (not while banned or suspended).
     'term_ends_at',tg.ends_at,
+    'term_has_access',case when tg.id is not null then exists(select 1 from private.current_account_access a where a.id=o.owner_id) end,
     'term_kind',case when tg.id is null then null when tg.package_id is not null then 'package'
       when exists(select 1 from private.payment_lines l join private.plan_versions v on v.id=l.plan_version_id
         where l.id=tg.payment_line_id and internal.individual_slot_plan(v.plan_code)) then 'individual'

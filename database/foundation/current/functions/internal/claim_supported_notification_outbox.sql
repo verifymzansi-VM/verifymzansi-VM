@@ -39,8 +39,10 @@ begin
     'slot_renew_all',case when sg.id is not null then (select count(*)>1 from private.entitlements x
       where x.owner_id=o.owner_id and x.status='active' and x.ends_at<=statement_timestamp()+interval '7 days'
         and internal.slot_renewal_due(x.id,o.owner_id)) end,
-    -- The term-ending notice: when the term ends, and what it is.
+    -- The term-ending notice: when the term ends, what it is, and whether the
+    -- member can sign in now (not while banned or suspended).
     'term_ends_at',tg.ends_at,
+    'term_has_access',case when tg.id is not null then exists(select 1 from private.current_account_access a where a.id=o.owner_id) end,
     'term_kind',case when tg.id is null then null when tg.package_id is not null then 'package'
       when exists(select 1 from private.payment_lines l join private.plan_versions v on v.id=l.plan_version_id
         where l.id=tg.payment_line_id and internal.individual_slot_plan(v.plan_code)) then 'individual'

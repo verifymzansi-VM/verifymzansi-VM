@@ -929,13 +929,14 @@ it("passes the renewal reminder's slot, end date and Renew all to the email", as
     { slotEndsAt: "2026-11-17T12:00:00+00:00", slotRenewAll: true, renewSlotId: slot }
   );
 });
-it("passes the term-ending notice's end date and kind of term to the email", async () => {
+it("passes the term-ending notice's end date, kind of term and access to the email", async () => {
   queue(
     job({
       kind: "term_ending_notice",
       subject_id: "00000000-0000-4000-8000-0000000000a2",
       term_ends_at: "2027-02-14T10:00:00+00:00",
       term_kind: "package",
+      term_has_access: false,
     })
   );
   expect(await run()).toMatchObject({ succeeded: 1 });
@@ -944,7 +945,7 @@ it("passes the term-ending notice's end date and kind of term to the email", asy
     "term_ending_notice",
     `foundation-outbox/${id}`,
     undefined,
-    { termEndsAt: "2027-02-14T10:00:00+00:00", termKind: "package" }
+    { termEndsAt: "2027-02-14T10:00:00+00:00", termKind: "package", termHasAccess: false }
   );
 });
 it("finishes a renewal reminder the database no longer addresses without sending it", async () => {

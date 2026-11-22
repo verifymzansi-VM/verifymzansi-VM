@@ -129,25 +129,25 @@ const platformNotices = {
   ],
   // The written notice before a paid term of 180 days or more ends, about 60
   // business days ahead (Consumer Protection Act s14(2)(c); update
-  // 20261122111209_term_ending_notice.sql); worded with its end date when the
-  // notification job knows it (postLifecycleIntro). Wording awaiting the
-  // owner's approval (FRONTEND-CHANGES.md group 91).
-  term_ending_notice: [
-    "Your paid term is ending",
-    "One of your paid slots or packages (a term of 180 days or more) ends in about 12 weeks. Nothing renews automatically and you will not be charged again.",
-  ],
+  // 20261122111209_term_ending_notice.sql); always worded with its end date
+  // (postLifecycleIntro), which the claim always supplies: without it nothing
+  // is sent. Wording awaiting the owner's approval (FRONTEND-CHANGES.md group
+  // 91).
+  term_ending_notice: ["Your paid term is ending", null],
 } as const;
 export type PlatformNoticeKind = keyof typeof platformNotices;
 /** The renewal reminder's second paragraph (awaiting the owner's approval). */
 const RENEWAL_REMINDER_BODY =
   "Nothing renews automatically. If you do not renew, the post in this slot is hidden when the slot ends and deleted 3 days later, with its photos and videos.";
 /** The term-ending notice's second paragraph: what happens next and how to
- * buy again (awaiting the owner's approval). */
+ * buy again, or, for a member who cannot sign in now (banned or suspended),
+ * only that nothing more is needed (awaiting the owner's approval). */
 const TERM_ENDING_BODY = {
   individual:
     "To keep posting after that date, renew this slot from My slots from 14 days before it ends (the new days start when the current ones end), or buy a new slot on Billing. If you do nothing, the slot simply ends: its post is hidden then and deleted 3 days later, with its photos and videos.",
   other:
     "To keep posting after that date, buy again on Billing. If you do nothing, it simply ends: the posts it pays for are hidden then, unless another of your slots takes them, and deleted 3 days later, with their photos and videos.",
+  noAccess: "You do not need to do anything.",
 } as const;
 /** What the notification job knows about the post a lifecycle notice is about,
  * or, for trial_started, when the introductory trial ends and whether it
@@ -164,9 +164,11 @@ export type PostLifecycleDetails = {
   renewSlotId?: string | null;
   slotEndsAt?: string | null;
   slotRenewAll?: boolean | null;
-  /** term_ending_notice: when the paid term ends, and what it is. */
+  /** term_ending_notice: when the paid term ends, what it is, and whether
+   * the member can sign in now (false while banned or suspended). */
   termEndsAt?: string | null;
   termKind?: "individual" | "package" | "other" | null;
+  termHasAccess?: boolean | null;
 };
 function deletionTime(iso: string | null | undefined): string | null {
   const ms = iso ? Date.parse(iso) : Number.NaN;
@@ -234,6 +236,7 @@ export async function sendPlatformNotice(
     return sendEmail({ to, idempotencyKey, ...buildPaymentReceiptEmail(details.receipt) });
   const [subject, fallbackIntro] = platformNotices[kind];
   const intro = postLifecycleIntro(kind, details) ?? fallbackIntro;
+  if (intro === null) throw new Error("Notice details unavailable");
   const appUrl = sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
   const moderation = [
     "content_hidden",
@@ -248,6 +251,9 @@ export async function sendPlatformNotice(
   // be renewed there), otherwise to Billing.
   const termEnding = kind === "term_ending_notice";
   const termSlot = termEnding && details?.termKind === "individual";
+  // A member who cannot sign in now (banned or suspended) is not asked to
+  // renew or buy: the notice says only that the term ends.
+  const termNoAccess = termEnding && details?.termHasAccess === false;
   const renewPath = details?.slotRenewAll
     ? "/billing/checkout?renew=soon"
     : details?.renewSlotId && /^[0-9a-f-]{36}$/i.test(details.renewSlotId)
@@ -281,7 +287,7 @@ export async function sendPlatformNotice(
       : renewal
         ? RENEWAL_REMINDER_BODY
         : termEnding
-          ? TERM_ENDING_BODY[termSlot ? "individual" : "other"]
+          ? TERM_ENDING_BODY[termNoAccess ? "noAccess" : termSlot ? "individual" : "other"]
           : "Sign in to your account to view the details.";
   const cta = renewal
     ? details?.slotRenewAll
@@ -302,10 +308,10 @@ export async function sendPlatformNotice(
       title: subject,
       intro,
       bodyHtml: paragraph(body),
-      cta: { label: cta, href: appUrl + path },
+      cta: termNoAccess ? undefined : { label: cta, href: appUrl + path },
       reason: "This is an operational update about your VerifyMzansi account.",
     }),
-    text: `${subject}\n\n${intro}${shownBody ? `\n\n${body}` : ""}\n\n${linkLabel}${appUrl}${path}`,
+    text: `${subject}\n\n${intro}${shownBody ? `\n\n${body}` : ""}${termNoAccess ? "" : `\n\n${linkLabel}${appUrl}${path}`}`,
   });
 }
 

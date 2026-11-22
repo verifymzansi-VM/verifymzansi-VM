@@ -14,8 +14,6 @@ AS $function$
       and pay.status='complete' and pay.owner_id=g.owner_id
       and (g.payment_line_id is null or exists(select 1 from private.payment_lines l
         where l.id=g.payment_line_id and l.payment_id=g.payment_id and l.status='open'))
-      and not exists(select 1 from private.entitlements n where n.slot_id=coalesce(g.slot_id,g.id)
-        and n.id<>g.id and n.status='active' and n.starts_at<=g.ends_at and n.ends_at>g.ends_at)
       and not exists(select 1 from private.account_closures c where c.user_id=g.owner_id));
 $function$;
 alter function internal.term_ending_notice_due(uuid,uuid) owner to postgres;

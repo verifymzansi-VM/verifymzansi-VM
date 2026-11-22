@@ -17,7 +17,8 @@
 // update, proves apply -> rollback -> apply returns the same fingerprints, then:
 // a 180-day term gets one notice once its end is 84 days away (not at 85),
 // never twice however often the job runs, and not again after the sent email
-// is removed by retention; the email job gets the end date and the term kind;
+// is removed by retention; the email job gets the end date, the term kind and
+// whether the member can sign in (a banned member still gets the notice);
 // terms shorter than 180 days, ended terms, refunded or revoked terms, terms
 // already under 63 days from their end and closed accounts get none; a term
 // refunded after its notice was queued, or an unconfirmed address, gets no
@@ -56,9 +57,9 @@ const REVIEWED = {
   [QUEUE]: "missing",
 };
 const UPDATED = {
-  [CLAIM]: "d7bce6d6994095f93fb3ca5dac54e3e6",
+  [CLAIM]: "05047312026b82e77bfade4a82dee03b",
   [RUN]: "64c3c57229ca6fe6b8163fd8d57dbfcc",
-  [DUE]: "db5cfe64a62f97b249b9348d34599ce8",
+  [DUE]: "ded26ab2db3448a183eeeddd7c8cd467",
   [QUEUE]: "70a197a68c46e8cb4a1fbc53056e0d86",
 };
 const P90 = { id: "6a449457-2384-457e-9434-23c2b0e73127", cents: 20700 };
@@ -206,6 +207,7 @@ await runTwoAdminUpdateCheck(
         json(`select to_jsonb(ends_at) from private.entitlements where id='${thandiGrant}';`)
       );
       assert.equal(job.term_kind, "individual");
+      assert.equal(job.term_has_access, true);
       assert.equal(job.slot_ends_at, null);
       assert.equal(complete(job), "t");
       // The notice for the term bought before the update went out too.
@@ -294,6 +296,27 @@ await runTwoAdminUpdateCheck(
       assert.ok(job);
       assert.equal(job.recipient, null);
       complete(job, "skipped");
+    });
+    await check("a banned member still gets the notice, marked as unable to sign in", () => {
+      const banned = verified("term-banned");
+      const grant = buy(banned);
+      endsIn(grant, 80);
+      q(`update auth.users set banned_until=now()+interval '1 year' where id='${banned.id}';`);
+      assert.equal(
+        q(`select count(*) from private.current_account_access where id='${banned.id}';`),
+        "0"
+      );
+      assert.equal(sweep().term_ending_notices, 1);
+      assert.equal(notices(grant), 1);
+      const job = claim().find((j) => j.subject_id === grant);
+      assert.ok(job);
+      assert.equal(job.recipient, banned.email);
+      assert.equal(
+        job.term_ends_at,
+        json(`select to_jsonb(ends_at) from private.entitlements where id='${grant}';`)
+      );
+      assert.equal(job.term_has_access, false);
+      assert.equal(complete(job), "t");
     });
     await check("the claim takes 22 kinds, each once", () => {
       const kinds = [

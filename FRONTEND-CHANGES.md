@@ -149,7 +149,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 85. Business storefront (item 17b, first part) | approved by owner 2026-11-21 (with the group 85 part of 7 rows elsewhere) | Nothing today (switch off). Once on: a checked business with a running Multi-listing package and at least one live listing shows 'All stock' (search, filters that follow the trade, newest first, Show more) on its business page, and each of its listings names the business (logo or initials) with 'See all 18 cars'. |
 | 86. Copy a post (item 17b, second part) | approved by owner 2026-11-22 (with the group 86 part of 8 rows elsewhere) | Nothing today (switch off). Once on: a member whose Multi-listing package runs gets 'More', then 'Copy this post' on My posts; the copy opens in the 'Post an item' form with a note (everything but the video filled in, one new photo for vehicles and property), unfinished copies wait under 'Drafts' for 14 days, and reviewers see 'Copied from'. |
 | 89. Authority requests: only the four D9 request types (item 69) (no file rows: the group 89 part of 6 rows in group 77) | approved by owner 2026-11-22 | Governors and admins only: the authority request form offers only a subpoena, court order, search warrant or urgent life-risk request, and asks for the issuing court (or SAPS station), the official number called and who confirmed it; the record and print sheet show the request type, reference, issuer and check; an urgent request shows no selfie or ID photo. Members see nothing new. |
-| 91. Email before a long paid term ends (item 68b) (no file rows: email only) | awaiting owner | Members with a paid slot or package of 180 days or more get one email about 12 weeks before it ends: the end date, that nothing renews and nothing more is charged, and how to buy again (My slots for an Individual slot, otherwise Billing). Nothing changes on any page. |
+| 91. Email before a long paid term ends (item 68b) (no file rows: email only) | awaiting owner | Members with a paid slot or package of 180 days or more get one email about 12 weeks before it ends: the end date, that nothing renews and nothing more is charged, and how to buy again (My slots for an Individual slot, otherwise Billing; a banned or suspended member is told only that nothing more is needed). Nothing changes on any page. |
 | 92. Registered street address no longer shown (no file rows: data setting only) | approved by owner 2026-11-22 | Trust & Safety (and the Terms and PAIA pages, which list the same company details) no longer show a 'Registered address' row with the street address. The other company details (registered name, trading name, CIPC number, officers, contacts) are unchanged. |
 
 Questions for the owner:
@@ -3573,11 +3573,14 @@ then:
 
 Button 'Go to Billing' (to `/billing`).
 
-If the end date cannot be read: 'One of your paid slots or packages (a term of
-180 days or more) ends in about 12 weeks. Nothing renews automatically and you
-will not be charged again.', with the Billing paragraph and button. The footer
-line stays 'This is an operational update about your VerifyMzansi account.' No
-bell notice is added.
+A banned or suspended member (who cannot sign in) gets the same first
+paragraph, then only:
+
+> You do not need to do anything.
+
+with no button and no link. The email is not sent without its end date. The
+footer line stays 'This is an operational update about your VerifyMzansi
+account.' No bell notice is added.
 
 Decision: awaiting owner.
 

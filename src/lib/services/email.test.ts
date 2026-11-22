@@ -251,11 +251,34 @@ describe("email service", () => {
     expect(message.text).toContain("To keep posting after that date, buy again on Billing.");
     expect(message.text).toContain("Go to Billing: https://verifymzansi.com/billing");
     expect(message.text).not.toContain("My slots");
-    // Without a date: the plain wording, still saying nothing renews.
-    await sendPlatformNotice("member@example.invalid", "term_ending_notice", "outbox/term-plain");
-    [message] = mockSend.mock.calls.at(-1)!;
-    expect(message.text).toContain("ends in about 12 weeks. Nothing renews automatically");
-    expect(message.text).toContain("Go to Billing: https://verifymzansi.com/billing");
+    // Without a date nothing is sent (the job retries, then reports it).
+    const sent = mockSend.mock.calls.length;
+    await expect(
+      sendPlatformNotice("member@example.invalid", "term_ending_notice", "outbox/term-plain")
+    ).rejects.toThrow("Notice details unavailable");
+    expect(mockSend.mock.calls.length).toBe(sent);
+    vi.unstubAllEnvs();
+  });
+  it("tells a banned or suspended member only that the term ends, without renew or buy", async () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
+    await sendPlatformNotice(
+      "member@example.invalid",
+      "term_ending_notice",
+      "foundation-outbox/term-no-access",
+      undefined,
+      { termEndsAt: "2027-02-14T10:00:00Z", termKind: "individual", termHasAccess: false }
+    );
+    const [message] = mockSend.mock.calls.at(-1)!;
+    expect(message.subject).toBe("Your paid term is ending");
+    expect(message.text).toBe(
+      "Your paid term is ending\n\nYour Individual slot ends on 14 February 2027 at 12:00 (South African time). Nothing renews automatically and you will not be charged again.\n\nYou do not need to do anything."
+    );
+    expect(message.html).toContain("You do not need to do anything.");
+    expect(message.html).not.toContain("My slots");
+    expect(message.html).not.toContain("Billing");
+    expect(message.html).not.toContain("https://verifymzansi.com/dashboard/slots");
+    expect(message.html).not.toContain("https://verifymzansi.com/billing");
+    expect(message.html).not.toContain("vm-button");
     vi.unstubAllEnvs();
   });
   it("passes durable job keys to Resend for repeatable notices", async () => {

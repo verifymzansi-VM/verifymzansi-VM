@@ -25,11 +25,11 @@ with bodies as (
       'absent') as body
   from (values
     ('internal.claim_supported_notification_outbox(text[],integer)',
-      'c7206aab3ac04b1f9d9b6ce2dc47bd0f', 'd7bce6d6994095f93fb3ca5dac54e3e6'),
+      'c7206aab3ac04b1f9d9b6ce2dc47bd0f', '05047312026b82e77bfade4a82dee03b'),
     ('api.run_slot_renewals(integer)',
       'b78dc0ac9c98fd46da971c17a3f07a43', '64c3c57229ca6fe6b8163fd8d57dbfcc'),
     ('internal.term_ending_notice_due(uuid,uuid)',
-      'absent', 'db5cfe64a62f97b249b9348d34599ce8'),
+      'absent', 'ded26ab2db3448a183eeeddd7c8cd467'),
     ('internal.queue_term_ending_notices(integer)',
       'absent', '70a197a68c46e8cb4a1fbc53056e0d86')
   ) v(sig, reviewed, updated)
