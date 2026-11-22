@@ -40,7 +40,7 @@ export interface PackageCheckoutTerm {
 }
 
 /** Shown while packages are not on sale (the checkout route answers the same). */
-export const PACKAGES_NOT_ON_SALE = "Multi-listing packages are not on sale yet.";
+const PACKAGES_NOT_ON_SALE = "Multi-listing packages are not on sale yet.";
 
 /** Why the member cannot buy a package now. */
 export type PackageCheckoutBlock = "id_review" | "has_package";
