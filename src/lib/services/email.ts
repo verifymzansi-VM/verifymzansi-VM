@@ -140,11 +140,16 @@ export type PlatformNoticeKind = keyof typeof platformNotices;
 const RENEWAL_REMINDER_BODY =
   "Nothing renews automatically. If you do not renew, the post in this slot is hidden when the slot ends and deleted 3 days later, with its photos and videos.";
 /** The term-ending notice's second paragraph: what happens next and how to
- * buy again, or, for a member who cannot sign in now (banned or suspended),
- * only that nothing more is needed (awaiting the owner's approval). */
+ * buy again, or, for an Individual slot whose post moves into the member's
+ * Multi-listing package when it ends (renewing and buying are closed while the
+ * package runs), only that, or, for a member who cannot sign in now (banned or
+ * suspended), only that nothing more is needed (awaiting the owner's
+ * approval). */
 const TERM_ENDING_BODY = {
   individual:
     "To keep posting after that date, renew this slot from My slots from 14 days before it ends (the new days start when the current ones end), or buy a new slot on Billing. If you do nothing, the slot simply ends: its post is hidden then and deleted 3 days later, with its photos and videos.",
+  individualIntoPackage:
+    "Its post then moves into your Multi-listing package, so you do not need to do anything.",
   other:
     "To keep posting after that date, buy again on Billing. If you do nothing, it simply ends: the posts it pays for are hidden then, unless another of your slots takes them, and deleted 3 days later, with their photos and videos.",
   noAccess: "You do not need to do anything.",
@@ -164,11 +169,14 @@ export type PostLifecycleDetails = {
   renewSlotId?: string | null;
   slotEndsAt?: string | null;
   slotRenewAll?: boolean | null;
-  /** term_ending_notice: when the paid term ends, what it is, and whether
-   * the member can sign in now (false while banned or suspended). */
+  /** term_ending_notice: when the paid term ends, what it is, whether the
+   * member can sign in now (false while banned or suspended) and, for an
+   * Individual slot, whether the member's Multi-listing package runs past
+   * its end (its post then moves into the package). */
   termEndsAt?: string | null;
   termKind?: "individual" | "package" | "other" | null;
   termHasAccess?: boolean | null;
+  termPackageContinues?: boolean | null;
 };
 function deletionTime(iso: string | null | undefined): string | null {
   const ms = iso ? Date.parse(iso) : Number.NaN;
@@ -254,6 +262,10 @@ export async function sendPlatformNotice(
   // A member who cannot sign in now (banned or suspended) is not asked to
   // renew or buy: the notice says only that the term ends.
   const termNoAccess = termEnding && details?.termHasAccess === false;
+  // An Individual slot whose post moves into the member's Multi-listing
+  // package when it ends: no renew or buy wording (both are closed while the
+  // package runs).
+  const termIntoPackage = termSlot && details?.termPackageContinues === true;
   const renewPath = details?.slotRenewAll
     ? "/billing/checkout?renew=soon"
     : details?.renewSlotId && /^[0-9a-f-]{36}$/i.test(details.renewSlotId)
@@ -287,7 +299,15 @@ export async function sendPlatformNotice(
       : renewal
         ? RENEWAL_REMINDER_BODY
         : termEnding
-          ? TERM_ENDING_BODY[termNoAccess ? "noAccess" : termSlot ? "individual" : "other"]
+          ? TERM_ENDING_BODY[
+              termNoAccess
+                ? "noAccess"
+                : termIntoPackage
+                  ? "individualIntoPackage"
+                  : termSlot
+                    ? "individual"
+                    : "other"
+            ]
           : "Sign in to your account to view the details.";
   const cta = renewal
     ? details?.slotRenewAll

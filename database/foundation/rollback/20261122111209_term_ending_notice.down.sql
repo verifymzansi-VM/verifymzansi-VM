@@ -25,7 +25,7 @@ begin
       ('internal.queue_term_ending_notices(integer)')) v(sig)
   loop
     if shape not in (
-        'internal.claim_supported_notification_outbox(text[],integer) 05047312026b82e77bfade4a82dee03b',
+        'internal.claim_supported_notification_outbox(text[],integer) 9a4c68c8ba330364831aac3bdf66b2aa',
         'api.run_slot_renewals(integer) 64c3c57229ca6fe6b8163fd8d57dbfcc',
         'internal.term_ending_notice_due(uuid,uuid) ded26ab2db3448a183eeeddd7c8cd467',
         'internal.queue_term_ending_notices(integer) 70a197a68c46e8cb4a1fbc53056e0d86') then

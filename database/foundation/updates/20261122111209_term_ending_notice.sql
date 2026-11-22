@@ -40,7 +40,13 @@
 --    end (term_ends_at), what it is (term_kind: 'individual' for an
 --    Individual slot, 'package' for a Multi-listing package, 'other') and
 --    whether the member can sign in now (term_has_access: false while banned
---    or suspended, and the email then offers no renewal or new purchase). The
+--    or suspended, and the email then offers no renewal or new purchase). For
+--    an Individual slot it also says whether the member's Multi-listing
+--    package runs past the slot's end (term_package_continues): the package
+--    internal.slot_package_now returns, the one api.run_slot_renewals and
+--    post funding (internal.slot_package_takeover_end) move the slot's post
+--    into once the slot ends, ending after the slot does; while it runs a
+--    renewal or new slot is refused, so the email offers neither. The
 --    notice is a service notice about the member's own paid term; the
 --    optional marketing choices do not apply. No in-app notice is added.
 --
@@ -69,7 +75,7 @@ begin
   loop
     if shape not in (
         'internal.claim_supported_notification_outbox(text[],integer) c7206aab3ac04b1f9d9b6ce2dc47bd0f',
-        'internal.claim_supported_notification_outbox(text[],integer) 05047312026b82e77bfade4a82dee03b',
+        'internal.claim_supported_notification_outbox(text[],integer) 9a4c68c8ba330364831aac3bdf66b2aa',
         'api.run_slot_renewals(integer) b78dc0ac9c98fd46da971c17a3f07a43',
         'api.run_slot_renewals(integer) 64c3c57229ca6fe6b8163fd8d57dbfcc',
         'internal.term_ending_notice_due(uuid,uuid) absent',
@@ -203,14 +209,20 @@ begin
     'slot_renew_all',case when sg.id is not null then (select count(*)>1 from private.entitlements x
       where x.owner_id=o.owner_id and x.status='active' and x.ends_at<=statement_timestamp()+interval '7 days'
         and internal.slot_renewal_due(x.id,o.owner_id)) end,
-    -- The term-ending notice: when the term ends, what it is, and whether the
-    -- member can sign in now (not while banned or suspended).
+    -- The term-ending notice: when the term ends, what it is, whether the
+    -- member can sign in now (not while banned or suspended) and, for an
+    -- Individual slot, whether the Multi-listing package its post moves into
+    -- when it ends (internal.slot_package_now) runs past that end.
     'term_ends_at',tg.ends_at,
     'term_has_access',case when tg.id is not null then exists(select 1 from private.current_account_access a where a.id=o.owner_id) end,
     'term_kind',case when tg.id is null then null when tg.package_id is not null then 'package'
       when exists(select 1 from private.payment_lines l join private.plan_versions v on v.id=l.plan_version_id
         where l.id=tg.payment_line_id and internal.individual_slot_plan(v.plan_code)) then 'individual'
-      else 'other' end) order by o.created_at,o.id),'[]'::jsonb)
+      else 'other' end,
+    'term_package_continues',case when tg.id is not null and tg.package_id is null
+      and exists(select 1 from private.payment_lines l join private.plan_versions v on v.id=l.plan_version_id
+        where l.id=tg.payment_line_id and internal.individual_slot_plan(v.plan_code))
+      then exists(select 1 from internal.slot_package_now(o.owner_id) n where n.ends_at>tg.ends_at) end) order by o.created_at,o.id),'[]'::jsonb)
     into result from claimed o left join auth.users u on u.id=o.owner_id
     left join private.enquiries e on o.kind='enquiry_received' and e.id=o.subject_id
     left join private.posts p on p.id=case when o.kind='enquiry_received' then e.post_id else o.subject_id end

@@ -19,6 +19,8 @@
 // never twice however often the job runs, and not again after the sent email
 // is removed by retention; the email job gets the end date, the term kind and
 // whether the member can sign in (a banned member still gets the notice);
+// an Individual slot that the member's Multi-listing package outlasts is
+// claimed as such, and its post moves into the package after the slot ends;
 // terms shorter than 180 days, ended terms, refunded or revoked terms, terms
 // already under 63 days from their end and closed accounts get none; a term
 // refunded after its notice was queued, or an unconfirmed address, gets no
@@ -40,6 +42,7 @@ import {
   applyAndProveRollback,
   assertDriftRefused,
   functionBodyMd5,
+  ozowSettle,
   P180,
   P30,
   runTwoAdminUpdateCheck,
@@ -57,12 +60,14 @@ const REVIEWED = {
   [QUEUE]: "missing",
 };
 const UPDATED = {
-  [CLAIM]: "05047312026b82e77bfade4a82dee03b",
+  [CLAIM]: "9a4c68c8ba330364831aac3bdf66b2aa",
   [RUN]: "64c3c57229ca6fe6b8163fd8d57dbfcc",
   [DUE]: "ded26ab2db3448a183eeeddd7c8cd467",
   [QUEUE]: "70a197a68c46e8cb4a1fbc53056e0d86",
 };
 const P90 = { id: "6a449457-2384-457e-9434-23c2b0e73127", cents: 20700 };
+// The 30-day Multi-listing package term (R100 per slot).
+const K30 = { id: "5b0f4c1e-2a7d-4c43-9b51-7e0d3f6a9c11", cents: 10000 };
 const LABEL = "term ending notice";
 // Literal patterns for the preflight summary (one 180-day term running, ending
 // within 84 days, no notice queued yet).
@@ -208,6 +213,7 @@ await runTwoAdminUpdateCheck(
       );
       assert.equal(job.term_kind, "individual");
       assert.equal(job.term_has_access, true);
+      assert.equal(job.term_package_continues, false, "no Multi-listing package");
       assert.equal(job.slot_ends_at, null);
       assert.equal(complete(job), "t");
       // The notice for the term bought before the update went out too.
@@ -318,6 +324,65 @@ await runTwoAdminUpdateCheck(
       assert.equal(job.term_has_access, false);
       assert.equal(complete(job), "t");
     });
+    await check(
+      "a slot a Multi-listing package outlasts: claimed as such, and its post moves into the package",
+      () => {
+        const owner = verified("term-package");
+        const slot = buy(owner);
+        // A live post in the slot, before the package is bought.
+        const post = world.post(owner, "listing", "market");
+        assert.equal(
+          json(member(owner, `select api.activate_post('${post}');`)).entitlement_id,
+          slot
+        );
+        q(`update private.posts set status='live',published_at=now(),
+             visible_until=(select f.funded_until from internal.post_funding('${post}') f) where id='${post}';
+           select internal.write_post_projection('${post}');`);
+        q(
+          "update private.slot_package_sales set on_sale=true,changed_at=now(),reason='Fixture: switched for the checks';"
+        );
+        const quoted = json(
+          member(
+            owner,
+            `select api.start_package_checkout('${K30.id}',5,${K30.cents * 5},true);`
+          )
+        );
+        assert.equal(ozowSettle(kit, owner, quoted.payment_id).fulfillment_status, "fulfilled");
+        const pkg = q(
+          `select id from private.entitlements where payment_id='${quoted.payment_id}';`
+        );
+        // The package started 10 days ago and ends in 100 days (110 in all: no
+        // notice of its own); the slot ends in 80.
+        replica(`update private.entitlements set starts_at=now()-interval '10 days',
+          ends_at=now()+interval '100 days' where id='${pkg}';`);
+        endsIn(slot, 80);
+        sweep();
+        assert.equal(notices(slot), 1);
+        assert.equal(notices(pkg), 0);
+        const job = claim().find((j) => j.subject_id === slot);
+        assert.ok(job);
+        assert.equal(job.recipient, owner.email);
+        assert.equal(job.term_kind, "individual");
+        assert.equal(job.term_has_access, true);
+        assert.equal(job.term_package_continues, true);
+        assert.equal(complete(job), "t");
+        // The slot ends: its post is funded by the package, and the sweep
+        // moves it in.
+        endsIn(slot, -1 / 1440);
+        assert.equal(
+          q(`select (select funded_until from internal.post_funding('${post}'))=
+            (select ends_at from private.entitlements where id='${pkg}');`),
+          "t"
+        );
+        assert.equal(sweep().package_moved, 1);
+        assert.equal(
+          q(
+            `select entitlement_id from private.post_activations where post_id='${post}' and released_at is null;`
+          ),
+          pkg
+        );
+      }
+    );
     await check("the claim takes 22 kinds, each once", () => {
       const kinds = [
         "payment_completed",

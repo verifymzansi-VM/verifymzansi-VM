@@ -259,6 +259,29 @@ describe("email service", () => {
     expect(mockSend.mock.calls.length).toBe(sent);
     vi.unstubAllEnvs();
   });
+  it("tells a slot owner whose package outlasts the slot that its post moves in, without renew or buy", async () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
+    await sendPlatformNotice(
+      "member@example.invalid",
+      "term_ending_notice",
+      "foundation-outbox/term-into-package",
+      undefined,
+      {
+        termEndsAt: "2027-02-14T10:00:00Z",
+        termKind: "individual",
+        termHasAccess: true,
+        termPackageContinues: true,
+      }
+    );
+    const [message] = mockSend.mock.calls.at(-1)!;
+    expect(message.text).toBe(
+      "Your paid term is ending\n\nYour Individual slot ends on 14 February 2027 at 12:00 (South African time). Nothing renews automatically and you will not be charged again.\n\nIts post then moves into your Multi-listing package, so you do not need to do anything.\n\nSee my slots: https://verifymzansi.com/dashboard/slots"
+    );
+    expect(message.html).toContain("https://verifymzansi.com/dashboard/slots");
+    expect(message.html).not.toContain("Billing");
+    expect(message.html).not.toContain("deleted 3 days later");
+    vi.unstubAllEnvs();
+  });
   it("tells a banned or suspended member only that the term ends, without renew or buy", async () => {
     vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
     await sendPlatformNotice(

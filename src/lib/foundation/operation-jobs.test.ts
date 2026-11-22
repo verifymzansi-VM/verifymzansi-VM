@@ -945,7 +945,37 @@ it("passes the term-ending notice's end date, kind of term and access to the ema
     "term_ending_notice",
     `foundation-outbox/${id}`,
     undefined,
-    { termEndsAt: "2027-02-14T10:00:00+00:00", termKind: "package", termHasAccess: false }
+    {
+      termEndsAt: "2027-02-14T10:00:00+00:00",
+      termKind: "package",
+      termHasAccess: false,
+      termPackageContinues: null,
+    }
+  );
+});
+it("passes whether a Multi-listing package outlasts the Individual slot", async () => {
+  queue(
+    job({
+      kind: "term_ending_notice",
+      subject_id: "00000000-0000-4000-8000-0000000000a3",
+      term_ends_at: "2027-02-14T10:00:00+00:00",
+      term_kind: "individual",
+      term_has_access: true,
+      term_package_continues: true,
+    })
+  );
+  expect(await run()).toMatchObject({ succeeded: 1 });
+  expect(deliver).toHaveBeenCalledExactlyOnceWith(
+    "synthetic@example.invalid",
+    "term_ending_notice",
+    `foundation-outbox/${id}`,
+    undefined,
+    {
+      termEndsAt: "2027-02-14T10:00:00+00:00",
+      termKind: "individual",
+      termHasAccess: true,
+      termPackageContinues: true,
+    }
   );
 });
 it("finishes a renewal reminder the database no longer addresses without sending it", async () => {

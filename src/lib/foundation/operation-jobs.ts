@@ -181,11 +181,14 @@ const jobSchema = z
     slot_ends_at: z.iso.datetime({ offset: true }).nullable().optional(),
     slot_renew_all: z.boolean().nullable().optional(),
     // Only for term_ending_notice (20261122111209): when the paid term ends,
-    // whether it is an Individual slot, a Multi-listing package or other, and
-    // whether the member can sign in now (false while banned or suspended).
+    // whether it is an Individual slot, a Multi-listing package or other,
+    // whether the member can sign in now (false while banned or suspended)
+    // and, for an Individual slot, whether the member's Multi-listing package
+    // runs past its end (its post then moves into the package).
     term_ends_at: z.iso.datetime({ offset: true }).nullable().optional(),
     term_kind: z.enum(["individual", "package", "other"]).nullable().optional(),
     term_has_access: z.boolean().nullable().optional(),
+    term_package_continues: z.boolean().nullable().optional(),
   })
   .refine(
     (job) =>
@@ -459,6 +462,7 @@ export async function runFoundationOperationJobs(
                       termEndsAt: job.term_ends_at ?? null,
                       termKind: job.term_kind ?? null,
                       termHasAccess: job.term_has_access ?? null,
+                      termPackageContinues: job.term_package_continues ?? null,
                     })
                   : job.kind === "trial_started"
                     ? deliver(recipient, job.kind, key, undefined, {

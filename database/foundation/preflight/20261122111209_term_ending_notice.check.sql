@@ -25,7 +25,7 @@ with bodies as (
       'absent') as body
   from (values
     ('internal.claim_supported_notification_outbox(text[],integer)',
-      'c7206aab3ac04b1f9d9b6ce2dc47bd0f', '05047312026b82e77bfade4a82dee03b'),
+      'c7206aab3ac04b1f9d9b6ce2dc47bd0f', '9a4c68c8ba330364831aac3bdf66b2aa'),
     ('api.run_slot_renewals(integer)',
       'b78dc0ac9c98fd46da971c17a3f07a43', '64c3c57229ca6fe6b8163fd8d57dbfcc'),
     ('internal.term_ending_notice_due(uuid,uuid)',
