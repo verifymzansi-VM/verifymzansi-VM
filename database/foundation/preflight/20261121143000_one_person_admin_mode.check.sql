@@ -6,7 +6,7 @@
 -- "summary" row, then one row per problem. Apply the update only when the
 -- summary is the only row and reads "update not applied".
 --
--- The summary says whether the eight functions the update replaces have their
+-- The summary says whether the nine functions the update replaces have their
 -- reviewed bodies, internal.single_administrator and
 -- internal.assert_post_reviewer are absent, the staff audit
 -- view is the reviewed one and the two new columns are absent (update not
@@ -14,9 +14,6 @@
 -- - "ID-verified staff": accounts with an active staff role and an accepted ID
 --   review (single-administrator mode applies while this is 1);
 -- - "house slots": current house slots (any account);
--- - "own posts without a reviewer": pending posts (and edits, and events) of
---   an ID-verified admin that are not on a current house slot of theirs: in
---   single-administrator mode nobody can review them;
 -- - "post claims by staff without an ID review": live post review claims
 --   held by staff who have no current ID review (they can neither decide nor
 --   renew them after the update; they expire within 15 minutes);
@@ -33,11 +30,11 @@ with bodies as (
     ('internal.grant_house_slots(text,integer,integer,text,text)',
       '77527fd29f2348e228441612a842cce2', '6d72e0bc6a5f2bee76a43563f19278ac'),
     ('internal.queue_conflict(uuid,uuid,uuid)',
-      '7ef9b54c11a14dfe2f71b4e7ec474b44', 'd4c268547c2cd0fe91f8b8726a95b061'),
+      '7ef9b54c11a14dfe2f71b4e7ec474b44', 'e1c180e9110bd095220ceebd5977125a'),
     ('internal.claim_queue_items(text,integer)',
       'fc822bf9b962527b0fba39c22d364735', 'f9de196ff57fbb40b2e39d587e8d5db8'),
     ('internal.moderate_post(uuid,integer,text,text,text,uuid)',
-      '1f127647b461014ddc3d6d6ef6d086c7', '51a65d3cab4ec53b7c86f15e03a4937b'),
+      '1f127647b461014ddc3d6d6ef6d086c7', '10379c34d9570cdd28e07eed9d099ff9'),
     ('internal.assert_posting_verification_ready(uuid,boolean)',
       'c54fe760620720d67cf17c644623bd6f', '45e28fa96d190f50aa15b1a106685680'),
     ('internal.claim_queue_item(text,uuid)',
@@ -46,6 +43,8 @@ with bodies as (
       'b75020319ce35bcfd23ad9f9397bb043', 'bddb3dfc05f96e4c4657058517c00b8a'),
     ('internal.renew_queue_claim(text,uuid,text,uuid)',
       '18da441302347a2e62440f03b5c698ad', 'ac7babfffdc98546fb59a743a7d683fd'),
+    ('internal.assert_event_duplicate_absent(uuid,boolean)',
+      '3daf9e28965193872661db491cb1fc39', 'aed89455eb3b154417b0b1cb71d1ca65'),
     ('internal.single_administrator(uuid)',
       null, '86df529201fa210e43106b1ad93a16ff'),
     ('internal.assert_post_reviewer(uuid,uuid)',
@@ -90,15 +89,6 @@ select 'summary' as kind,
     || '; house slots: ' || (select count(*) from private.entitlements e
          where e.source = 'staff_grant' and e.status = 'active' and e.ends_at > statement_timestamp()
            and exists (select 1 from private.house_slot_events h where h.entitlement_id = e.id))
-    || '; own posts without a reviewer: ' || (select count(*) from private.posts p
-         where p.status = 'pending_moderation'
-           and exists (select 1 from private.staff_roles r where r.user_id = p.owner_id and r.role = 'admin'
-             and r.revoked_at is null)
-           and internal.current_verified_identity(p.owner_id) is not null
-           and not exists (select 1 from private.post_activations a join private.entitlements e on e.id = a.entitlement_id
-             where a.post_id = coalesce(p.edit_of, p.id) and a.released_at is null and e.owner_id = p.owner_id
-               and e.source = 'staff_grant' and e.status = 'active' and e.ends_at > statement_timestamp()
-               and exists (select 1 from private.house_slot_events h where h.entitlement_id = e.id)))
     || '; post claims by staff without an ID review: ' || (select count(*) from private.queue_claims q
          where q.post_id is not null and q.claimed_by is not null and q.claim_expires_at > clock_timestamp()
            and internal.current_verified_identity(q.claimed_by) is null)

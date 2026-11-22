@@ -30,4 +30,4 @@ CREATE TRIGGER moderation_log_append_only BEFORE DELETE OR UPDATE ON private.mod
 CREATE TRIGGER moderation_log_no_truncate BEFORE TRUNCATE ON private.moderation_log FOR EACH STATEMENT EXECUTE FUNCTION internal.append_only_guard();
 CREATE TRIGGER notify_post_moderation AFTER INSERT ON private.moderation_log FOR EACH ROW EXECUTE FUNCTION internal.notify_post_moderation();
 revoke all on private.moderation_log from public;
-comment on column private.moderation_log.self_approved is 'Approved in single-administrator mode: the only ID-verified staff member approved their own post funded by one of their house slots (internal.moderate_post).';
+comment on column private.moderation_log.self_approved is 'Approved in single-administrator mode: the only ID-verified staff member approved their own post (internal.moderate_post).';

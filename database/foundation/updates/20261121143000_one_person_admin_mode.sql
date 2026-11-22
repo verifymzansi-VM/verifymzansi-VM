@@ -1,10 +1,11 @@
--- Single-administrator mode for house slots, logged (owner's decision of 21
--- November 2026, launch checklist item 67).
+-- Single-administrator mode for house slots and own posts, logged (owner's
+-- decisions of 21 and 22 November 2026, launch checklist item 67).
 --
 -- While the platform has exactly one ID-verified staff member, the two-person
--- rules for house slots cannot be met: the owner's second admin account has no
--- accepted ID review of its own (one person, one ID). From this update, while
--- that single ID-verified staff member exists:
+-- rules for house slots and for reviewing their own posts cannot be met: the
+-- owner's second admin account has no accepted ID review of its own (one
+-- person, one ID). From this update, while that single ID-verified staff
+-- member exists:
 --
 -- 1. internal.grant_house_slots (database owner only, run in the Supabase SQL
 --    editor; still executable by no API role) accepts the recipient as their
@@ -20,14 +21,15 @@
 -- 3. Staff review posts only with an accepted ID review of their own
 --    (internal.current_verified_identity): internal.queue_conflict counts
 --    every post as a conflict for a staff member without one.
---    The single ID-verified staff member may review their own pending post
---    when one of their own current house slots funds it (for an edit: the
---    live post it edits):
---    internal.queue_conflict no longer counts it as a conflict, so it is
+--    The single ID-verified staff member may review any of their own
+--    pending posts and edits, whatever funds them (house slot, free first
+--    post, paid or package slot, an event):
+--    internal.queue_conflict no longer counts them as a conflict, so they are
 --    listed, claimed and opened like any other post (the moderation queue,
 --    internal.claim_queue_items, internal.claim_queue_item,
 --    internal.staff_review_post). internal.claim_queue_items and the
---    approval check internal.assert_posting_verification_ready now ask
+--    approval checks internal.assert_posting_verification_ready and
+--    internal.assert_event_duplicate_absent now ask
 --    internal.queue_conflict instead of comparing the owner themselves.
 --    The per-item commands (internal.claim_queue_item,
 --    internal.staff_review_post, internal.renew_queue_claim for posts and
@@ -35,11 +37,9 @@
 --    internal.assert_post_reviewer: 42501 "ID verification required to
 --    review posts" (detail staff_identity_required) without an ID review,
 --    otherwise "self-review is not allowed" on a conflict.
---    While the mode holds, the owner's own posts that are not on a current
---    house slot (free first post, paid or package slots, events, and their
---    edits) have no reviewer: the owner moderates members' posts from the
---    verified account, and the second account sees an empty queue.
--- 4. internal.moderate_post lets them approve (never reject) such a post. As
+--    The owner reviews members' posts and their own from the verified
+--    account; the second account (no ID review) sees an empty queue.
+-- 4. internal.moderate_post lets them approve (never reject) their own post. As
 --    for every moderation decision, the admin role's post:moderate needs an
 --    authenticator code from the last 15 minutes (internal.staff_actor, 42501
 --    "recent second-factor verification required"); the update refuses to
@@ -81,6 +81,7 @@ begin
       ('internal.claim_queue_item(text,uuid)'),
       ('internal.staff_review_post(uuid,text,uuid)'),
       ('internal.renew_queue_claim(text,uuid,text,uuid)'),
+      ('internal.assert_event_duplicate_absent(uuid,boolean)'),
       ('internal.single_administrator(uuid)'),
       ('internal.assert_post_reviewer(uuid,uuid)')) v(sig)
   loop
@@ -88,11 +89,11 @@ begin
         'internal.grant_house_slots(text,integer,integer,text,text) 77527fd29f2348e228441612a842cce2',
         'internal.grant_house_slots(text,integer,integer,text,text) 6d72e0bc6a5f2bee76a43563f19278ac',
         'internal.queue_conflict(uuid,uuid,uuid) 7ef9b54c11a14dfe2f71b4e7ec474b44',
-        'internal.queue_conflict(uuid,uuid,uuid) d4c268547c2cd0fe91f8b8726a95b061',
+        'internal.queue_conflict(uuid,uuid,uuid) e1c180e9110bd095220ceebd5977125a',
         'internal.claim_queue_items(text,integer) fc822bf9b962527b0fba39c22d364735',
         'internal.claim_queue_items(text,integer) f9de196ff57fbb40b2e39d587e8d5db8',
         'internal.moderate_post(uuid,integer,text,text,text,uuid) 1f127647b461014ddc3d6d6ef6d086c7',
-        'internal.moderate_post(uuid,integer,text,text,text,uuid) 51a65d3cab4ec53b7c86f15e03a4937b',
+        'internal.moderate_post(uuid,integer,text,text,text,uuid) 10379c34d9570cdd28e07eed9d099ff9',
         'internal.assert_posting_verification_ready(uuid,boolean) c54fe760620720d67cf17c644623bd6f',
         'internal.assert_posting_verification_ready(uuid,boolean) 45e28fa96d190f50aa15b1a106685680',
         'internal.claim_queue_item(text,uuid) ea7b6354f26d6a274ccdf1a4f54b3991',
@@ -101,6 +102,8 @@ begin
         'internal.staff_review_post(uuid,text,uuid) bddb3dfc05f96e4c4657058517c00b8a',
         'internal.renew_queue_claim(text,uuid,text,uuid) 18da441302347a2e62440f03b5c698ad',
         'internal.renew_queue_claim(text,uuid,text,uuid) ac7babfffdc98546fb59a743a7d683fd',
+        'internal.assert_event_duplicate_absent(uuid,boolean) 3daf9e28965193872661db491cb1fc39',
+        'internal.assert_event_duplicate_absent(uuid,boolean) aed89455eb3b154417b0b1cb71d1ca65',
         'internal.assert_post_reviewer(uuid,uuid) absent',
         'internal.assert_post_reviewer(uuid,uuid) 1725259d54dbdce5ad1c8823514444d0',
         'internal.single_administrator(uuid) absent',
@@ -135,7 +138,7 @@ alter table private.moderation_log add column if not exists self_approved boolea
 alter table private.moderation_log drop constraint if exists moderation_log_self_approved_check;
 alter table private.moderation_log add constraint moderation_log_self_approved_check
   check (not self_approved or decision = 'approve');
-comment on column private.moderation_log.self_approved is 'Approved in single-administrator mode: the only ID-verified staff member approved their own post funded by one of their house slots (internal.moderate_post).';
+comment on column private.moderation_log.self_approved is 'Approved in single-administrator mode: the only ID-verified staff member approved their own post (internal.moderate_post).';
 
 -- 2. The mode, worked out at every call.
 create or replace function internal.single_administrator(p_account uuid)
@@ -316,15 +319,8 @@ as $function$
     then internal.current_verified_identity(p_actor) is null
       or (exists(select 1 from private.posts p where p.id=p_post_id and p.owner_id=p_actor)
         -- Single-administrator mode: the only ID-verified staff member may
-        -- review their own post when one of their current house slots funds
-        -- it (for an edit, the live post it edits).
-        and not (exists(select 1 from private.posts p
-            join private.post_activations a on a.post_id=coalesce(p.edit_of, p.id) and a.released_at is null
-            join private.entitlements e on e.id=a.entitlement_id
-            where p.id=p_post_id and e.owner_id=p_actor and e.source='staff_grant'
-              and e.status='active' and e.ends_at>statement_timestamp()
-              and exists(select 1 from private.house_slot_events h where h.entitlement_id=e.id))
-          and internal.single_administrator(p_actor)))
+        -- review any of their own posts and edits.
+        and not internal.single_administrator(p_actor))
     else exists(select 1 from private.reports r where r.id=p_report_id and
       (r.reporter_id=p_actor or r.subject_account_id=p_actor
        or r.duplicate_owner_b=p_actor or r.duplicate_created_by=p_actor))
@@ -428,9 +424,9 @@ begin
   end if;
   actor := internal.staff_actor('post:moderate'); -- authority after any lock wait
   -- Single-administrator mode (internal.queue_conflict): the only ID-verified
-  -- staff member may approve, never reject, their own post funded by one of
-  -- their house slots. post:moderate already needs an authenticator code from
-  -- the last 15 minutes (internal.staff_actor, requires_recent_mfa).
+  -- staff member may approve, never reject, their own post. post:moderate
+  -- already needs an authenticator code from the last 15 minutes
+  -- (internal.staff_actor, requires_recent_mfa).
   v_self := post.owner_id = actor;
   -- Every decision needs the reviewer's own ID review and no conflict.
   perform internal.assert_post_reviewer(actor, post.id);
@@ -620,6 +616,50 @@ $function$;
 alter function internal.renew_queue_claim(text,uuid,text,uuid) owner to postgres;
 revoke all on function internal.renew_queue_claim(text,uuid,text,uuid) from public, anon, authenticated, service_role;
 grant execute on function internal.renew_queue_claim(text,uuid,text,uuid) to authenticated;
+
+-- 7c. The event duplicate guard at approval asks internal.queue_conflict too.
+create or replace function internal.assert_event_duplicate_absent(p_post_id uuid, p_staff boolean)
+ RETURNS void
+ LANGUAGE plpgsql
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare target private.posts; logical_id uuid; core jsonb; duplicate boolean; actor uuid;
+begin
+  if p_staff then actor:=internal.staff_actor('post:moderate');
+  else actor:=internal.price_draft_actor(); end if;
+  if p_staff is null then raise exception 'invalid internal authority context' using errcode='22023'; end if;
+  -- Callers already hold original -> copy -> media locks. Never lock competitors.
+  select * into target from private.posts p where p.id=p_post_id;
+  if target.id is null or target.kind<>'event' then raise exception 'event not found' using errcode='22023'; end if;
+  -- Staff never decide their own event, except in single-administrator mode
+  -- (internal.queue_conflict).
+  if (not p_staff and actor<>target.owner_id) or (p_staff and internal.queue_conflict(actor, target.id, null)) then
+    raise exception 'event authority denied' using errcode='42501';
+  end if;
+  logical_id:=coalesce(target.edit_of,target.id);
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(target.owner_id::text,909));
+  -- Recheck before data-dependent denials, not only on the successful return path.
+  if p_staff then perform internal.staff_actor('post:moderate');
+  else perform internal.price_draft_actor(); end if;
+  core:=internal.event_duplicate_core(target.id);
+  select exists(select 1 from private.posts p
+    where p.owner_id=target.owner_id and p.kind='event' and p.status in('pending_moderation','live')
+      and coalesce(p.edit_of,p.id)<>logical_id
+      and (p.edit_of is null or (p.status='pending_moderation' and exists(
+        select 1 from private.posts o join private.event_details e on e.post_id=o.id
+        where o.id=p.edit_of and o.status='live' and o.visible_until>clock_timestamp() and e.ends_at>clock_timestamp())))
+      and internal.event_duplicate_core(p.id)=core) into duplicate;
+  if p_staff then perform internal.staff_actor('post:moderate');
+  else perform internal.price_draft_actor(); end if;
+  if core is null then raise exception 'event detail not found' using errcode='22023'; end if;
+  if duplicate then
+    raise exception 'a matching event is already pending or live on your account'
+      using errcode='PT409',detail='duplicate_event';
+  end if;
+end;
+$function$;
+alter function internal.assert_event_duplicate_absent(uuid,boolean) owner to postgres;
+revoke all on function internal.assert_event_duplicate_absent(uuid,boolean) from public, anon, authenticated, service_role;
 
 -- 8. The staff Audit log shows a self-approval as post:self_approved; every
 -- other branch is unchanged.

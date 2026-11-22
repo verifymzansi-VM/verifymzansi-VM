@@ -37,9 +37,9 @@ begin
   end if;
   actor := internal.staff_actor('post:moderate'); -- authority after any lock wait
   -- Single-administrator mode (internal.queue_conflict): the only ID-verified
-  -- staff member may approve, never reject, their own post funded by one of
-  -- their house slots. post:moderate already needs an authenticator code from
-  -- the last 15 minutes (internal.staff_actor, requires_recent_mfa).
+  -- staff member may approve, never reject, their own post. post:moderate
+  -- already needs an authenticator code from the last 15 minutes
+  -- (internal.staff_actor, requires_recent_mfa).
   v_self := post.owner_id = actor;
   -- Every decision needs the reviewer's own ID review and no conflict.
   perform internal.assert_post_reviewer(actor, post.id);

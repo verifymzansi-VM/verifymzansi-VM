@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Behaviour checks for 20261121143000_one_person_admin_mode.sql (owner's
-// decision of 21 November 2026): single-administrator mode for house slots,
-// logged.
+// decisions of 21 and 22 November 2026): single-administrator mode for house
+// slots and own posts, logged.
 //
 // Replays database/foundation (prelude, candidate.sql, every update before this
 // one) into the throwaway, network-less Postgres 17 container of the SQL lint
@@ -16,16 +16,15 @@
 // administrator) and the cap is 25; with one, that administrator may grant
 // house slots to their own account (a written reason, never another account,
 // never their second account without an ID review, at most 25, every event
-// marked self_granted and append-only); their own pending post funded by one
-// of their house slots is listed, claimed and approved (never rejected) with
-// an authenticator code from the last 15 minutes, logged as self_approved and
-// shown as post:self_approved in the staff Audit log, while their own post
-// without a house slot (free first post or paid slot) stays a conflict; an
-// admin account without an ID review can neither claim nor approve a post;
-// another member's post is approved as before; the owner's own ID review
-// ending turns the mode off; a second ID-verified staff member ends the mode at once, for grants,
-// listing, claims and an item already claimed, and removing them brings it
-// back; the rollback refuses a changed function and once a self-granted or
+// marked self_granted and append-only); any of their own pending posts and
+// edits (house slot, free first post, paid slot, event) is listed, claimed and
+// approved (never rejected) with an authenticator code from the last 15
+// minutes, logged as self_approved and shown as post:self_approved in the staff
+// Audit log; an admin account without an ID review can neither claim, open,
+// renew nor decide a post; another member's post is approved as before; the
+// owner's own ID review ending turns the mode off; a second ID-verified staff
+// member ends the mode at once, for grants, listing, claims and items already
+// claimed (every kind of own post), and removing them brings it back; the rollback refuses a changed function and once a self-granted or
 // self-approved record exists; after every later update a self-approval still
 // needs an authenticator code from the last 15 minutes.
 //
@@ -57,12 +56,13 @@ const CLAIM_ONE = "internal.claim_queue_item(text,uuid)";
 const REVIEW = "internal.staff_review_post(uuid,text,uuid)";
 const RENEW = "internal.renew_queue_claim(text,uuid,text,uuid)";
 const SINGLE = "internal.single_administrator(uuid)";
-const REPLACED = [GRANT, CONFLICT, CLAIM, MODERATE, READY, CLAIM_ONE, REVIEW, RENEW];
+const EVENT_GUARD = "internal.assert_event_duplicate_absent(uuid,boolean)";
+const REPLACED = [GRANT, CONFLICT, CLAIM, MODERATE, READY, CLAIM_ONE, REVIEW, RENEW, EVENT_GUARD];
 const NO_ID = /staff_identity_required|ID verification required to review posts/;
 const NONE = { anon: false, authenticated: false, service_role: false };
 const REASON = "Owner's own house slots for real offers";
 const NOT_APPLIED =
-  /^one-person admin mode: update not applied; ID-verified staff: \d+; house slots: \d+; own posts without a reviewer: \d+; post claims by staff without an ID review: \d+$/;
+  /^one-person admin mode: update not applied; ID-verified staff: \d+; house slots: \d+; post claims by staff without an ID review: \d+$/;
 const MINUTE = 60;
 
 const SETUP = { update: UPDATE, label: "solo", title: "One-person admin mode" };
@@ -87,6 +87,21 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
           'A synthetic description long enough for every rule.','gp','gp_johannesburg');
       insert into private.listing_details(post_id,price_mode,price_cents) values(pid,'amount',12000);
       insert into private.post_contacts(post_id,post_kind,channels) values(pid,'listing',array['form']);
+      insert into private.post_media(post_id,object_id,purpose,position) values(pid,cover,'cover',0);
+      return pid;
+    end$$;
+    create function vmtest.event_draft(p_owner uuid) returns uuid language plpgsql as $$
+    declare pid uuid:=gen_random_uuid(); cover uuid:=gen_random_uuid(); begin
+      insert into private.media_objects(id,owner_id,kind,object_key,declared_bytes,size_bytes,sha256,mime,width,height,state)
+        values(cover,p_owner,'image','media/'||cover,1024,1024,encode(sha256(convert_to(cover::text,'UTF8')),'hex'),'image/jpeg',800,600,'ready');
+      insert into private.posts(id,owner_id,kind,area,category_key,activity_key,title,description,province_id,city_id)
+        values(pid,p_owner,'event','tourism_events','events',(select a.key from private.category_activities a
+            join private.categories c on c.key=a.category_key where a.category_key='events' and c.activity_required
+            order by a.key limit 1),
+          'Solo event '||left(pid::text,8),'A synthetic description long enough for every rule.','gp','gp_johannesburg');
+      insert into private.event_details(post_id,starts_at,ends_at,timezone)
+        values(pid,date_trunc('milliseconds',now()+interval '20 days'),date_trunc('milliseconds',now()+interval '21 days'),'Africa/Johannesburg');
+      insert into private.post_contacts(post_id,post_kind,channels) values(pid,'event',array['form']);
       insert into private.post_media(post_id,object_id,purpose,position) values(pid,cover,'cover',0);
       return pid;
     end$$;`);
@@ -152,7 +167,7 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
     assert.match(rows[0][1], NOT_APPLIED);
     assert.match(
       rows[0][1],
-      /; ID-verified staff: 2; house slots: 0; own posts without a reviewer: 0; post claims by staff without an ID review: 0$/
+      /; ID-verified staff: 2; house slots: 0; post claims by staff without an ID review: 0$/
     );
     assertReadOnlyPreflight(database, kit.preflightSql);
   });
@@ -164,7 +179,7 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
   await applyAndProveRollback(kit, database, check, {
     label: "one-person admin mode",
     applied:
-      /^one-person admin mode: already applied; ID-verified staff: 2; house slots: 0; own posts without a reviewer: 0; post claims by staff without an ID review: 0; self-granted slot events: 0; self-approved decisions: 0$/,
+      /^one-person admin mode: already applied; ID-verified staff: 2; house slots: 0; post claims by staff without an ID review: 0; self-granted slot events: 0; self-approved decisions: 0$/,
     notApplied: NOT_APPLIED,
   });
 
@@ -318,21 +333,38 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
   });
 
   let own;
+  // One lease on an item, through the single-item claim.
+  const claimOne = (who, id) => json(staff(who, `select api.claim_queue_item('post','${id}');`));
+  // A live post's edit with a changed title, submitted for review.
+  const submittedEdit = (owner, id, title) => {
+    const edit = json(
+      member(owner, `select api.create_post_edit('${id}',${row(id).revision});`)
+    ).id;
+    q(`update private.posts set title=${sqlValue(title)} where id='${edit}';`);
+    assert.equal(
+      json(member(owner, `select api.submit_post('${edit}',${row(edit).revision});`)).status,
+      "pending_moderation"
+    );
+    return edit;
+  };
+  // An event draft (no slot funds an event), submitted for review.
+  const submittedEvent = (owner) => {
+    const id = q(`select vmtest.event_draft('${owner.id}');`);
+    const done = json(member(owner, `select api.submit_post('${id}',${row(id).revision});`));
+    assert.equal(done.status, "pending_moderation");
+    assert.equal(fundedBy(id), "");
+    return id;
+  };
+
   await check(
     "their own house-slot post is listed, claimed and approved with a fresh code, logged as self-approved",
     () => {
       own = submitted(admin);
       assert.ok(activeSlots(admin).includes(fundedBy(own)));
-      // Listed and claimed; the post without a house slot is not.
+      // In the mode every own post is listed, whatever funds it.
       const queue = listed(admin);
-      assert.ok(queue.includes(own));
-      assert.ok(!queue.includes(ownFree));
-      const leases = claimed(admin);
-      assert.deepEqual(
-        leases.map((l) => l.id),
-        [own]
-      );
-      const [lease] = leases;
+      for (const id of [own, ownFree, ownPaid]) assert.ok(queue.includes(id), id);
+      const lease = claimOne(admin, own);
       json(
         staff(
           admin,
@@ -374,81 +406,80 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
       );
     }
   );
-  await check("an edit of their own live house-slot post is self-approved too", () => {
-    const edit = json(
-      member(admin, `select api.create_post_edit('${own}',${row(own).revision});`)
-    ).id;
-    q(`update private.posts set title='Solo listing, edited' where id='${edit}';`);
-    assert.equal(
-      json(member(admin, `select api.submit_post('${edit}',${row(edit).revision});`)).status,
-      "pending_moderation"
-    );
-    assert.ok(listed(admin).includes(edit));
-    const [lease] = claimed(admin);
-    assert.equal(lease.id, edit);
-    assert.equal(json(decideSql(admin, edit, lease, "approve")).status, "merged");
-    assert.equal(row(own).title, "Solo listing, edited");
-    assert.deepEqual(decisions(own).at(-1), {
-      staff_id: admin.id,
-      decision: "approve",
-      self_approved: true,
-    });
-  });
   await check(
-    "their own post without a house slot stays a conflict; others' posts are as before",
+    "every own post is self-approvable in the mode: free first post, paid slot, event and edits",
     () => {
-      // Funded by the free first post or by a paid slot: never their own review.
-      for (const id of [ownFree, ownPaid]) {
-        assert.ok(!listed(admin).includes(id));
+      const ownEvent = submittedEvent(admin);
+      for (const id of [ownFree, ownPaid, ownEvent]) {
+        const lease = claimOne(admin, id);
+        fails(decideSql(admin, id, lease, "reject"), "42501", /self-review is not allowed/);
+        assert.equal(row(id).status, "pending_moderation");
+        assert.equal(json(decideSql(admin, id, lease, "approve")).status, "live", id);
+        assert.deepEqual(decisions(id), [
+          { staff_id: admin.id, decision: "approve", self_approved: true },
+        ]);
+      }
+      // An edit of a live own post: on a house slot here.
+      const edit = submittedEdit(admin, own, "Solo listing, edited");
+      assert.ok(listed(admin).includes(edit));
+      const lease = claimOne(admin, edit);
+      fails(decideSql(admin, edit, lease, "reject"), "42501", /self-review is not allowed/);
+      assert.equal(json(decideSql(admin, edit, lease, "approve")).status, "merged");
+      assert.equal(row(own).title, "Solo listing, edited");
+      assert.deepEqual(decisions(own).at(-1), {
+        staff_id: admin.id,
+        decision: "approve",
+        self_approved: true,
+      });
+      assert.equal(count("private.moderation_log where self_approved"), 5);
+    }
+  );
+  await check("another member's post is approved as before, not marked", () => {
+    const other = ready(world.verified("solo-member", admin));
+    const theirs = submitted(other);
+    const lease = claimOne(admin, theirs);
+    assert.equal(json(decideSql(admin, theirs, lease, "approve")).status, "live");
+    assert.deepEqual(decisions(theirs), [
+      { staff_id: admin.id, decision: "approve", self_approved: false },
+    ]);
+    assert.equal(count("private.moderation_log where self_approved"), 5);
+  });
+
+  // ------------------------------------- a second ID-verified staff member
+  await check(
+    "a second ID-verified staff member ends the mode at once for every own post, also one already claimed",
+    () => {
+      // Claimed in the mode: a house-slot post, an event and edits of the
+      // free-first-post and paid-slot posts.
+      const next = submitted(admin);
+      const items = [
+        next,
+        submittedEvent(admin),
+        submittedEdit(admin, ownFree, "Free week listing, edited"),
+        submittedEdit(admin, ownPaid, "Paid slot listing, edited"),
+      ];
+      const leases = items.map((id) => claimOne(admin, id));
+      const moderator = world.staffUser("solo-mod", "moderator");
+      world.review(moderator, admin, "solo-mod");
+      assert.equal(single(admin), "f");
+      items.forEach((id, i) => {
+        fails(decideSql(admin, id, leases[i], "approve"), "42501", /self-review is not allowed/);
+        assert.equal(row(id).status, "pending_moderation", id);
+        assert.ok(!listed(admin).includes(id), id);
         fails(
           staff(admin, `select api.claim_queue_item('post','${id}');`),
           "42501",
           /self-review is not allowed/
         );
-      }
-      fails(
-        staff(admin, `select api.staff_review_post('${ownFree}','1','${admin.session}');`),
-        "42501",
-        /self-review is not allowed/
-      );
-      const other = ready(world.verified("solo-member", admin));
-      const theirs = submitted(other);
-      const [lease] = claimed(admin);
-      assert.equal(lease.id, theirs);
-      assert.equal(json(decideSql(admin, theirs, lease, "approve")).status, "live");
-      assert.deepEqual(decisions(theirs), [
-        { staff_id: admin.id, decision: "approve", self_approved: false },
-      ]);
-      // The self-approval is never applied to another member's post.
-      assert.equal(count("private.moderation_log where self_approved"), 2);
-    }
-  );
-
-  // ------------------------------------- a second ID-verified staff member
-  await check(
-    "a second ID-verified staff member ends the mode at once, also for an item already claimed",
-    () => {
-      const next = submitted(admin);
-      const [lease] = claimed(admin);
-      assert.equal(lease.id, next);
-      const moderator = world.staffUser("solo-mod", "moderator");
-      world.review(moderator, admin, "solo-mod");
-      assert.equal(single(admin), "f");
-      fails(decideSql(admin, next, lease, "approve"), "42501", /self-review is not allowed/);
-      assert.equal(row(next).status, "pending_moderation");
-      assert.ok(!listed(admin).includes(next));
-      fails(
-        staff(admin, `select api.claim_queue_item('post','${next}');`),
-        "42501",
-        /self-review is not allowed/
-      );
+        // The other reviewer sees them.
+        assert.ok(listed(moderator).includes(id), id);
+      });
       fails(grantSql(admin, 25, 90, REASON, admin), "42501", /house_slots_self_approval/);
-      // The other reviewer sees it.
-      assert.ok(listed(moderator).includes(next));
+      assert.equal(count("private.moderation_log where self_approved"), 5);
       // Removing that staff member's role brings the mode back.
       revokeRole(moderator);
       assert.equal(single(admin), "t");
-      assert.ok(listed(admin).includes(next));
+      for (const id of items) assert.ok(listed(admin).includes(id), id);
       // A suspended second staff member is not a second reviewer either.
       const governor = world.staffUser("solo-gov", "governor");
       world.review(governor, admin, "solo-gov");
@@ -479,7 +510,7 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
     () => {
       assert.match(
         preflight()[0][1],
-        /^one-person admin mode: already applied; ID-verified staff: 1; house slots: 25; own posts without a reviewer: 2; post claims by staff without an ID review: 0; self-granted slot events: 28; self-approved decisions: 2$/
+        /^one-person admin mode: already applied; ID-verified staff: 1; house slots: 25; post claims by staff without an ID review: 0; self-granted slot events: 28; self-approved decisions: 5$/
       );
       const before = fingerprint();
       assert.match(fails(kit.rollbackSql, "55000"), /self-granted or self-approved records exist/);
@@ -502,8 +533,7 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
       assert.equal(single(admin), "t");
       assert.notEqual(bodyMd5(SINGLE), "missing");
       const post = submitted(admin);
-      const [lease] = claimed(admin);
-      assert.equal(lease.id, post);
+      const lease = claimOne(admin, post);
       fails(
         decideSql(admin, post, lease, "approve", now() - 16 * MINUTE),
         "42501",
@@ -512,31 +542,4 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
       assert.equal(row(post).status, "pending_moderation");
     }
   );
-  await check("an own post on a house slot that has ended is neither listed nor claimable", () => {
-    const post = submitted(admin);
-    const slot = fundedBy(post);
-    assert.ok(activeSlots(admin).includes(slot));
-    // The slot's end has passed, or it was revoked; the activation is still open.
-    for (const change of [
-      "ends_at=starts_at+interval '1 second'",
-      "status='revoked',revoked_reason='house_slot_ended'",
-    ]) {
-      const before = json(`select to_jsonb(e) from private.entitlements e where e.id='${slot}';`);
-      q(`set session_replication_role=replica;
-        update private.entitlements set ${change} where id='${slot}';
-        set session_replication_role=origin;`);
-      assert.equal(fundedBy(post), slot);
-      assert.ok(!listed(admin).includes(post), change);
-      assert.ok(!claimed(admin).some((l) => l.id === post), change);
-      fails(
-        staff(admin, `select api.claim_queue_item('post','${post}');`),
-        "42501",
-        /self-review is not allowed/
-      );
-      q(`set session_replication_role=replica;
-        update private.entitlements set ends_at='${before.ends_at}',status='${before.status}',
-          revoked_reason=${before.revoked_reason === null ? "null" : `'${before.revoked_reason}'`} where id='${slot}';
-        set session_replication_role=origin;`);
-    }
-  });
 });
