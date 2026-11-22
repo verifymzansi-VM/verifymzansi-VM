@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createFoundationServiceApi, type FoundationServiceApi } from "./service-api";
 import { deleteFromR2, deleteManyFromR2, R2_DELETE_BATCH_LIMIT } from "../services/storage";
 import { VARIANT_WIDTHS, variantKeyFor } from "../media/variant-keys";
+import { deleteDiditSession, diditConfig } from "./didit-client";
 import { createLogger } from "../utils/logger";
 
 const log = createLogger("RetentionJobs");
@@ -29,6 +30,7 @@ const log = createLogger("RetentionJobs");
 type CleanupLimits = Record<
   | "subrequests"
   | "evidenceClaim"
+  | "identityCheckClaim"
   | "mediaClaimPerRound"
   | "rounds"
   | "runMs"
@@ -40,6 +42,7 @@ type CleanupLimits = Record<
 export const CLEANUP_LIMITS: Readonly<CleanupLimits> = Object.freeze({
   subrequests: 40,
   evidenceClaim: 4,
+  identityCheckClaim: 4,
   mediaClaimPerRound: 100,
   rounds: 8,
   runMs: 20_000,
@@ -57,6 +60,7 @@ function checkedLimits(override: Partial<CleanupLimits>): CleanupLimits {
     !Object.values(limits).every((value) => Number.isSafeInteger(value) && value > 0) ||
     limits.mediaClaimPerRound * MEDIA_KEYS_PER_OBJECT > R2_DELETE_BATCH_LIMIT ||
     limits.evidenceClaim > 100 ||
+    limits.identityCheckClaim > 100 ||
     limits.mediaClaimPerRound > 500 ||
     limits.runMs >= limits.deadlineMs
   )
@@ -80,6 +84,18 @@ const evidenceRow = z.strictObject({
   object_key: z.string().regex(/^evidence\/[a-f0-9-]{36}\/[a-f0-9-]{36}$/),
 });
 type MediaRow = z.infer<typeof mediaRow>;
+const identityCheckRow = z.strictObject({ check_id: z.uuid(), session_id: z.uuid() });
+
+/** Deletes one automatic ID check session at the partner (one subrequest). */
+export type IdentityCheckSessions = {
+  delete(sessionId: string, signal: AbortSignal): Promise<void>;
+};
+function partnerSessions(): IdentityCheckSessions | null {
+  const config = diditConfig();
+  return config
+    ? { delete: (sessionId, signal) => deleteDiditSession(config, sessionId, signal) }
+    : null;
+}
 
 /**
  * Storage calls the cleanup makes; each is exactly one Worker subrequest and
@@ -144,7 +160,12 @@ type RunContext = {
 export async function runFoundationRetention(
   service: FoundationServiceApi = createFoundationServiceApi(),
   storage: CleanupStorage = r2Storage,
-  options: { now?: () => number; limits?: Partial<CleanupLimits> } = {}
+  options: {
+    now?: () => number;
+    limits?: Partial<CleanupLimits>;
+    /** The partner's session deletion; null (no partner key) skips that step. */
+    identityChecks?: IdentityCheckSessions | null;
+  } = {}
 ) {
   const now = options.now ?? Date.now;
   const limits = checkedLimits(options.limits ?? {});
@@ -175,9 +196,15 @@ export async function runFoundationRetention(
     elapsed: () => now() - started,
   };
   const evidence = await cleanEvidence(context);
+  // Before media: its rounds may use the rest of the budget.
+  const sessions = await deleteIdentityCheckSessions(
+    context,
+    options.identityChecks === undefined ? partnerSessions() : options.identityChecks
+  );
   const media = await cleanMedia(context);
   if (evidence.claimFailed) failures.push("evidence_claim");
   if (media.claimFailed) failures.push("media_claim");
+  if (sessions.claimFailed) failures.push("identity_check_claim");
 
   // Counts only: no keys, identifiers or account data. Warn level whenever
   // the owner should look: failures, slow claims, storage trouble, retries.
@@ -186,7 +213,7 @@ export async function runFoundationRetention(
     ...(media.claimMs > limits.slowClaimMs ? ["slow_claim"] : []),
     ...(media.batchFallback ? ["batch_fallback"] : []),
     ...(media.storageBusy ? ["storage_busy"] : []),
-    ...(media.failed + evidence.failed > 0 ? ["objects_retrying"] : []),
+    ...(media.failed + evidence.failed + sessions.failed > 0 ? ["objects_retrying"] : []),
     ...(stuckErasures > 0 ? ["account_erasure_errors"] : []),
   ];
   (alerts.length > 0 ? log.warn : log.info)("Storage cleanup run", {
@@ -202,6 +229,12 @@ export async function runFoundationRetention(
       claimMs: media.claimMs,
     },
     evidence: { claimed: evidence.claimed, deleted: evidence.deleted, failed: evidence.failed },
+    identityCheckSessions: {
+      claimed: sessions.claimed,
+      deleted: sessions.deleted,
+      failed: sessions.failed,
+      ...(sessions.skipped ? { skipped: sessions.skipped } : {}),
+    },
     accountErasureErrors: stuckErasures,
     subrequests: budget.used,
     durationMs: now() - started,
@@ -213,6 +246,63 @@ export async function runFoundationRetention(
     retrying: media.failed + media.deferred + evidence.failed,
     backlog: media.drained ? ("drained" as const) : ("remaining" as const),
   };
+}
+
+/**
+ * The partner's copies of automatic ID checks that are due for deletion
+ * (api.claim_identity_check_deletions: unfinished checks, and declined ones 5
+ * days after the decline unless a person was asked; holds skip them). One
+ * claim, then a partner deletion and an acknowledgement per session. A
+ * failed deletion keeps its claim and is tried again after 5 minutes.
+ */
+async function deleteIdentityCheckSessions(
+  { service, limits, budget, signal }: RunContext,
+  sessions: IdentityCheckSessions | null
+) {
+  const result = {
+    claimed: 0,
+    deleted: 0,
+    failed: 0,
+    claimFailed: false,
+    /** Why nothing was claimed, when that is a setting (for the run log). */
+    skipped: undefined as "didit_delete_skipped_no_key" | undefined,
+  };
+  // Without the partner key nothing can be deleted there: said in the run log
+  // (an info line; on the manual setting no check needs deleting).
+  if (!sessions) return { ...result, skipped: "didit_delete_skipped_no_key" as const };
+  const limit = Math.min(limits.identityCheckClaim, Math.floor((budget.remaining - 1) / 2));
+  if (limit < 1 || signal.aborted) return result;
+  budget.take(1);
+  let claimed;
+  try {
+    claimed = await service
+      .rpc("claim_identity_check_deletions", { p_limit: limit })
+      .abortSignal(signal);
+  } catch {
+    claimed = null;
+  }
+  const parsed = z.array(identityCheckRow).max(limit).safeParse(claimed?.data);
+  if (!claimed || claimed.error || !parsed.success) {
+    result.claimFailed = true;
+    return result;
+  }
+  result.claimed = parsed.data.length;
+  budget.take(parsed.data.length * 2);
+  await Promise.all(
+    parsed.data.map(async (row) => {
+      try {
+        await sessions.delete(row.session_id, signal);
+        const marked = await service
+          .rpc("mark_identity_check_provider_deleted", { p_check: row.check_id })
+          .abortSignal(signal);
+        if (marked.error) result.failed++;
+        else result.deleted++;
+      } catch {
+        result.failed++;
+      }
+    })
+  );
+  return result;
 }
 
 /** Erasures recorded as failed, from the retention sweep's result (0 when the

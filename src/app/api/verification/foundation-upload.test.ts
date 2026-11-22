@@ -6,9 +6,11 @@ import { createFoundationRouteContext } from "@/lib/foundation/request-route";
 import { createFoundationServiceApi } from "@/lib/foundation/service-api";
 import { putImmutableR2Bytes } from "@/lib/services/storage";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
-import { cleanEvidence } from "@/lib/foundation/verification-runtime";
+import { cleanEvidence, FoundationVerificationError } from "@/lib/foundation/verification-runtime";
 import { cameraJpegFile } from "@/test/fixtures/camera-jpeg";
 import { issueCaptureToken, sessionChannel } from "@/lib/foundation/capture-token";
+import { refuseWhileAutomaticCheckOpen } from "@/lib/foundation/identity-check";
+vi.mock("@/lib/foundation/identity-check", () => ({ refuseWhileAutomaticCheckOpen: vi.fn() }));
 vi.mock("@/lib/foundation/request-route", () => ({ createFoundationRouteContext: vi.fn() }));
 vi.mock("@/lib/foundation/runtime-connection", () => ({
   readFoundationRuntimeConnection: () => ({}),
@@ -192,6 +194,18 @@ it("records how the browser says the selfie was taken, for staff review only", a
     );
     expect(serviceRpc.mock.calls[completion][1]).toMatchObject({ p_risk_score: 10 });
   }
+});
+it("is closed while the automatic ID check is open, before reading or storing anything", async () => {
+  vi.mocked(refuseWhileAutomaticCheckOpen).mockRejectedValueOnce(
+    new FoundationVerificationError(409, "Use the ID check on the Get verified page.")
+  );
+  const res = await POST(request());
+  expect(res.status).toBe(409);
+  expect((await res.json()).error).toMatch(/ID check/);
+  expect(refuseWhileAutomaticCheckOpen).toHaveBeenCalledTimes(1);
+  expect(rpc).not.toHaveBeenCalled();
+  expect(cleanEvidence).not.toHaveBeenCalled();
+  expect(putImmutableR2Bytes).not.toHaveBeenCalled();
 });
 it("refuses photos the page did not take with its camera, before reserving or storing", async () => {
   for (const asSelfie of [false, true]) {
