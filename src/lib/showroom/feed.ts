@@ -150,7 +150,8 @@ export async function loadShowroomItems(
   random: () => number = Math.random
 ): Promise<CarouselItem[]> {
   const fair = await fairOrder(surface, showroomVisitorArea());
-  if (fair) return rotateFront(fair, random);
+  // Visual pictures must be stable: the browser test copy keeps the front card.
+  if (fair) return rotateFront(fair, process.env.PLAYWRIGHT_TEST_MODE === "1" ? () => 0 : random);
   try {
     return await newestFirst(surface);
   } catch (error) {

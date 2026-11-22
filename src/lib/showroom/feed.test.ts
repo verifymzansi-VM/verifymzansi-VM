@@ -165,6 +165,17 @@ describe("loadShowroomItems", () => {
     }
   });
 
+  it("keeps the front card on the browser test copy, whose pictures must be stable", async () => {
+    vi.stubEnv("PLAYWRIGHT_TEST_MODE", "1");
+    try {
+      loadFoundationShowroom.mockResolvedValue([1, 2, 3].map((n) => card(ID(n))));
+      const items = await loadShowroomItems("tourism", () => 0.99);
+      expect(items.map((item) => item.id)).toEqual([ID(1), ID(2), ID(3)]);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   // LIM-APP-showroom-cache: a minute per showroom and area.
   it("remembers the order for a minute per showroom and area", async () => {
     vi.useFakeTimers();
