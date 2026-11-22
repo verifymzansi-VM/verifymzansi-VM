@@ -120,6 +120,72 @@ describe("Authority request record and disclosure sheet", () => {
     expect(screen.queryByRole("button", { name: "Close record" })).toBeNull();
   });
 
+  it("shows the request type and its reference, and how it was checked", async () => {
+    readIdentityDisclosure.mockResolvedValue({
+      disclosure: {
+        ...disclosure,
+        issued_by: "Richards Bay Magistrate's Court",
+        confirmed_number: "035 789 1234",
+        confirmed_by: "Ms T. Zulu, clerk of the court",
+      },
+      records: [record],
+    });
+    render(await RecordPage({ params }));
+    expect(screen.getByText("Subpoena (Criminal Procedure Act, s205)")).toBeVisible();
+    expect(screen.getByText("CAS 123/11/2026")).toBeVisible();
+    expect(screen.getByText("Richards Bay Magistrate's Court")).toBeVisible();
+    expect(screen.getByText("Ms T. Zulu, clerk of the court, on 035 789 1234")).toBeVisible();
+  });
+
+  it("for an urgent request shows no selfie and no ID photo", async () => {
+    const { selfie: _selfie, id_photo: _photo, ...minimal } = record;
+    readIdentityDisclosure.mockResolvedValue({
+      disclosure: {
+        ...disclosure,
+        request_type: "urgent_life_risk",
+        issued_by: "Richards Bay SAPS",
+        confirmed_number: "035 901 7000",
+        confirmed_by: "W/O N. Mthembu",
+      },
+      records: [minimal],
+    });
+    render(await RecordPage({ params }));
+    expect(screen.getByText(/Urgent: a life is at risk/)).toHaveTextContent(/never the selfie/);
+    expect(screen.getByText("Thando Sipho Dlamini")).toBeVisible();
+    expect(screen.getByText("800101 5009 08 7")).toBeVisible();
+    expect(screen.queryByRole("img", { name: /Selfie/ })).toBeNull();
+    expect(screen.queryByText(/No selfie is kept/)).toBeNull();
+    expect(screen.queryByText("Photo of the ID document")).toBeNull();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("never draws or fetches a selfie for an urgent record, even if one arrives", async () => {
+    readIdentityDisclosure.mockResolvedValue({
+      disclosure: { ...disclosure, request_type: "urgent_life_risk" },
+      records: [record],
+    });
+    render(await RecordPage({ params }));
+    expect(screen.getByText("Thando Sipho Dlamini")).toBeVisible();
+    expect(screen.queryByRole("img", { name: /Selfie/ })).toBeNull();
+    expect(screen.queryByText(/Selfie from the ID check/)).toBeNull();
+    expect(screen.queryByText("Photo of the ID document")).toBeNull();
+    const { container } = render(await SheetPage({ params }));
+    const sheet = container.querySelector("article")!;
+    expect(within(sheet).queryByRole("img", { name: /Selfie/ })).toBeNull();
+    expect(within(sheet).queryByText("Photo of the ID document")).toBeNull();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("still shows a record opened before rule D9 with its type", async () => {
+    readIdentityDisclosure.mockResolvedValue({
+      disclosure: { ...disclosure, request_type: "police_case" },
+      records: [record],
+    });
+    render(await RecordPage({ params }));
+    expect(screen.getByText("Written police request with a case number")).toBeVisible();
+    expect(screen.queryByText("Checked with")).toBeNull();
+  });
+
   it("says a search found nobody, and that it is logged", async () => {
     readIdentityDisclosure.mockResolvedValue({
       disclosure: { ...disclosure, outcome: "no_match", match_count: 0 },

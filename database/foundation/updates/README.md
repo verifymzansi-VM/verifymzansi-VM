@@ -223,6 +223,95 @@ an existing account); staff operations health showing no overdue file for three
 accepted members at day 40 and counting a declined attempt's two files at day 7;
 a legal hold keeping a failed attempt.
 
+## Authority requests under rule D9, 22 November 2026
+
+`20261122013616_authority_request_types.sql` was applied on 22 November 2026 at
+13:00 UTC (see the applied register). Launch checklist item 69, owner decision
+D9 of 21 November ("Keep both"): staff may disclose a member's kept identity
+record to an authority only on a subpoena (Criminal Procedure Act s205, issued
+by a magistrate or judge), a court order or a search warrant, each checked with
+the issuing court or the named prosecutor on an official number; or on an urgent
+written request from SAPS where a life is at risk, checked by calling the
+station. An urgent request gives only the minimum, never the selfie.
+
+- **The request types:** `subpoena`, `court_order`, `search_warrant` and
+  `urgent_life_risk`. The earlier `warrant`, `police_case` and `regulator` rows
+  stay as they are and read as before; no row is rewritten.
+- **The confirmation:** `private.identity_disclosures` gains `issued_by` (the
+  court or prosecutor's office, or the SAPS station; 3 to 120 characters),
+  `confirmed_number` (the official number that was called; 5 to 20 digits with
+  single spaces between them, an optional leading +) and `confirmed_by` (who
+  confirmed it on that call; 3 to 120 characters). The reference (3 to 100) is
+  the subpoena, warrant or case number. The reference, issuer and confirmer each
+  need at least one letter or digit. A table check makes every `search_warrant`
+  and `urgent_life_risk` row carry all three; the command, the table's only
+  writer, checks the rest.
+- **Opening:** the new
+  `api.open_authority_request(type, reference, issued_by, confirmed_number, confirmed_by, reason, lookup kind, lookup value, attested)`
+  refuses each missing part with 22023 and its own detail
+  (`disclosure_issued_by_required`, `disclosure_confirmed_number_required`,
+  `disclosure_confirmed_by_required`, and the existing ones); the staff rule,
+  the search and log-before-show are unchanged. `api.open_identity_disclosure`
+  keeps its signature but now runs the same rule with no confirmation, so it is
+  always refused; a later contract step removes it.
+- **Urgent requests, in the database:** the record leaves out the selfie and the
+  ID photo and lists only the current verified phone numbers, never removed ones
+  (names, ID number state, current phones and dates only); reading the selfie is
+  refused with `disclosure_selfie_withheld` before anything is logged; the
+  server material never carries the selfie's stored object (the encrypted ID
+  number still). An urgent search by phone finds only the number's current
+  holder (never someone whose proof of it was removed), and an urgent search by
+  ID number never falls back to numbers that were only tried.
+- **Reading:** `api.read_identity_disclosure` adds `issued_by`,
+  `confirmed_number` and `confirmed_by` only when the row has them, so the live
+  website still reads every earlier row.
+
+One new command; no command or argument removed (expand). ORDER: apply first,
+then merge. Between the two, the live website cannot open a new record (its form
+has no confirmation fields and the earlier command is refused); records opened
+before read as they did.
+
+**Applying.**
+
+1. Run `../preflight/20261122013616_authority_request_types.check.sql` unchanged
+   in the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "authority request types: update not applied;
+   disclosures: N" (any count).
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "authority request types: already applied; disclosures:
+   N; under rule D9: 0; urgent: 0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is
+`../rollback/20261122013616_authority_request_types.down.sql` (only with the
+owner's decision; prefer a forward fix). It first locks the disclosure log
+against new openings, refuses unless the update is applied, and refuses while
+any record opened under rule D9 is kept. Otherwise it puts back the four
+functions byte for byte, drops the new command and removes the three columns and
+the check.
+
+`node --import tsx scripts/test-foundation-identity-record-disclosure.mjs` (part
+of `pnpm db:foundation:lifecycle-test`) now also runs
+`scripts/lib/foundation-authority-request-types.mjs` on the throwaway database:
+the preflight before and after, read only; drifted bodies and a premature
+rollback refused; apply, rollback and re-apply return the same fingerprints; the
+new command's grants; records opened under the first rule (subpoena, warrant,
+police case) read as they did and stay listed; the earlier command always
+refused, logging nothing; the three earlier and any other types refused; for
+each of the four types, each missing or malformed reference, issuer, number,
+confirmer, reason and confirmation refused with its own detail and nothing
+logged; each type opening with its trimmed reference and confirmation on the row
+and the record; text of only spaces or invisible marks refused; the table check
+refusing a new-type row without its confirmation; an urgent request showing
+names, ID number state and only the current phone without the selfie or ID photo
+(view and print), its selfie read refused before logging and its server material
+without the selfie; a court order still showing the selfie and the earlier phone
+numbers; an urgent phone search finding no removed holder, only a number's
+current holder, while a court order still finds both; an urgent ID number search
+never giving attempts; and the rollback refused while a D9 record is kept.
+
 ## Copy a post, 21 November 2026
 
 `20261121150309_copy_a_post.sql` was applied on 22 November 2026 at 11:40 UTC
@@ -7230,6 +7319,14 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   parts as updated; copies: 0); production fingerprint after it
   (fingerprint.sql) matched the full replay (except the known schema grant
   difference)
+
+- `20261122013616_authority_request_types.sql`: applied 2026-11-22 13:00 UTC;
+  owner-approved, apply-first, Supabase SQL editor (pull request #346); update
+  sha256 starting 3528b0f5; preflight (sha256 starting 10c3307f) before: update
+  not applied (4 of 4 bodies reviewed, new objects 0 of 6, disclosures 0, no
+  problems), after: already applied (4 of 4 bodies updated, 6 of 6 new objects,
+  disclosures 0); production fingerprint after it (fingerprint.sql) matched the
+  full replay (except the known schema grant difference)
 
 - `20261122022323_identity_keep_for.sql`: pending; apply-first
 

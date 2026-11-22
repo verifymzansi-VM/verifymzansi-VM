@@ -1,6 +1,11 @@
 import type { ReactNode } from "react";
-import type { DisclosureRecord } from "@/lib/foundation/identity-disclosures";
-import { formatDisclosurePhone, formatIdNumber } from "@/lib/admin/authority-requests";
+import type { DisclosureRead, DisclosureRecord } from "@/lib/foundation/identity-disclosures";
+import {
+  URGENT_REQUEST,
+  formatDisclosurePhone,
+  formatIdNumber,
+  requestTypeLabel,
+} from "@/lib/admin/authority-requests";
 import { formatDate } from "@/lib/utils/format";
 import { DisclosureSelfie } from "./record-parts";
 
@@ -17,14 +22,56 @@ function Sub({ children }: { children: ReactNode }) {
   return <span className="mt-0.5 block text-muted-foreground">{children}</span>;
 }
 
+/** The request a record was opened for: its type and reference, and (for a
+ * record opened under rule D9) who issued it and how it was checked. Rows of
+ * a `<dl>` with the page's or the sheet's term style. */
+export function DisclosureRequestRows({
+  disclosure,
+  termClassName,
+}: {
+  disclosure: DisclosureRead["disclosure"];
+  termClassName: string;
+}) {
+  return (
+    <>
+      <dt className={termClassName}>Type of request</dt>
+      <dd>
+        {requestTypeLabel(disclosure.request_type)}
+        {disclosure.request_type === URGENT_REQUEST &&
+          " (only the minimum is given; never the selfie)"}
+      </dd>
+      <dt className={termClassName}>Reference</dt>
+      <dd className="break-words">{disclosure.reference}</dd>
+      {disclosure.issued_by && (
+        <>
+          <dt className={termClassName}>Issued by</dt>
+          <dd className="break-words">{disclosure.issued_by}</dd>
+        </>
+      )}
+      {disclosure.confirmed_by && (
+        <>
+          <dt className={termClassName}>Checked with</dt>
+          <dd className="break-words">
+            {disclosure.confirmed_by}, on {disclosure.confirmed_number}
+          </dd>
+        </>
+      )}
+    </>
+  );
+}
+
 /** One person the record names: the kept identity record, an ID number that
- * was only tried, or an account with no identity kept. */
+ * was only tried, or an account with no identity kept. An urgent request
+ * carries no selfie or ID photo (rule D9), so neither is shown. */
 export function DisclosureRecordView({
   disclosureId,
   record,
+  withhold,
 }: {
   disclosureId: string;
   record: DisclosureRecord;
+  /** An urgent request: never the selfie or the ID photo, whatever arrives. */
+  withhold: boolean;
 }) {
   if ("attempts" in record)
     return (
@@ -52,27 +99,31 @@ export function DisclosureRecordView({
     );
   const name = [record.legal_first_name, record.legal_last_name].filter(Boolean).join(" ");
   const [current, ...earlier] = record.phones;
+  const selfie = withhold ? undefined : record.selfie;
+  const idPhoto = withhold ? undefined : record.id_photo;
   return (
-    <div className="grid gap-6 md:grid-cols-[minmax(0,15rem)_minmax(0,1fr)]">
-      <figure className="space-y-2">
-        {record.selfie.kept ? (
-          <DisclosureSelfie
-            disclosureId={disclosureId}
-            subject={record.account_id}
-            label={`Selfie of ${name || "the account holder"}`}
-          />
-        ) : (
-          <div className="flex aspect-[3/4] w-full items-center justify-center rounded-2xl border bg-muted p-4 text-center text-sm text-muted-foreground">
-            No selfie is kept
-            {record.selfie.deleted_at ? ` (deleted ${formatDate(record.selfie.deleted_at)})` : ""}.
-          </div>
-        )}
-        {record.selfie.taken_at && (
-          <figcaption className="text-sm text-muted-foreground">
-            Selfie from the ID check, {formatDate(record.selfie.taken_at)}
-          </figcaption>
-        )}
-      </figure>
+    <div className={selfie ? "grid gap-6 md:grid-cols-[minmax(0,15rem)_minmax(0,1fr)]" : ""}>
+      {selfie && (
+        <figure className="space-y-2">
+          {selfie.kept ? (
+            <DisclosureSelfie
+              disclosureId={disclosureId}
+              subject={record.account_id}
+              label={`Selfie of ${name || "the account holder"}`}
+            />
+          ) : (
+            <div className="flex aspect-[3/4] w-full items-center justify-center rounded-2xl border bg-muted p-4 text-center text-sm text-muted-foreground">
+              No selfie is kept
+              {selfie.deleted_at ? ` (deleted ${formatDate(selfie.deleted_at)})` : ""}.
+            </div>
+          )}
+          {selfie.taken_at && (
+            <figcaption className="text-sm text-muted-foreground">
+              Selfie from the ID check, {formatDate(selfie.taken_at)}
+            </figcaption>
+          )}
+        </figure>
+      )}
       <dl>
         <Row label="Full names as on the ID">
           <span className="font-semibold">{name || "Not kept"}</span>
@@ -135,18 +186,18 @@ export function DisclosureRecordView({
             <Sub>Verification withdrawn {formatDate(record.verification_revoked_at)}.</Sub>
           )}
         </Row>
-        <Row label="Photo of the ID document">
-          {record.id_photo.kept ? (
-            <span className="font-semibold">Kept</span>
-          ) : (
-            <>
-              <span className="font-semibold">Deleted</span>
-              {record.id_photo.deleted_at && (
-                <Sub>Deleted {formatDate(record.id_photo.deleted_at)}.</Sub>
-              )}
-            </>
-          )}
-        </Row>
+        {idPhoto && (
+          <Row label="Photo of the ID document">
+            {idPhoto.kept ? (
+              <span className="font-semibold">Kept</span>
+            ) : (
+              <>
+                <span className="font-semibold">Deleted</span>
+                {idPhoto.deleted_at && <Sub>Deleted {formatDate(idPhoto.deleted_at)}.</Sub>}
+              </>
+            )}
+          </Row>
+        )}
         <Row label="Account">
           <span className="font-mono text-xs">{record.account_id}</span>
           {record.account_closed_at && <Sub>Closed {formatDate(record.account_closed_at)}.</Sub>}

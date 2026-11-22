@@ -20,6 +20,8 @@ import { detectMimeFromMagicBytes } from "../utils/file-validation";
 import {
   AUTHORITY_REQUEST_MESSAGES,
   AUTHORITY_REQUESTS_PATH,
+  RECORDED_REQUEST_TYPES,
+  URGENT_REQUEST,
   emailForLookup,
   phoneForLookup,
   postReferenceFromLink,
@@ -29,10 +31,13 @@ import {
 } from "@/lib/admin/authority-requests";
 
 /**
- * Authority requests (database update
- * 20261121043124_identity_record_disclosure.sql). Every command runs through
+ * Authority requests (database updates
+ * 20261121043124_identity_record_disclosure.sql and, for rule D9,
+ * 20261122013616_authority_request_types.sql). Every command runs through
  * internal.staff_actor('identity:disclose'): governors and admins with an
- * authenticator code from the last 15 minutes. Opening writes the log row
+ * authenticator code from the last 15 minutes. Opening needs one of the four
+ * D9 request types with who issued it, the official number called and who
+ * confirmed it; it writes the log row
  * and answers only its id; reading logs the look before it answers; a record
  * closes 15 minutes after it was opened. The ID number is decrypted and the
  * selfie read here, on the server, from the service-only material of a
@@ -56,10 +61,14 @@ export class AuthorityRequestRefused extends Error {
 const REASONS_22023 = [
   "disclosure_request_type_invalid",
   "disclosure_reference_required",
+  "disclosure_issued_by_required",
+  "disclosure_confirmed_number_required",
+  "disclosure_confirmed_by_required",
   "disclosure_reason_required",
   "disclosure_attestation_required",
   "disclosure_lookup_invalid",
   "disclosure_lookup_value_invalid",
+  "disclosure_selfie_withheld",
 ] as const;
 
 /** Throws the refusal a database error stands for; unknown errors stay as
@@ -97,7 +106,8 @@ function parse<T>(schema: z.ZodType<T>, data: unknown): T {
 
 const timestamp = z.iso.datetime({ offset: true });
 const outcome = z.enum(["record", "no_record", "attempt_only", "no_match"]);
-const requestType = z.enum(["subpoena", "court_order", "warrant", "police_case", "regulator"]);
+// Every type a record can carry: the four D9 types and the earlier ones.
+const requestType = z.enum(RECORDED_REQUEST_TYPES);
 const lookupKind = z.enum(["post", "id_number", "phone", "email"]);
 const number = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const publicName = z.string().max(120).nullable();
@@ -142,8 +152,9 @@ const keptRecord = z.strictObject({
   checked_by: z.enum(["staff_review", "other"]),
   id_number_kept: z.boolean(),
   id_number_erased_at: timestamp.nullable(),
-  selfie: fileState,
-  id_photo: fileState,
+  // Left out for an urgent request (rule D9): never the selfie or ID photo.
+  selfie: fileState.optional(),
+  id_photo: fileState.optional(),
   phones: z
     .array(
       z.strictObject({
@@ -178,6 +189,10 @@ const readResult = z.strictObject({
     lookup_value: z.string().max(254).nullable(),
     outcome,
     match_count: z.number().int().nonnegative(),
+    // Only on records opened under rule D9.
+    issued_by: z.string().min(3).max(120).optional(),
+    confirmed_number: z.string().min(5).max(40).optional(),
+    confirmed_by: z.string().min(3).max(120).optional(),
   }),
   records: z.array(z.union([keptRecord, attempts, noRecord])).max(5),
 });
@@ -231,6 +246,9 @@ export async function listIdentityDisclosures(api: FoundationAuthenticatedApi) {
 export type AuthorityRequestInput = {
   requestType: RequestType;
   reference: string;
+  issuedBy: string;
+  confirmedNumber: string;
+  confirmedBy: string;
   reason: string;
   lookupKind: LookupKind;
   lookupValue: string;
@@ -258,16 +276,20 @@ export function lookupValueFor(kind: LookupKind, input: string): string {
   return value;
 }
 
-/** Opens a record: the database writes the log row first and answers its id. */
+/** Opens a record: the database checks the request (rule D9), writes the log
+ * row first and answers its id. */
 export async function openIdentityDisclosure(
   api: FoundationAuthenticatedApi,
   input: AuthorityRequestInput
 ) {
   const { data, error } = await api.rpc(
-    "open_identity_disclosure",
+    "open_authority_request",
     {
       p_request_type: input.requestType,
       p_reference: input.reference,
+      p_issued_by: input.issuedBy,
+      p_confirmed_number: input.confirmedNumber,
+      p_confirmed_by: input.confirmedBy,
       p_reason: input.reason,
       p_lookup_kind: input.lookupKind,
       p_lookup_value: lookupValueFor(input.lookupKind, input.lookupValue),
@@ -333,6 +355,9 @@ export async function readIdentityDisclosure(
   purpose: "view" | "print"
 ): Promise<{ disclosure: DisclosureRead["disclosure"]; records: DisclosureRecord[] }> {
   const shown = await readDisclosure(api, id, purpose);
+  // An urgent request never shows the selfie or the ID photo (rule D9). The
+  // database already leaves them out; this keeps it so on the website too.
+  const withhold = shown.disclosure.request_type === URGENT_REQUEST;
   const kept = shown.records.filter((record) => "verified_at" in record);
   const material = kept.length ? await readMaterial(service, id, staffId) : [];
   return {
@@ -352,12 +377,21 @@ export async function readIdentityDisclosure(
           createLogger("AuthorityRequests").error("Kept ID number could not be decrypted");
         }
       }
-      return { ...record, id_number: number, id_number_unreadable: unreadable };
+      // Urgent: no selfie, no ID photo and only the current phone numbers.
+      const shownRecord = withhold
+        ? (({ selfie: _selfie, id_photo: _idPhoto, ...rest }) => ({
+            ...rest,
+            phones: rest.phones.filter((phone) => phone.revoked_at === null),
+          }))(record)
+        : record;
+      return { ...shownRecord, id_number: number, id_number_unreadable: unreadable };
     }),
   };
 }
 
-/** The selfie of one person a disclosure names, decrypted for the screen. */
+/** The selfie of one person a disclosure names, decrypted for the screen;
+ * null when none is kept, and "withheld" for an urgent request (rule D9: the
+ * database refuses it too). */
 export async function readIdentityDisclosureSelfie(
   api: FoundationAuthenticatedApi,
   service: FoundationServiceApi,
@@ -365,7 +399,15 @@ export async function readIdentityDisclosureSelfie(
   id: string,
   subject: string
 ) {
-  await readDisclosure(api, id, "selfie", subject);
+  let shown: DisclosureRead;
+  try {
+    shown = await readDisclosure(api, id, "selfie", subject);
+  } catch (error) {
+    if (error instanceof AuthorityRequestRefused && error.reason === "disclosure_selfie_withheld")
+      return "withheld" as const;
+    throw error;
+  }
+  if (shown.disclosure.request_type === URGENT_REQUEST) return "withheld" as const;
   const record = (await readMaterial(service, id, staffId)).find(
     (item) => item.account_id === subject
   );
