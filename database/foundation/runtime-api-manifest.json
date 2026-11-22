@@ -6266,7 +6266,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current free_credit:give capability (admin role; authenticator code from the last 15 minutes): gives the member with this email (an active, confirmed account with a current accepted ID review; never the admin's own account or another account of the same person) a free-credit entitlement of 1 to 6 posts for 1 to 30 days from now, with a reason of 5 to 200 characters; area null, 4 posts going live per post per 30 days, 10 photos and 1 video, no add-ons, no payment, never renewed; recorded in the append-only gift record."
+      "authority": "Current free_credit:give capability (admin role; authenticator code from the last 15 minutes): gives the member with this email (an active, confirmed account with a current accepted ID review; never the admin's own account or an account ever reviewed as the same person; the admin needs a current accepted ID review of their own; refused while the member already has a running gift) a free-credit entitlement of 1 to 6 posts for 1 to 30 days from now, with a reason of 5 to 200 characters; area null, 4 posts going live per post per 30 days, 10 photos and 1 video, no add-ons, no payment, never renewed; recorded in the append-only gift record."
     },
     {
       "name": "extend_free_credit",
@@ -6309,6 +6309,25 @@
         "service_role": false
       },
       "authority": "Current free_credit:view capability (admin role; 12-hour authenticator rule): the latest 500 free-credit entitlements, newest first: id, the member's masked email (null after erasure), posts, start, end, active or ended, and the all-time views of the posts each funded; never the reason, the admin or an unmasked address."
+    },
+    {
+      "name": "showroom_feed",
+      "updates": ["updates/20261122023000_fair_showroom.sql"],
+      "arguments": [
+        {
+          "name": "p_request",
+          "sqlType": "jsonb",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": true,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Public: the fair showroom order of publicly live posts for one showroom (home when omitted, business, market or tourism) and an optional province and city of the visitor, which are not stored; at most 15 or 7 public cards with their preview and is_new. Card facts only: no score, counts, owner or account. Writes nothing (volatile only for its random variety)."
     }
   ]
 }

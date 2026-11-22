@@ -19,22 +19,21 @@
     ],
     "notYetCompared": [],
     "howToCompare": "In the Supabase SQL editor (read-only), run `set search_path to \"$user\", public;` first, so pg_get_indexdef prints `extensions.gin_trgm_ops` as the replay does, then run database/foundation/fingerprint.sql unchanged and compare each row with categories below.",
-    "matchedThroughUpdate": "20261122013616_authority_request_types.sql",
+    "matchedThroughUpdate": "20261122023000_fair_showroom.sql",
     "matchedFingerprints": {
       "column_grants": "5e5623672e80b927048d8553487d5442",
-      "columns": "2ebaf9dd5a32c0eba62a1bd75da6f2a2",
-      "constraints": "42fd24b1afcead13bd0d8f803f74f8e0",
+      "columns": "23cd20976a1aa41e02001ce53196c8f2",
+      "constraints": "883b4709932c9d3150f94a5ad07db340",
       "event_triggers": "821f7d069c595c075754fad9309136ac",
-      "function_bodies": "67b5470fba3e3f4d9133e75140c153d8",
-      "function_grants": "6077049d320d99c31fea317e0f720815",
-      "function_metadata": "0d819e1e2a8c94851afdad47cff09eec",
-      "indexes": "abc01dab90beb70158cc121d0a2fe3ed",
+      "function_bodies": "9a4d1a77bc23fcf6ad8acfa6359fdb82",
+      "function_grants": "9d9e95a820b9e15bfea539fabe969b73",
+      "function_metadata": "144a8e0bfd4fbc0c1fb9fe3a310ad758",
+      "indexes": "b076460981fb48b68cd601b912b450fa",
       "policies": "085a305fbc41d38d34eb40c3748c0793",
       "row_level_security": "ecbef18d9ad91ecfeb81d5442b60f0e4",
-      "triggers": "ed2dfd308785ad406071d440a11cd1bc"
+      "triggers": "6ce134158f96253d4302816139e2db8e"
     },
     "pendingApplication": [
-      "20261122022323_identity_keep_for.sql",
       "20261122130744_free_credits.sql"
     ]
   },
@@ -42,7 +41,7 @@
     "Reference data is not fingerprinted. candidate.sql seeds posting-terms version posting-v2, which production does not hold: production has posting-v1 and posting-v3 (current since 20261109173012_posting_terms_v3.sql), and posting-v4 once 20261112122001_publish_posting_terms_v4.sql is applied (current from 20261112173841_switch_posting_terms_v4.sql).",
     "schema_grants: production has 8 items (d397fed9c8bd9d4fc50ebdd777899d93) and the replay 7 (categories below). The extra production item is `internal supabase_auth_admin:USAGE`, which Supabase grants when the Auth \"Before user created\" hook is switched on; no repository file creates it (see replay/hosted-auth-hook-grants.sql)."
   ],
-  "updateCount": 106,
+  "updateCount": 107,
   "lastUpdate": "20261122130744_free_credits.sql",
   "categories": {
     "column_grants": {
@@ -62,20 +61,20 @@
       "fingerprint": "821f7d069c595c075754fad9309136ac"
     },
     "function_bodies": {
-      "items": 1163,
-      "fingerprint": "b4bf5ef02f25d52514d30a485058b355"
+      "items": 1165,
+      "fingerprint": "f184ca543bb6483fee19b9a52ed9025d"
     },
     "function_grants": {
-      "items": 845,
-      "fingerprint": "abc7f00f2a87d8e52a9ba6dbe999c48d"
+      "items": 849,
+      "fingerprint": "f4b0d3e4cc0bfeb763ca02d2cda124fc"
     },
     "function_metadata": {
-      "items": 1163,
-      "fingerprint": "538e2924d5484b881dcf083ab6f389b2"
+      "items": 1165,
+      "fingerprint": "5315c62536e31f74084d81a8cae7de2c"
     },
     "indexes": {
-      "items": 602,
-      "fingerprint": "5d6d8059fa96b23153cb818441808f22"
+      "items": 603,
+      "fingerprint": "c8fdafed6d8f99c57a165c1b836a6c08"
     },
     "policies": {
       "items": 4,

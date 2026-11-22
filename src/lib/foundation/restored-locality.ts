@@ -17,3 +17,11 @@ export function resolveRestoredLocality(province: string, city: string) {
   if (!p || matches.length !== 1) throw new LocalityInputError("Select a valid province and city");
   return { p_province: p.id, p_city: matches[0].id };
 }
+/** A province label, code or ID as its canonical ID, or null. */
+export function resolveRestoredProvince(province: string): string | null {
+  return (
+    reference.provinces.find((row) =>
+      [row.id, row.code, row.label].some((v) => normalize(v) === normalize(province))
+    )?.id ?? null
+  );
+}

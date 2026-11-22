@@ -779,12 +779,17 @@ export function ShowroomCardCarousel({
   const frontItem = count > 0 ? carouselItems[normalizedActiveIndex] : undefined;
   const frontTable = frontItem ? SHOWROOM_TABLES[frontItem.type] : undefined;
   const frontId = frontItem?.id;
+  // Each card's appearance is sent once per page load: autoplay brings the
+  // same cards round again, and the fair showroom counts a turn per visit.
+  const sentAppearancesRef = useRef(new Set<string>());
   useEffect(() => {
     if (!frontId || !frontTable || !isHalfVisible) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
     const start = () => {
       if (timer || document.visibilityState === "hidden") return;
       timer = setTimeout(() => {
+        if (sentAppearancesRef.current.has(frontId)) return;
+        sentAppearancesRef.current.add(frontId);
         trackCommercialEvents([
           { table: frontTable, id: frontId, type: "showroom_appearance", surface },
         ]);

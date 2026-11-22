@@ -313,8 +313,9 @@ export default async function MetricsPage() {
               Showroom turns, last 7 days
             </CardTitle>
             <p className="text-sm text-muted-foreground">
-              Everyone gets an equal turn. Posts seen least go next, and new posts get 72 hours up
-              front.{" "}
+              Every live post gets a fair turn. Posts seen least go next, new posts get a 3-day head
+              start, and visitors see posts from their own city and province first, mixed with the
+              rest of South Africa. Likes help a little but never jump the queue.{" "}
               <Link href="/help/showroom" className="font-medium underline underline-offset-2">
                 How the showroom works
               </Link>
