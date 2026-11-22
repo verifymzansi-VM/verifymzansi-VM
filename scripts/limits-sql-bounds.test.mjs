@@ -79,6 +79,7 @@ const MAIL_KINDS = [
   "post_kept",
   "verification_returned",
   "slot_renewal_reminder",
+  "term_ending_notice",
 ];
 const batch = (id, command, max, error) => ({
   id,
@@ -183,7 +184,7 @@ const ROWS = [
     error: /invalid payment summary request/,
   },
   {
-    // 21 kinds are supported; a 22nd (unknown) kind is refused by the count
+    // 22 kinds are supported; a 23rd (unknown) kind is refused by the count
     // before the unknown-kind rule ("unsupported mail kind") sees it.
     id: "LIM-F-claim_supported_notification_outbox",
     as: "service",

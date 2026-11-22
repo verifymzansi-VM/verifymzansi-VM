@@ -6,10 +6,13 @@ name: E2E WebKit (advisory)
 # ADVISORY: this check is not required (it is not in
 # .github/rulesets/protect-main.json), it is not part of the required
 # aggregate check `e2e-foundation`, and CI does not call it on main, so it
-# never holds back a merge or a release. It runs on pull requests (not drafts,
-# unless labelled run-full-ci) and by hand, and has no schedule, so a red run
-# raises no failure alert. It may be made required only once it has passed on
-# a run of consecutive pull requests (owner decision).
+# never holds back a merge or a release. It runs on pull requests that are
+# ready for review (opened ready, marked ready, and every later push; never on
+# a draft push unless labelled run-full-ci), nightly and by hand. Like every
+# scheduled workflow, a red nightly run opens or updates the failure alert
+# issue (workflow "Failure alert"). A pull request that changes only documents
+# and ledgers skips it. It may be made required only once it has passed on a
+# run of consecutive pull requests (owner decision).
 #
 # WebKit takes about 1.6 times as long as mobile-chrome (about 20 minutes
 # against 12), so Playwright's own limit is 40 minutes here, not 20.
@@ -17,6 +20,8 @@ on:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened, ready_for_review]
+  schedule:
+    - cron: "30 2 * * *" # Nightly at 02:30 UTC (04:30 in South Africa)
   workflow_dispatch:
 
 permissions:
@@ -27,9 +32,57 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Pull requests only: decides whether the pull request changes only
+  # documents and ledgers. Skipped on nightly and manual runs, where the
+  # WebKit job always runs.
+  changes:
+    name: Changed files (WebKit)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      docs_only: ${{ steps.docs.outputs.only }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The merge commit and its first parent (the base), so this job can
+          # list exactly what the pull request changes.
+          fetch-depth: 2
+      - name: Decide whether only documents and ledgers changed
+        id: docs
+        run: |
+          # Checked out as the merge commit: parent 1 is the base branch tip.
+          # Anything else cannot be compared safely, so run in full.
+          if [ "$(git rev-list --parents -n 1 HEAD | wc -w)" -ne 3 ]; then
+            echo "only=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::HEAD is not the pull request merge commit; running the browser tests."
+            exit 0
+          fi
+          if ! changed="$(git diff --no-renames --name-only HEAD^1 HEAD)"; then
+            echo "only=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Could not list the changed files; running the browser tests."
+            exit 0
+          fi
+          # Documents and ledgers only: the same list in each workflow that
+          # skips work for them (scripts/branch-ruleset.test.mjs keeps the
+          # copies identical). The
+          # native suite's prototypes under docs/ never count as documents.
+          docs_only='^(database/foundation/updates/README\.md|database/foundation/fingerprint\.json|FRONTEND-CHANGES\.md|docs/.+|.+\.md)$'
+          code="$(printf '%s\n' "$changed" | grep -Ev "$docs_only" | grep -v '^$' || true)"
+          prototypes="$(printf '%s\n' "$changed" | grep -E '^docs/backend-foundation/prototypes/' || true)"
+          if [ -n "$changed" ] && [ -z "$code" ] && [ -z "$prototypes" ]; then
+            echo "only=true" >> "$GITHUB_OUTPUT"
+            echo "Only documents and ledgers changed; the browser tests are skipped:"
+            printf '%s\n' "$changed"
+          else
+            echo "only=false" >> "$GITHUB_OUTPUT"
+          fi
+
   webkit:
     name: e2e-foundation (mobile-safari, advisory)
-    if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'run-full-ci')) }}
+    needs: changes
+    if: ${{ !cancelled() && !(github.event_name == 'pull_request' && github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'run-full-ci')) && needs.changes.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     # Step ceilings: stack 5, build 10, tests 42 (Playwright stops itself at 40
     # and writes its report first).

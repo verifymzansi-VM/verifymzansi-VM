@@ -142,8 +142,8 @@ describe("CI job graph", () => {
       "runs-on"?: string;
       container?: unknown;
     };
-    // The required check's name must not change.
-    expect(job.name).toBe("Visual regression (chosen frontend)");
+    // The required check's name must not change outside drafts.
+    expect(job.name).toBe(draftRenamed("Visual regression (chosen frontend)"));
     // The test copy needs the runner's Docker: no job container.
     expect(job.container).toBeUndefined();
     expect(job["runs-on"]).toBe("ubuntu-latest");
@@ -157,7 +157,7 @@ describe("CI job graph", () => {
       at("scripts/foundation-e2e.mjs build")
     );
     const down = job.steps.find((step) => (step.run ?? "").includes("foundation-e2e.mjs down"));
-    expect(down?.if).toBe("always()");
+    expect(down?.if).toBe("always() && steps.scope.outputs.run == 'true'");
     // Nothing of the retired backend or its in-memory stub.
     const text = JSON.stringify(job);
     for (const retired of [
@@ -249,14 +249,19 @@ describe("CI job graph", () => {
 
   it("counts tests that passed only on retry in each browser job's summary", () => {
     const e2e = parse(readFileSync(".github/workflows/e2e-foundation.yml", "utf8")) as {
-      jobs: Record<string, Job & { strategy?: { matrix: { project: string[] } } }>;
+      jobs: Record<string, Job & { strategy?: { matrix: { lane: string[] } } }>;
     };
     const browser = e2e.jobs.browser;
-    expect(browser.strategy?.matrix.project).toEqual(["chromium", "mobile-chrome"]);
+    // chromium runs as two Playwright shards on two runners.
+    expect(browser.strategy?.matrix.lane).toEqual([
+      "chromium-1-of-2",
+      "chromium-2-of-2",
+      "mobile-chrome",
+    ]);
     const steps = browser.steps;
     const run = steps.findIndex((step) => (step.run ?? "").includes("playwright test"));
     expect(steps[run].env?.PLAYWRIGHT_JSON_REPORT).toBe(
-      "test-results/foundation-${{ matrix.project }}.json"
+      "test-results/foundation-${{ matrix.lane }}.json"
     );
     const summary = steps
       .slice(run + 1)
@@ -268,7 +273,7 @@ describe("CI job graph", () => {
     const aggregate = e2e.jobs["e2e-foundation"];
     expect(aggregate.name).toBe(draftRenamed("e2e-foundation"));
     expect(DRAFT_CONDITION.startsWith("github.event_name == 'pull_request' && ")).toBe(true);
-    expect(aggregate.needs).toBe("browser");
+    expect(aggregate.needs).toEqual(["changes", "browser"]);
     expect(aggregate.if).toBe("${{ !cancelled() }}");
     expect(aggregate.steps.map((step) => step.run ?? "").join("\n")).toContain(
       'if [ "$RESULT" != "success" ]'
@@ -280,9 +285,13 @@ describe("CI job graph", () => {
       on: Record<string, unknown>;
       jobs: Record<string, Job>;
     };
-    // Pull requests and manual runs only: CI never calls it on main (so it
-    // never gates a release) and no schedule can raise a failure alert.
-    expect(Object.keys(webkit.on).sort()).toEqual(["pull_request", "workflow_dispatch"]);
+    // Pull requests, nightly and manual runs: CI never calls it on main, so
+    // it never gates a release; a red nightly alerts like any scheduled run.
+    expect(Object.keys(webkit.on).sort()).toEqual([
+      "pull_request",
+      "schedule",
+      "workflow_dispatch",
+    ]);
     expect(readFileSync(".github/workflows/ci.yml", "utf8")).not.toContain("e2e-webkit");
     expect(readFileSync(".github/workflows/e2e-foundation.yml", "utf8")).not.toContain(
       "mobile-safari"
@@ -1330,14 +1339,20 @@ describe("production-matching suites on main and the failure alert", () => {
       for (const group of groups) expect(group, caller).toContain("a".repeat(40));
       expect(evaluate(String(workflow.concurrency?.group), "pull_request")).not.toBe(groups[2]);
       // Nothing inside the called workflow can turn a failure into a pass or
-      // skip the suite on main: no job condition except the aggregate's and
-      // the browser projects' draft condition (false for every event but a
-      // pull request), no continue-on-error anywhere.
+      // skip the suite on main: no job condition except the aggregate's, the
+      // pull-request-only changes job and the browser lanes' draft and
+      // documents-only conditions (both false for every event but a pull
+      // request: the changes job is skipped, so its output is empty), no
+      // continue-on-error anywhere.
       for (const [id, called] of Object.entries(workflow.jobs)) {
         expect(JSON.stringify(called), `${file} ${id}`).not.toContain("continue-on-error");
         if (id === "e2e-foundation") expect(called.if).toBe("${{ !cancelled() }}");
+        else if (file === "e2e-foundation.yml" && id === "changes")
+          expect(called.if).toBe("github.event_name == 'pull_request'");
         else if (file === "e2e-foundation.yml" && id === "browser")
-          expect(called.if).toBe(`\${{ !(${DRAFT_CONDITION}) }}`);
+          expect(called.if).toBe(
+            `\${{ !cancelled() && !(${DRAFT_CONDITION}) && needs.changes.outputs.docs_only != 'true' }}`
+          );
         else expect(called.if, `${file} ${id}`).toBeUndefined();
       }
     }
@@ -1358,7 +1373,7 @@ describe("production-matching suites on main and the failure alert", () => {
     // green without them only in a draft run, which reports another name.
     const aggregate = load("e2e-foundation.yml").jobs["e2e-foundation"];
     expect(aggregate.name).toBe(draftRenamed("e2e-foundation"));
-    expect(aggregate.needs).toBe("browser");
+    expect(aggregate.needs).toEqual(["changes", "browser"]);
     expect(aggregate.steps[0].env?.DRAFT_NOT_RUN).toBe(`\${{ ${DRAFT_CONDITION} }}`);
     expect(aggregate.steps[0].env?.RESULT).toBe("${{ needs.browser.result }}");
     expect(aggregate.steps[0].run).toContain('if [ "$RESULT" != "success" ]; then');

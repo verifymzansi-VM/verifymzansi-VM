@@ -150,6 +150,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 86. Copy a post (item 17b, second part) | approved by owner 2026-11-22 (with the group 86 part of 8 rows elsewhere) | Nothing today (switch off). Once on: a member whose Multi-listing package runs gets 'More', then 'Copy this post' on My posts; the copy opens in the 'Post an item' form with a note (everything but the video filled in, one new photo for vehicles and property), unfinished copies wait under 'Drafts' for 14 days, and reviewers see 'Copied from'. |
 | 88. Fair showroom for every post (item 66) | awaiting owner (design and plan pictures approved by owner 2026-11-21: 'Approve all 7'; built pictures awaiting; with the group 88 part of 6 rows elsewhere) | Showrooms (home and each area) show posts in fair turns, mixing the visitor's city, province and the rest of South Africa (3 / 2 / 2 of every 7 places), with a gold 'New' tag for a post's first 3 days live; help page, Performance card (hidden) and privacy notice wording to match. |
 | 89. Authority requests: only the four D9 request types (item 69) (no file rows: the group 89 part of 6 rows in group 77) | approved by owner 2026-11-22 | Governors and admins only: the authority request form offers only a subpoena, court order, search warrant or urgent life-risk request, and asks for the issuing court (or SAPS station), the official number called and who confirmed it; the record and print sheet show the request type, reference, issuer and check; an urgent request shows no selfie or ID photo. Members see nothing new. |
+| 91. Email before a long paid term ends (item 68b) (no file rows: email only) | awaiting owner | Members with a paid slot or package of 180 days or more get one email about 12 weeks before it ends: the end date, that nothing renews and nothing more is charged, and how to buy again (My slots for an Individual slot, otherwise Billing; an Individual slot whose post moves into the member's running Multi-listing package is told only that; a banned or suspended member is told only that nothing more is needed). Nothing changes on any page. |
 | 92. Registered street address no longer shown (no file rows: data setting only) | approved by owner 2026-11-22 | Trust & Safety (and the Terms and PAIA pages, which list the same company details) no longer show a 'Registered address' row with the street address. The other company details (registered name, trading name, CIPC number, officers, contacts) are unchanged. |
 | 93. Free credits for businesses you recruit (item 70) | awaiting owner (with the group 93 part of 4 rows elsewhere) | Admins only: a 'Free credits' page under Commercial in the staff menu to give an ID-verified member 1 to 6 free posts for 1 to 30 days with a reason, list every gift (masked email, posts, end date, Active or Ended, views) and extend one by 1 to 30 days. Members with a gift: 'Free credits from VerifyMzansi: 1 post' with its end date on My slots, and 'Free credits from VerifyMzansi' on the posting slots card of My posts. |
 
@@ -3618,6 +3619,64 @@ Decision: awaiting owner.
 | `src/app/admin/free-credits/free-credits-client.test.tsx` | test | Group 93: checks the list, the empty state, giving with defaults and chosen values, refusals, the re-verify redirect and extending. | Nothing (not part of a page) | keep | awaiting owner | 2026-11-22 | 3588d3f27504 |
 | `src/app/admin/free-credits/page.test.tsx` | test | Group 93: checks the page guard, the header, the re-verify redirect and the failed-read message. | Nothing (not part of a page) | keep | awaiting owner | 2026-11-22 | a3e1c1158591 |
 | `src/components/dashboard/slot-usage-card.test.tsx` | test | Group 93: checks the free credits line on the posting slots card. | Nothing (not part of a page) | keep | awaiting owner | 2026-11-22 | 1dc4434888fb |
+
+### 91. Email before a long paid term ends (item 68b)
+
+Email only: no file in the checked scope changes, so this group has no file
+rows. Launch checklist item 68b (Consumer Protection Act s14(2)(c); owner's
+answer: terms of 180 days or more get a written notice about 60 business days
+before the end, and nothing renews automatically). Database update
+`20261122111209_term_ending_notice.sql` (pending, apply first) queues one email
+per paid term of 180 days or more, 63 to 84 days before it ends (about 60
+business days). The words are new (owner rule 4). Text outside the checked
+scope: `src/lib/services/email.ts` (`term_ending_notice`, `TERM_ENDING_BODY`).
+
+Subject: 'Your paid term is ending'.
+
+An Individual slot of 180 days:
+
+> Your Individual slot ends on 14 February 2027 at 12:00 (South African time).
+> Nothing renews automatically and you will not be charged again.
+>
+> To keep posting after that date, renew this slot from My slots from 14 days
+> before it ends (the new days start when the current ones end), or buy a new
+> slot on Billing. If you do nothing, the slot simply ends: its post is hidden
+> then and deleted 3 days later, with its photos and videos.
+
+Button 'See my slots' (to `/dashboard/slots`).
+
+An Individual slot whose owner's Multi-listing package runs past the slot's
+end (renewing and buying a slot are closed while it runs; its post moves into
+the package when the slot ends if the package has a free place then, and is
+otherwise hidden and deleted 3 days later): the same first paragraph, then
+only:
+
+> Its post then moves into your Multi-listing package if the package has a free
+> place on that date. If it has none, the post is hidden then and deleted 3 days
+> later, so keep a place free or add one from My slots.
+
+Button 'See my slots' (to `/dashboard/slots`).
+
+A Multi-listing package of 180 days ('Your Multi-listing package ends on ...')
+or any other paid plan ('Your paid plan ends on ...'), same first paragraph,
+then:
+
+> To keep posting after that date, buy again on Billing. If you do nothing, it
+> simply ends: the posts it pays for are hidden then, unless another of your
+> slots takes them, and deleted 3 days later, with their photos and videos.
+
+Button 'Go to Billing' (to `/billing`).
+
+A banned or suspended member (who cannot sign in) gets the same first
+paragraph, then only (whatever the term):
+
+> You do not need to do anything.
+
+with no button and no link. The email is not sent without its end date. The
+footer line stays 'This is an operational update about your VerifyMzansi
+account.' No bell notice is added.
+
+Decision: awaiting owner.
 
 ### 92. Registered street address no longer shown
 
