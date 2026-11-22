@@ -113,6 +113,8 @@ interface PostFormScaffoldProps {
    * screens only, so mobile keeps a single focused column.
    */
   aside?: React.ReactNode;
+  /** A note shown under the heading, above the steps (a copy of a post). */
+  notice?: React.ReactNode;
 }
 
 function formatFieldSummaryLabel(fieldKey: string, fieldLabels?: Record<string, string>): string {
@@ -162,6 +164,7 @@ export function PostFormScaffold({
   footer,
   completeness,
   aside,
+  notice,
 }: PostFormScaffoldProps) {
   const errorRef = useRef<HTMLDivElement>(null);
   const headingId = useId();
@@ -236,6 +239,8 @@ export function PostFormScaffold({
           </div>
         </div>
       </header>
+
+      {notice}
 
       {error && (
         <Alert ref={errorRef} variant="destructive">

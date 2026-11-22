@@ -16,10 +16,11 @@ begin
     ('posts',$q$select p.id,p.kind,p.area,p.category_key,p.activity_key,p.title,p.description,p.province_id,p.city_id,p.locality_label,
       p.status,p.status_reason,p.created_at,p.submitted_at,p.published_at,p.visible_until,p.edit_of,
       l.price_mode,l.price_cents,l.price_negotiable,l.attributes,b.business_type,e.starts_at,e.ends_at,e.timezone,
-      s.slug,d.data presentation,d.contacts contact_details,c.channels
+      s.slug,d.data presentation,d.contacts contact_details,c.channels,cp.source_post_id copied_from
       from private.posts p left join private.listing_details l on l.post_id=p.id left join private.business_details b on b.post_id=p.id
       left join private.event_details e on e.post_id=p.id left join private.post_slugs s on s.post_id=p.id
       left join private.post_presentations d on d.post_id=p.id left join private.post_contacts c on c.post_id=p.id
+      left join private.post_copies cp on cp.post_id=p.id
       where p.owner_id=$1 order by p.created_at,p.id$q$),
     ('post_reviews',$q$select m.post_id,m.edit_id,m.decision,m.reason,m.decided_at,m.price_only
       from private.moderation_log m join private.posts p on p.id=m.post_id where p.owner_id=$1 order by m.decided_at,m.id$q$),
