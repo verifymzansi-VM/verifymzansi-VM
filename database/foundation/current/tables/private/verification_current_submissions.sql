@@ -11,4 +11,5 @@ create table private.verification_current_submissions (
 );
 alter table private.verification_current_submissions owner to postgres;
 alter table private.verification_current_submissions enable row level security;
+CREATE TRIGGER identity_submission_replaced AFTER UPDATE OF submission_id ON private.verification_current_submissions FOR EACH ROW WHEN (old.submission_id IS DISTINCT FROM new.submission_id) EXECUTE FUNCTION internal.identity_submission_replaced();
 revoke all on private.verification_current_submissions from public;
