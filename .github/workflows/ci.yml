@@ -543,7 +543,13 @@ jobs:
   # runner's 127.0.0.1. Approved pictures:
   # e2e/foundation/visual-regression.spec.ts-snapshots/.
   visual-regression:
-    name: Visual regression (chosen frontend)
+    # On a draft pull request (without the run-full-ci label) the pictures are
+    # not compared and the job reports under another name, so the required
+    # check waits for the full run that "Ready for review" starts. A pull
+    # request that changes only documents and ledgers (the list in the scope
+    # step) ends green under the required name without building anything.
+    # Pushes to main and manual runs always compare in full.
+    name: ${{ (github.event_name == 'pull_request' && github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'run-full-ci')) && 'Visual regression (chosen frontend) (draft, not run)' || 'Visual regression (chosen frontend)' }}
     runs-on: ubuntu-latest
     needs: lint-type-security
     # Expected about 12-14 minutes (install, stack, build, image, 33 pictures);
@@ -557,33 +563,86 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+          # The merge commit and its first parent (the base), so the scope
+          # step can list exactly what the pull request changes.
+          fetch-depth: 2
+      - name: Decide whether the pictures need comparing
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DRAFT_NOT_RUN: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'run-full-ci') }}
+        run: |
+          if [ "$DRAFT_NOT_RUN" = "true" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "Draft pull request: the pictures are compared once it is marked ready for review (or with the run-full-ci label)."
+            exit 0
+          fi
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "Full run ($EVENT_NAME)."
+            exit 0
+          fi
+          # Checked out as the merge commit: parent 1 is the base branch tip.
+          # Anything else cannot be compared safely, so run in full.
+          if [ "$(git rev-list --parents -n 1 HEAD | wc -w)" -ne 3 ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::HEAD is not the pull request merge commit; comparing the pictures."
+            exit 0
+          fi
+          if ! changed="$(git diff --no-renames --name-only HEAD^1 HEAD)"; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::Could not list the changed files; comparing the pictures."
+            exit 0
+          fi
+          # Documents and ledgers only: the same list in each workflow that
+          # skips work for them (scripts/branch-ruleset.test.mjs keeps the
+          # copies identical). The
+          # native suite's prototypes under docs/ never count as documents.
+          docs_only='^(database/foundation/updates/README\.md|database/foundation/fingerprint\.json|FRONTEND-CHANGES\.md|docs/.+|.+\.md)$'
+          code="$(printf '%s\n' "$changed" | grep -Ev "$docs_only" | grep -v '^$' || true)"
+          prototypes="$(printf '%s\n' "$changed" | grep -E '^docs/backend-foundation/prototypes/' || true)"
+          if [ -n "$changed" ] && [ -z "$code" ] && [ -z "$prototypes" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "Only documents and ledgers changed; the pictures are not compared and this check passes:"
+            printf '%s\n' "$changed"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.scope.outputs.run == 'true'
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - if: steps.scope.outputs.run == 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
           cache: "pnpm"
-      - run: pnpm install --frozen-lockfile
+      - if: steps.scope.outputs.run == 'true'
+        run: pnpm install --frozen-lockfile
       # Same reason as in workflow "E2E foundation": the copy's fixed ports must
       # never be handed out to outgoing connections.
       - name: Keep the test copy's ports out of the ephemeral range
+        if: steps.scope.outputs.run == 'true'
         run: sudo sysctl -w net.ipv4.ip_local_reserved_ports=55440-55460
       - name: Start the test copy (local stack, schema proof, test people)
+        if: steps.scope.outputs.run == 'true'
         timeout-minutes: 5
         run: node --import tsx scripts/foundation-e2e.mjs up
       - name: Build the website for the test copy
+        if: steps.scope.outputs.run == 'true'
         timeout-minutes: 10
         run: node --import tsx scripts/foundation-e2e.mjs build
       - name: Fetch the pinned browser image
+        if: steps.scope.outputs.run == 'true'
         timeout-minutes: 5
         run: node --import tsx scripts/foundation-visual.mjs pull
       - name: Compare the main screens with the approved pictures
+        if: steps.scope.outputs.run == 'true'
         timeout-minutes: 10
         run: node --import tsx scripts/foundation-visual.mjs --retries=1
       - name: List the screens that differ
-        if: always()
+        if: always() && steps.scope.outputs.run == 'true'
         run: node scripts/visual-diff-summary.mjs test-results/visual-report.json | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Upload expected, actual and diff pictures
-        if: always()
+        if: always() && steps.scope.outputs.run == 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: visual-regression-${{ github.run_id }}-${{ github.run_attempt }}
@@ -593,7 +652,7 @@ jobs:
             tmp/foundation-e2e/visual-website.log
           if-no-files-found: warn
       - name: Delete the test copy
-        if: always()
+        if: always() && steps.scope.outputs.run == 'true'
         run: node --import tsx scripts/foundation-e2e.mjs down
 
   # Decides once whether a staging address exists. The jobs that need one test
@@ -678,6 +737,11 @@ jobs:
   # Also runs the advisory Lighthouse audit on the same build (it used to
   # build the app a second time in its own job).
   bundle-analysis:
+    # On a draft pull request (without the run-full-ci label) nothing is built
+    # and the job reports under another name, so the required check waits for
+    # the full run that "Ready for review" starts. Pushes to main, manual runs
+    # and pull requests that are ready for review always run in full.
+    name: ${{ (github.event_name == 'pull_request' && github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'run-full-ci')) && 'bundle-analysis (draft, not run)' || 'bundle-analysis' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: lint-type-security
@@ -685,22 +749,41 @@ jobs:
       # Measurement build only; lint-type-security runs tsc on this commit.
       VERIFYMZANSI_SKIP_NEXT_TYPECHECK: "1"
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Decide whether to build
+        id: scope
+        env:
+          DRAFT_NOT_RUN: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'run-full-ci') }}
+        run: |
+          if [ "$DRAFT_NOT_RUN" = "true" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "Draft pull request: the bundle and Lighthouse checks run once it is marked ready for review (or with the run-full-ci label)."
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.scope.outputs.run == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      - if: steps.scope.outputs.run == 'true'
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - if: steps.scope.outputs.run == 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
           cache: "pnpm"
-      - run: pnpm install --frozen-lockfile
+      - if: steps.scope.outputs.run == 'true'
+        run: pnpm install --frozen-lockfile
       - name: Prepare isolated foundation build configuration
+        if: steps.scope.outputs.run == 'true'
         run: node scripts/prepare-cloudflare-runtime-check.mjs
       - name: Build and analyze bundle
+        if: steps.scope.outputs.run == 'true'
         run: ANALYZE=true pnpm run build
       - name: Check bundle size budget
+        if: steps.scope.outputs.run == 'true'
         run: pnpm run check:bundle-budget
       - name: Install Chromium for Lighthouse
+        if: steps.scope.outputs.run == 'true'
         continue-on-error: true
         timeout-minutes: 3
         run: |
@@ -710,11 +793,12 @@ jobs:
       # Advisory: a step limit and continue-on-error keep it from failing
       # bundle-analysis (a job-level timeout would ignore continue-on-error).
       - name: Lighthouse quality audit (advisory)
+        if: steps.scope.outputs.run == 'true'
         continue-on-error: true
         timeout-minutes: 5
         run: pnpm run quality:lighthouse
       - name: Upload Lighthouse reports
-        if: always()
+        if: always() && steps.scope.outputs.run == 'true'
         continue-on-error: true
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
