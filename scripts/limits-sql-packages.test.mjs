@@ -297,27 +297,27 @@ describe("package invoices issued by staff", () => {
   });
 
   test("LIM-F-issue_package_customer_invoice: an add is due 3 days after issue, or on the package's last day", async () => {
-    const issue = async (request) => {
-      const due = await h.one(
-        `select (internal.issue_package_customer_invoice(r,v,(select u.id from auth.users u where u.id<>r.account_id limit 1),7,'Synthetic invoice reason')).due_on::text
+    // The due date and both candidates are read in the one statement that
+    // issues the invoice, so a day boundary cannot fall between them.
+    const issue = async (request) =>
+      (
+        await h.db.query(
+          `select (internal.issue_package_customer_invoice(r,v,(select u.id from auth.users u where u.id<>r.account_id limit 1),7,
+               'Synthetic invoice reason')).due_on::text as due,
+             (internal.customer_invoice_day(statement_timestamp())+3)::text as plus3,
+             (select internal.customer_invoice_day(max(e.ends_at)) from private.entitlements e where e.package_id=r.package_id)::text as last_day
            from private.package_invoice_requests r join private.plan_versions v on v.id=r.plan_version_id where r.id=$1`,
-        [request.id]
-      );
-      const day = (sql) => h.one(`select (${sql})::text`);
-      return { due, day };
-    };
-    const later = await addRequest("issue-due-later", 5, 1, 20);
-    const a = await issue(later);
-    assert.equal(a.due, await a.day(`internal.customer_invoice_day(statement_timestamp())+3`));
+          [request.id]
+        )
+      ).rows[0];
+    const later = await issue(await addRequest("issue-due-later", 5, 1, 20));
+    assert.equal(later.due, later.plus3);
     // Ending in 1 day and 12 hours: due on the package's last day instead.
-    const soon = await addRequest("issue-due-soon", 5, 1, 20);
-    await setPackageDaysLeft(h, soon.pkg, 1);
-    const b = await issue(soon);
-    const lastDay = await b.day(
-      `select internal.customer_invoice_day(max(ends_at)) from private.entitlements where package_id=${lit(soon.pkg.id)}`
-    );
-    assert.equal(b.due, lastDay);
-    assert.notEqual(b.due, await b.day(`internal.customer_invoice_day(statement_timestamp())+3`));
+    const soonRequest = await addRequest("issue-due-soon", 5, 1, 20);
+    await setPackageDaysLeft(h, soonRequest.pkg, 1);
+    const soon = await issue(soonRequest);
+    assert.equal(soon.due, soon.last_day);
+    assert.ok(soon.due < soon.plus3, JSON.stringify(soon));
   });
 
   test("LIM-F-payment_invoice_vat: a VAT rate of 0 to 10,000 basis points", async () => {
@@ -336,33 +336,43 @@ describe("package invoices issued by staff", () => {
   });
 
   test("LIM-SQL-staff-invoice-max: a staff invoice is at most R50,000", async () => {
-    // No Individual slot is priced near R50,000: a newer 30-day version is
-    // priced at R10,000 (the most a slot may cost) for this check, and the
-    // customer's limit is raised to 5 slots, so 5 slots reach the bound.
+    // No Individual slot is priced near R50,000, so newer 30-day plan versions
+    // are added for this check (the newest is the one sold).
     const staffUser = await verifiedStaff(h, "invoice-max-staff");
     const customer = await buyer("invoice-max-buyer");
     const email = await h.one(`select email from auth.users where id=$1`, [customer.id]);
-    await h.seed(`insert into private.individual_slot_limits(identity_hmac,account_id,slot_limit,ends_at,reason,granted_by)
-      select identity_hmac,owner_id,5,now()+interval '30 days','Synthetic slot reason',${lit(staffUser.id)}
-      from private.accepted_identity_facts where owner_id=${lit(customer.id)} and revoked_at is null;`);
-    const version = randomUUID();
-    const price = (cents) =>
-      h.seed(`update private.plan_versions set price_cents=${cents} where id=${lit(version)};`);
-    await h.seed(`insert into private.plan_versions
-        select (jsonb_populate_record(v, jsonb_build_object('id',${lit(version)},'version',v.version+90))).*
-        from private.plan_versions v where v.plan_code='individual_30d' and v.retired_at is null order by v.version desc limit 1;`);
-    const issue = () =>
+    const versions = [];
+    const priced = async (cents) => {
+      const id = randomUUID();
+      versions.push(id);
+      await h.seed(`insert into private.plan_versions
+          select (jsonb_populate_record(v, jsonb_build_object('id',${lit(id)},'version',v.version+1,'price_cents',${cents}))).*
+          from private.plan_versions v where v.plan_code='individual_30d' and v.retired_at is null order by v.version desc limit 1;`);
+    };
+    const issue = (slots) =>
       h.asStaff(
         staffUser,
-        `select api.issue_staff_invoice(${lit(email)},30,5,7,'Synthetic invoice reason',${lit(randomUUID())}) as r`
+        `select api.issue_staff_invoice(${lit(email)},30,${slots},7,'Synthetic invoice reason',${lit(randomUUID())}) as r`
       );
     try {
-      await price(1000001);
-      await refused(issue(), "PT413", /above R50,000/);
-      await price(1000000);
-      assert.equal(Number((await issue())[0].r.total_cents), 5000000);
+      // One slot (within the default limit of 4) at R50,000.01 is refused.
+      await priced(5000001);
+      await refused(issue(1), "PT413", /above R50,000/);
+      // At exactly R50,000 the rule lets it through; the invoice row then
+      // refuses a single slot priced above R10,000.
+      await priced(5000000);
+      await refused(issue(1), "23514", /customer_invoices_unit_price_cents_check/);
+      // So an invoice of exactly R50,000 is 5 slots of R10,000, after the
+      // customer's limit is raised to 5; it is issued.
+      await h.seed(`insert into private.individual_slot_limits(identity_hmac,account_id,slot_limit,ends_at,reason,granted_by)
+        select identity_hmac,owner_id,5,now()+interval '30 days','Synthetic slot reason',${lit(staffUser.id)}
+        from private.accepted_identity_facts where owner_id=${lit(customer.id)} and revoked_at is null;`);
+      await priced(1000000);
+      assert.equal(Number((await issue(5))[0].r.total_cents), 5000000);
     } finally {
-      await h.seed(`update private.plan_versions set retired_at=now() where id=${lit(version)};`);
+      await h.seed(
+        `update private.plan_versions set retired_at=now() where id=any(array[${versions.map(lit).join(",")}]::uuid[]);`
+      );
     }
   });
 

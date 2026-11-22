@@ -3149,14 +3149,18 @@
     },
     {
       "id": "LIM-F-get_my_frontend_verification_uploads",
-      "title": "internal.get_my_frontend_verification_uploads: reads or returns at most 2 rows",
-      "value": "limit 2",
-      "category": "batch",
+      "title": "internal.get_my_frontend_verification_uploads: at most one upload per purpose, and only two purposes (ID photo, selfie) exist, so at most 2 rows; the read's own \"limit 2\" is redundant (see notLimits)",
+      "value": "1 per purpose, 2 purposes",
+      "category": "cap",
       "enforcedAt": [
         {
           "file": "database/foundation/current/functions/internal/get_my_frontend_verification_uploads.sql",
           "symbol": "internal.get_my_frontend_verification_uploads",
-          "contains": "order by r.purpose,r.created_at desc,r.request_id limit 2) x;"
+          "contains": "select distinct on(r.purpose) r.* from private.frontend_verification_uploads r"
+        },
+        {
+          "file": "database/foundation/current/tables/private/frontend_verification_uploads.sql",
+          "contains": "constraint frontend_verification_uploads_purpose_check CHECK (purpose = ANY (ARRAY['id_front'::text, 'selfie'::text]))"
         }
       ],
       "tests": [
@@ -13514,6 +13518,11 @@
       "file": "src/lib/presentation/storefront.ts",
       "contains": "export const STOREFRONT_PAGE_SIZE = 24;",
       "reason": "cards a storefront page shows before Show more (a display choice); the enforced bound is LIM-SQL-search-page-size"
+    },
+    {
+      "file": "database/foundation/current/functions/internal/get_my_frontend_verification_uploads.sql",
+      "contains": "order by r.purpose,r.created_at desc,r.request_id limit 2) x;",
+      "reason": "redundant read cap that never applies: distinct on (purpose) returns one row per purpose and the purpose CHECK allows two, so the bound is LIM-F-get_my_frontend_verification_uploads (one per purpose); raising this limit changes nothing"
     }
   ]
 }

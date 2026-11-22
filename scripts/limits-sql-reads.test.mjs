@@ -47,9 +47,9 @@ const draftBusinesses = (owner, n, status = "draft") =>
    select ${lit(owner)},'business','business',${CATEGORY},'Fixture business','A synthetic description long enough for every rule.',
      'gp','gp_johannesburg',${lit(status)},now()-make_interval(secs=>i) from generate_series(1,${n}) i;`;
 /** `n` listed organisations, returned by a CTE named `o`. */
-const orgs = (n, extra = "") =>
-  `o as (insert into private.organisations(slug,name,is_public,programme_status${extra ? `,${extra.split("=")[0]}` : ""})
-     select 'fixture-'||replace(gen_random_uuid()::text,'-',''),'Fixture Organisation',true,'affiliation_only'${extra ? `,${extra.split("=")[1]}` : ""}
+const orgs = (n) =>
+  `o as (insert into private.organisations(slug,name,is_public,programme_status)
+     select 'fixture-'||replace(gen_random_uuid()::text,'-',''),'Fixture Organisation',true,'affiliation_only'
      from generate_series(1,${n}) returning id)`;
 const messages = (checkId, n) =>
   `insert into private.frontend_business_check_messages(check_id,author_role,body,created_at)
@@ -59,26 +59,29 @@ const messages = (checkId, n) =>
  * business (one open check per business and kind), so each gets a new
  * business post unless `business` is given for decided checks.
  */
-const businessChecks = (owner, n, { status = "pending", kind = "seen", business = null } = {}) =>
-  `with p as (select ${business ? `${lit(business)}::uuid` : "gen_random_uuid()"} as post,gen_random_uuid() as id,i from generate_series(1,${n}) i),
-     posts as (${
-       business
-         ? "select 1"
-         : `insert into private.posts(id,owner_id,kind,area,category_key,title,description,province_id,city_id,status)
-            select post,${lit(owner)},'business','business',${CATEGORY},'Fixture business','A synthetic description long enough for every rule.',
-              'gp','gp_johannesburg','draft' from p returning 1`
-     }),
+function businessChecks(owner, n, { status = "pending", kind = "seen", business = null } = {}) {
+  const open = status === "pending";
+  const post = business ? `${lit(business)}::uuid` : "gen_random_uuid()";
+  const posts = business
+    ? "select 1"
+    : `insert into private.posts(id,owner_id,kind,area,category_key,title,description,province_id,city_id,status)
+       select post,${lit(owner)},'business','business',${CATEGORY},'Fixture business','A synthetic description long enough for every rule.',
+         'gp','gp_johannesburg','draft' from p returning 1`;
+  // A seen check needs its method, slots and consent; a CIPC check its review.
+  const seen = kind === "seen" ? "'video',array['Monday morning'],now()" : "null,null,null";
+  const finish =
+    kind === "seen"
+      ? "select count(*) from b, posts, c"
+      : `insert into private.frontend_cipc_reviews(check_id,registration_number,route,submitted_at)
+         select id,'2020/'||lpad((row_number() over ())::text,6,'0')||'/07','director',now() from b`;
+  return `with p as (select ${post} as post,gen_random_uuid() as id,i from generate_series(1,${n}) i),
+     posts as (${posts}),
      c as (insert into private.evidence_cases(id,subject_id,kind,status)
-       select id,${lit(owner)},'business',${status === "pending" ? "'open'" : "'decided'"} from p returning id),
+       select id,${lit(owner)},'business',${open ? "'open'" : "'decided'"} from p returning id),
      b as (insert into private.frontend_business_checks(id,business_id,owner_id,kind,status,seen_method,available_slots,screenshots_consent_at,decided_at,created_at)
-       select p.id,p.post,${lit(owner)},${lit(kind)},${lit(status)},${kind === "seen" ? "'video',array['Monday morning'],now()" : "null,null,null"},
-         ${status === "pending" ? "null" : "now()"},now()-make_interval(secs=>p.i) from p returning id)
-   ${
-     kind === "seen"
-       ? "select count(*) from b, posts, c"
-       : `insert into private.frontend_cipc_reviews(check_id,registration_number,route,submitted_at)
-          select id,'2020/'||lpad((row_number() over ())::text,6,'0')||'/07','director',now() from b`
-   };`;
+       select p.id,p.post,${lit(owner)},${lit(kind)},${lit(status)},${seen},${open ? "null" : "now()"},now()-make_interval(secs=>p.i) from p returning id)
+   ${finish};`;
+}
 
 // ---------------------------------------------------------------- read caps
 //
@@ -563,7 +566,7 @@ describe("read caps that need a held case or a subject", () => {
     assert.equal(new Set(log.map((entry) => entry.id.split(":")[0])).size, 100);
   });
 
-  test("LIM-F-get_my_frontend_verification_uploads: at most 2 uploads (one ID photo, one selfie)", async () => {
+  test("LIM-F-get_my_frontend_verification_uploads: one upload per purpose (the read's own limit 2 is redundant)", async () => {
     const owner = await h.member("my-uploads");
     const c = randomUUID();
     await h.seed(`insert into private.evidence_cases(id,subject_id,kind) values(${lit(c)},${lit(owner.id)},'kyc');

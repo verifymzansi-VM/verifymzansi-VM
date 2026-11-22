@@ -148,6 +148,10 @@ test("a missing test file, or a test that does not name the id, fails", () => {
   files[TEST] = "// tests something else\n";
   const unnamed = run(files, { limits: [entry(), tableEntry] });
   assert.ok(unnamed.failures.some((f) => /does not reference LIM-SQL-things-hour/.test(f)));
+  // A longer id that starts with this one does not name it.
+  files[TEST] = "// LIM-SQL-things-hour-2 and LIM-SQL-things-hour_daily\n";
+  const prefixed = run(files, { limits: [entry(), tableEntry] });
+  assert.ok(prefixed.failures.some((f) => /does not reference LIM-SQL-things-hour/.test(f)));
 });
 
 test("a register-driven test must read the register", () => {

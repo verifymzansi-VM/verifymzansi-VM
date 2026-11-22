@@ -30,7 +30,7 @@ export const fingerprintSql = (id) =>
  * internal.current_verified_identity(user) is set. Returns the case,
  * submission and fact ids.
  */
-export async function acceptIdentity(h, user, { riskScore = 0 } = {}) {
+export async function acceptIdentity(h, user) {
   const ids = {
     case: randomUUID(),
     idPhoto: randomUUID(),
@@ -46,7 +46,7 @@ export async function acceptIdentity(h, user, { riskScore = 0 } = {}) {
     insert into private.verification_identity_submissions(id,case_id,owner_id,case_version,id_artifact_id,selfie_artifact_id,identity_hmac,
         identity_key_id,encryption_key_id,receipt_id,recipe,risk_score,number_ciphertext,number_iv,number_tag)
       values(${lit(ids.submission)},${lit(ids.case)},${lit(user.id)},1,${lit(ids.idPhoto)},${lit(ids.selfie)},${fingerprintSql(user.id)},
-        'identity-match-v1','identity-number-v1',gen_random_uuid(),'manual-id-selfie-v1',${riskScore},
+        'identity-match-v1','identity-number-v1',gen_random_uuid(),'manual-id-selfie-v1',0,
         ${lit("a".repeat(26))},${lit("b".repeat(24))},${lit("c".repeat(32))});
     insert into private.accepted_identity_facts(id,owner_id,submission_id,identity_hmac,reviewed_by)
       values(${lit(ids.fact)},${lit(user.id)},${lit(ids.submission)},${fingerprintSql(user.id)},gen_random_uuid());

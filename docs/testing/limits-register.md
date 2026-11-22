@@ -23,7 +23,7 @@ schema snapshot is regenerated) fails when the register and the code disagree.
 ## Test kinds
 
 - `behaviour`: the test exercises the limit at or past its bound. The test file
-  must contain the entry's id.
+  must name the entry's id as a whole id (`LIM-F-x-2` does not name `LIM-F-x`).
 - `register`: a register-driven test reads the register and checks every entry
   of its kind: `src/__tests__/limits/rate-limiter-limits.test.ts` (every limiter
   action and tier, one request below and at each limit) and
