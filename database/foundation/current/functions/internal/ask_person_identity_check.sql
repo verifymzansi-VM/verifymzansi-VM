@@ -26,6 +26,10 @@ begin
   insert into private.verification_current_submissions(case_id,submission_id) values(k.case_id,k.submission_id);
   update private.identity_checks set asked_at=clock_timestamp(),ask_reason=explanation,provider_delete_due=null
     where id=k.id returning * into k;
+  -- The decline made the files due 5 days later; a person now decides first.
+  update private.evidence_artifacts a set retain_until=null from private.verification_identity_submissions s
+    where s.id=k.submission_id and a.id in(s.id_artifact_id,s.selfie_artifact_id)
+      and a.state in('uploaded','clean','rejected');
   perform internal.price_draft_actor();
   return jsonb_build_object('check_id',k.id,'asked_at',k.asked_at,'reused',false);
 end$function$;

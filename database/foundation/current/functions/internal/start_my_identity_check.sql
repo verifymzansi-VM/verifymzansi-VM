@@ -41,7 +41,7 @@ begin
   now_at:=clock_timestamp();
   insert into private.identity_checks(owner_id,case_id,created_at,expires_at,start_first_name,start_last_name)
     select actor,(opened->>'case_id')::uuid,now_at,now_at+interval '24 hours',p.legal_first_name,p.legal_last_name
-      from private.profiles p where p.account_id=actor returning * into k;
+      from private.profiles p where p.account_id=actor returning * into strict k;
   perform internal.price_draft_actor();
   return jsonb_build_object('check_id',k.id,'session_id',null,'session_url',null,'created',true);
 end$function$;

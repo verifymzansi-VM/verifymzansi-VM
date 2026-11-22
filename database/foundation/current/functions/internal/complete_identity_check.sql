@@ -50,7 +50,8 @@ begin
   select array_agg(r order by r) into found_reasons from (select distinct r from unnest(p_reasons
     ||case p_outcome when 'declined' then array['provider_declined'] when 'in_review' then array['provider_in_review'] else '{}'::text[] end
     ||case when exists(select 1 from private.identity_submission_names n where n.submission_id=s.id
-      and n.legal_first_name=p_names->>'first_name' and n.legal_last_name=p_names->>'last_name') then '{}'::text[]
+      and n.legal_first_name=p_names->>'first_name' and n.legal_last_name=p_names->>'last_name'
+      and n.legal_first_name=k.start_first_name and n.legal_last_name=k.start_last_name) then '{}'::text[]
       else array['names_differ'] end
     ||case when exists(select 1 from private.banned_identities b where b.identity_hmac=s.identity_hmac
       and b.retain_until>clock_timestamp()) then array['banned'] else '{}'::text[] end
@@ -62,7 +63,7 @@ begin
   if setting_mode in('staff_final','automatic') and found_reasons is null then
     update private.identity_checks set status='approved',finished_at=now_at,submission_id=s.id where id=k.id;
     perform internal.accept_automatic_identity_submission(k.id,s.id);
-  elsif setting_mode='automatic' then
+  elsif setting_mode='automatic' and not ('session_moved'=any(found_reasons)) then
     update private.identity_checks set reasons=found_reasons where id=k.id;
     perform internal.decline_automatic_identity_submission(k.id,s.id);
   else

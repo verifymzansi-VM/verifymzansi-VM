@@ -80,6 +80,109 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Identity keep-for periods, 22 November 2026
+
+`20261122022323_identity_keep_for.sql` is pending (see the applied register).
+Didit plan C1 (checklist item 61, part 3): how long identity check data is kept,
+and the last database rules before automatic ID checks may leave `manual`.
+**Order: apply-first** (the default). No command is added or removed; the
+website shows the new `decline_reason` only once the screens part ships, and its
+reader of the member's check accepts extra fields. Nothing changes for members
+or staff until an admin changes the setting, except the keep-for periods below.
+
+- **The setting:** `api.set_identity_check_mode` accepts `manual`, `staff_final`
+  and `automatic` (it refused all but `manual` with PT409
+  `identity_check_retention_pending`).
+- **Accepted identities:** the selfie and the encrypted ID number are kept while
+  the identity is current (the account is open) and while its ID number is
+  banned (5 years from the ban), even after the account closes. They went 30
+  days after the decision before. `internal.identity_record_kept(submission)`
+  decides it for the file clean-up (`internal.claim_evidence_cleanup`) and the
+  ID number erasure (`internal.retention_verification`, which now follows the
+  selfie instead of the ID photo). The ID photo still goes 30 days after the
+  decision, and the partner's copy of an accepted check is due 30 days after the
+  acceptance.
+- **Closed in good standing:** closing revokes the identity, so the selfie and
+  the ID number go with the account's other files, at the latest 90 days after
+  closure. The blocking code (the submission's fingerprint), the legal names and
+  the verified phone stay until the five-year history sweep; the phone numbers
+  an account had verified when it closed are no longer deleted 30 days after
+  closure. A number replaced before closure still goes 30 days after it was
+  replaced.
+- **Failed or not accepted attempts keep only the fingerprint:** an automatic
+  decline's files are due 5 days after the decline ("ask a person" keeps them
+  until a person decides); a submission staff send back has its files due 5 days
+  later (90 before); the partner's copy of a check sent back, or whose case
+  closed without an acceptance, is due 5 days after
+  (`internal.claim_identity_check_deletions` schedules it). The ID number is
+  erased when the selfie goes, then the submission's names snapshot. The check
+  row, with its "ask a person" reason, goes 7 days after it finished once the
+  partner's copy is deleted and no person is still to decide it. A closed
+  account's "ask a person" reasons go 90 days after closure.
+- **The check row:** its start context (typed names at start, network hash,
+  device kind) is cleared when it leaves `started` (trigger
+  `identity_check_clear_start`, two constraints). The five-year sweep skips an
+  account while a partner copy of one of its checks is not yet deleted.
+- **Results:** `session_moved` always goes to the staff queue, on `automatic`
+  too. A result whose names at start differ from the submission's names gets
+  `names_differ` (staff on `manual` and `staff_final`, a decline on
+  `automatic`). The start inserts exactly one row (`strict`). The member's view
+  of a declined check carries `decline_reason`: `id_unreadable`, `names_differ`,
+  `under_18`, `photo_not_matched` or `not_confirmed` (a ban, a duplicate or a
+  high risk score is never named).
+- **Logs:** authority-request logs (`private.identity_disclosures` with their
+  events) are kept while a named account exists and 5 years after it closed, a
+  search that named nobody 5 years from the search; an open legal hold on a
+  named account keeps them. The setting's change log is kept 5 years. Both are
+  deleted by `internal.retention_verification` under `api.run_retention`.
+- **The clean-up and the case version:** on an open identity case, deleting a
+  file that no current submission uses no longer changes the case version
+  (`internal.evidence_artifact_submission_guard`), so deleting a sent-back
+  attempt's files cannot make the newer submission stale.
+- **Not in this update:** the privacy export does not yet list the member's
+  checks; it waits for the pending updates that also replace
+  `internal.frontend_privacy_export_data`.
+
+Holds keep everything, as before (an open legal hold on the account, a fraud
+hold on the case).
+
+**Applying.**
+
+1. Run `../preflight/20261122022323_identity_keep_for.check.sql` unchanged in
+   the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "identity keep-for: update not applied; mode: manual;
+   checks: N; finished: M; accepted identities: K" (any counts).
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "identity keep-for: already applied; ...".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is `../rollback/20261122022323_identity_keep_for.down.sql`
+(only with the owner's decision; prefer a forward fix). It refuses (55000)
+unless every function has the update's body, the setting is `manual` and no
+check has finished since the update; then it puts back the 11 bodies byte for
+byte, drops the helper and the trigger and restores the check row's constraints.
+Data the retention job already deleted stays deleted.
+
+`node --import tsx scripts/test-foundation-identity-keep-for.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; drifted bodies and a premature rollback
+refused; apply, rollback and re-apply return the same fingerprints; the three
+settings; `session_moved` and names at start on each setting; the cleared start
+context; each decline category; the ID photo at day 29 and 31, the selfie and ID
+number kept for an open account (also after 5 years); the partner's copy at day
+29 and 31 after an acceptance; good-standing closure (selfie and number gone,
+code, names and phone kept, the 90-day cap at day 89 and 91, a replaced number
+still deleted); the five-year sweep waiting for the partner's copy (4 years 364
+days, then 5 years 1 day); a ban keeping the selfie and number 5 years from the
+ban; an automatic decline's files at 4 days 23 hours and 5 days 1 hour, then
+only the fingerprint, and the check row at 6 and 8 days; "ask a person" answered
+by a return (5 days) and by an acceptance (30 days, the reason cleared 91 days
+after closure, not 89); a sent-back attempt's files deleted without making the
+newer submission stale; the authority-request logs and the change log at their
+5-year edges; a legal hold keeping a failed attempt.
+
 ## Business storefront, 21 November 2026
 
 `20261121131915_business_storefront.sql` was applied on 21 November 2026 at
@@ -6867,5 +6970,7 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   new functions absent), after: already applied (the 5 bodies as updated);
   production fingerprint after it (fingerprint.sql) matched the full replay
   (except the known schema grant difference)
+
+- `20261122022323_identity_keep_for.sql`: pending; apply-first
 
 <!-- applied-register:end -->
