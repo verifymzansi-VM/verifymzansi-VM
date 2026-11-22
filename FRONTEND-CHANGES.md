@@ -148,6 +148,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 82. Automatic ID checks: hidden until it works (no file rows) | hidden until it works (approved by owner 2026-11-21) | Nothing. The database part of automatic ID checks (update 20261121094003) is in, with the switch at Manual; members keep the in-page camera and staff review. The database keeps the switch at Manual until the retention update (C1) is applied |
 | 85. Business storefront (item 17b, first part) | approved by owner 2026-11-21 (with the group 85 part of 7 rows elsewhere) | Nothing today (switch off). Once on: a checked business with a running Multi-listing package and at least one live listing shows 'All stock' (search, filters that follow the trade, newest first, Show more) on its business page, and each of its listings names the business (logo or initials) with 'See all 18 cars'. |
 | 86. Copy a post (item 17b, second part) | approved by owner 2026-11-22 (with the group 86 part of 8 rows elsewhere) | Nothing today (switch off). Once on: a member whose Multi-listing package runs gets 'More', then 'Copy this post' on My posts; the copy opens in the 'Post an item' form with a note (everything but the video filled in, one new photo for vehicles and property), unfinished copies wait under 'Drafts' for 14 days, and reviewers see 'Copied from'. |
+| 89. Authority requests: only the four D9 request types (item 69) (no file rows: the group 89 part of 6 rows in group 77) | approved by owner 2026-11-22 | Governors and admins only: the authority request form offers only a subpoena, court order, search warrant or urgent life-risk request, and asks for the issuing court (or SAPS station), the official number called and who confirmed it; the record and print sheet show the request type, reference, issuer and check; an urgent request shows no selfie or ID photo. Members see nothing new. |
 | 93. Free credits for businesses you recruit (item 70) | awaiting owner (with the group 93 part of 4 rows elsewhere) | Admins only: a 'Free credits' page under Commercial in the staff menu to give an ID-verified member 1 to 6 free posts for 1 to 30 days with a reason, list every gift (masked email, posts, end date, Active or Ended, views) and extend one by 1 to 30 days. Members with a gift: 'Free credits from VerifyMzansi: 1 post' with its end date on My slots, and 'Free credits from VerifyMzansi' on the posting slots card of My posts. |
 
 Questions for the owner:
@@ -3186,13 +3187,13 @@ Decision: approved by owner 2026-11-21 (owner question: 'Approve the authority-r
 | File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `src/app/admin/authority-requests/page.tsx` | visual | Group 77: the new Authority requests page (governors and admins): the intro, the 2-step line and the earlier requests. | Governors and admins: the page described in group 77; a message when the list cannot be loaded. | keep | approved by owner 2026-11-21 | 2026-11-21 | ea4cd6674461 |
-| `src/app/admin/authority-requests/authority-request-form.tsx` | visual | Group 77: the request form (request, search, confirmation, Open record). | Governors and admins: the form described in group 77. | keep | approved by owner 2026-11-21 | 2026-11-21 | c380743b6a12 |
-| `src/app/admin/authority-requests/[id]/page.tsx` | visual | Group 77: the record page (logged line, kept identity record, Print disclosure sheet). | Governors and admins: the record described in group 77. | keep | approved by owner 2026-11-21 | 2026-11-21 | 62e32bbde186 |
-| `src/app/admin/authority-requests/[id]/record-view.tsx` | visual | Group 77: one person's record (selfie, names, ID number, phones, how checked, ID photo, account), used on the page and the sheet. | Governors and admins: the record rows described in group 77. | keep | approved by owner 2026-11-21 | 2026-11-21 | 1470e17b35b6 |
+| `src/app/admin/authority-requests/authority-request-form.tsx` | visual | Group 77: the request form (request, search, confirmation, Open record). Group 89: only the four D9 request types; issuing court or SAPS station, official number called and who confirmed it; new tick-box words. | Governors and admins: the form described in group 77. Group 89: the form changes described in group 89. | keep | approved by owner 2026-11-21 (group 77 part) and 2026-11-22 (group 89 part) | 2026-11-22 | e5e2bea46005 |
+| `src/app/admin/authority-requests/[id]/page.tsx` | visual | Group 77: the record page (logged line, kept identity record, Print disclosure sheet). Group 89: the request type, reference, issuer and check above the record. | Governors and admins: the record described in group 77. Group 89: the request rows described in group 89. | keep | approved by owner 2026-11-21 (group 77 part) and 2026-11-22 (group 89 part) | 2026-11-22 | 9b1de959716b |
+| `src/app/admin/authority-requests/[id]/record-view.tsx` | visual | Group 77: one person's record (selfie, names, ID number, phones, how checked, ID photo, account), used on the page and the sheet. Group 89: the shared request rows; no selfie or ID photo row for an urgent request. | Governors and admins: the record rows described in group 77. Group 89: an urgent request's record without the selfie or ID photo. | keep | approved by owner 2026-11-21 (group 77 part) and 2026-11-22 (group 89 part) | 2026-11-22 | 5c9c7e1024c6 |
 | `src/app/admin/authority-requests/[id]/record-parts.tsx` | visual | Group 77: the selfie, the Print button and the 15-minute close. | Governors and admins: the selfie and the buttons described in group 77. | keep | approved by owner 2026-11-21 | 2026-11-21 | 2bf515697b20 |
-| `src/app/admin/authority-requests/[id]/sheet/page.tsx` | visual | Group 77: the watermarked print disclosure sheet. | Governors and admins: the sheet described in group 77. | keep | approved by owner 2026-11-21 | 2026-11-21 | f79abc610d41 |
-| `src/app/admin/authority-requests/page.test.tsx` | test | Group 77: checks the guard, the 2-step line, the searches (never by name), opening, refusals, the earlier requests and the re-verify redirect. | Nothing (not part of a page) | keep | approved by owner 2026-11-21 | 2026-11-21 | 8b8e024b8924 |
-| `src/app/admin/authority-requests/[id]/page.test.tsx` | test | Group 77: checks the record, no match, an ID number only tried, the closed record and the re-verify redirect, and the sheet's watermark and stamp. | Nothing (not part of a page) | keep | approved by owner 2026-11-21 | 2026-11-21 | bdbbb9b0f78f |
+| `src/app/admin/authority-requests/[id]/sheet/page.tsx` | visual | Group 77: the watermarked print disclosure sheet. Group 89: the sheet's request rows add Issued by and Checked with. | Governors and admins: the sheet described in group 77. Group 89: the request rows described in group 89. | keep | approved by owner 2026-11-21 (group 77 part) and 2026-11-22 (group 89 part) | 2026-11-22 | 613583589e40 |
+| `src/app/admin/authority-requests/page.test.tsx` | test | Group 77: checks the guard, the 2-step line, the searches (never by name), opening, refusals, the earlier requests and the re-verify redirect. Group 89: checks the four request types, the urgent wording, the new fields in the request and the official number refusal. | Nothing (not part of a page) | keep | approved by owner 2026-11-21 (group 77 part) and 2026-11-22 (group 89 part) | 2026-11-22 | c2f9f786c9ae |
+| `src/app/admin/authority-requests/[id]/page.test.tsx` | test | Group 77: checks the record, no match, an ID number only tried, the closed record and the re-verify redirect, and the sheet's watermark and stamp. Group 89: checks the request rows, an urgent record without the selfie or ID photo, and an earlier record's type. | Nothing (not part of a page) | keep | approved by owner 2026-11-21 (group 77 part) and 2026-11-22 (group 89 part) | 2026-11-22 | 5190a52cd6a5 |
 
 ### 78. Staff privacy requests: no Export on completed requests
 
@@ -3500,6 +3501,41 @@ Decision: approved by owner 2026-11-22 (after seeing the copy-a-post pictures).
 | `src/app/post/create-listing/copy-notes.tsx` | visual | Group 86: the copy's note, the video note and the Final check lines. | Only on a copy: the texts described in group 86. | keep | approved by owner 2026-11-22 | 2026-11-21 | cad9f742c964 |
 | `src/components/admin/moderation/moderation-preview-panel.test.tsx` | test | Group 86: checks the copied-from link for a live source, and no link for one that is not live or was deleted. | Nothing (not part of a page) | keep | approved by owner 2026-11-22 | 2026-11-21 | fc832b857392 |
 
+### 89. Authority requests: only the four D9 request types (item 69)
+
+Launch checklist item 69, owner decision D9 of 21 November 2026 ("Keep both").
+Database update `20261122013616_authority_request_types.sql` (pending, apply
+first). Governors and admins only; members see nothing new. No file rows: the
+group 89 part of 6 rows in group 77.
+
+- `/admin/authority-requests`, '1. The request': 'Type of request' offers only
+  'Subpoena (Criminal Procedure Act, s205)', 'Court order', 'Search warrant' and
+  'Urgent: a life is at risk (SAPS, in writing)' (the written police request and
+  the Information Regulator are gone). 'Request reference' becomes 'Case number
+  on the court document' ('Case number on the written request' for an urgent
+  request), and three new fields follow: 'Issuing court' ('SAPS station' for an
+  urgent request), 'Official number you called' and 'Who confirmed it', with
+  'Call the issuing court or the prosecutor named in it on an official number to
+  confirm it.' (urgent: 'Call the station on its official number to confirm the
+  request. Only the names, ID number and verified phone are given; never the
+  selfie.'). The tick box reads 'I checked this request on the official number
+  above. It is genuine and names this person or this post. I will keep the
+  original with the company records.' Each missing field is refused under the
+  form and marked.
+- `/admin/authority-requests/[id]` and the print sheet: 'Type of request',
+  'Reference', 'Issued by' and 'Checked with' (who, on which number) above the
+  record (the sheet keeps its other request rows). An urgent request adds '(only
+  the minimum is given; never the selfie)' to its type, and its record shows no
+  selfie and no 'Photo of the ID document' row: full names, SA ID number,
+  verified phone (the current number only, no earlier numbers), how the ID was
+  checked and the account. Records opened before
+  this change show their earlier type and no 'Issued by' or 'Checked with'.
+
+Pictures (synthetic test people only, not published):
+`screenshots/item69-authority-requests/` (before and after, desktop 1280 and
+phone 375).
+
+Decision: approved by owner 2026-11-22 (after seeing the item 69 pictures; answer: 'Approve both', for the pictures and the database update).
 ### 93. Free credits for businesses you recruit (item 70)
 
 Launch checklist item 70, the owner's design of 22 November 2026. Database
