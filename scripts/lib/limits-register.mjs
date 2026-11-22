@@ -53,6 +53,16 @@ const TEST_KINDS = new Set(["behaviour", "register", "declaration"]);
 const UNTESTED_MECHANISM = "LIM-MECH-SQL-GUARD";
 
 const toPosix = (path) => path.split("\\").join("/");
+/**
+ * Whether `text` names `id` as a whole id: "LIM-F-x" is not named by
+ * "LIM-F-x-2" or "LIM-F-x_y".
+ */
+function namesId(text, id) {
+  const idChar = (c) => c !== undefined && /[-\w]/.test(c);
+  for (let at = text.indexOf(id); at >= 0; at = text.indexOf(id, at + 1))
+    if (!idChar(text[at - 1]) && !idChar(text[at + id.length])) return true;
+  return false;
+}
 
 function walk(dir) {
   if (!existsSync(dir)) return [];
@@ -286,7 +296,7 @@ export function checkLimitsRegister({
         failures.push(`${entry.id}: test file ${test.file} is missing`);
         continue;
       }
-      if (test.kind === "behaviour" && !text.includes(entry.id))
+      if (test.kind === "behaviour" && !namesId(text, entry.id))
         failures.push(`${entry.id}: test file ${test.file} does not reference ${entry.id}`);
       if (test.kind === "register" && !text.includes("limits-register.json"))
         failures.push(`${entry.id}: register test ${test.file} does not read the register`);
