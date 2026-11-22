@@ -73,8 +73,8 @@
 -- ORDER: apply first, then merge (the website's deploy check probes every
 -- command in the runtime manifest; the showroom falls back to the newest posts
 -- if the read fails).
--- Read-only preflight: ../preflight/20261121224857_fair_showroom.check.sql.
--- Rollback: ../rollback/20261121224857_fair_showroom.down.sql.
+-- Read-only preflight: ../preflight/20261122023000_fair_showroom.check.sql.
+-- Rollback: ../rollback/20261122023000_fair_showroom.down.sql.
 begin;
 -- Never wait more than 5 seconds for anything this update needs.
 set local lock_timeout='5s';

@@ -26,7 +26,7 @@ const publicBusinessProjections = new Map([
 // the storefront of a public business or listing, card facts only). The
 // probe's unknown post id answers exactly null.
 const publicPostReads = new Map([["get_public_storefront", (data) => data === null]]);
-// Reviewed public feeds (20261121224857_fair_showroom.sql): the showroom order
+// Reviewed public feeds (20261122023000_fair_showroom.sql): the showroom order
 // of publicly live posts, card facts only. Volatile for its random variety; it
 // writes nothing. The probe's empty request is the home showroom: at most 15
 // cards, each with is_new.

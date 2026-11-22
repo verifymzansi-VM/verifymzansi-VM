@@ -98,7 +98,7 @@ export interface FoundationShowroomRequest {
   province?: string;
   city?: string;
 }
-/** The fair showroom order for one visitor area (20261121224857_fair_showroom.sql):
+/** The fair showroom order for one visitor area (20261122023000_fair_showroom.sql):
  * at most 15 cards (home) or 7 (an area), in showroom order, each with is_new. */
 export async function loadFoundationShowroom(
   api: FoundationPublicApi,

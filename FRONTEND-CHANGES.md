@@ -3448,7 +3448,7 @@ Decision: approved by owner 2026-11-21 (after seeing the storefront pictures; an
 Launch checklist item 66, fair showroom plan (owner-approved 21 November 2026:
 'Approve all 7'; plan pictures `1` to `5` count as the design sign-off; the
 built screens come back for picture sign-off). Database update
-`20261121224857_fair_showroom.sql` (pending, apply first).
+`20261122023000_fair_showroom.sql` (pending, apply first).
 
 - Home showroom and the Market, Business and Tourism & Events showrooms: the
   cards come in the fair order instead of newest first. Posts seen least this

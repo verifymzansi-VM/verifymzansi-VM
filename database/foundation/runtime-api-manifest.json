@@ -6118,7 +6118,7 @@
     },
     {
       "name": "showroom_feed",
-      "updates": ["updates/20261121224857_fair_showroom.sql"],
+      "updates": ["updates/20261122023000_fair_showroom.sql"],
       "arguments": [
         {
           "name": "p_request",

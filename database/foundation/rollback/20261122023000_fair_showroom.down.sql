@@ -1,4 +1,4 @@
--- Reviewed rollback for updates/20261121224857_fair_showroom.sql.
+-- Reviewed rollback for updates/20261122023000_fair_showroom.sql.
 -- Not part of the replay. Run it only if that update must be undone, after the
 -- owner has decided so; prefer a forward fix. The website's showroom then
 -- falls back to the newest posts (its read fails closed to that list).

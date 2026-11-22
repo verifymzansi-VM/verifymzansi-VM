@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Behaviour checks for 20261121224857_fair_showroom.sql: the public read
+// Behaviour checks for 20261122023000_fair_showroom.sql: the public read
 // api.showroom_feed orders each showroom by turns (7-day appearances against
 // the fair share), mixes 3 city / 2 province / 2 rest-of-South-Africa places
 // out of every 7, caps busy posts at twice the fair share, tags and lifts new
@@ -44,7 +44,7 @@ import {
 } from "./lib/foundation-sql-checks.mjs";
 import { applySteps } from "./lib/foundation-sql-lint.mjs";
 
-const UPDATE = "20261121224857_fair_showroom.sql";
+const UPDATE = "20261122023000_fair_showroom.sql";
 const [PREFLIGHT, ROLLBACK] = [
   ["preflight", ".check.sql"],
   ["rollback", ".down.sql"],

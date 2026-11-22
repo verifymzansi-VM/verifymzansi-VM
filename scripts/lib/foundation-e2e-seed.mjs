@@ -480,7 +480,7 @@ export async function seedTestCopy({ root = process.cwd(), status, sql, log = ()
     );
 
   // Showroom turns, through the website server's own recording command: the
-  // fair showroom (20261121224857_fair_showroom.sql) puts the posts seen least
+  // fair showroom (20261122023000_fair_showroom.sql) puts the posts seen least
   // first and varies the order of posts on level turns at random. Giving the
   // seeded posts turns a whole fair share apart makes the order the same on
   // every run (the visual pictures; the test copy keeps the front card) and

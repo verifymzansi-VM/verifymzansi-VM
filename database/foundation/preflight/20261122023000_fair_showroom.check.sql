@@ -1,4 +1,4 @@
--- Read-only preflight for updates/20261121224857_fair_showroom.sql.
+-- Read-only preflight for updates/20261122023000_fair_showroom.sql.
 --
 -- Run this file unchanged in the Supabase SQL editor before applying the
 -- update, and again after it. It changes nothing: the first statement makes

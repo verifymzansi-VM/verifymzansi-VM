@@ -82,7 +82,7 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Fair showroom for every post, 21 November 2026
 
-`20261121224857_fair_showroom.sql` is pending (see the applied register). Launch
+`20261122023000_fair_showroom.sql` is pending (see the applied register). Launch
 checklist item 66 (design approved by the owner on 21 November 2026). It adds
 one public read, `api.showroom_feed(p_request)` (visitors and members, security
 invoker over a security definer `internal` twin), which the home showroom and
@@ -161,7 +161,7 @@ if the read fails.
 
 **Applying.**
 
-1. Run `../preflight/20261121224857_fair_showroom.check.sql` unchanged in the
+1. Run `../preflight/20261122023000_fair_showroom.check.sql` unchanged in the
    SQL editor. It is read only. Continue only if its result is the single
    "summary" row reading "fair showroom: update not applied; showroom posts: N"
    (any count).
@@ -171,7 +171,7 @@ if the read fails.
    compare with `../fingerprint.json`; once it matches, record it as described
    above.
 
-The reviewed rollback is `../rollback/20261121224857_fair_showroom.down.sql`
+The reviewed rollback is `../rollback/20261122023000_fair_showroom.down.sql`
 (only with the owner's decision; prefer a forward fix). It refuses (55000)
 unless all four parts are the update's, then drops the new function, the read
 and the index and puts back `internal.record_post_activity` byte for byte; the
@@ -6985,6 +6985,6 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   production fingerprint after it (fingerprint.sql) matched the full replay
   (except the known schema grant difference)
 
-- `20261121224857_fair_showroom.sql`: pending; apply-first
+- `20261122023000_fair_showroom.sql`: pending; apply-first
 
 <!-- applied-register:end -->
