@@ -29,23 +29,17 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import {
-  assertReadOnlyPreflight,
-  completeSlotOrder,
-  executeGrants,
-  sqlLiteral,
-} from "./lib/foundation-sql-checks.mjs";
+  assertClaimKinds,
+  assertNoticeGrants,
+  checkNoticeUpdate,
+  CLAIM,
+  RUN,
+} from "./lib/foundation-outbox-notice-checks.mjs";
+import { completeSlotOrder, sqlLiteral } from "./lib/foundation-sql-checks.mjs";
 import { applySteps } from "./lib/foundation-sql-lint.mjs";
-import {
-  applyAndProveRollback,
-  assertDriftRefused,
-  functionBodyMd5,
-  P30,
-  runTwoAdminUpdateCheck,
-} from "./lib/foundation-staff-payment-world.mjs";
+import { P30, runTwoAdminUpdateCheck } from "./lib/foundation-staff-payment-world.mjs";
 
 const UPDATE = "20261122182304_free_credit_reminder.sql";
-const CLAIM = "internal.claim_supported_notification_outbox(text[],integer)";
-const RUN = "api.run_slot_renewals(integer)";
 const KEY = "internal.free_credit_reminder_key(uuid,uuid)";
 const QUEUE = "internal.queue_free_credit_reminders(integer)";
 const REVIEWED = {
@@ -72,8 +66,7 @@ const ALREADY_APPLIED =
 await runTwoAdminUpdateCheck(
   { update: UPDATE, label: "credit", title: "Free credit reminder" },
   async ({ database, check, kit, world, admin }) => {
-    const { q, json, fails, member, staff, service, preflight, steps, index } = kit;
-    const bodyMd5 = (signature) => functionBodyMd5(kit, signature);
+    const { q, json, member, staff, service, steps, index } = kit;
     const replica = (sql) =>
       q(`set session_replication_role=replica;\n${sql}\nset session_replication_role=origin;`);
     const verified = (label) => world.verified(label, admin);
@@ -116,57 +109,25 @@ await runTwoAdminUpdateCheck(
       `free_credit_reminder:${gift}:${q(
         `select floor(extract(epoch from ends_at))::bigint from private.entitlements where id='${gift}';`
       )}`;
-    const SIGNATURES = [RUN, CLAIM, "api.claim_supported_notification_outbox(text[],integer)"];
 
     // ------------------------------------------------------------ before
     const early = verified("credit-early");
     const earlyGift = give(early);
     endsIn(earlyGift, 2);
-    await check(
-      "before the update: the reviewed bodies, and the preflight reads not applied",
-      () => {
-        for (const [signature, md5] of Object.entries(REVIEWED))
-          assert.equal(bodyMd5(signature), md5, signature);
-        const rows = preflight();
-        assert.deepEqual(
-          rows.map((r) => r[0]),
-          ["summary"],
-          JSON.stringify(rows)
-        );
-        assert.match(rows[0][1], NOT_APPLIED);
-        assertReadOnlyPreflight(database, kit.preflightSql);
-        // The minute job queues no such reminder yet.
-        assert.equal(sweep().free_credit_reminders, undefined);
+    const grants = await checkNoticeUpdate(
+      { kit, database, check },
+      {
+        label: LABEL,
+        reviewed: REVIEWED,
+        updated: UPDATED,
+        notApplied: NOT_APPLIED,
+        applied: ALREADY_APPLIED,
+        before: () => {
+          // The minute job queues no such reminder yet.
+          assert.equal(sweep().free_credit_reminders, undefined);
+        },
       }
     );
-    await check("drift and a premature rollback are refused", () => {
-      assertDriftRefused(kit, { label: LABEL, signatures: [CLAIM, RUN], rows: 2 });
-      const live = q(
-        "select pg_get_constraintdef(oid) from pg_constraint where conname='outbox_events_kind_check';"
-      );
-      q(`alter table private.outbox_events drop constraint outbox_events_kind_check;
-        alter table private.outbox_events add constraint outbox_events_kind_check check (kind <> '');`);
-      assert.match(preflight()[0][1], /^free credit reminder: unexpected state;/);
-      assert.match(
-        fails(kit.step.sql, "55000"),
-        /free credit reminder precondition: the outbox kind check is not the reviewed one/
-      );
-      q(`alter table private.outbox_events drop constraint outbox_events_kind_check;
-        alter table private.outbox_events add constraint outbox_events_kind_check ${live};`);
-      assert.match(preflight()[0][1], NOT_APPLIED);
-    });
-
-    // ------------------------------------------------------------- apply
-    const grants = executeGrants(json, SIGNATURES);
-    await applyAndProveRollback(kit, database, check, {
-      label: LABEL,
-      applied: ALREADY_APPLIED,
-      notApplied: NOT_APPLIED,
-    });
-    await check("after the update: the bodies are the update's", () => {
-      for (const [signature, md5] of Object.entries(UPDATED))
-        assert.equal(bodyMd5(signature), md5, signature);
-    });
 
     const thandi = verified("credit-thandi");
     const thandiGift = give(thandi);
@@ -320,69 +281,10 @@ await runTwoAdminUpdateCheck(
       assert.equal(result.reminders, 1, "the slot's own renewal reminder");
       assert.deepEqual(reminders(slot), []);
     });
-    await check("the claim takes 23 kinds, each once", () => {
-      const kinds = [
-        "payment_completed",
-        "payment_reversed",
-        "payment_reconciliation_required",
-        "trial_started",
-        "post_expired",
-        "post_expiry_reminder",
-        "draft_deletion_warning",
-        "post_deleted",
-        "verification_phone_confirmed",
-        "identity_accepted",
-        "enquiry_received",
-        "account_warning",
-        "content_hidden",
-        "account_suspended",
-        "account_banned",
-        "appeal_decided",
-        "business_check_update",
-        "post_sold",
-        "post_kept",
-        "verification_returned",
-        "slot_renewal_reminder",
-        "term_ending_notice",
-        "free_credit_reminder",
-      ];
-      const list = (k) => `array[${k.map((x) => `'${x}'`).join(",")}]`;
-      json(service(`select api.claim_supported_notification_outbox(${list(kinds)},1);`));
-      fails(
-        service(
-          `select api.claim_supported_notification_outbox(${list([...kinds, "post_kept"])},1);`
-        ),
-        "22023",
-        /supported mail kinds required/
-      );
-      fails(
-        service(`select api.claim_supported_notification_outbox(${list(["no_such_kind"])},1);`),
-        "22023",
-        /unsupported mail kind/
-      );
-    });
-    await check("who may run them is unchanged; the new functions are internal", () => {
-      assert.deepEqual(executeGrants(json, SIGNATURES), grants);
-      for (const signature of SIGNATURES)
-        assert.deepEqual(grants[signature], {
-          anon: false,
-          authenticated: false,
-          service_role: true,
-        });
-      assert.deepEqual(executeGrants(json, [QUEUE, KEY]), {
-        [QUEUE]: { anon: false, authenticated: false, service_role: true },
-        [KEY]: { anon: false, authenticated: false, service_role: false },
-      });
-      for (const [signature, definer] of [
-        [QUEUE, true],
-        [KEY, false],
-      ]) {
-        const meta =
-          json(`select jsonb_build_object('definer',prosecdef,'owner',proowner::regrole::text,'config',proconfig)
-            from pg_proc where oid='${signature}'::regprocedure;`);
-        assert.deepEqual(meta, { definer, owner: "postgres", config: ["search_path=pg_catalog"] });
-      }
-    });
+    await check("the claim takes 23 kinds, each once", () => assertClaimKinds(kit, 23));
+    await check("who may run them is unchanged; the new functions are internal", () =>
+      assertNoticeGrants(kit, grants, { queue: QUEUE, due: KEY })
+    );
 
     const later = steps.slice(index + 1);
     if (later.length) {
