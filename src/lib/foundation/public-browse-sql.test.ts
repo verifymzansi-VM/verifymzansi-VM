@@ -5,6 +5,15 @@ import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import { readRestoredCollection } from "./marketplace-read";
 import type { FoundationPublicApi } from "./public-api";
+import type * as HiddenFeatures from "@/lib/hidden-features";
+
+// Not about view and like totals: SHOW_ENGAGEMENT_TOTALS is pinned off so no
+// totals read is made (that read is tested in post-engagement.test.ts).
+// It is on in production (owner's decision of 22 November 2026).
+vi.mock("@/lib/hidden-features", async (importOriginal) => ({
+  ...(await importOriginal<typeof HiddenFeatures>()),
+  SHOW_ENGAGEMENT_TOTALS: false,
+}));
 
 // Actual update SQL on isolated embedded PostgreSQL. The fixture supplies only
 // the surrounding projection/auth context; it never opens a hosted connection.

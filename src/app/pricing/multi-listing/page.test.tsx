@@ -42,10 +42,13 @@ describe("the hidden Multi-listing page (P4a)", () => {
     const text = container.textContent ?? "";
     expect(text).toMatch(/From 5 slots at R100 per slot per 30 days, for 30, 90 or 180 days/);
     expect(screen.getByText("Does not renew automatically")).toBeInTheDocument();
-    // Package teams are not built yet: hidden until they work.
-    expect(text).not.toMatch(/You \+ 1 person|you \+ 4/);
-    // Advertise hides its Multi-listing section while packages are off sale there.
-    expect(screen.queryByRole("link", { name: /Who multi-listing is for/ })).toBeNull();
+    // Package teams are shown (SHOW_PACKAGE_TEAMS), though not built yet.
+    expect(text).toMatch(/You \+ 1 person \(you \+ 4 from 50 slots\)/);
+    // Advertise shows its Multi-listing section (PACKAGES_ON_SALE).
+    expect(screen.getByRole("link", { name: /Who multi-listing is for/ })).toHaveAttribute(
+      "href",
+      "/advertise#multi-listing"
+    );
     expect(text).toMatch(/up to 4 posts going live per slot per 30 days/);
     expect(text).not.toMatch(/Paid once|never renews|administrators|10 to 100|for 90 or 180 days/);
     // Ozow's maximum (the database setting), never the old R10,000.

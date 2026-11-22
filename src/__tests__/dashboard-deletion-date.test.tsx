@@ -7,6 +7,15 @@ import type { PropsWithChildren, ReactNode } from "react";
 import ListingsPage from "@/app/dashboard/listings/page";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
 import { readRestoredPostManager } from "@/lib/foundation/post-manager";
+import type * as HiddenFeatures from "@/lib/hidden-features";
+
+// Not about view and like totals: SHOW_ENGAGEMENT_TOTALS is pinned off so no
+// totals read is made (that read is tested in post-engagement.test.ts).
+// It is on in production (owner's decision of 22 November 2026).
+vi.mock("@/lib/hidden-features", async (importOriginal) => ({
+  ...(await importOriginal<typeof HiddenFeatures>()),
+  SHOW_ENGAGEMENT_TOTALS: false,
+}));
 
 vi.mock("@/lib/foundation/server-session", () => ({
   readFoundationServerSession: vi.fn(),

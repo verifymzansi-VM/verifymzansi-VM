@@ -4,6 +4,14 @@
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render, screen } from "@testing-library/react";
+import type * as HiddenFeatures from "@/lib/hidden-features";
+
+// These tests check the view and like display with SHOW_ENGAGEMENT_TOTALS
+// switched off, the branch kept for turning it off again. It is on in production (owner's decision of 22 November 2026).
+vi.mock("@/lib/hidden-features", async (importOriginal) => ({
+  ...(await importOriginal<typeof HiddenFeatures>()),
+  SHOW_ENGAGEMENT_TOTALS: false,
+}));
 
 const { listingDetailClientState } = vi.hoisted(() => ({
   listingDetailClientState: {

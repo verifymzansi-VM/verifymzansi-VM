@@ -15,6 +15,15 @@ import {
 import { getStablePlanId } from "@/lib/constants/plan-ids";
 import { getActivePlanSelectionFromToken } from "@/lib/billing/plan-resolver";
 import { getEntitlements } from "@/lib/services/entitlements";
+import type * as Pricing from "@/lib/constants/pricing";
+
+// Individual slot parity, checked with package sales switched off (no
+// Multi-listing tab). It is on in production (owner's decision of 22 November 2026). The
+// foundation browser tests check the Multi-listing tab.
+vi.mock("@/lib/constants/pricing", async (importOriginal) => ({
+  ...(await importOriginal<typeof Pricing>()),
+  PACKAGES_ON_SALE: false,
+}));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/pricing",

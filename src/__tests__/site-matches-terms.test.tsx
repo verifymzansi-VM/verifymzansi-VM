@@ -13,6 +13,17 @@ import postingTermsV5 from "@/lib/legal/terms-documents/posting-v5.json";
 import { TrialPolicy } from "@/components/billing/trial-policy";
 import { getPlanFeatureItems, PLANS, RETAIL_OFFERS } from "@/lib/constants/pricing";
 import type { PublicSponsor } from "@/lib/organisations/sponsors";
+import type * as HiddenFeatures from "@/lib/hidden-features";
+
+// These guards check the wording with paid add-ons and the sponsor offer
+// switched off, the branch kept for turning them off again. Both are on in
+// production (owner's decision of 22 November 2026); the wording they show is
+// listed for review in the launch checklist item 71 pull request.
+vi.mock("@/lib/hidden-features", async (importOriginal) => ({
+  ...(await importOriginal<typeof HiddenFeatures>()),
+  SHOW_PAID_ADDONS: false,
+  SHOW_SPONSOR_OFFER: false,
+}));
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/link", () => ({

@@ -77,17 +77,18 @@ it("keeps the site's price constants in step with the active Terms", () => {
   const wasPrices = RETAIL_OFFERS.filter((offer) => offer.compareAtCents !== undefined);
   for (const offer of wasPrices)
     expect(noDiscounts, `${rand(offer.compareAtCents!)} was-price`).toBe(false);
-  // Multi-listing prices are shown only while packages are on sale and the
-  // active Terms cover multi-listing packages or state the package slot price.
-  const multiListingCovered = content.includes(
-    "Multi-listing plans bought online follow these Terms"
-  );
-  expect(
-    !PACKAGES_ON_SALE ||
-      multiListingCovered ||
-      content.includes(`${rand(PACKAGE_SLOT_PRICE_CENTS_PER_30_DAYS)} per slot`),
-    `package slot price ${rand(PACKAGE_SLOT_PRICE_CENTS_PER_30_DAYS)}`
-  ).toBe(true);
+  // Multi-listing prices are shown (PACKAGES_ON_SALE is on in production by
+  // the owner's decision of 22 November 2026: hide nothing before launch),
+  // while the active Terms may not state them yet; packages are sold only once
+  // the database's packages sales switch is on. Whatever per-slot price the
+  // Terms state must be the site's price, never another.
+  expect(PACKAGES_ON_SALE).toBe(true);
+  const slotPrice = `${rand(PACKAGE_SLOT_PRICE_CENTS_PER_30_DAYS)} per slot`;
+  const individual = RETAIL_OFFERS.find((offer) => offer.durationDays === 30);
+  const individualSlot = `${rand(individual!.priceCents)} per slot`;
+  for (const stated of content.match(/R[\d,]+ per slot\b/g) ?? [])
+    if (stated !== individualSlot)
+      expect(stated, `package slot price ${slotPrice}`).toBe(slotPrice);
   // With no plan on sale in the database, nothing links to checkout.
   expect(buildCommercialCatalog([]).onSale).toBe(false);
 });
