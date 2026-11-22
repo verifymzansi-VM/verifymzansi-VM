@@ -10264,6 +10264,25 @@
       "unit": "turns"
     },
     {
+      "id": "LIM-SQL-showroom-mark-valve",
+      "title": "Showroom appearances: no mark or count once the day's views and showroom marks reach 300,000 (the views' storage valve)",
+      "value": 300000,
+      "category": "cap",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/record_post_activity.sql",
+          "symbol": "internal.record_post_activity",
+          "contains": "if day_marks < 300000 then"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-fair-showroom.mjs"
+        }
+      ]
+    },
+    {
       "id": "LIM-SQL-showroom-new-window",
       "title": "Fair showroom: a post is New, with a fading head start, for 72 hours after it first went live",
       "value": 72,

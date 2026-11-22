@@ -528,7 +528,8 @@ try {
     );
     assert.equal(marks() - before, 3, "random ids, a draft and an own post store no mark");
     assert.equal(today(shown, "showroom_market"), 0);
-    // The marks count under the views' daily storage valve (300,000 a day):
+    // LIM-SQL-showroom-mark-valve: the marks count under the views' daily
+    // storage valve (300,000 a day):
     // they add to the day's count, and at the valve no showroom appearance
     // counts or stores a mark.
     const day = `(now() at time zone 'Africa/Johannesburg')::date`;
