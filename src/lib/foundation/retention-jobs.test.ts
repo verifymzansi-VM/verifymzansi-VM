@@ -689,3 +689,63 @@ it("refuses limits a single batch request, the claim commands or the deadline ca
     await expect(world.run(limits)).rejects.toThrow("Invalid storage cleanup limits");
   expect(world.rpc).not.toHaveBeenCalled();
 });
+
+it("deletes due automatic ID check sessions at the partner, then records each deletion", async () => {
+  const world = createWorld();
+  const sessions = [1, 2, 3].map((n) => ({ check_id: uuid(7000 + n), session_id: uuid(8000 + n) }));
+  world.overrides.claim_identity_check_deletions = (args) => {
+    expect(args.p_limit).toBe(CLEANUP_LIMITS.identityCheckClaim);
+    return { data: sessions, error: null };
+  };
+  const marked: unknown[] = [];
+  world.overrides.mark_identity_check_provider_deleted = (args) => {
+    marked.push(args.p_check);
+    return { data: { check_id: args.p_check }, error: null };
+  };
+  const partner = {
+    delete: vi.fn(async (sessionId: string) => {
+      // The second session cannot be deleted now: it is not recorded.
+      if (sessionId === sessions[1]!.session_id) throw new Error("partner unavailable");
+    }),
+  };
+  await runFoundationRetention(
+    { rpc: world.rpc } as unknown as FoundationServiceApi,
+    world.storage,
+    {
+      identityChecks: partner,
+    }
+  );
+  expect(partner.delete.mock.calls.map(([id]) => id)).toEqual(sessions.map((s) => s.session_id));
+  expect(marked).toEqual([sessions[0]!.check_id, sessions[2]!.check_id]);
+  expect(logLine().level).toBe("warn");
+  expect(logLine().line).toContain("objects_retrying");
+});
+
+it("skips partner deletions without the partner key, and fails the run when the claim fails", async () => {
+  const world = createWorld();
+  world.overrides.claim_identity_check_deletions = () => {
+    throw new Error("the claim must not run without the partner key");
+  };
+  await runFoundationRetention(
+    { rpc: world.rpc } as unknown as FoundationServiceApi,
+    world.storage,
+    {
+      identityChecks: null,
+    }
+  );
+  expect(world.rpc).not.toHaveBeenCalledWith("claim_identity_check_deletions", expect.anything());
+  // Said in the run log with a reason code, not skipped silently.
+  expect(logLine().line).toContain("didit_delete_skipped_no_key");
+  info.mockClear();
+  warn.mockClear();
+  world.overrides.claim_identity_check_deletions = () => ({
+    data: null,
+    error: { code: "PGRST202" },
+  });
+  await expect(
+    runFoundationRetention({ rpc: world.rpc } as unknown as FoundationServiceApi, world.storage, {
+      identityChecks: { delete: vi.fn() },
+    })
+  ).rejects.toThrow("incomplete");
+  expect(logLine().line).toContain("identity_check_claim");
+});

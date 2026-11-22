@@ -45,6 +45,7 @@ import { logRequestFailure } from "../utils/request-failure";
 import { foundationNoStore } from "@/lib/foundation/owner-route";
 import { hasDatabaseReason } from "./error-reasons";
 import { grantChannel, issueCaptureToken } from "./capture-token";
+import { refuseWhileAutomaticCheckOpen } from "./identity-check";
 import {
   CAPTURE_TOKEN_UNAVAILABLE,
   failure as tokenFailure,
@@ -133,6 +134,7 @@ export async function handleStartCaptureHandoff(request: NextRequest): Promise<N
     const caller = await context.authenticateCaller();
     const own = await limited(caller.accountId, "verification:handoff");
     if (own) return reply(own, { error: HANDOFF_MESSAGES.busy });
+    await refuseWhileAutomaticCheckOpen(caller.api);
     const raw = await readSmallJson(request);
     const body = startBody.safeParse(raw);
     if (!body.success) return reply(400, { error: HANDOFF_MESSAGES.needsId });
@@ -438,6 +440,7 @@ export async function handleCaptureHandoffUpload(request: NextRequest): Promise<
     if (!found.ok) return refuse(request, context, found.refusal);
     const own = await limited(caller.accountId, "verification:upload");
     if (own) return reply(own, { error: "Too many attempts. Please wait a moment." });
+    await refuseWhileAutomaticCheckOpen(caller.api);
     const form = await readBoundedRequestFormData(request, 5 * 1024 * 1024 + 16384);
     const allowed = [
       "file",
