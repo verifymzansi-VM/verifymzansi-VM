@@ -119,7 +119,14 @@ const billingSchema = z.strictObject({
       z.strictObject({
         id: z.uuid(),
         area: z.enum(["market", "business", "tourism_events"]).nullable(),
-        source: z.enum(["retail_paid", "intro_trial", "sponsorship", "contract", "staff_grant"]),
+        source: z.enum([
+          "retail_paid",
+          "intro_trial",
+          "sponsorship",
+          "contract",
+          "staff_grant",
+          "free_credit",
+        ]),
         status: z.literal("active"),
         slot_capacity: z.number().int().positive(),
         max_photos: z.number().int().positive(),
@@ -405,7 +412,14 @@ const mySlotsSchema = z.strictObject({
     .array(
       z.strictObject({
         id: z.uuid(),
-        source: z.enum(["retail_paid", "intro_trial", "sponsorship", "contract", "staff_grant"]),
+        source: z.enum([
+          "retail_paid",
+          "intro_trial",
+          "sponsorship",
+          "contract",
+          "staff_grant",
+          "free_credit",
+        ]),
         individual: z.boolean(),
         label: z.string().max(200).nullable(),
         area: z.enum(["market", "business", "tourism_events"]).nullable(),

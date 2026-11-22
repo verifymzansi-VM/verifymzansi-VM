@@ -13,6 +13,7 @@ const SOURCE: Record<Slot["source"], { label: string; icon: typeof Layers }> = {
   retail_paid: { label: "Paid slot", icon: Layers },
   intro_trial: { label: "Free first post", icon: Gift },
   staff_grant: { label: "Slot from VerifyMzansi", icon: BadgeCheck },
+  free_credit: { label: "Free credits from VerifyMzansi", icon: Gift },
   contract: { label: "Contract slot", icon: BadgeCheck },
   sponsorship: { label: "Sponsored place", icon: Building2 },
 };
@@ -20,6 +21,9 @@ const SOURCE: Record<Slot["source"], { label: string; icon: typeof Layers }> = {
 function slotName(slot: Slot) {
   if (slot.individual) return "Individual slot";
   if (slot.source === "sponsorship" && slot.sponsor) return `Paid by ${slot.sponsor}`;
+  // Free credits (20261122130744_free_credits.sql): "...: 1 post", "...: 3 posts".
+  if (slot.source === "free_credit")
+    return `${SOURCE.free_credit.label}: ${slot.places} post${slot.places === 1 ? "" : "s"}`;
   return SOURCE[slot.source].label;
 }
 

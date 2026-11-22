@@ -80,6 +80,96 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Free credits for businesses VerifyMzansi recruits, 22 November 2026
+
+`20261122130744_free_credits.sql` was applied on 22 November 2026 at 17:35 UTC
+(see the applied register). Launch checklist item 70, the owner's design of 22
+November 2026: an admin gives an ID-verified member free posts for a short time
+and may extend the gift.
+
+- **The gift.** An entitlement (`private.entitlements`) with the new source
+  `free_credit`: every section (area null), 1 to 6 posts (slot capacity), the
+  fair use and media of a paid Individual slot per post (4 posts going live per
+  post per 30 days, 10 photos, 1 video), no add-ons, no payment, from now for 1
+  to 30 days. New constraint `entitlements_free_credit_check`: the admin who
+  gave it is named, and it has no payment, area or add-ons. It funds posts
+  through the existing posting, activation and media commands, which already
+  accept every source other than `retail_paid` without a payment. It never
+  renews and is never charged: renewals, renewal reminders, the 4 Individual
+  slots, sales figures, the VAT total and invoices read only `retail_paid`
+  entitlements and payments. It is not a house slot (`staff_grant` with
+  `private.house_slot_events`) and not the free first post (`intro_trial`);
+  giving one touches neither.
+- **Commands** (admins; internal twins security definer, `api` wrappers security
+  invoker, authenticated only):
+  - `api.give_free_credit(email, posts, days, reason)` (capability
+    `free_credit:give`, an authenticator code from the last 15 minutes) finds
+    the member by email (an active, confirmed account) and refuses: no such
+    account (PT409, `free_credit_member_not_found`), no current accepted ID
+    review (`free_credit_identity_required`), a member who already has a running
+    gift (`free_credit_active`: extend that one instead), posts outside 1 to 6
+    (22023, `free_credit_posts_invalid`), days outside 1 to 30
+    (`free_credit_days_invalid`), a reason that is not 5 to 200 characters of
+    plain text on one line (`free_credit_reason_required`).
+  - `api.extend_free_credit(gift, days, reason)` (`free_credit:give`, the same
+    fresh code) adds 1 to 30 days from the gift's current end while it runs,
+    otherwise from now, as often as needed; the member must still be active and
+    ID-verified; an unknown gift is refused (22023, `free_credit_not_found`),
+    one whose account was erased too (PT409, `free_credit_closed`). The search
+    end of its live posts follows (`internal.refresh_slot_chain_documents`).
+  - Both follow the rule of staff money actions
+    (`internal.assert_staff_payment_actor`): the admin needs a current accepted
+    ID review of their own (42501, `staff_review_required`) and never acts for
+    their own account or an account ever reviewed as the same person, past
+    reviews included (42501, `staff_same_identity`).
+  - `api.list_free_credits()` (`free_credit:view`, the 12-hour rule): the latest
+    500 gifts, newest first: the member's masked email, posts, start, end,
+    active or ended, and the all-time views of the posts each funded.
+- **Record.** `private.free_credit_events` (append-only, row level security, no
+  grants) keeps each gift (`given`) and extension (`extended`): the admin, the
+  time, the gift (its entitlement names the member), posts, days, the end it set
+  and the reason. It goes only with its entitlement (commerce retention, five
+  tax years after the gift ended).
+- **Member reads.** `internal.get_my_frontend_post_manager` (full body; the slot
+  list on My posts) names the source `FREE_CREDIT`; the member's My slots list
+  (`api.get_my_slots_v2`) and billing read already return every source.
+
+Expand only. ORDER: apply first, then merge. Until an admin gives the first gift
+no entitlement has the new source, so the website before this release reads
+nothing new.
+
+**Applying.**
+
+1. Run `../preflight/20261122130744_free_credits.check.sql` unchanged in the SQL
+   editor. It is read only. Continue only if its result is the single "summary"
+   row reading "free credits: update not applied; entitlements: N".
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "free credits: already applied; entitlements: N; gifts: 0
+   (active: 0); events: 0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is `../rollback/20261122130744_free_credits.down.sql`
+(only with the owner's decision; prefer a forward fix; deploy a website without
+the Free credits page first). It refuses (55000) unless every piece has the
+update's body, and once any gift was given; otherwise it puts back
+`internal.get_my_frontend_post_manager` byte for byte and drops what the update
+added.
+
+`node --import tsx scripts/test-foundation-free-credits.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; a drifted body and a premature rollback
+refused; apply, rollback and re-apply return the same fingerprints; the grants;
+a gift's shape and record; each refusal (unverified member, own account, 0 or 7
+posts, 0 or 31 days, a missing reason, no such account, a moderator, a stale
+authenticator code); an admin without an accepted ID review of their own, and an
+admin whose ended review matches the member's current one, refused for giving
+and extending, while that admin can still give to another member; a second gift
+refused while the first runs and allowed once it ended; extending a running and
+an ended gift; posting with the gift (the free first post untouched); the sales
+figures and VAT total unchanged; the list; and the append-only record.
+
 ## Fair showroom for every post, 21 November 2026
 
 `20261122023000_fair_showroom.sql` was applied on 22 November 2026 at 15:45 UTC
@@ -518,11 +608,12 @@ export.
 
 ## A written notice before a long paid term ends, 22 November 2026
 
-`20261122111209_term_ending_notice.sql` is pending (see the applied register).
-Launch checklist item 68b. The Consumer Protection Act, s14(2)(c), asks for a
-written notice 40 to 80 business days before a fixed-term agreement ends. The
-owner's rule: a paid term of 180 days or more gets one written notice about 60
-business days before it ends; nothing ever renews automatically.
+`20261122111209_term_ending_notice.sql` was applied on 22 November 2026 at
+17:33 UTC (see the applied register). Launch checklist item 68b. The Consumer
+Protection Act, s14(2)(c), asks for a written notice 40 to 80 business days
+before a fixed-term agreement ends. The owner's rule: a paid term of 180 days or
+more gets one written notice about 60 business days before it ends; nothing ever
+renews automatically.
 
 - **Which terms.** A paid grant (`private.entitlements`, source `retail_paid`)
   that runs 180 days or more from its own start to its own end: an Individual
@@ -7507,6 +7598,18 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   and `20261122022323_identity_keep_for.sql` (fingerprint.sql) matched the full
   replay (except the known schema grant difference)
 
-- `20261122111209_term_ending_notice.sql`: pending
+- `20261122111209_term_ending_notice.sql`: applied 2026-11-22 17:33 UTC;
+  owner-approved, apply-first (pull request #349); update sha256 starting
+  ec2ffdb0; preflight after: already applied; applied in one sitting with
+  `20261122130744_free_credits.sql` two minutes later and no production
+  fingerprint captured between the two, so it is checked by the capture after
+  that update (the full replay through both matched, except the known schema
+  grant difference)
+
+- `20261122130744_free_credits.sql`: applied 2026-11-22 17:35 UTC;
+  owner-approved, apply-first (pull request #352); update sha256 starting
+  2cbdd9ab; preflight after: already applied; production fingerprint after it
+  and `20261122111209_term_ending_notice.sql` (fingerprint.sql) matched the full
+  replay (except the known schema grant difference)
 
 <!-- applied-register:end -->
