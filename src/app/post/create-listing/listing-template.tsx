@@ -1,5 +1,7 @@
 "use client";
 
+import { Loader2 } from "lucide-react";
+import { Header } from "@/components/layout/header";
 import { ToastAction } from "@/components/ui/toast";
 import type { toast as showToast } from "@/hooks/use-toast";
 import { SHOW_POST_TEMPLATES } from "@/lib/hidden-features";
@@ -55,15 +57,15 @@ export function dropTemplateFromAddress() {
 
 /**
  * The "Started from <name>" message. When the template replaced an unfinished
- * draft, it offers Undo, which puts that draft back; the first edit of the
- * form (or Undo) ends the offer.
+ * post, it offers Undo, which puts that post back, and stays until Undo or the
+ * form's first edit (the form then calls `dismiss`).
  */
 export function announceTemplate(
   toast: typeof showToast,
   template: PostTemplate,
   undo: (() => void) | null
-) {
-  const shown = toast({
+): { dismiss: () => void } {
+  return toast({
     title: `Started from "${template.name}"`,
     description: undo
       ? "Your unfinished post was set aside. Undo brings it back."
@@ -71,6 +73,7 @@ export function announceTemplate(
     variant: "success",
     ...(undo
       ? {
+          duration: Infinity,
           action: (
             <ToastAction altText="Bring back your unfinished post" onClick={() => undo()}>
               Undo
@@ -79,14 +82,6 @@ export function announceTemplate(
         }
       : {}),
   });
-  if (!undo) return;
-  const endOffer = () => {
-    shown.dismiss();
-    document.removeEventListener("input", endOffer, true);
-    document.removeEventListener("change", endOffer, true);
-  };
-  document.addEventListener("input", endOffer, true);
-  document.addEventListener("change", endOffer, true);
 }
 
 /** The message when a template could not be loaded (the saved draft opens instead). */
@@ -96,4 +91,26 @@ export function announceTemplateFailed(toast: typeof showToast) {
     description: "It may have been deleted. You can fill in the form yourself.",
     variant: "destructive",
   });
+}
+
+/** True while the address names a template the form has not settled yet. */
+export function templateLoading(templateParam: string | null) {
+  return SHOW_POST_TEMPLATES && templateParam !== null;
+}
+
+/** The form's place while its template loads (at most 5 seconds). */
+export function TemplateLoading() {
+  return (
+    <div className="flex min-h-screen flex-col">
+      <Header isAuthenticated />
+      <main
+        id="main-content"
+        aria-busy="true"
+        className="flex flex-1 flex-col items-center justify-center gap-3"
+      >
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" aria-hidden="true" />
+        <p className="text-sm text-muted-foreground">Loading your template…</p>
+      </main>
+    </div>
+  );
 }
