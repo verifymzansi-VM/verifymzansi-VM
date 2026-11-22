@@ -84,14 +84,38 @@ describe("AuthorityRequestsPage", () => {
     expect(screen.getByText(/A search that finds nobody is logged too/)).toBeVisible();
   });
 
+  it("offers only a subpoena, court order, search warrant or urgent life-risk request", async () => {
+    render(await AuthorityRequestsPage());
+    const types = Array.from(
+      (screen.getByLabelText("Type of request") as HTMLSelectElement).options
+    ).map((option) => option.value);
+    expect(types).toEqual(["subpoena", "court_order", "search_warrant", "urgent_life_risk"]);
+    expect(screen.getByLabelText("Issuing court")).toBeVisible();
+    fireEvent.change(screen.getByLabelText("Type of request"), {
+      target: { value: "urgent_life_risk" },
+    });
+    expect(screen.getByLabelText("SAPS station")).toBeVisible();
+    expect(screen.getByLabelText("Case number on the written request")).toBeVisible();
+    expect(screen.getByText(/never the selfie/)).toBeVisible();
+  });
+
   it("opens the record page after the database logged the opening", async () => {
     const fetchMock = vi.fn(async () =>
       Response.json({ id: "00000000-0000-4000-8000-000000000009", number: 43 })
     );
     vi.stubGlobal("fetch", fetchMock);
     render(await AuthorityRequestsPage());
-    fireEvent.change(screen.getByLabelText("Request reference"), {
+    fireEvent.change(screen.getByLabelText("Case number on the court document"), {
       target: { value: "CAS 123/11/2026" },
+    });
+    fireEvent.change(screen.getByLabelText("Issuing court"), {
+      target: { value: "Richards Bay Magistrate's Court" },
+    });
+    fireEvent.change(screen.getByLabelText("Official number you called"), {
+      target: { value: "035 789 1234" },
+    });
+    fireEvent.change(screen.getByLabelText("Who confirmed it"), {
+      target: { value: "Ms T. Zulu, clerk of the court" },
     });
     fireEvent.click(screen.getByRole("checkbox"));
     fireEvent.click(screen.getByRole("button", { name: "Open record" }));
@@ -102,7 +126,11 @@ describe("AuthorityRequestsPage", () => {
     );
     const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(JSON.parse(String(init.body))).toMatchObject({
+      requestType: "subpoena",
       reference: "CAS 123/11/2026",
+      issuedBy: "Richards Bay Magistrate's Court",
+      confirmedNumber: "035 789 1234",
+      confirmedBy: "Ms T. Zulu, clerk of the court",
       attested: true,
     });
     vi.unstubAllGlobals();
@@ -126,6 +154,29 @@ describe("AuthorityRequestsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open record" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("genuine, signed");
     expect(screen.getByRole("checkbox")).toHaveAttribute("aria-invalid", "true");
+    vi.unstubAllGlobals();
+  });
+
+  it("marks the official number when it is missing", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json(
+          {
+            error: "Enter the official number you called to check the request (digits and spaces).",
+            reason: "disclosure_confirmed_number_required",
+          },
+          { status: 422 }
+        )
+      )
+    );
+    render(await AuthorityRequestsPage());
+    fireEvent.click(screen.getByRole("button", { name: "Open record" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("official number");
+    expect(screen.getByLabelText("Official number you called")).toHaveAttribute(
+      "aria-invalid",
+      "true"
+    );
     vi.unstubAllGlobals();
   });
 
