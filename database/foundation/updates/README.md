@@ -130,9 +130,11 @@ showroom appearance counts at most once per browser, post and showroom a day.
   most once per browser, post and showroom a day, through a mark under the day's
   salt in `private.post_view_marks`, as views use (the engagement clean-up
   deletes it after 24 hours). Marks are stored only for posts that would count
-  (publicly live, not the viewer's own), never without a browser (`p_device`),
-  and they add to the views' daily count: at its storage valve (300,000 a day)
-  no showroom appearance counts. The website sends the browser's signed
+  (publicly live, not the viewer's own; `showroom_business`, `_market` and
+  `_tourism` only for a post of that area), never without a browser
+  (`p_device`). They add to the views' daily count (once per request and last,
+  like views), and stop at 200,000 of it, so showroom traffic alone never closes
+  the views' 300,000 storage valve. The website sends the browser's signed
   `vmz_viewer` identifier for showroom appearances only, and only when it is at
   least a day old; it drops them otherwise. They have their own per-post daily
   limit (`engagement:activity:showroom`), and the carousel sends each card's

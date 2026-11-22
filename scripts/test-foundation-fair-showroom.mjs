@@ -523,24 +523,31 @@ try {
     );
     json(
       service(
-        `select api.record_post_activity(array['${shown}']::uuid[],array['showroom_market']::text[],'${probe}','${owner.id}');`
+        `select api.record_post_activity(array['${shown}']::uuid[],array['showroom_home']::text[],'${probe}','${owner.id}');`
       )
     );
     assert.equal(marks() - before, 3, "random ids, a draft and an own post store no mark");
-    assert.equal(today(shown, "showroom_market"), 0);
-    // LIM-SQL-showroom-mark-valve: the marks count under the views' daily
-    // storage valve (300,000 a day):
-    // they add to the day's count, and at the valve no showroom appearance
-    // counts or stores a mark.
+    assert.equal(today(shown, "showroom_home"), 2, "the owner's own appearance does not count");
+    // An area showroom's counter only for a post of that area: an event
+    // (Tourism & Events) credited to the Business showroom stores no mark.
+    appear([[shown, "showroom_business"]], probe);
+    assert.equal(today(shown, "showroom_business"), 0);
+    assert.equal(marks() - before, 3, "no mark for another area's showroom");
+    // LIM-SQL-showroom-mark-valve: the marks add to the views' daily count
+    // (once per request, last) and stop at 200,000 of it, below the views'
+    // 300,000 valve, so showroom traffic alone never closes it.
     const day = `(now() at time zone 'Africa/Johannesburg')::date`;
     const counted = () => Number(q(`select views from private.post_view_salts where day=${day};`));
     const start = counted();
-    appear([[shown, "showroom_business"]], probe);
+    appear([[shown, "showroom_tourism"]], probe);
     assert.equal(counted(), start + 1);
-    q(`update private.post_view_salts set views=300000 where day=${day};`);
+    q(`update private.post_view_salts set views=199999 where day=${day};`);
+    appear([[shown, "showroom_home"]], probe);
+    assert.equal(counted(), 200000, "below the point it still counts");
     appear([[shown, "showroom_programme"]], probe);
-    assert.equal(today(shown, "showroom_programme"), 0);
-    assert.equal(marks() - before, 4);
+    assert.equal(today(shown, "showroom_programme"), 0, "at 200,000 nothing more counts");
+    assert.equal(counted(), 200000);
+    assert.equal(marks() - before, 5);
     q(`update private.post_view_salts set views=${start + 1} where day=${day};`);
     clear();
   });

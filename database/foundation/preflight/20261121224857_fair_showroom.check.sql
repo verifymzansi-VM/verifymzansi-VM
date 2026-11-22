@@ -25,7 +25,7 @@ with parts as (
     ('api.showroom_feed(jsonb)', null, '20563a7dac3f7a15e63b08d6f00460da'),
     ('private.moderation_log_post_approvals_idx', null, '355001da88e9af5134655e1717eaea25'),
     ('internal.record_post_activity(uuid[],text[],uuid,uuid)', 'b9e3418d962ee84b9ad9b69d4316428a',
-      'ccc284df33bccaaf138df62911a3cd70')
+      'e91d4d7ff65461c7d2d599edb5a9ffb5')
   ) v(part, reviewed, updated)
 ),
 state as (

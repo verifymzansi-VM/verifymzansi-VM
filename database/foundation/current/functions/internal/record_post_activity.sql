@@ -36,15 +36,16 @@ begin
   -- Showroom appearances count at most once per browser, post and showroom a
   -- day: a mark under the day's salt, as views use (deleted after 24 hours
   -- by the engagement clean-up), only for posts that would count (publicly
-  -- live, not the viewer's own). Without a browser they do not count. The
-  -- marks share the views' daily storage valve: from 300,000 marks and
-  -- counted views a day, no showroom appearance counts.
+  -- live, not the viewer's own; an area showroom's counter only for a post of
+  -- that area). Without a browser they do not count. The marks add to the
+  -- views' daily count, but stop at 200,000 of it, so showroom traffic alone
+  -- never closes the views' 300,000 storage valve.
   if p_device is not null and exists(select 1 from unnest(p_metrics) m where m like 'showroom\_%') then
     insert into private.post_view_salts(day, salt)
       values (today, decode(replace(gen_random_uuid()::text,'-','')||replace(gen_random_uuid()::text,'-',''),'hex'))
       on conflict (day) do nothing;
     select s.salt, s.views into salt_today, day_marks from private.post_view_salts s where s.day = today;
-    if day_marks < 300000 then
+    if day_marks < 200000 then
       with fresh as (
         insert into private.post_view_marks(mark)
         select sha256(salt_today || convert_to('showroom:' || e.metric || ':' || p_device::text || '|' || e.post_id::text, 'UTF8'))
@@ -55,16 +56,13 @@ begin
         where d.is_visible and (d.visible_until is null or d.visible_until > statement_timestamp())
           and exists(select 1 from private.public_eligible_posts l where l.id = p.id)
           and p.owner_id is distinct from viewer
+          and (e.metric not in ('showroom_business', 'showroom_market', 'showroom_tourism')
+            or d.area = case e.metric when 'showroom_business' then 'business'
+              when 'showroom_market' then 'market' else 'tourism_events' end)
         order by 1
         on conflict (mark) do nothing
         returning mark)
       select coalesce(array_agg(f.mark), '{}'::bytea[]) into showroom_marks from fresh f;
-      if cardinality(showroom_marks) > 0 then
-        update private.post_view_salts s set views = s.views + cardinality(showroom_marks) where s.day = today
-          returning s.views into after_marks;
-        perform internal.engagement_valve_alarms('post_views_counted', 300000,
-          after_marks - cardinality(showroom_marks), after_marks);
-      end if;
     end if;
   end if;
 
@@ -160,6 +158,13 @@ begin
         on conflict (post_id) do update set engaged_views = t.engaged_views + 1;
       engaged := engaged + 1;
     end loop;
+  end if;
+  -- The day's count of showroom marks, once per request and last (as views).
+  if cardinality(showroom_marks) > 0 then
+    update private.post_view_salts s set views = s.views + cardinality(showroom_marks) where s.day = today
+      returning s.views into after_marks;
+    perform internal.engagement_valve_alarms('post_views_counted', 300000,
+      after_marks - cardinality(showroom_marks), after_marks);
   end if;
   return jsonb_build_object('posts', moved, 'engaged', engaged);
 end;

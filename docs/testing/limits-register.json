@@ -10265,14 +10265,14 @@
     },
     {
       "id": "LIM-SQL-showroom-mark-valve",
-      "title": "Showroom appearances: no mark or count once the day's views and showroom marks reach 300,000 (the views' storage valve)",
-      "value": 300000,
+      "title": "Showroom appearances: no mark or count once the day's views and showroom marks reach 200,000 (below the views' 300,000 storage valve)",
+      "value": 200000,
       "category": "cap",
       "enforcedAt": [
         {
           "file": "database/foundation/current/functions/internal/record_post_activity.sql",
           "symbol": "internal.record_post_activity",
-          "contains": "if day_marks < 300000 then"
+          "contains": "if day_marks < 200000 then"
         }
       ],
       "tests": [
