@@ -6,12 +6,11 @@ import {
   OUTCOME_LABELS,
   disclosureNumber,
   lookupKindLabel,
-  requestTypeLabel,
 } from "@/lib/admin/authority-requests";
 import { formatDateTime } from "@/lib/utils/format";
 import { loadDisclosureRecord } from "../load-record";
 import { PrintSheetButton } from "../record-parts";
-import { DisclosureRecordView } from "../record-view";
+import { DisclosureRecordView, DisclosureRequestRows } from "../record-view";
 
 export const metadata = {
   title: "Disclosure sheet — Admin",
@@ -101,10 +100,7 @@ export default async function DisclosureSheetPage({ params }: { params: Promise<
           <section className="space-y-2">
             <h1 className="font-display text-xl font-semibold">The request</h1>
             <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-[12rem_minmax(0,1fr)]">
-              <dt className="text-slate-600">Type of request</dt>
-              <dd>{requestTypeLabel(disclosure.request_type)}</dd>
-              <dt className="text-slate-600">Reference</dt>
-              <dd className="break-words">{disclosure.reference}</dd>
+              <DisclosureRequestRows disclosure={disclosure} termClassName="text-slate-600" />
               <dt className="text-slate-600">Reason</dt>
               <dd className="whitespace-pre-line break-words">{disclosure.reason}</dd>
               <dt className="text-slate-600">Searched by</dt>

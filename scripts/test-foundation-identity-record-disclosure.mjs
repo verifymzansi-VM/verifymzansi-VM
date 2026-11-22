@@ -4,7 +4,11 @@
 // (15 minutes) opens a member's kept identity record against a recorded
 // request; the log row is written before anything is shown, a search that
 // finds nobody is logged too, people are never looked up by name, a record
-// closes after 15 minutes, and both logs are append-only.
+// closes after 15 minutes, and both logs are append-only. Then, with
+// scripts/lib/authority-request-types-checks.mjs, rule D9
+// (20261122013616_authority_request_types.sql): only a subpoena, court order,
+// search warrant or urgent life-risk request, each with its confirmation, and
+// never the selfie for an urgent one.
 //
 // Replays database/foundation (prelude, candidate.sql, every update before this
 // one) into the throwaway, network-less Postgres 17 container of the SQL lint
@@ -32,6 +36,12 @@ import {
   sqlLiteral,
 } from "./lib/foundation-sql-checks.mjs";
 import { applySteps } from "./lib/foundation-sql-lint.mjs";
+import {
+  D9_UPDATE,
+  checkAuthorityRequestTypes,
+  d9OpenSql,
+  d9Request,
+} from "./lib/authority-request-types-checks.mjs";
 
 const UPDATE = "20261121043124_identity_record_disclosure.sql";
 const [PREFLIGHT, ROLLBACK] = [
@@ -713,11 +723,44 @@ try {
     }
   );
 
+  // Records opened under the first rule, read again after rule D9.
+  const earlier = ["subpoena", "warrant", "police_case"].map((type) => ({
+    id: open(admin, request({ type, value: currentPhone })).disclosure_id,
+    type,
+  }));
   const later = steps.slice(index + 1);
-  if (later.length) {
-    applySteps(database, later);
-    await check("later updates keep authority requests working", () => {
-      const opened = open(admin, thandoRequest);
+  const d9 = later.findIndex((s) => s.label === D9_UPDATE);
+  assert.ok(d9 >= 0, `${D9_UPDATE} is missing`);
+  applySteps(database, later.slice(0, d9));
+  await check("later updates keep authority requests working", () => {
+    for (const { id } of earlier) assert.equal(read(admin, id).records.length, 1);
+  });
+  await checkAuthorityRequestTypes(
+    {
+      check,
+      q,
+      json,
+      fails,
+      staff,
+      service,
+      fingerprint,
+      admin,
+      governor,
+      moderator,
+      thando,
+      logCount,
+      eventCount,
+      openSql,
+      request,
+      readSql,
+      read,
+    },
+    { database, current, step: later[d9], earlier }
+  );
+  if (later.length > d9 + 1) {
+    applySteps(database, later.slice(d9 + 1));
+    await check("updates after rule D9 keep authority requests working", () => {
+      const opened = json(staff(admin, d9OpenSql(d9Request({ value: currentPhone }))));
       assert.equal(read(admin, opened.disclosure_id).records.length, 1);
     });
   }

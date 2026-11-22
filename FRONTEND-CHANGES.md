@@ -147,6 +147,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 81. Performance page: real figures from the live backend (item 2) (and the group 81 part of 2 rows elsewhere) | approved by owner 2026-11-21 | Nothing today: the Performance page and the staff Operations health page stay off until launch. Once on: the Performance page looks as on 27 October with every section filled from the live backend; the staff 'Scheduled jobs' table lists an 18th job, 'Old view records removed'. |
 | 82. Automatic ID checks: hidden until it works (no file rows) | hidden until it works (approved by owner 2026-11-21) | Nothing. The database part of automatic ID checks (update 20261121094003) is in, with the switch at Manual; members keep the in-page camera and staff review. The database keeps the switch at Manual until the retention update (C1) is applied |
 | 85. Business storefront (item 17b, first part) | approved by owner 2026-11-21 (with the group 85 part of 7 rows elsewhere) | Nothing today (switch off). Once on: a checked business with a running Multi-listing package and at least one live listing shows 'All stock' (search, filters that follow the trade, newest first, Show more) on its business page, and each of its listings names the business (logo or initials) with 'See all 18 cars'. |
+| 89. Authority requests: only the four D9 request types (item 69) (no file rows: the group 89 part of 6 rows in group 77) | awaiting owner | Governors and admins only: the authority request form offers only a subpoena, court order, search warrant or urgent life-risk request, and asks for the issuing court (or SAPS station), the official number called and who confirmed it; the record and print sheet show the request type, reference, issuer and check; an urgent request shows no selfie or ID photo. Members see nothing new. |
 
 Questions for the owner:
 
@@ -3184,13 +3185,13 @@ Decision: approved by owner 2026-11-21 (owner question: 'Approve the authority-r
 | File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `src/app/admin/authority-requests/page.tsx` | visual | Group 77: the new Authority requests page (governors and admins): the intro, the 2-step line and the earlier requests. | Governors and admins: the page described in group 77; a message when the list cannot be loaded. | keep | approved by owner 2026-11-21 | 2026-11-21 | ea4cd6674461 |
-| `src/app/admin/authority-requests/authority-request-form.tsx` | visual | Group 77: the request form (request, search, confirmation, Open record). | Governors and admins: the form described in group 77. | keep | approved by owner 2026-11-21 | 2026-11-21 | c380743b6a12 |
-| `src/app/admin/authority-requests/[id]/page.tsx` | visual | Group 77: the record page (logged line, kept identity record, Print disclosure sheet). | Governors and admins: the record described in group 77. | keep | approved by owner 2026-11-21 | 2026-11-21 | 62e32bbde186 |
-| `src/app/admin/authority-requests/[id]/record-view.tsx` | visual | Group 77: one person's record (selfie, names, ID number, phones, how checked, ID photo, account), used on the page and the sheet. | Governors and admins: the record rows described in group 77. | keep | approved by owner 2026-11-21 | 2026-11-21 | 1470e17b35b6 |
+| `src/app/admin/authority-requests/authority-request-form.tsx` | visual | Group 77: the request form (request, search, confirmation, Open record). Group 89: only the four D9 request types; issuing court or SAPS station, official number called and who confirmed it; new tick-box words. | Governors and admins: the form described in group 77. Group 89: the form changes described in group 89. | keep | awaiting owner (group 77 part approved by owner 2026-11-21) | 2026-11-22 | 3c9d89a17834 |
+| `src/app/admin/authority-requests/[id]/page.tsx` | visual | Group 77: the record page (logged line, kept identity record, Print disclosure sheet). Group 89: the request type, reference, issuer and check above the record. | Governors and admins: the record described in group 77. Group 89: the request rows described in group 89. | keep | awaiting owner (group 77 part approved by owner 2026-11-21) | 2026-11-22 | 285fd212e847 |
+| `src/app/admin/authority-requests/[id]/record-view.tsx` | visual | Group 77: one person's record (selfie, names, ID number, phones, how checked, ID photo, account), used on the page and the sheet. Group 89: the shared request rows; no selfie or ID photo row for an urgent request. | Governors and admins: the record rows described in group 77. Group 89: an urgent request's record without the selfie or ID photo. | keep | awaiting owner (group 77 part approved by owner 2026-11-21) | 2026-11-22 | 7c81c5c7cf10 |
 | `src/app/admin/authority-requests/[id]/record-parts.tsx` | visual | Group 77: the selfie, the Print button and the 15-minute close. | Governors and admins: the selfie and the buttons described in group 77. | keep | approved by owner 2026-11-21 | 2026-11-21 | 2bf515697b20 |
-| `src/app/admin/authority-requests/[id]/sheet/page.tsx` | visual | Group 77: the watermarked print disclosure sheet. | Governors and admins: the sheet described in group 77. | keep | approved by owner 2026-11-21 | 2026-11-21 | f79abc610d41 |
-| `src/app/admin/authority-requests/page.test.tsx` | test | Group 77: checks the guard, the 2-step line, the searches (never by name), opening, refusals, the earlier requests and the re-verify redirect. | Nothing (not part of a page) | keep | approved by owner 2026-11-21 | 2026-11-21 | 8b8e024b8924 |
-| `src/app/admin/authority-requests/[id]/page.test.tsx` | test | Group 77: checks the record, no match, an ID number only tried, the closed record and the re-verify redirect, and the sheet's watermark and stamp. | Nothing (not part of a page) | keep | approved by owner 2026-11-21 | 2026-11-21 | bdbbb9b0f78f |
+| `src/app/admin/authority-requests/[id]/sheet/page.tsx` | visual | Group 77: the watermarked print disclosure sheet. Group 89: the sheet's request rows add Issued by and Checked with. | Governors and admins: the sheet described in group 77. Group 89: the request rows described in group 89. | keep | awaiting owner (group 77 part approved by owner 2026-11-21) | 2026-11-22 | f58319c10b4b |
+| `src/app/admin/authority-requests/page.test.tsx` | test | Group 77: checks the guard, the 2-step line, the searches (never by name), opening, refusals, the earlier requests and the re-verify redirect. Group 89: checks the four request types, the urgent wording, the new fields in the request and the official number refusal. | Nothing (not part of a page) | keep | awaiting owner (group 77 part approved by owner 2026-11-21) | 2026-11-22 | c2f9f786c9ae |
+| `src/app/admin/authority-requests/[id]/page.test.tsx` | test | Group 77: checks the record, no match, an ID number only tried, the closed record and the re-verify redirect, and the sheet's watermark and stamp. Group 89: checks the request rows, an urgent record without the selfie or ID photo, and an earlier record's type. | Nothing (not part of a page) | keep | awaiting owner (group 77 part approved by owner 2026-11-21) | 2026-11-22 | 125d07994696 |
 
 ### 78. Staff privacy requests: no Export on completed requests
 
@@ -3441,6 +3442,41 @@ Decision: approved by owner 2026-11-21 (after seeing the storefront pictures; an
 | `src/components/business/business-storefront.test.tsx` | test | Group 85: checks the heading, the filters per trade, a filtered read, Show more and a failed read. | Nothing (not part of a page) | keep | approved by owner 2026-11-21 | 2026-11-21 | 76827d2f86a3 |
 | `src/components/business/layouts/business-layout-router.tsx` | helper | Group 85: passes 'hide Live offers' to the business layout. | Nothing by itself (see unified-layout in group 85) | keep | approved by owner 2026-11-21 | 2026-11-21 | ca150fa1b64d |
 | `src/components/trust/business-stickers.tsx` | wording-behaviour | Group 85: the ID sticker's words can be set; a post's seller block says 'Poster ID reviewed' (plan notes for the build). | Only on a listing in a storefront: 'Poster ID reviewed'. Business pages keep 'ID reviewed'. | keep | approved by owner 2026-11-21 | 2026-11-21 | 42cb1b25bfab |
+
+### 89. Authority requests: only the four D9 request types (item 69)
+
+Launch checklist item 69, owner decision D9 of 21 November 2026 ("Keep both").
+Database update `20261122013616_authority_request_types.sql` (pending, apply
+first). Governors and admins only; members see nothing new. No file rows: the
+group 89 part of 6 rows in group 77.
+
+- `/admin/authority-requests`, '1. The request': 'Type of request' offers only
+  'Subpoena (Criminal Procedure Act, s205)', 'Court order', 'Search warrant' and
+  'Urgent: a life is at risk (SAPS, in writing)' (the written police request and
+  the Information Regulator are gone). 'Request reference' becomes 'Case number
+  on the court document' ('Case number on the written request' for an urgent
+  request), and three new fields follow: 'Issuing court' ('SAPS station' for an
+  urgent request), 'Official number you called' and 'Who confirmed it', with
+  'Call the issuing court or the prosecutor named in it on an official number to
+  confirm it.' (urgent: 'Call the station on its official number to confirm the
+  request. Only the names, ID number and verified phone are given; never the
+  selfie.'). The tick box reads 'I checked this request on the official number
+  above. It is genuine and names this person or this post. I will keep the
+  original with the company records.' Each missing field is refused under the
+  form and marked.
+- `/admin/authority-requests/[id]` and the print sheet: 'Type of request',
+  'Reference', 'Issued by' and 'Checked with' (who, on which number) above the
+  record (the sheet keeps its other request rows). An urgent request adds '(only
+  the minimum is given; never the selfie)' to its type, and its record shows no
+  selfie and no 'Photo of the ID document' row: full names, SA ID number,
+  verified phone, how the ID was checked and the account. Records opened before
+  this change show their earlier type and no 'Issued by' or 'Checked with'.
+
+Pictures (synthetic test people only, not published):
+`screenshots/item69-authority-requests/` (before and after, desktop 1280 and
+phone 375).
+
+Decision: awaiting owner.
 
 <!-- frontend-ledger:end -->
 

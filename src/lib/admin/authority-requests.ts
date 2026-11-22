@@ -1,10 +1,13 @@
 /**
  * Authority requests (staff): words and small pure helpers shared by the
- * pages, the route and the server adapter. Database update
- * 20261121043124_identity_record_disclosure.sql holds the rules: governors
- * and admins only, with an authenticator code from the last 15 minutes; the
- * log row is written before anything is shown; never a search by name; a
- * record closes 15 minutes after it was opened.
+ * pages, the route and the server adapter. Database updates
+ * 20261121043124_identity_record_disclosure.sql and
+ * 20261122013616_authority_request_types.sql hold the rules: governors and
+ * admins only, with an authenticator code from the last 15 minutes; only a
+ * subpoena, court order, search warrant or urgent life-risk request, each
+ * checked on an official number (rule D9); the log row is written before
+ * anything is shown; never a search by name; never the selfie for an urgent
+ * request; a record closes 15 minutes after it was opened.
  */
 import { normalizeSaPhone } from "@/lib/utils/phone";
 
@@ -16,14 +19,45 @@ export const AUTHORITY_SELFIE_ENDPOINT = "/api/admin/authority-requests/selfie";
  * authenticator code must be (both 15 minutes in the database). */
 export const DISCLOSURE_OPEN_MINUTES = 15;
 
+/** The requests a record may be opened for (rule D9). */
 export const REQUEST_TYPES = [
   { value: "subpoena", label: "Subpoena (Criminal Procedure Act, s205)" },
   { value: "court_order", label: "Court order" },
+  { value: "search_warrant", label: "Search warrant" },
+  { value: "urgent_life_risk", label: "Urgent: a life is at risk (SAPS, in writing)" },
+] as const;
+export type RequestType = (typeof REQUEST_TYPES)[number]["value"];
+
+/** Types of records opened before rule D9: shown on those records, never offered. */
+const EARLIER_REQUEST_TYPES = [
   { value: "warrant", label: "Search warrant" },
   { value: "police_case", label: "Written police request with a case number" },
   { value: "regulator", label: "Information Regulator or another body by law" },
 ] as const;
-export type RequestType = (typeof REQUEST_TYPES)[number]["value"];
+/** Every type a record can carry (for reading). */
+export const RECORDED_REQUEST_TYPES = [
+  ...REQUEST_TYPES.map((type) => type.value),
+  ...EARLIER_REQUEST_TYPES.map((type) => type.value),
+] as [string, ...string[]];
+
+/** The urgent request: only the minimum is given, never the selfie. */
+export const URGENT_REQUEST: RequestType = "urgent_life_risk";
+
+/** The confirmation fields' labels for a request type. */
+export function confirmationWords(type: RequestType) {
+  return type === URGENT_REQUEST
+    ? {
+        reference: "Case number on the written request",
+        issuedBy: "SAPS station",
+        check: "Call the station on its official number to confirm the request.",
+      }
+    : {
+        reference: "Case number on the court document",
+        issuedBy: "Issuing court",
+        check:
+          "Call the issuing court or the prosecutor named in it on an official number to confirm it.",
+      };
+}
 
 export const LOOKUP_KINDS = [
   {
@@ -53,7 +87,10 @@ export function disclosureNumber(value: number): string {
 }
 
 export function requestTypeLabel(value: string): string {
-  return REQUEST_TYPES.find((type) => type.value === value)?.label ?? "Authority request";
+  return (
+    [...REQUEST_TYPES, ...EARLIER_REQUEST_TYPES].find((type) => type.value === value)?.label ??
+    "Authority request"
+  );
 }
 
 export function lookupKindLabel(value: string): string {
@@ -140,11 +177,16 @@ export function minutesLeft(until: string | number, now = Date.now()): number {
 /** Refusals the screens word themselves (the route's `reason`). */
 export const AUTHORITY_REQUEST_MESSAGES = {
   disclosure_request_type_invalid: "Choose the type of request.",
-  disclosure_reference_required:
-    "Enter the subpoena, court order or police case number (3 to 100 characters).",
+  disclosure_reference_required: "Enter the case number on the request (3 to 100 characters).",
+  disclosure_issued_by_required:
+    "Enter the issuing court, or the SAPS station for an urgent request (3 to 120 characters).",
+  disclosure_confirmed_number_required:
+    "Enter the official number you called to check the request (digits and spaces).",
+  disclosure_confirmed_by_required:
+    "Enter who confirmed the request on that call (3 to 120 characters).",
   disclosure_reason_required: "Enter the reason for the request (10 to 2,000 characters).",
   disclosure_attestation_required:
-    "Confirm that the request is genuine, signed, and names this person or this post.",
+    "Confirm that you checked the request on an official number and that it names this person or this post.",
   disclosure_lookup_invalid: "Search by post link, ID number, phone number or email address.",
   disclosure_lookup_value_invalid:
     "Check the search value: a link to a post, a 13-digit SA ID number, an SA phone number or an email address.",
@@ -153,5 +195,6 @@ export const AUTHORITY_REQUEST_MESSAGES = {
   disclosure_closed:
     "This record has closed. Open it again from Authority requests; that is logged again.",
   disclosure_not_allowed: "Only governors and admins can open authority requests.",
+  disclosure_selfie_withheld: "The selfie is never given for an urgent request.",
 } as const;
 export type AuthorityRequestRefusal = keyof typeof AUTHORITY_REQUEST_MESSAGES;

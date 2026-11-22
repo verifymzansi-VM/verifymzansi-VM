@@ -40,6 +40,9 @@ const service = { rpc: machine } as unknown as FoundationServiceApi;
 const request = {
   requestType: "subpoena" as const,
   reference: "CAS 123/11/2026",
+  issuedBy: "Richards Bay Magistrate's Court",
+  confirmedNumber: "035 789 1234",
+  confirmedBy: "Ms T. Zulu, clerk of the court",
   reason: "Fraud investigation into a reported listing.",
   lookupKind: "phone" as const,
   lookupValue: "082 123 4567",
@@ -146,7 +149,7 @@ describe("authority requests: what is searched", () => {
     }
   });
 
-  it("opens through api.open_identity_disclosure and returns only the log row", async () => {
+  it("opens through api.open_authority_request and returns only the log row", async () => {
     rpc.mockResolvedValue({
       data: {
         disclosure_id: DISCLOSURE,
@@ -165,10 +168,13 @@ describe("authority requests: what is searched", () => {
       closesAt: AT,
     });
     expect(rpc).toHaveBeenCalledExactlyOnceWith(
-      "open_identity_disclosure",
+      "open_authority_request",
       {
         p_request_type: "subpoena",
         p_reference: "CAS 123/11/2026",
+        p_issued_by: "Richards Bay Magistrate's Court",
+        p_confirmed_number: "035 789 1234",
+        p_confirmed_by: "Ms T. Zulu, clerk of the court",
         p_reason: "Fraud investigation into a reported listing.",
         p_lookup_kind: "phone",
         p_lookup_value: "+27821234567",
@@ -217,6 +223,10 @@ describe("authority requests: refusals", () => {
       ["22023", "disclosure_attestation_required", 422],
       ["22023", "disclosure_lookup_invalid", 422],
       ["22023", "disclosure_reference_required", 422],
+      ["22023", "disclosure_issued_by_required", 422],
+      ["22023", "disclosure_confirmed_number_required", 422],
+      ["22023", "disclosure_confirmed_by_required", 422],
+      ["22023", "disclosure_selfie_withheld", 422],
       ["PT409", "disclosure_closed", 410],
       ["PT409", "disclosure_unavailable", 404],
     ] as const) {
@@ -293,6 +303,39 @@ describe("authority requests: reading a record", () => {
     // The read comes before the material: nothing is shown without the log.
     expect(rpc.mock.invocationCallOrder[0]).toBeLessThan(machine.mock.invocationCallOrder[0]);
     expect(result.records[0]).toMatchObject({ id_number: ID_NUMBER, legal_last_name: "Dlamini" });
+  });
+
+  it("reads an urgent request: its confirmation, no selfie or ID photo", async () => {
+    const { selfie: _selfie, id_photo: _photo, ...minimal } = keptRecord;
+    rpc.mockResolvedValue({
+      data: {
+        disclosure: {
+          ...disclosure(),
+          request_type: "urgent_life_risk",
+          issued_by: "Richards Bay SAPS",
+          confirmed_number: "035 901 7000",
+          confirmed_by: "W/O N. Mthembu",
+        },
+        records: [minimal],
+      },
+      error: null,
+    });
+    const result = await readIdentityDisclosure(api, service, STAFF, DISCLOSURE, "view");
+    expect(result.disclosure).toMatchObject({
+      request_type: "urgent_life_risk",
+      issued_by: "Richards Bay SAPS",
+    });
+    expect(result.records[0]).not.toHaveProperty("selfie");
+    expect(result.records[0]).toMatchObject({ id_number: ID_NUMBER });
+  });
+
+  it("still reads a record opened before rule D9 (earlier request type)", async () => {
+    rpc.mockResolvedValue({
+      data: { disclosure: { ...disclosure(), request_type: "police_case" }, records: [keptRecord] },
+      error: null,
+    });
+    const result = await readIdentityDisclosure(api, service, STAFF, DISCLOSURE, "view");
+    expect(result.disclosure.request_type).toBe("police_case");
   });
 
   it("still shows the record when the kept number cannot be decrypted, and says so", async () => {

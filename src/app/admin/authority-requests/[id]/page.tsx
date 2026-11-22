@@ -12,7 +12,7 @@ import {
 import { formatDateTime } from "@/lib/utils/format";
 import { loadDisclosureRecord } from "./load-record";
 import { RecordCloser } from "./record-parts";
-import { DisclosureRecordView } from "./record-view";
+import { DisclosureRecordView, DisclosureRequestRows } from "./record-view";
 
 export const metadata = {
   title: "Authority request record — Admin",
@@ -55,6 +55,9 @@ export default async function AuthorityRequestRecordPage({
         </p>
       </div>
       <Card className="max-w-5xl space-y-5 p-4 sm:p-6">
+        <dl className="grid gap-x-6 gap-y-2 border-b pb-4 text-sm sm:grid-cols-[12rem_minmax(0,1fr)]">
+          <DisclosureRequestRows disclosure={disclosure} termClassName="text-muted-foreground" />
+        </dl>
         <div>
           <h2 className="font-display text-lg font-semibold">
             {kept ? "Kept identity record" : OUTCOME_LABELS[disclosure.outcome]}

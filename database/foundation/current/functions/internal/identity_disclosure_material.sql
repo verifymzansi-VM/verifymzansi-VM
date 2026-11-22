@@ -18,7 +18,8 @@ begin
       cross join lateral (select jsonb_build_object('account_id',f.owner_id,'submission_id',s.id,
           'encrypted_number',case when s.number_erased_at is null then jsonb_build_object('ciphertext',s.number_ciphertext,
             'iv',s.number_iv,'tag',s.number_tag,'key_id',s.encryption_key_id) end,
-          'selfie',case when a.state in ('uploaded','clean') and a.sha256 is not null and a.size_bytes is not null
+          'selfie',case when d.request_type<>'urgent_life_risk'
+              and a.state in ('uploaded','clean') and a.sha256 is not null and a.size_bytes is not null
             then jsonb_build_object('artifact_id',a.id,'case_id',a.case_id,'object_key',a.object_key,
               'sha256',a.sha256,'size_bytes',a.size_bytes) end) material
         from private.accepted_identity_facts f

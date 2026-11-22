@@ -80,6 +80,86 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Authority requests under rule D9, 22 November 2026
+
+`20261122013616_authority_request_types.sql` is pending (see the applied
+register). Launch checklist item 69, owner decision D9 of 21 November ("Keep
+both"): staff may disclose a member's kept identity record to an authority only
+on a subpoena (Criminal Procedure Act s205, issued by a magistrate or judge), a
+court order or a search warrant, each checked with the issuing court or the
+named prosecutor on an official number; or on an urgent written request from
+SAPS where a life is at risk, checked by calling the station. An urgent request
+gives only the minimum, never the selfie.
+
+- **The request types:** `subpoena`, `court_order`, `search_warrant` and
+  `urgent_life_risk`. The earlier `warrant`, `police_case` and `regulator` rows
+  stay as they are and read as before; no row is rewritten.
+- **The confirmation:** `private.identity_disclosures` gains `issued_by` (the
+  court or prosecutor's office, or the SAPS station; 3 to 120 characters),
+  `confirmed_number` (the official number that was called; 5 to 20 digits and
+  spaces, an optional leading +) and `confirmed_by` (who confirmed it on that
+  call; 3 to 120 characters). The reference (3 to 100) is the subpoena, warrant
+  or case number. A table check keeps every row either an earlier one (no
+  confirmation, an earlier type) or a D9 one (all three, a D9 type).
+- **Opening:** the new
+  `api.open_authority_request(type, reference, issued_by, confirmed_number, confirmed_by, reason, lookup kind, lookup value, attested)`
+  refuses each missing part with 22023 and its own detail
+  (`disclosure_issued_by_required`, `disclosure_confirmed_number_required`,
+  `disclosure_confirmed_by_required`, and the existing ones); the staff rule,
+  the search and log-before-show are unchanged. `api.open_identity_disclosure`
+  keeps its signature but now runs the same rule with no confirmation, so it is
+  always refused; a later contract step removes it.
+- **Urgent requests, in the database:** the record leaves out the selfie and the
+  ID photo (names, ID number state, verified phones and dates only); reading the
+  selfie is refused with `disclosure_selfie_withheld` before anything is logged;
+  the server material never carries the selfie's stored object (the encrypted ID
+  number still).
+- **Reading:** `api.read_identity_disclosure` adds `issued_by`,
+  `confirmed_number` and `confirmed_by` only when the row has them, so the live
+  website still reads every earlier row.
+
+One new command; no command or argument removed (expand). ORDER: apply first,
+then merge. Between the two, the live website cannot open a new record (its form
+has no confirmation fields and the earlier command is refused); records opened
+before read as they did.
+
+**Applying.**
+
+1. Run `../preflight/20261122013616_authority_request_types.check.sql` unchanged
+   in the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "authority request types: update not applied;
+   disclosures: N" (any count).
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "authority request types: already applied; disclosures:
+   N; under rule D9: 0; urgent: 0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is
+`../rollback/20261122013616_authority_request_types.down.sql` (only with the
+owner's decision; prefer a forward fix). It refuses unless the update is
+applied, and refuses while any record opened under rule D9 is kept. Otherwise it
+puts back the four functions byte for byte, drops the new command and removes
+the three columns and the check.
+
+`node --import tsx scripts/test-foundation-identity-record-disclosure.mjs` (part
+of `pnpm db:foundation:lifecycle-test`) now also runs
+`scripts/lib/authority-request-types-checks.mjs` on the throwaway database: the
+preflight before and after, read only; drifted bodies and a premature rollback
+refused; apply, rollback and re-apply return the same fingerprints; the new
+command's grants; records opened under the first rule (subpoena, warrant, police
+case) read as they did and stay listed; the earlier command always refused,
+logging nothing; the three earlier and any other types refused; for each of the
+four types, each missing or malformed reference, issuer, number, confirmer,
+reason and confirmation refused with its own detail and nothing logged; each
+type opening with its trimmed reference and confirmation on the row and the
+record; the table check refusing a row that breaks the rule; an urgent request
+showing names, ID number state and phones without the selfie or ID photo (view
+and print), its selfie read refused before logging and its server material
+without the selfie; a court order still showing the selfie; and the rollback
+refused while a D9 record is kept.
+
 ## Business storefront, 21 November 2026
 
 `20261121131915_business_storefront.sql` was applied on 21 November 2026 at
@@ -6867,5 +6947,7 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   new functions absent), after: already applied (the 5 bodies as updated);
   production fingerprint after it (fingerprint.sql) matched the full replay
   (except the known schema grant difference)
+
+- `20261122013616_authority_request_types.sql`: pending; apply-first
 
 <!-- applied-register:end -->

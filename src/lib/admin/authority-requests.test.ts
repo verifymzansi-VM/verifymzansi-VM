@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   AUTHORITY_REQUEST_MESSAGES,
+  confirmationWords,
   disclosureNumber,
   earlierRequestStatus,
   emailForLookup,
@@ -10,6 +11,8 @@ import {
   minutesLeft,
   phoneForLookup,
   postReferenceFromLink,
+  RECORDED_REQUEST_TYPES,
+  REQUEST_TYPES,
   requestTypeLabel,
 } from "./authority-requests";
 
@@ -66,10 +69,26 @@ describe("authority request helpers", () => {
     expect(disclosureNumber(12345)).toBe("D-12345");
     expect(requestTypeLabel("subpoena")).toBe("Subpoena (Criminal Procedure Act, s205)");
     expect(requestTypeLabel("unknown")).toBe("Authority request");
+    // Records opened before rule D9 keep their label.
+    expect(requestTypeLabel("police_case")).toBe("Written police request with a case number");
     expect(formatIdNumber("8001015009087")).toBe("800101 5009 08 7");
     expect(formatDisclosurePhone("+27712345678")).toBe("+27 71 234 5678");
     expect(minutesLeft("2026-11-21T10:15:00Z", Date.parse("2026-11-21T10:03:10Z"))).toBe(12);
     expect(minutesLeft("2026-11-21T10:00:00Z", Date.parse("2026-11-21T10:03:10Z"))).toBe(0);
+  });
+
+  it("offers only the four D9 request types, and reads the earlier ones", () => {
+    expect(REQUEST_TYPES.map((type) => type.value)).toEqual([
+      "subpoena",
+      "court_order",
+      "search_warrant",
+      "urgent_life_risk",
+    ]);
+    expect(RECORDED_REQUEST_TYPES).toEqual(
+      expect.arrayContaining(["warrant", "police_case", "regulator"])
+    );
+    expect(confirmationWords("urgent_life_risk").issuedBy).toBe("SAPS station");
+    expect(confirmationWords("search_warrant").issuedBy).toBe("Issuing court");
   });
 
   it("words the earlier requests' status like the design", () => {

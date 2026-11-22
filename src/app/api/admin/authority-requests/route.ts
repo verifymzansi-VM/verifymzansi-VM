@@ -19,8 +19,12 @@ const text = (min: number, max: number) =>
     .max(max)
     .regex(/^[^\x00-\x08\x0b\x0c\x0e-\x1f\x7f]*$/);
 const body = z.strictObject({
-  requestType: z.enum(["subpoena", "court_order", "warrant", "police_case", "regulator"]),
+  // Rule D9: only these four (20261122013616_authority_request_types.sql).
+  requestType: z.enum(["subpoena", "court_order", "search_warrant", "urgent_life_risk"]),
   reference: text(1, 100),
+  issuedBy: text(1, 120),
+  confirmedNumber: text(1, 20),
+  confirmedBy: text(1, 120),
   reason: text(1, 2000),
   lookupKind: z.enum(["post", "id_number", "phone", "email"]),
   lookupValue: text(1, 2048),
@@ -32,7 +36,10 @@ const body = z.strictObject({
  *
  * Open a member's kept identity record against an authority request. Same-origin, CSRF and a per-client rate limit
  * (handleFoundationOwnerRoute); the database checks the caller is a governor
- * or admin with an authenticator code from the last 15 minutes, writes the log
+ * or admin with an authenticator code from the last 15 minutes, checks the
+ * request (a subpoena, court order, search warrant or urgent life-risk
+ * request, with who issued it, the official number called and who confirmed
+ * it), writes the log
  * row before answering (a search that finds nobody is logged too) and answers
  * only the row's id: the record is read on its own page. An ID number is sent
  * to the database only as its one-way fingerprint.

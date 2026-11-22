@@ -16,6 +16,9 @@ begin
   d:=internal.identity_disclosure_open_for(p_disclosure,actor);
   if p_subject is not null and (d.outcome<>'record' or not p_subject=any(d.subject_ids)) then
     raise exception 'valid disclosure required' using errcode='22023',detail='disclosure_subject_invalid'; end if;
+  -- Rule D9: an urgent request gives only the minimum, never the selfie.
+  if p_purpose='selfie' and d.request_type='urgent_life_risk' then
+    raise exception 'the selfie is never disclosed for an urgent request' using errcode='22023',detail='disclosure_selfie_withheld'; end if;
   -- The look is logged before anything is answered.
   insert into private.identity_disclosure_events(disclosure_id,staff_id,kind,subject_id)
     values(d.id,actor,case p_purpose when 'view' then 'viewed' when 'print' then 'printed' else 'selfie_viewed' end,p_subject);
@@ -29,7 +32,9 @@ begin
       'request_type',d.request_type,'reference',d.request_reference,'reason',d.reason,
       'lookup_kind',d.lookup_kind,
       'lookup_value',case when d.lookup_kind='id_number' then null else d.lookup_value end,
-      'outcome',d.outcome,'match_count',d.match_count),
+      'outcome',d.outcome,'match_count',d.match_count)
+      || jsonb_strip_nulls(jsonb_build_object('issued_by',d.issued_by,'confirmed_number',d.confirmed_number,
+        'confirmed_by',d.confirmed_by)),
     'records',records);
 end;
 $function$;
