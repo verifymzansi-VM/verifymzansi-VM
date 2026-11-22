@@ -13,6 +13,15 @@ begin
   update private.identity_checks set status='not_finished',finished_at=now_at,
     provider_delete_due=case when session_id is not null then now_at end
     where status='started' and expires_at<now_at-interval '1 hour';
+  update private.identity_checks k set provider_delete_due=f.reviewed_at+interval '30 days'
+    from private.accepted_identity_facts f
+    where f.submission_id=k.submission_id and k.provider_delete_due is null and k.provider_deleted_at is null
+      and k.session_id is not null;
+  update private.identity_checks k set provider_delete_due=now_at+interval '5 days'
+    where k.status in('with_staff','declined') and k.provider_delete_due is null and k.provider_deleted_at is null
+      and k.session_id is not null
+      and not exists(select 1 from private.accepted_identity_facts f where f.submission_id=k.submission_id)
+      and not internal.identity_submission_waiting(k.submission_id);
   with due as (
     select k.id from private.identity_checks k
     where k.provider_delete_due<=now_at and k.provider_deleted_at is null and k.session_id is not null

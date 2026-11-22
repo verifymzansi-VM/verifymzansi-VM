@@ -250,10 +250,12 @@ export async function runFoundationRetention(
 
 /**
  * The partner's copies of automatic ID checks that are due for deletion
- * (api.claim_identity_check_deletions: unfinished checks, and declined ones 5
- * days after the decline unless a person was asked; holds skip them). One
- * claim, then a partner deletion and an acknowledgement per session. A
- * failed deletion keeps its claim and is tried again after 5 minutes.
+ * (api.claim_identity_check_deletions: unfinished checks at once, declined
+ * ones 5 days after the decline unless a person was asked, checks a person
+ * sent back or closed without accepting 5 days after, and accepted ones 30
+ * days after the acceptance; holds skip them). One claim, then a partner
+ * deletion and an acknowledgement per session. A failed deletion keeps its
+ * claim and is tried again after 5 minutes.
  */
 async function deleteIdentityCheckSessions(
   { service, limits, budget, signal }: RunContext,
