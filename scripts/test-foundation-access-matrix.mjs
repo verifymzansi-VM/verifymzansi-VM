@@ -294,6 +294,12 @@ const OWNER_TABLES = [
   ],
   // Copy a post (20261121150309_copy_a_post): which of A's posts a copy came from.
   ["post_copies", ownPosts],
+  // Free credits (20261122130744_free_credits): a gift to A, or one A gave or
+  // extended as staff.
+  [
+    "free_credit_events",
+    "entitlement_id in (select id from private.entitlements where owner_id=$1) or actor_id=$1",
+  ],
   ["listing_price_drafts", "owner_id=$1"],
   ["moderation_log", ownPosts],
   [

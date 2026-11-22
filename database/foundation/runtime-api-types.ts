@@ -744,6 +744,15 @@ export type FoundationRuntimeAuthenticatedDatabase = {
       copy_my_post: { Args: { p_post: string; p_request: string }; Returns: Json };
       get_frontend_staff_copy_facts: { Args: { p_posts: string[] }; Returns: Json };
       list_my_copy_drafts: { Args: Record<never, never>; Returns: Json };
+      give_free_credit: {
+        Args: { p_email: string; p_posts: number; p_days: number; p_reason: string };
+        Returns: Json;
+      };
+      extend_free_credit: {
+        Args: { p_credit_id: string; p_days: number; p_reason: string };
+        Returns: Json;
+      };
+      list_free_credits: { Args: Record<never, never>; Returns: Json };
     };
   };
 };

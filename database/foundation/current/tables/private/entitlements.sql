@@ -40,6 +40,7 @@ END),
   constraint entitlements_check4 CHECK (source <> 'staff_grant'::text OR granted_by IS NOT NULL),
   constraint entitlements_check5 CHECK ((status = 'revoked'::text) = (revoked_reason IS NOT NULL)),
   constraint entitlements_check6 CHECK (source <> 'intro_trial'::text OR addon_capabilities = '{}'::text[]),
+  constraint entitlements_free_credit_check CHECK (source <> 'free_credit'::text OR granted_by IS NOT NULL AND payment_id IS NULL AND area IS NULL AND addon_capabilities = '{}'::text[]),
   constraint entitlements_granted_by_fkey FOREIGN KEY (granted_by) REFERENCES auth.users(id) ON DELETE RESTRICT,
   constraint entitlements_max_photos_check CHECK (max_photos >= 1 AND max_photos <= 50),
   constraint entitlements_max_videos_check CHECK (max_videos >= 0 AND max_videos <= 10),
@@ -54,12 +55,13 @@ END),
   constraint entitlements_renews_entitlement_id_fkey FOREIGN KEY (renews_entitlement_id) REFERENCES private.entitlements(id) ON DELETE RESTRICT,
   constraint entitlements_slot_capacity_check CHECK (slot_capacity >= 1 AND slot_capacity <= 1000),
   constraint entitlements_slot_id_fkey FOREIGN KEY (slot_id) REFERENCES private.entitlements(id) ON DELETE RESTRICT,
-  constraint entitlements_source_check CHECK (source = ANY (ARRAY['retail_paid'::text, 'intro_trial'::text, 'sponsorship'::text, 'contract'::text, 'staff_grant'::text])),
+  constraint entitlements_source_check CHECK (source = ANY (ARRAY['retail_paid'::text, 'intro_trial'::text, 'sponsorship'::text, 'contract'::text, 'staff_grant'::text, 'free_credit'::text])),
   constraint entitlements_status_check CHECK (status = ANY (ARRAY['active'::text, 'pending_verification'::text, 'revoked'::text]))
 );
 alter table private.entitlements owner to postgres;
 alter table private.entitlements enable row level security;
 CREATE INDEX entitlements_active_ends_idx ON private.entitlements USING btree (ends_at) WHERE (status = 'active'::text);
+CREATE INDEX entitlements_free_credit_idx ON private.entitlements USING btree (starts_at DESC, id) WHERE (source = 'free_credit'::text);
 CREATE INDEX entitlements_granted_by_idx ON private.entitlements USING btree (granted_by) WHERE (granted_by IS NOT NULL);
 CREATE INDEX entitlements_house_slot_ended_idx ON private.entitlements USING btree (id) WHERE ((source = 'staff_grant'::text) AND (status = 'revoked'::text) AND (revoked_reason = 'house_slot_ended'::text));
 CREATE INDEX entitlements_owner_id_idx ON private.entitlements USING btree (owner_id);
