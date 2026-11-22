@@ -149,6 +149,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 85. Business storefront (item 17b, first part) | approved by owner 2026-11-21 (with the group 85 part of 7 rows elsewhere) | Nothing today (switch off). Once on: a checked business with a running Multi-listing package and at least one live listing shows 'All stock' (search, filters that follow the trade, newest first, Show more) on its business page, and each of its listings names the business (logo or initials) with 'See all 18 cars'. |
 | 86. Copy a post (item 17b, second part) | approved by owner 2026-11-22 (with the group 86 part of 8 rows elsewhere) | Nothing today (switch off). Once on: a member whose Multi-listing package runs gets 'More', then 'Copy this post' on My posts; the copy opens in the 'Post an item' form with a note (everything but the video filled in, one new photo for vehicles and property), unfinished copies wait under 'Drafts' for 14 days, and reviewers see 'Copied from'. |
 | 89. Authority requests: only the four D9 request types (item 69) (no file rows: the group 89 part of 6 rows in group 77) | approved by owner 2026-11-22 | Governors and admins only: the authority request form offers only a subpoena, court order, search warrant or urgent life-risk request, and asks for the issuing court (or SAPS station), the official number called and who confirmed it; the record and print sheet show the request type, reference, issuer and check; an urgent request shows no selfie or ID photo. Members see nothing new. |
+| 92. Registered street address no longer shown (no file rows: data setting only) | approved by owner 2026-11-22 | Trust & Safety (and the Terms and PAIA pages, which list the same company details) no longer show a 'Registered address' row with the street address. The other company details (registered name, trading name, CIPC number, officers, contacts) are unchanged. |
 
 Questions for the owner:
 
@@ -3535,6 +3536,22 @@ Pictures (synthetic test people only, not published):
 phone 375).
 
 Decision: approved by owner 2026-11-22 (after seeing the item 69 pictures; answer: 'Approve both', for the pictures and the database update).
+
+### 92. Registered street address no longer shown
+
+The owner decided that the company's registered street address is never shown
+on any page. Until now Trust & Safety, the Terms and the PAIA page listed a
+'Registered address' row with the street address among the company details.
+That row, its setting and its built-in value are removed
+(`src/lib/trust-public-config.ts`, outside the frozen folders, so no file rows).
+Every other company detail row stays as it is. A wider change still in review
+(the legal must-haves pull request) makes the same removal; this group ships it
+first.
+
+Pictures (not published): `screenshots/hide-address/` (desktop 1280 and phone
+375, before and after; the address is blurred in the before pictures).
+
+Decision: approved by owner 2026-11-22 (answer: 'Approve').
 
 <!-- frontend-ledger:end -->
 
