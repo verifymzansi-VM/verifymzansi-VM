@@ -9,10 +9,10 @@ CREATE OR REPLACE FUNCTION internal.claim_supported_notification_outbox(p_suppor
 AS $function$
 declare result jsonb;
 begin
-  -- Each kind once; 22 kinds since the term-ending notice.
-  if p_supported_kinds is null or cardinality(p_supported_kinds) not between 1 and 22 or coalesce(array_ndims(p_supported_kinds),0)<>1
+  -- Each kind once; 23 kinds since the free credit reminder.
+  if p_supported_kinds is null or cardinality(p_supported_kinds) not between 1 and 23 or coalesce(array_ndims(p_supported_kinds),0)<>1
     or (select count(distinct coalesce(k,'')) from unnest(p_supported_kinds) k)<>cardinality(p_supported_kinds) then raise exception 'supported mail kinds required' using errcode='22023';end if;
-  if exists(select 1 from unnest(p_supported_kinds) k where k is null or k not in('payment_completed','payment_reversed','payment_reconciliation_required','trial_started','post_expired','post_expiry_reminder','draft_deletion_warning','post_deleted','verification_phone_confirmed','identity_accepted','enquiry_received','account_warning','content_hidden','account_suspended','account_banned','appeal_decided','business_check_update','post_sold','post_kept','verification_returned','slot_renewal_reminder','term_ending_notice')) then raise exception 'unsupported mail kind' using errcode='22023';end if;
+  if exists(select 1 from unnest(p_supported_kinds) k where k is null or k not in('payment_completed','payment_reversed','payment_reconciliation_required','trial_started','post_expired','post_expiry_reminder','draft_deletion_warning','post_deleted','verification_phone_confirmed','identity_accepted','enquiry_received','account_warning','content_hidden','account_suspended','account_banned','appeal_decided','business_check_update','post_sold','post_kept','verification_returned','slot_renewal_reminder','term_ending_notice','free_credit_reminder')) then raise exception 'unsupported mail kind' using errcode='22023';end if;
   if p_limit is null or p_limit not between 1 and 50 then raise exception 'invalid limit' using errcode='22023'; end if;
   with due as (select id from private.outbox_events where kind=any(p_supported_kinds) and processed_at is null
     and delivery_attempts<8 and delivery_after<=statement_timestamp()
@@ -25,7 +25,8 @@ begin
     'owner_id',o.owner_id,'claim_token',o.delivery_claim,'locked_until',o.delivery_until,
     'attempts',o.delivery_attempts,'recipient',case when u.email_confirmed_at is not null and not u.is_anonymous and (o.kind not in('account_warning','content_hidden','account_suspended','account_banned','appeal_decided','business_check_update','verification_returned') or not exists(select 1 from private.account_closures c where c.user_id=u.id))
       and (o.kind<>'slot_renewal_reminder' or internal.slot_renewal_due(o.subject_id,o.owner_id))
-      and (o.kind<>'term_ending_notice' or internal.term_ending_notice_due(o.subject_id,o.owner_id)) then u.email end,
+      and (o.kind<>'term_ending_notice' or internal.term_ending_notice_due(o.subject_id,o.owner_id))
+      and (o.kind<>'free_credit_reminder' or o.dedupe_key=internal.free_credit_reminder_key(o.subject_id,o.owner_id)) then u.email end,
     'post_title',p.title,'post_id',p.id,'created_at',o.created_at,'notice_reason',case when o.kind='account_warning' then (select r.reason from private.frontend_report_action_receipts r join private.frontend_account_warnings w on w.receipt_id=r.id where r.id=o.subject_id and w.account_id=o.owner_id) end,
     'deletes_at',p.deletes_at,
     'holds_slot',case when p.id is not null then exists(select 1 from private.post_activations a where a.post_id=p.id and a.released_at is null) end,
@@ -52,14 +53,18 @@ begin
     'term_package_continues',case when tg.id is not null and tg.package_id is null
       and exists(select 1 from private.payment_lines l join private.plan_versions v on v.id=l.plan_version_id
         where l.id=tg.payment_line_id and internal.individual_slot_plan(v.plan_code))
-      then exists(select 1 from internal.slot_package_now(o.owner_id) n where n.ends_at>tg.ends_at) end) order by o.created_at,o.id),'[]'::jsonb)
+      then exists(select 1 from internal.slot_package_now(o.owner_id) n where n.ends_at>tg.ends_at) end,
+    -- The free credit reminder: when the gift ends.
+    'credit_ends_at',fc.ends_at) order by o.created_at,o.id),'[]'::jsonb)
     into result from claimed o left join auth.users u on u.id=o.owner_id
     left join private.enquiries e on o.kind='enquiry_received' and e.id=o.subject_id
     left join private.posts p on p.id=case when o.kind='enquiry_received' then e.post_id else o.subject_id end
     left join private.entitlements tr on o.kind='trial_started' and tr.id=o.subject_id and tr.source='intro_trial'
       and tr.owner_id=o.owner_id and tr.status='active'
     left join private.entitlements sg on o.kind='slot_renewal_reminder' and sg.id=o.subject_id and sg.owner_id=o.owner_id
-    left join private.entitlements tg on o.kind='term_ending_notice' and tg.id=o.subject_id and tg.owner_id=o.owner_id;
+    left join private.entitlements tg on o.kind='term_ending_notice' and tg.id=o.subject_id and tg.owner_id=o.owner_id
+    left join private.entitlements fc on o.kind='free_credit_reminder' and fc.id=o.subject_id and fc.owner_id=o.owner_id
+      and fc.source='free_credit';
   return result;
 end;
 $function$;

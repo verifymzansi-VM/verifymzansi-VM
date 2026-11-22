@@ -33,14 +33,16 @@
       "row_level_security": "940a39e3dbeb75610b47e5d037f77324",
       "triggers": "f2166e999c55c3ea32f79c794efafc9d"
     },
-    "pendingApplication": []
+    "pendingApplication": [
+      "20261122182304_free_credit_reminder.sql"
+    ]
   },
   "knownDifferences": [
     "Reference data is not fingerprinted. candidate.sql seeds posting-terms version posting-v2, which production does not hold: production has posting-v1 and posting-v3 (current since 20261109173012_posting_terms_v3.sql), and posting-v4 once 20261112122001_publish_posting_terms_v4.sql is applied (current from 20261112173841_switch_posting_terms_v4.sql).",
     "schema_grants: production has 8 items (d397fed9c8bd9d4fc50ebdd777899d93) and the replay 7 (categories below). The extra production item is `internal supabase_auth_admin:USAGE`, which Supabase grants when the Auth \"Before user created\" hook is switched on; no repository file creates it (see replay/hosted-auth-hook-grants.sql)."
   ],
-  "updateCount": 108,
-  "lastUpdate": "20261122130744_free_credits.sql",
+  "updateCount": 109,
+  "lastUpdate": "20261122182304_free_credit_reminder.sql",
   "categories": {
     "column_grants": {
       "items": 10,
@@ -52,23 +54,23 @@
     },
     "constraints": {
       "items": 1322,
-      "fingerprint": "c9acb208a54f3c5d50c667063507e21b"
+      "fingerprint": "8bef10dda827dff4b0651e51c9a85d42"
     },
     "event_triggers": {
       "items": 1,
       "fingerprint": "821f7d069c595c075754fad9309136ac"
     },
     "function_bodies": {
-      "items": 1167,
-      "fingerprint": "943c041609e602c85956952984c4a21d"
+      "items": 1169,
+      "fingerprint": "9705f7761b79ba4148496b96804084a0"
     },
     "function_grants": {
-      "items": 850,
-      "fingerprint": "38f2e64e950c9fecd4141d82461932b5"
+      "items": 851,
+      "fingerprint": "5ae84a726b7fd4ef9239a45724c92b17"
     },
     "function_metadata": {
-      "items": 1167,
-      "fingerprint": "251b913db4b9e7180d633a2003e5801c"
+      "items": 1169,
+      "fingerprint": "fb0d07f1cb1b61a0d100bea39696db06"
     },
     "indexes": {
       "items": 603,

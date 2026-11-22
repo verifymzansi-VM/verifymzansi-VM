@@ -43,6 +43,7 @@ const kind = z.enum([
   "verification_returned",
   "slot_renewal_reminder",
   "term_ending_notice",
+  "free_credit_reminder",
 ]);
 type Kind = z.infer<typeof kind>;
 // Payment messages are claimed before every other kind.
@@ -56,6 +57,8 @@ const otherKinds = kind.options.filter((k) => !paymentKinds.includes(k));
 // such a database the job drops them one update at a time until the claim is
 // accepted, and keeps that list.
 const laterKinds: ReadonlyArray<ReadonlySet<Kind>> = [
+  // 20261122182304_free_credit_reminder.sql
+  new Set<Kind>(["free_credit_reminder"]),
   // 20261122111209_term_ending_notice.sql
   new Set<Kind>(["term_ending_notice"]),
   // 20261114093742_renew_slots_early.sql
@@ -117,7 +120,8 @@ const MAX_ALERTS_PER_RUN = 2;
 
 const SWEEPS = [
   // Posts move into a renewed slot's next period; renewal reminders are
-  // queued (20261114093742_renew_slots_early.sql).
+  // queued (20261114093742_renew_slots_early.sql), and so are term-ending
+  // notices and free credit reminders (20261122182304_free_credit_reminder.sql).
   ["run_slot_renewals", { p_limit: 100 }],
   ["run_post_lifecycle", { p_limit: 100 }],
   ["sweep_sponsorships", { p_limit: 100 }],
@@ -189,6 +193,8 @@ const jobSchema = z
     term_kind: z.enum(["individual", "package", "other"]).nullable().optional(),
     term_has_access: z.boolean().nullable().optional(),
     term_package_continues: z.boolean().nullable().optional(),
+    // Only for free_credit_reminder (20261122182304): when the free credit ends.
+    credit_ends_at: z.iso.datetime({ offset: true }).nullable().optional(),
   })
   .refine(
     (job) =>
@@ -464,14 +470,18 @@ export async function runFoundationOperationJobs(
                       termHasAccess: job.term_has_access ?? null,
                       termPackageContinues: job.term_package_continues ?? null,
                     })
-                  : job.kind === "trial_started"
+                  : job.kind === "free_credit_reminder"
                     ? deliver(recipient, job.kind, key, undefined, {
-                        trialEndsAt: job.trial_ends_at ?? null,
-                        trialFundsPost: job.trial_funds_post ?? null,
+                        creditEndsAt: job.credit_ends_at ?? null,
                       })
-                    : receiptDetails
-                      ? deliver(recipient, job.kind, key, undefined, receiptDetails)
-                      : deliver(recipient, job.kind, key)
+                    : job.kind === "trial_started"
+                      ? deliver(recipient, job.kind, key, undefined, {
+                          trialEndsAt: job.trial_ends_at ?? null,
+                          trialFundsPost: job.trial_funds_post ?? null,
+                        })
+                      : receiptDetails
+                        ? deliver(recipient, job.kind, key, undefined, receiptDetails)
+                        : deliver(recipient, job.kind, key)
         );
         success = result.success;
         unknown = !success && result.outcomeUnknown === true;

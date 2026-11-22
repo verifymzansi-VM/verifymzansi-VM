@@ -304,6 +304,37 @@ describe("email service", () => {
     expect(message.html).not.toContain("vm-button");
     vi.unstubAllEnvs();
   });
+  it("reminds a member that their free credits end, with the date and My slots (item 70b)", async () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
+    await sendPlatformNotice(
+      "member@example.invalid",
+      "free_credit_reminder",
+      "foundation-outbox/credit",
+      undefined,
+      { creditEndsAt: "2026-12-20T10:00:00Z" } // 12:00 in South Africa
+    );
+    const [message, options] = mockSend.mock.calls.at(-1)!;
+    expect(message.subject).toBe("Your free credits end soon");
+    expect(message.text).toBe(
+      "Your free credits end soon\n\nYour free credits from VerifyMzansi end on 20 December 2026 at 12:00 (South African time).\n\nThe posts they pay for are then hidden. Unless you reactivate them in another slot, they are deleted 3 days later, with their photos and videos.\n\nSee my slots: https://verifymzansi.com/dashboard/slots"
+    );
+    expect(message.html).toContain("20 December 2026 at 12:00 (South African time)");
+    expect(message.html).toContain("deleted 3 days later, with their photos and videos");
+    expect(message.html).toContain("https://verifymzansi.com/dashboard/slots");
+    expect(message.html).toContain("See my slots");
+    // No renewal, purchase or further gift is offered.
+    for (const part of [message.text, message.html]) {
+      expect(part).not.toMatch(/renew|Billing|another gift|more free|coming soon/i);
+    }
+    expect(options.idempotencyKey).toBe("foundation-outbox/credit");
+    // Without a date nothing is sent (the job retries, then reports it).
+    const sent = mockSend.mock.calls.length;
+    await expect(
+      sendPlatformNotice("member@example.invalid", "free_credit_reminder", "outbox/credit-plain")
+    ).rejects.toThrow("Notice details unavailable");
+    expect(mockSend.mock.calls.length).toBe(sent);
+    vi.unstubAllEnvs();
+  });
   it("passes durable job keys to Resend for repeatable notices", async () => {
     await sendModerationNoticeEmail({
       email: "user@example.com",
