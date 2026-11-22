@@ -58,8 +58,10 @@
 --   (showroom_home, _business, _market, _tourism, _programme) counts at most
 --   once per browser, post and showroom a day, through a mark under the day's
 --   salt in private.post_view_marks as views use (deleted after 24 hours by
---   the engagement clean-up), and never without a browser (p_device). Every
---   other counter, the arguments and the answer are unchanged.
+--   the engagement clean-up), only for posts that would count (publicly live,
+--   not the viewer's own), and never without a browser (p_device). The marks
+--   add to the views' daily count and stop at its storage valve (300,000 a
+--   day). Every other counter, the arguments and the answer are unchanged.
 --
 -- Expand only: one new API command and one index; one function's body is
 -- replaced (no argument, grant or result field changes); nothing is removed.
@@ -90,7 +92,7 @@ begin
   end if;
   if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc
       where oid=to_regprocedure('internal.record_post_activity(uuid[],text[],uuid,uuid)'))
-      not in ('b9e3418d962ee84b9ad9b69d4316428a', 'e15aedaa40e465e45bc9be85be76cfdb') then
+      not in ('b9e3418d962ee84b9ad9b69d4316428a', 'ccc284df33bccaaf138df62911a3cd70') then
     raise exception 'fair showroom precondition: internal.record_post_activity is not a reviewed body' using errcode='55000';
   end if;
   if to_regclass('private.post_activity_days') is null then
@@ -114,7 +116,7 @@ declare
   today date := (statement_timestamp() at time zone 'Africa/Johannesburg')::date;
   viewer uuid := p_account; moved integer := 0; engaged integer := 0;
   salt_today bytea; salt_before bytea; pid uuid; seen bytea; again bytea;
-  showroom_marks bytea[] := '{}'::bytea[];
+  showroom_marks bytea[] := '{}'::bytea[]; day_marks integer; after_marks integer;
 begin
   if p_post_ids is null or p_metrics is null or cardinality(p_post_ids) not between 1 and 50
     or cardinality(p_metrics) <> cardinality(p_post_ids)
@@ -138,20 +140,37 @@ begin
 
   -- Showroom appearances count at most once per browser, post and showroom a
   -- day: a mark under the day's salt, as views use (deleted after 24 hours
-  -- by the engagement clean-up). Without a browser they do not count.
+  -- by the engagement clean-up), only for posts that would count (publicly
+  -- live, not the viewer's own). Without a browser they do not count. The
+  -- marks share the views' daily storage valve: from 300,000 marks and
+  -- counted views a day, no showroom appearance counts.
   if p_device is not null and exists(select 1 from unnest(p_metrics) m where m like 'showroom\_%') then
     insert into private.post_view_salts(day, salt)
       values (today, decode(replace(gen_random_uuid()::text,'-','')||replace(gen_random_uuid()::text,'-',''),'hex'))
       on conflict (day) do nothing;
-    select s.salt into salt_today from private.post_view_salts s where s.day = today;
-    with fresh as (
-      insert into private.post_view_marks(mark)
-      select distinct sha256(salt_today || convert_to('showroom:' || e.metric || ':' || p_device::text || '|' || e.post_id::text, 'UTF8'))
-      from unnest(p_post_ids, p_metrics) e(post_id, metric)
-      where e.metric like 'showroom\_%'
-      on conflict (mark) do nothing
-      returning mark)
-    select coalesce(array_agg(f.mark), '{}'::bytea[]) into showroom_marks from fresh f;
+    select s.salt, s.views into salt_today, day_marks from private.post_view_salts s where s.day = today;
+    if day_marks < 300000 then
+      with fresh as (
+        insert into private.post_view_marks(mark)
+        select sha256(salt_today || convert_to('showroom:' || e.metric || ':' || p_device::text || '|' || e.post_id::text, 'UTF8'))
+        from (select distinct x.post_id, x.metric from unnest(p_post_ids, p_metrics) x(post_id, metric)
+          where x.metric like 'showroom\_%') e
+        join private.posts p on p.id = e.post_id
+        join private.post_search_documents d on d.post_id = p.id
+        where d.is_visible and (d.visible_until is null or d.visible_until > statement_timestamp())
+          and exists(select 1 from private.public_eligible_posts l where l.id = p.id)
+          and p.owner_id is distinct from viewer
+        order by 1
+        on conflict (mark) do nothing
+        returning mark)
+      select coalesce(array_agg(f.mark), '{}'::bytea[]) into showroom_marks from fresh f;
+      if cardinality(showroom_marks) > 0 then
+        update private.post_view_salts s set views = s.views + cardinality(showroom_marks) where s.day = today
+          returning s.views into after_marks;
+        perform internal.engagement_valve_alarms('post_views_counted', 300000,
+          after_marks - cardinality(showroom_marks), after_marks);
+      end if;
+    end if;
   end if;
 
   -- The day's counters of each publicly live post the viewer does not own;

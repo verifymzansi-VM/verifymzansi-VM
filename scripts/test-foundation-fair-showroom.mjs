@@ -511,6 +511,36 @@ try {
     // One mark per browser, post and showroom, as views keep (the engagement
     // clean-up deletes them after 24 hours).
     assert.equal(marks() - before, 3);
+    // Marks only for posts that would count: random ids, a draft and the
+    // signed-in owner's own post store none.
+    const draft = post("kzn_durban", { liveFor: null });
+    const probe = randomUUID();
+    appear(
+      Array.from({ length: 40 }, () => [randomUUID(), "showroom_home"]).concat([
+        [draft, "showroom_home"],
+      ]),
+      probe
+    );
+    json(
+      service(
+        `select api.record_post_activity(array['${shown}']::uuid[],array['showroom_market']::text[],'${probe}','${owner.id}');`
+      )
+    );
+    assert.equal(marks() - before, 3, "random ids, a draft and an own post store no mark");
+    assert.equal(today(shown, "showroom_market"), 0);
+    // The marks count under the views' daily storage valve (300,000 a day):
+    // they add to the day's count, and at the valve no showroom appearance
+    // counts or stores a mark.
+    const day = `(now() at time zone 'Africa/Johannesburg')::date`;
+    const counted = () => Number(q(`select views from private.post_view_salts where day=${day};`));
+    const start = counted();
+    appear([[shown, "showroom_business"]], probe);
+    assert.equal(counted(), start + 1);
+    q(`update private.post_view_salts set views=300000 where day=${day};`);
+    appear([[shown, "showroom_programme"]], probe);
+    assert.equal(today(shown, "showroom_programme"), 0);
+    assert.equal(marks() - before, 4);
+    q(`update private.post_view_salts set views=${start + 1} where day=${day};`);
     clear();
   });
 

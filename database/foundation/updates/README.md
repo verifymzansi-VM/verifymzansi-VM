@@ -129,11 +129,15 @@ showroom appearance counts at most once per browser, post and showroom a day.
   (`showroom_home`, `_business`, `_market`, `_tourism`, `_programme`) counts at
   most once per browser, post and showroom a day, through a mark under the day's
   salt in `private.post_view_marks`, as views use (the engagement clean-up
-  deletes it after 24 hours), and never without a browser (`p_device`). The
-  website sends the browser's signed `vmz_viewer` identifier for showroom
-  appearances only, and drops them without one; they are also under the per-post
-  daily limit (`engagement:activity:post`). Every other counter, the arguments
-  and the answer are unchanged.
+  deletes it after 24 hours). Marks are stored only for posts that would count
+  (publicly live, not the viewer's own), never without a browser (`p_device`),
+  and they add to the views' daily count: at its storage valve (300,000 a day)
+  no showroom appearance counts. The website sends the browser's signed
+  `vmz_viewer` identifier for showroom appearances only, and only when it is at
+  least a day old; it drops them otherwise. They have their own per-post daily
+  limit (`engagement:activity:showroom`), and the carousel sends each card's
+  appearance once per page load. Every other counter, the arguments and the
+  answer are unchanged.
 
 **Cost.** Each call reads the showroom's live posts, 7 days of activity rows
 (for 2,000 live posts about 14,000 small rows), one view and like totals row per
@@ -187,8 +191,9 @@ appearances yet, no video or likes nudge (photo posts first about half the time
 against video posts); all nudges together under one turn (a post a turn behind
 with a video and farmed likes never first); the index; a showroom appearance
 recorded once per browser, post and showroom, and never without a browser;
-appearances counted up to 3 fair shares (two flooded posts level); and that
-reads write nothing.
+appearances counted up to 3 fair shares (two flooded posts level); no mark for
+random ids, a draft or an own post; the marks under the views' daily valve; and
+that reads write nothing.
 
 ## Business storefront, 21 November 2026
 

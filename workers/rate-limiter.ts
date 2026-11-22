@@ -340,9 +340,15 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
     { limit: 3000, ttl: 86400 },
   ],
   // Per address and post: requests with a post's page events (detail views,
-  // contact taps, shares) a day; card appearances are not checked against it.
-  // Far above what one person reaches; room for a shared carrier address.
+  // contact taps, shares) a day; card appearances are not checked against it
+  // (showroom appearances have their own action below). Far above what one
+  // person reaches; room for a shared carrier address.
   "engagement:activity:post": [{ limit: 200, ttl: 86400 }],
+  // Per address and post: requests with a post's showroom appearance a day
+  // (they move its place in the fair showroom). The carousel sends each card
+  // once per page load and the database counts each browser once a day, so
+  // this only bounds a flood from one address; room for a shared carrier.
+  "engagement:activity:showroom": [{ limit: 200, ttl: 86400 }],
   "engagement:like": [
     { limit: 30, ttl: 60 },
     { limit: 300, ttl: 3600 },

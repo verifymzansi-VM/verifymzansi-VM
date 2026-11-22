@@ -26,7 +26,7 @@ begin
     if shape not in (
         'internal.showroom_feed(jsonb) 405f59b149292741ecd6f5d4138ea489',
         'api.showroom_feed(jsonb) 20563a7dac3f7a15e63b08d6f00460da',
-        'internal.record_post_activity(uuid[],text[],uuid,uuid) e15aedaa40e465e45bc9be85be76cfdb',
+        'internal.record_post_activity(uuid[],text[],uuid,uuid) ccc284df33bccaaf138df62911a3cd70',
         'private.moderation_log_post_approvals_idx 355001da88e9af5134655e1717eaea25') then
       raise exception 'rollback precondition: the fair showroom update is not applied as reviewed (%)', shape
         using errcode='55000';
