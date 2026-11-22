@@ -65,12 +65,21 @@ register:
   delivery attempts and back-off, allowances) and read caps (a read returns at
   most N rows when N + 1 exist), each with its fixtures. A new database guard on
   a command's input gets a row there.
+- `scripts/limits-sql-packages.test.mjs`: buying slots: Multi-listing packages
+  (new packages, slots added part-way, their invoices and checkouts), invoice
+  payments, shared plans, raised slot limits and Ozow refund sends;
+- `scripts/limits-sql-cases.test.mjs`: claimed ID and business (CIPC and seen)
+  cases, the ID upload steps and the automatic ID check settings;
+- `scripts/limits-sql-reads.test.mjs`: read caps over tables with many required
+  links, default page sizes, caps of 1,000 to 200,000 rows (written in one
+  statement with `generate_series`), thresholds on stored counts and the batch
+  sizes of the scheduled sweeps.
 
-The database entries still marked `LIM-MECH-SQL-GUARD` need a fixture this lane
-does not have yet: a claimed identity, CIPC or visit case; the Multi-listing
-package world (packages on sale, a verified buyer, payments over time), which
-the Docker package suites exercise; refund sends; or a read cap over a table
-with many required links.
+The larger fixtures these share (a member whose ID review is accepted, packages
+on sale and a running package, business cases held by staff, refunds sent N
+times, live businesses) are in `scripts/lib/limits-sql-fixtures.mjs`. No
+database entry is left on `LIM-MECH-SQL-GUARD` alone: a new database limit gets
+a behaviour test in one of these files.
 
 ## Adding or changing a limit
 
