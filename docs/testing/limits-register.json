@@ -13516,6 +13516,116 @@
       ]
     },
     {
+      "id": "LIM-SQL-IDENTITY-ATTEMPT-FILES",
+      "title": "Identity checks: a failed attempt's files are kept 5 days (after an automatic decline unless the member asks a person, after staff send it back, or once a newer submission replaces it)",
+      "value": "5 days",
+      "category": "retention",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/decline_automatic_identity_submission.sql",
+          "symbol": "internal.decline_automatic_identity_submission",
+          "contains": "set retain_until=least(coalesce(a.retain_until,'infinity'::timestamptz),now_at+interval '5 days')"
+        },
+        {
+          "file": "database/foundation/current/functions/internal/return_identity_submission.sql",
+          "symbol": "internal.return_identity_submission",
+          "contains": "set retain_until=least(coalesce(retain_until,'infinity'::timestamptz),statement_timestamp()+interval '5 days')"
+        },
+        {
+          "file": "database/foundation/current/functions/internal/identity_submission_replaced.sql",
+          "symbol": "internal.identity_submission_replaced",
+          "contains": "set retain_until=least(coalesce(a.retain_until,'infinity'::timestamptz),statement_timestamp()+interval '5 days')"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-identity-keep-for.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-SQL-IDENTITY-PROVIDER-COPY",
+      "title": "Identity checks: the partner's copy of a check is deleted 30 days after an acceptance, 5 days after a person decided without accepting",
+      "value": "30 days; 5 days",
+      "category": "retention",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/claim_identity_check_deletions.sql",
+          "symbol": "internal.claim_identity_check_deletions",
+          "contains": "update private.identity_checks k set provider_delete_due=f.reviewed_at+interval '30 days'"
+        },
+        {
+          "file": "database/foundation/current/functions/internal/claim_identity_check_deletions.sql",
+          "symbol": "internal.claim_identity_check_deletions",
+          "contains": "update private.identity_checks k set provider_delete_due=now_at+interval '5 days'"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-identity-keep-for.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-SQL-IDENTITY-CHECK-ROW",
+      "title": "Identity checks: a check that did not lead to an accepted identity is deleted 7 days after it finished (once the partner's copy is deleted)",
+      "value": "7 days",
+      "category": "retention",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/retention_verification.sql",
+          "symbol": "internal.retention_verification",
+          "contains": "where k.status<>'started' and k.finished_at<statement_timestamp()-interval '7 days'"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-identity-keep-for.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-SQL-IDENTITY-DISCLOSURE-LOG",
+      "title": "Authority-request logs: kept while a named account exists and 5 years after it closed; a search that named nobody, 5 years",
+      "value": "5 years",
+      "category": "retention",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/retention_verification.sql",
+          "symbol": "internal.retention_verification",
+          "contains": "where d.opened_at<statement_timestamp()-interval '5 years'"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-identity-keep-for.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-SQL-IDENTITY-MODE-LOG",
+      "title": "Automatic ID check setting: each change is logged and kept 5 years",
+      "value": "5 years",
+      "category": "retention",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/retention_verification.sql",
+          "symbol": "internal.retention_verification",
+          "contains": "where e.changed_at<statement_timestamp()-interval '5 years'"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-identity-keep-for.mjs"
+        }
+      ]
+    },
+    {
       "id": "LIM-F-claim_identity_check_deletions",
       "title": "internal.claim_identity_check_deletions: limit 1 to 100",
       "value": "1 to 100",

@@ -5590,7 +5590,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current audit:view capability (governor, admin) and recent authenticator proof: every scheduled job with how often it runs, its last recorded run and whether it is late; counts and at most 50 rows each of stuck emails (kind, attempts, queued time, error code), stuck privacy request notices the notice job can still send (kind, attempts, queued time) with a separate count of notices from the last 30 days it can never send, payment problems seen in the past 7 days (an 8-character payment reference, reason, source, times, occurrences, whether staff were alerted), paid payments not activated, account deletions held back (reason and dates), file deletions stuck or queued, ID evidence past its deletion date outside holds, accounts on legal hold and open cost alarms; never an account id, name, email, phone or message text. Read only."
+      "authority": "Current audit:view capability (governor, admin) and recent authenticator proof: every scheduled job with how often it runs, its last recorded run and whether it is late; counts and at most 50 rows each of stuck emails (kind, attempts, queued time, error code), stuck privacy request notices the notice job can still send (kind, attempts, queued time) with a separate count of notices from the last 30 days it can never send, payment problems seen in the past 7 days (an 8-character payment reference, reason, source, times, occurrences, whether staff were alerted), paid payments not activated, account deletions held back (reason and dates), file deletions stuck or queued, ID evidence past its deletion date outside holds (a selfie kept with its identity record is not past it, 20261122022323_identity_keep_for), accounts on legal hold and open cost alarms; never an account id, name, email, phone or message text. Read only."
     },
     {
       "name": "record_scheduled_job_run",
@@ -5894,7 +5894,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Admin (identity_check:configure) with an authenticator code from the last 15 minutes: sets the automatic ID check setting with a reason of 5 to 500 characters (no control or direction characters); a change is logged append-only and setting a mode, even the current one, ends a pause. Until the retention update replaces it, only manual is accepted (PT409 identity_check_retention_pending)."
+      "authority": "Admin (identity_check:configure) with an authenticator code from the last 15 minutes: sets the automatic ID check setting with a reason of 5 to 500 characters (no control or direction characters); a change is logged append-only and setting a mode, even the current one, ends a pause. Accepts manual, staff_final and automatic (20261122022323_identity_keep_for)."
     },
     {
       "name": "get_identity_check_for_case",
