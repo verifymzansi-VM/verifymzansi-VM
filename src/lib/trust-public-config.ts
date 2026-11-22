@@ -10,7 +10,6 @@ export interface TrustPublicConfig {
   legalName?: string;
   tradingName?: string;
   cipcNumber?: string;
-  businessAddress?: string;
   responsibleOfficer?: string;
   informationOfficerName?: string;
   informationOfficerEmail: string;
@@ -38,7 +37,6 @@ const publicConfigRows = [
   { groups: ["identity", "legal"], key: "legalName", label: "Registered name" },
   { groups: ["identity", "legal"], key: "tradingName", label: "Trading name" },
   { groups: ["identity", "legal"], key: "cipcNumber", label: "CIPC registration number" },
-  { groups: ["identity", "legal"], key: "businessAddress", label: "Registered address" },
   { groups: ["identity", "legal"], key: "responsibleOfficer", label: "Responsible officer" },
   {
     groups: ["identity", "legal"],
@@ -81,10 +79,6 @@ export function getTrustPublicConfig(): TrustPublicConfig {
     legalName: envOrDefault("VERIFYMZANSI_LEGAL_NAME", "VERIFYMZANSI (PTY) LTD"),
     tradingName: envOrDefault("VERIFYMZANSI_TRADING_NAME", "VerifyMzansi"),
     cipcNumber: envOrDefault("VERIFYMZANSI_CIPC_NUMBER", "2026/155305/07"),
-    businessAddress: envOrDefault(
-      "VERIFYMZANSI_BUSINESS_ADDRESS",
-      "Kwadlangezwa, Khandisa, Empangeni, KwaZulu-Natal, 3886"
-    ),
     responsibleOfficer: envOrDefault("VERIFYMZANSI_RESPONSIBLE_OFFICER", "Senzo Mqondisi Mhlongo"),
     informationOfficerName: envOrDefault(
       "VERIFYMZANSI_INFORMATION_OFFICER_NAME",
