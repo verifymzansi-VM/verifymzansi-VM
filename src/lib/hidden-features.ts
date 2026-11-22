@@ -50,7 +50,8 @@ export const SHOW_STAFF_OPERATIONS: boolean = true;
 /**
  * The "Performance" tab of an organisation's dashboard, with its two "CSV"
  * download links, and the route behind them (/api/organisations/<id>/report).
- * Off: the report is not built on the live database yet; checklist item 74.
+ * Off: the report is not built on the live database yet; checklist item 46
+ * ("Sponsors, part B: the pilot", which includes report version 1).
  * Its route still reads the retired backend, so the downloads would fail.
  * While off, the tab is hidden and the route answers 404.
  */

@@ -24,7 +24,7 @@ afterEach(() => {
 });
 
 /** Switches that stay off because what they show is not built (the review of
- * launch checklist item 71): the organisation report (item 74) and package
+ * launch checklist item 71): the organisation report (item 46) and package
  * teams (item 15). Every other switch is on. */
 const STILL_OFF = new Set(["SHOW_ORGANISATION_REPORT", "SHOW_PACKAGE_TEAMS"]);
 

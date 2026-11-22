@@ -127,7 +127,7 @@ const PAGES: Page_[] = [
  * session, so nothing is changed: each must be served and must not fail. */
 const ROUTES: { feature: string; method: "GET" | "POST"; path: string }[] = [
   { feature: "SHOW_ACCOUNT_DELETION", method: "POST", path: "/api/account/delete" },
-  // SHOW_ORGANISATION_REPORT stays off (checklist item 74): its route answers 404.
+  // SHOW_ORGANISATION_REPORT stays off (checklist item 46): its route answers 404.
 ];
 
 /** Staff pages removed for launch (old commercial settings, trial, programme

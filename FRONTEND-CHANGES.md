@@ -3614,7 +3614,7 @@ to a 404 (the Multi-listing page and the package checkout are always shown;
 while packages are not on sale, paying is refused and asking for an invoice
 says 'Multi-listing packages are not on sale yet.'); 'See … prices' on
 Advertise only for Individual; Business Sponsors says 'No sponsors yet' when
-none is listed; SHOW_ORGANISATION_REPORT (item 74) and SHOW_PACKAGE_TEAMS
+none is listed; SHOW_ORGANISATION_REPORT (item 46) and SHOW_PACKAGE_TEAMS
 (item 15) stay off because what they show is not built.
 
 Pictures: the refreshed visual baselines and the screenshots on the pull
