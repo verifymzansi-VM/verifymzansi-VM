@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 import {
   parseFoundationOwnerPostingTerms,
   type FoundationOwnerPostingTerms,
@@ -55,5 +56,31 @@ export function usePostTransport() {
     },
     [terms]
   );
-  return { fields, captureRevision };
+  /** A form that saves an existing post (a copy) records the member's consent
+   * itself when the current terms are not accepted yet. */
+  const acceptTerms = useCallback(async () => {
+    if (!terms) throw new Error("Posting terms are still loading. Refresh this form.");
+    const response = await fetch("/api/foundation/posting-terms", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({
+        version: terms.version,
+        document_hash: terms.document_hash,
+        accepted: true,
+      }),
+    });
+    const accepted = response.ok
+      ? parseFoundationOwnerPostingTerms(await response.json().catch(() => null))
+      : null;
+    if (!accepted || accepted.accepted_at === null)
+      throw new Error("The posting terms could not be accepted. Refresh this form and try again.");
+    setTerms(accepted);
+  }, [terms]);
+  /** After a definite answer, the next save is a new request. */
+  const renewRequest = useCallback(() => {
+    receipt.current = crypto.randomUUID();
+  }, []);
+  const needsTerms = terms !== null && terms.accepted_at === null;
+  return { fields, captureRevision, needsTerms, acceptTerms, renewRequest };
 }

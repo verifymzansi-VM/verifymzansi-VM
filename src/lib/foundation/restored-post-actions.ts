@@ -101,6 +101,12 @@ export function handleRestoredPostAction(
             error: "Your posting allowance has been reached",
             reason: "posting_limit",
           });
+        if (code === "22023" && hasDatabaseReason(result.error, "copy_new_photo_required"))
+          throw new ActionRefusal({
+            status: 422,
+            error: "Add at least one new photo of this item. Each car or home is a different item.",
+            reason: "copy_new_photo_required",
+          });
         if (code === "22023")
           throw new ActionRefusal({
             status: 422,

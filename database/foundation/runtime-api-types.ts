@@ -741,6 +741,9 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         Returns: Json;
       };
       get_my_post_performance: { Args: Record<never, never>; Returns: Json };
+      copy_my_post: { Args: { p_post: string; p_request: string }; Returns: Json };
+      get_frontend_staff_copy_facts: { Args: { p_posts: string[] }; Returns: Json };
+      list_my_copy_drafts: { Args: Record<never, never>; Returns: Json };
     };
   };
 };

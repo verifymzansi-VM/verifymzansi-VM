@@ -3,6 +3,9 @@ import { ZodError } from "zod";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import { parseStaffModerationQueue, readStaffModerationQueue } from "./staff-moderation-queue";
 import { FoundationStaffReadError } from "./staff-read";
+import { readStaffCopyFacts } from "./staff-copy-facts";
+
+vi.mock("./staff-copy-facts", () => ({ readStaffCopyFacts: vi.fn() }));
 
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const staff = uuid(1);
@@ -106,6 +109,7 @@ const queue = (items: unknown[], overrides: Record<string, unknown> = {}) => ({
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(readStaffCopyFacts).mockResolvedValue(new Map());
 });
 
 describe("parseStaffModerationQueue", () => {
@@ -282,6 +286,29 @@ describe("readStaffModerationQueue", () => {
       { p_limit: 50 },
       { get: false }
     );
+  });
+
+  it("asks for copy facts only of the listings the reviewer holds, and attaches them", async () => {
+    const facts = {
+      copied_from: { id: uuid(50), title: "Source", status: "live" },
+    };
+    vi.mocked(readStaffCopyFacts).mockResolvedValueOnce(new Map([[uuid(101), facts]]));
+    rpc.mockResolvedValueOnce({
+      data: queue(
+        [
+          claimed(1),
+          summary(2, { claim: otherClaim }),
+          summary(3),
+          claimed(4, "business", "business"),
+        ],
+        { my_claims: 2 }
+      ),
+      error: null,
+    });
+    const read = await readStaffModerationQueue(api, staff);
+    expect(readStaffCopyFacts).toHaveBeenCalledExactlyOnceWith(api, [uuid(101)]);
+    expect(read.allItems.find((i) => i.id === uuid(101))?.copy_facts).toEqual(facts);
+    expect(read.allItems.find((i) => i.id === uuid(102))?.copy_facts).toBeUndefined();
   });
 
   // Deliberately pins today's behaviour: this reader treats EVERY 42501 as a
