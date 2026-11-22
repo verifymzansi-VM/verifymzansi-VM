@@ -1035,6 +1035,44 @@
       ]
     },
     {
+      "id": "LIM-APP-showroom-cache",
+      "title": "Fair showroom: each server copy remembers a showroom order for 60 seconds per showroom and area",
+      "value": 60000,
+      "unit": "milliseconds",
+      "category": "expiry",
+      "enforcedAt": [
+        {
+          "file": "src/lib/showroom/feed.ts",
+          "contains": "const CACHE_MS = 60_000;"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "src/lib/showroom/feed.test.ts"
+        }
+      ]
+    },
+    {
+      "id": "LIM-APP-showroom-viewer-age",
+      "title": "Fair showroom: showroom appearances count only from a vmz_viewer identifier at least 24 hours old",
+      "value": 86400000,
+      "unit": "milliseconds",
+      "category": "expiry",
+      "enforcedAt": [
+        {
+          "file": "src/app/api/analytics/events/route.ts",
+          "contains": "const SHOWROOM_VIEWER_MIN_AGE_MS = 24 * 60 * 60 * 1000;"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "src/app/api/engagement/engagement-routes.test.ts"
+        }
+      ]
+    },
+    {
       "id": "LIM-APP-verification-file-size",
       "title": "ID verification uploads: at most 5 MB per file (server validation)",
       "value": 5242880,
@@ -8583,6 +8621,32 @@
       ]
     },
     {
+      "id": "LIM-RL-engagement-activity-showroom",
+      "title": "Shared rate limit for \"engagement:activity:showroom\"",
+      "value": "200 per day",
+      "category": "rate",
+      "action": "engagement:activity:showroom",
+      "tiers": [
+        {
+          "limit": 200,
+          "ttl": 86400
+        }
+      ],
+      "enforcedAt": [
+        {
+          "file": "workers/rate-limiter.ts",
+          "symbol": "ACTION_LIMITS",
+          "contains": "\"engagement:activity:showroom\": [{ limit: 200, ttl: 86400 }],"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "register",
+          "file": "src/__tests__/limits/rate-limiter-limits.test.ts"
+        }
+      ]
+    },
+    {
       "id": "LIM-RL-inbox-read",
       "title": "Shared rate limit for \"inbox:read\"",
       "value": "60 per minute",
@@ -10201,6 +10265,142 @@
           "file": "scripts/limits-sql.test.mjs"
         }
       ]
+    },
+    {
+      "id": "LIM-SQL-showroom-appearance-cap",
+      "title": "Fair showroom: a post's appearances count up to 3 fair shares",
+      "value": 3,
+      "category": "cap",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/showroom_feed.sql",
+          "symbol": "internal.showroom_feed",
+          "contains": "cross join lateral (select least(coalesce(s.n, 0), 3 * f.share) as n) seen"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-fair-showroom.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-SQL-showroom-busy-cap",
+      "title": "Fair showroom: a post shown more than twice the fair share this week loses its city and province places",
+      "value": 2,
+      "category": "cap",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/showroom_feed.sql",
+          "symbol": "internal.showroom_feed",
+          "contains": "case when v_province is null or seen.n > 2 * f.share then 3"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-fair-showroom.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-SQL-showroom-like-nudge",
+      "title": "Fair showroom: the likes nudge is at most 0.15 of a turn (lifetime likes per view, from 1 like in 20 views)",
+      "value": 0.15,
+      "category": "cap",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/showroom_feed.sql",
+          "symbol": "internal.showroom_feed",
+          "contains": "+ least(0.15, 0.75 * (coalesce(t.likes, 0) + 1)::numeric / (coalesce(t.views, 0) + 20)))"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-fair-showroom.mjs"
+        }
+      ],
+      "unit": "turns"
+    },
+    {
+      "id": "LIM-SQL-showroom-mark-valve",
+      "title": "Showroom appearances: no mark or count once the day's views and showroom marks reach 200,000 (below the views' 300,000 storage valve)",
+      "value": 200000,
+      "category": "cap",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/record_post_activity.sql",
+          "symbol": "internal.record_post_activity",
+          "contains": "if day_marks < 200000 then"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-fair-showroom.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-SQL-showroom-new-window",
+      "title": "Fair showroom: a post is New, with a fading head start, for 72 hours after it first went live",
+      "value": 72,
+      "category": "expiry",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/showroom_feed.sql",
+          "symbol": "internal.showroom_feed",
+          "contains": "cross join lateral (select c.published_at > statement_timestamp() - interval '72 hours'"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-fair-showroom.mjs"
+        }
+      ],
+      "unit": "hours"
+    },
+    {
+      "id": "LIM-SQL-showroom-places",
+      "title": "Fair showroom: at most 15 cards on the home showroom and 7 in an area showroom",
+      "value": "15 / 7",
+      "category": "cap",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/showroom_feed.sql",
+          "symbol": "internal.showroom_feed",
+          "contains": "v_places := case when v_showroom = 'home' then 15 else 7 end;"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-fair-showroom.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-SQL-showroom-request-size",
+      "title": "Fair showroom: request at most 1 KB",
+      "value": 1024,
+      "category": "size",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/showroom_feed.sql",
+          "symbol": "internal.showroom_feed",
+          "contains": "if jsonb_typeof(req) <> 'object' or octet_length(req::text) > 1024 then"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-fair-showroom.mjs"
+        }
+      ],
+      "unit": "bytes"
     },
     {
       "id": "LIM-SQL-signup-email-length",
@@ -13312,6 +13512,116 @@
         {
           "kind": "behaviour",
           "file": "scripts/test-foundation-automatic-identity-checks.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-SQL-IDENTITY-ATTEMPT-FILES",
+      "title": "Identity checks: a failed attempt's files are kept 5 days (after an automatic decline unless the member asks a person, after staff send it back, or once a newer submission replaces it)",
+      "value": "5 days",
+      "category": "retention",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/decline_automatic_identity_submission.sql",
+          "symbol": "internal.decline_automatic_identity_submission",
+          "contains": "set retain_until=least(coalesce(a.retain_until,'infinity'::timestamptz),now_at+interval '5 days')"
+        },
+        {
+          "file": "database/foundation/current/functions/internal/return_identity_submission.sql",
+          "symbol": "internal.return_identity_submission",
+          "contains": "set retain_until=least(coalesce(retain_until,'infinity'::timestamptz),statement_timestamp()+interval '5 days')"
+        },
+        {
+          "file": "database/foundation/current/functions/internal/identity_submission_replaced.sql",
+          "symbol": "internal.identity_submission_replaced",
+          "contains": "set retain_until=least(coalesce(a.retain_until,'infinity'::timestamptz),statement_timestamp()+interval '5 days')"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-identity-keep-for.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-SQL-IDENTITY-PROVIDER-COPY",
+      "title": "Identity checks: the partner's copy of a check is deleted 30 days after an acceptance, 5 days after a person decided without accepting",
+      "value": "30 days; 5 days",
+      "category": "retention",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/claim_identity_check_deletions.sql",
+          "symbol": "internal.claim_identity_check_deletions",
+          "contains": "update private.identity_checks k set provider_delete_due=f.reviewed_at+interval '30 days'"
+        },
+        {
+          "file": "database/foundation/current/functions/internal/claim_identity_check_deletions.sql",
+          "symbol": "internal.claim_identity_check_deletions",
+          "contains": "update private.identity_checks k set provider_delete_due=now_at+interval '5 days'"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-identity-keep-for.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-SQL-IDENTITY-CHECK-ROW",
+      "title": "Identity checks: a check that did not lead to an accepted identity is deleted 7 days after it finished (once the partner's copy is deleted)",
+      "value": "7 days",
+      "category": "retention",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/retention_verification.sql",
+          "symbol": "internal.retention_verification",
+          "contains": "where k.status<>'started' and k.finished_at<statement_timestamp()-interval '7 days'"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-identity-keep-for.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-SQL-IDENTITY-DISCLOSURE-LOG",
+      "title": "Authority-request logs: kept while a named account exists and 5 years after it closed; a search that named nobody, 5 years",
+      "value": "5 years",
+      "category": "retention",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/retention_verification.sql",
+          "symbol": "internal.retention_verification",
+          "contains": "where d.opened_at<statement_timestamp()-interval '5 years'"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-identity-keep-for.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-SQL-IDENTITY-MODE-LOG",
+      "title": "Automatic ID check setting: each change is logged and kept 5 years",
+      "value": "5 years",
+      "category": "retention",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/retention_verification.sql",
+          "symbol": "internal.retention_verification",
+          "contains": "where e.changed_at<statement_timestamp()-interval '5 years'"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-identity-keep-for.mjs"
         }
       ]
     },

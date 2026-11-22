@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Eye, PlayCircle, Shuffle, Sparkles, UserX } from "lucide-react";
+import { Eye, Heart, MapPin, PlayCircle, Shuffle, Sparkles, UserX } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { InfoHero, SectionHeading } from "@/components/safety/info-hero";
@@ -24,15 +24,27 @@ const ORDER_RULES = [
   },
   {
     icon: Sparkles,
-    name: "New posts get a head start",
+    name: "New posts get a head start and a New tag for 3 days",
     description:
-      "For its first 72 hours, a new post is moved forward so people see it while it is fresh.",
+      "For the first 3 days after a post first goes live, it carries a New tag and is moved forward, a little less each day. Editing or renewing a post does not make it new again.",
+  },
+  {
+    icon: MapPin,
+    name: "Near you first, never only near you",
+    description:
+      "Of every 7 places, 3 go to posts from your city, 2 to the rest of your province and 2 to the rest of South Africa, so a post in a small town still reaches the big cities. We estimate your area from your internet connection for that page only and never store it. A post that has already had more than twice its fair share this week waits with the rest of South Africa.",
   },
   {
     icon: PlayCircle,
     name: "A small nudge for video",
     description:
       "The showroom is built for video, so a post with a video gets a small boost within its turn. It never jumps the queue.",
+  },
+  {
+    icon: Heart,
+    name: "Likes help a little",
+    description:
+      "A post that more of its visitors like gets a small nudge within its turn. We count likes per view, so a new post is not behind a popular one, and likes never jump the queue.",
   },
 ];
 

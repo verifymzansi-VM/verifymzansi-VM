@@ -12,6 +12,11 @@ begin
   update private.identity_checks set status='declined',declined_at=now_at,finished_at=now_at,submission_id=p_submission,
     provider_delete_due=now_at+interval '5 days' where id=p_check and status='started';
   if not found then raise exception 'identity check changed' using errcode='PT409'; end if;
+  update private.evidence_artifacts a
+    set retain_until=least(coalesce(a.retain_until,'infinity'::timestamptz),now_at+interval '5 days')
+    from private.verification_identity_submissions s
+    where s.id=p_submission and a.id in(s.id_artifact_id,s.selfie_artifact_id)
+      and a.state in('uploaded','clean','rejected');
 end$function$;
 alter function internal.decline_automatic_identity_submission(uuid,uuid) owner to postgres;
 revoke all on function internal.decline_automatic_identity_submission(uuid,uuid) from public;

@@ -85,8 +85,8 @@ test.describe("foundation test copy", () => {
     test.skip(staging, "Needs the local test copy's seeded posts");
     const titles = state.posts.map((post) => post.title);
     expect(titles.length).toBeGreaterThan(0);
-    // The same public command the home showroom calls (search_post_cards).
-    const cards = await rpc(state, "search_post_cards", { p_request: { limit: 24 } });
+    // The same public command the home showroom calls (showroom_feed).
+    const cards = await rpc(state, "showroom_feed", { p_request: { showroom: "home" } });
     expect(cards.status).toBe(200);
     expect(cards.data.items.map((item: { title: string }) => item.title)).toEqual(
       expect.arrayContaining(titles)

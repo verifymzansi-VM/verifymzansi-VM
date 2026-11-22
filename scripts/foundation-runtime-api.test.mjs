@@ -188,6 +188,36 @@ test("the reviewed public engagement read accepts only its empty items answer", 
       (error) => error.code === "ERR_ASSERTION"
     );
 });
+test("the reviewed public showroom feed accepts only its cards, volatile, with one request", async () => {
+  const input = publicRead("showroom_feed", [
+    { name: "p_request", sqlType: "jsonb", optional: false },
+  ]);
+  input.functions[0].volatility = "v";
+  const card = { id: "4d5e6f70-8192-4a3b-9c4d-5e6f708192a3", is_new: true };
+  for (const answer of [{ items: [] }, { items: [card, { ...card, is_new: false }] }])
+    assert.equal(
+      await verifyFoundationRuntimeApi(connection, async () => Response.json(answer), input),
+      1
+    );
+  for (const answer of [
+    { items: Array.from({ length: 16 }, () => card) },
+    { items: [{ id: card.id }] },
+    { items: [], extra: 1 },
+    [],
+    null,
+  ])
+    await assert.rejects(
+      verifyFoundationRuntimeApi(connection, async () => Response.json(answer), input),
+      /projection probe failed/
+    );
+  await assert.rejects(
+    verifyFoundationRuntimeApi(connection, async () => Response.json({ items: [] }), {
+      ...input,
+      functions: [{ ...input.functions[0], volatility: "s" }],
+    }),
+    (error) => error.code === "ERR_ASSERTION"
+  );
+});
 test("the reviewed public sign-up mode accepts only its one-word answer", async () => {
   const input = publicRead("get_signup_mode", []);
   for (const mode of ["invite_only", "open"])
