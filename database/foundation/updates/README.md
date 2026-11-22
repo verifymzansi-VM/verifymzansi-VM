@@ -283,17 +283,16 @@ business days before it ends; nothing ever renews automatically.
 - **The email.** `internal.claim_supported_notification_outbox` (full body, 22
   kinds) gives the address only while the term still qualifies and the address
   is confirmed (otherwise the job finishes it as skipped), with `term_ends_at`,
-  `term_kind` (`individual`, `package` or `other`), `term_has_access`
-  (whether `private.current_account_access` has the member) and, for an
-  Individual slot, `term_package_continues` (whether the package
-  `internal.slot_package_now` returns, the one the slot's post moves into when
-  the slot ends, ends after it). The website words it
-  (`src/lib/services/email.ts`, wording awaiting the owner in
-  `FRONTEND-CHANGES.md` group 91): the end date, that nothing renews and nothing
-  more is charged, and how to buy again (My slots for an Individual slot,
-  Billing otherwise); a slot whose post moves into the package is told only
-  that; a member who cannot sign in is told only that nothing more is needed.
-  No in-app notice.
+  `term_kind` (`individual`, `package` or `other`), `term_has_access` (whether
+  `private.current_account_access` has the member) and, for an Individual slot,
+  `term_package_continues` (whether the package `internal.slot_package_now`
+  returns, the one the slot's post moves into when the slot ends, ends after
+  it). The website words it (`src/lib/services/email.ts`, wording awaiting the
+  owner in `FRONTEND-CHANGES.md` group 91): the end date, that nothing renews
+  and nothing more is charged, and how to buy again (My slots for an Individual
+  slot, Billing otherwise); a slot whose post moves into the package is told
+  only that; a member who cannot sign in is told only that nothing more is
+  needed. No in-app notice.
 - **Order.** Apply first, then merge. A website before the update drops the kind
   (`laterKinds`); an earlier website never claims it, so queued notices wait.
   Preflight: `../preflight/20261122111209_term_ending_notice.check.sql`;

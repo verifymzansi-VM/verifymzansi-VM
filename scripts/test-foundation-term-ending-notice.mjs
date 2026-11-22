@@ -342,10 +342,7 @@ await runTwoAdminUpdateCheck(
           "update private.slot_package_sales set on_sale=true,changed_at=now(),reason='Fixture: switched for the checks';"
         );
         const quoted = json(
-          member(
-            owner,
-            `select api.start_package_checkout('${K30.id}',5,${K30.cents * 5},true);`
-          )
+          member(owner, `select api.start_package_checkout('${K30.id}',5,${K30.cents * 5},true);`)
         );
         assert.equal(ozowSettle(kit, owner, quoted.payment_id).fulfillment_status, "fulfilled");
         const pkg = q(
