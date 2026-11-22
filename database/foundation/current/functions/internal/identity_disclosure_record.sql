@@ -32,7 +32,7 @@ AS $function$
           'revoked_at',v.revoked_at) order by v.verified_at desc)
         from (select y.phone,y.verified_at,y.revoked_at from private.verification_phone_proofs y
           where y.owner_id=p_subject
-            and (p_disclosure.request_type<>'urgent_life_risk' or y.revoked_at is null)
+            and (p_disclosure.request_type is distinct from 'urgent_life_risk' or y.revoked_at is null)
           order by y.verified_at desc limit 20) v),'[]'::jsonb))
       from private.accepted_identity_facts f
       join private.verification_identity_submissions s on s.id=f.submission_id and s.owner_id=f.owner_id
