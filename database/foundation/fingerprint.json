@@ -19,15 +19,15 @@
     ],
     "notYetCompared": [],
     "howToCompare": "In the Supabase SQL editor (read-only), run `set search_path to \"$user\", public;` first, so pg_get_indexdef prints `extensions.gin_trgm_ops` as the replay does, then run database/foundation/fingerprint.sql unchanged and compare each row with categories below.",
-    "matchedThroughUpdate": "20261121150309_copy_a_post.sql",
+    "matchedThroughUpdate": "20261122013616_authority_request_types.sql",
     "matchedFingerprints": {
       "column_grants": "5e5623672e80b927048d8553487d5442",
-      "columns": "cd6047da0902391a72ef232429fb5767",
-      "constraints": "499f61f64f59024238f39bde51c2523e",
+      "columns": "2ebaf9dd5a32c0eba62a1bd75da6f2a2",
+      "constraints": "42fd24b1afcead13bd0d8f803f74f8e0",
       "event_triggers": "821f7d069c595c075754fad9309136ac",
-      "function_bodies": "7f9abf12124fd5d915cc945b200e0335",
-      "function_grants": "771b232f2885f23c316d4efb3789d1fa",
-      "function_metadata": "bfb318868856e7031041d79906fa245f",
+      "function_bodies": "67b5470fba3e3f4d9133e75140c153d8",
+      "function_grants": "6077049d320d99c31fea317e0f720815",
+      "function_metadata": "0d819e1e2a8c94851afdad47cff09eec",
       "indexes": "abc01dab90beb70158cc121d0a2fe3ed",
       "policies": "085a305fbc41d38d34eb40c3748c0793",
       "row_level_security": "ecbef18d9ad91ecfeb81d5442b60f0e4",
@@ -39,36 +39,36 @@
     "Reference data is not fingerprinted. candidate.sql seeds posting-terms version posting-v2, which production does not hold: production has posting-v1 and posting-v3 (current since 20261109173012_posting_terms_v3.sql), and posting-v4 once 20261112122001_publish_posting_terms_v4.sql is applied (current from 20261112173841_switch_posting_terms_v4.sql).",
     "schema_grants: production has 8 items (d397fed9c8bd9d4fc50ebdd777899d93) and the replay 7 (categories below). The extra production item is `internal supabase_auth_admin:USAGE`, which Supabase grants when the Auth \"Before user created\" hook is switched on; no repository file creates it (see replay/hosted-auth-hook-grants.sql)."
   ],
-  "updateCount": 103,
-  "lastUpdate": "20261121150309_copy_a_post.sql",
+  "updateCount": 104,
+  "lastUpdate": "20261122013616_authority_request_types.sql",
   "categories": {
     "column_grants": {
       "items": 10,
       "fingerprint": "5e5623672e80b927048d8553487d5442"
     },
     "columns": {
-      "items": 1490,
-      "fingerprint": "cd6047da0902391a72ef232429fb5767"
+      "items": 1493,
+      "fingerprint": "2ebaf9dd5a32c0eba62a1bd75da6f2a2"
     },
     "constraints": {
-      "items": 1312,
-      "fingerprint": "499f61f64f59024238f39bde51c2523e"
+      "items": 1313,
+      "fingerprint": "42fd24b1afcead13bd0d8f803f74f8e0"
     },
     "event_triggers": {
       "items": 1,
       "fingerprint": "821f7d069c595c075754fad9309136ac"
     },
     "function_bodies": {
-      "items": 1151,
-      "fingerprint": "7f9abf12124fd5d915cc945b200e0335"
+      "items": 1153,
+      "fingerprint": "67b5470fba3e3f4d9133e75140c153d8"
     },
     "function_grants": {
-      "items": 837,
-      "fingerprint": "771b232f2885f23c316d4efb3789d1fa"
+      "items": 839,
+      "fingerprint": "6077049d320d99c31fea317e0f720815"
     },
     "function_metadata": {
-      "items": 1151,
-      "fingerprint": "bfb318868856e7031041d79906fa245f"
+      "items": 1153,
+      "fingerprint": "0d819e1e2a8c94851afdad47cff09eec"
     },
     "indexes": {
       "items": 598,

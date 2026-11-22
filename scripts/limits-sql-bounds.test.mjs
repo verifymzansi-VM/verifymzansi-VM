@@ -1022,10 +1022,10 @@ const ROWS = [
     error: /valid represented restriction required/,
   },
   {
-    id: "LIM-F-open_identity_disclosure",
+    id: "LIM-F-open_authority_request",
     as: "staff",
     sql: (n) =>
-      `select api.open_identity_disclosure('subpoena','REF-001','A synthetic disclosure reason','email',${lit(emailOfLength(n))},true)`,
+      `select api.open_authority_request('subpoena','REF-001','A synthetic court','035 789 1234','A synthetic clerk','A synthetic disclosure reason','email',${lit(emailOfLength(n))},true)`,
     at: [254],
     over: [255],
     error: /valid search value required/,
