@@ -9,6 +9,7 @@ import {
   readIdentityDisclosureSelfie,
 } from "@/lib/foundation/identity-disclosures";
 import { foundationNoStore } from "@/lib/foundation/owner-route";
+import { AUTHORITY_REQUEST_MESSAGES } from "@/lib/admin/authority-requests";
 import { evidenceViewResponse } from "@/lib/services/evidence-serving";
 import { limitStaffEvidenceView } from "@/lib/foundation/evidence-route";
 import { enforceMutationRequest } from "@/lib/utils/mutation-guard";
@@ -66,6 +67,13 @@ export async function POST(request: NextRequest) {
       input.disclosureId,
       input.subject
     );
+    if (bytes === "withheld")
+      return context.respond(
+        NextResponse.json(
+          { error: AUTHORITY_REQUEST_MESSAGES.disclosure_selfie_withheld },
+          { status: 404, headers }
+        )
+      );
     if (!bytes)
       return context.respond(
         NextResponse.json({ error: "No selfie is kept for this person" }, { status: 404, headers })
