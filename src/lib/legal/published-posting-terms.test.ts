@@ -249,8 +249,9 @@ it("states the Pricing v2 rules in posting-v4 (roadmap P1 checklist)", () => {
 // first at any amount, paid with Pay now or by EFT; above the payment
 // provider's maximum (internal.online_payment_max_cents), an invoice paid by
 // EFT. posting-v5 is posting-v4 with only those paragraphs changed.
-it("makes posting-v5 the site's one set of Terms, stating how people pay now", () => {
-  expect(manifest.active_version).toBe("posting-v5");
+it("publishes posting-v5, stating how people pay now", () => {
+  // posting-v6 (item 27) replaces it as the active version.
+  expect(Object.hasOwn(manifest.versions, "posting-v5")).toBe(true);
   const v5 = getPublishedPostingTerms("posting-v5")!;
   expect(v5.document_hash).toBe("LkgzMkvecZ75fguL1-eUNxwRsHZpg9pi42CTae2Q5mc");
   const content = text("posting-v5");

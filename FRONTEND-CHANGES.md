@@ -152,6 +152,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 89. Authority requests: only the four D9 request types (item 69) (no file rows: the group 89 part of 6 rows in group 77) | approved by owner 2026-11-22 | Governors and admins only: the authority request form offers only a subpoena, court order, search warrant or urgent life-risk request, and asks for the issuing court (or SAPS station), the official number called and who confirmed it; the record and print sheet show the request type, reference, issuer and check; an urgent request shows no selfie or ID photo. Members see nothing new. |
 | 91. Email before a long paid term ends (item 68b) (no file rows: email only) | awaiting owner | Members with a paid slot or package of 180 days or more get one email about 12 weeks before it ends: the end date, that nothing renews and nothing more is charged, and how to buy again (My slots for an Individual slot, otherwise Billing; an Individual slot whose post moves into the member's running Multi-listing package is told only that; a banned or suspended member is told only that nothing more is needed). Nothing changes on any page. |
 | 92. Registered street address no longer shown (no file rows: data setting only) | approved by owner 2026-11-22 | Trust & Safety (and the Terms and PAIA pages, which list the same company details) no longer show a 'Registered address' row with the street address. The other company details (registered name, trading name, CIPC number, officers, contacts) are unchanged. |
+| 94. Terms posting-v6: the package rules (item 27) (no file rows: Terms text outside the checked scope; the Google line's two rows are in group 15) | awaiting owner | The Terms page gains two sections, 'Multi-listing packages' and 'Paid add-ons', and changed paragraphs on prices, paying, refunds, prohibited content and the content licence. Members tick the posting terms again before their next post or edit (the same tick as today). Under the Google button on the sign-in and sign-up pages, the line now ends ', and that you are 18 or older.' |
 
 Questions for the owner:
 
@@ -1173,10 +1174,10 @@ saved at sign-up).
 
 | File                                             | Kind              | Reason                                                                                                                         | What changes on screen                                                                                                                                                                                                                                                                                                    | Proposed | Owner decision               | Date       | Version      |
 | ------------------------------------------------ | ----------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ---------------------------- | ---------- | ------------ |
-| `src/components/ui/google-oauth-button.tsx`      | wording-behaviour | Google sign-up creates an account without the Terms box the email form has.                                                    | Sign-in and sign-up pages: under the Google button, one small line 'By continuing with Google, you agree to the Terms of Service and Privacy Policy.' with both links opening in a new tab.                                                                                                                               | keep     | approved by owner 2026-11-12 | 2026-11-12 | 744c498f6990 |
+| `src/components/ui/google-oauth-button.tsx` | wording-behaviour | Google sign-up creates an account without the Terms box the email form has. Group 94 (settled legal answer D14, launch checklist item 27): the line also states the age rule. | Sign-in and sign-up pages: under the Google button, one small line 'By continuing with Google, you agree to the Terms of Service and Privacy Policy.' with both links opening in a new tab. Group 94: the line now ends 'Privacy Policy, and that you are 18 or older.' | keep | approved by owner 2026-11-12; group 94 part awaiting owner | 2026-11-22 | 17c57aa3f940 |
 | `src/app/(auth)/login/page.tsx` | wording-behaviour | A refused or cancelled Google sign-in said 'Your sign-in link has expired', and an uninvited sign-up was told a link was sent. Group 63: a Google sign-up the sign-up hook refuses for its email domain (only while sign-up is open) gets its own message instead of the generic sign-in error. Group 71: the invite-only words: the 'Check your email' box after an invite-only sign-up and the Google sign-up refusal ('Sign-up is by invitation for now'). | Sign-in page: 'Sign-up is by invitation for now' with 'If you were invited, use the email address the invitation was sent to. Already have an account? Sign in with the email you used.' in the plain (white) message style when a Google sign-up is refused while sign-up is by invitation; 'Google sign-in was not completed' when it is cancelled; after an invite-only sign-up the 'Check your email' box reads 'VerifyMzansi is open by invitation for now. If this email was invited, we've sent it a confirmation link. Nothing there after a few minutes? Resend it, or sign up with the email address your invitation was sent to.' above its 'Resend confirmation' button. Group 63 (only once the owner opens sign-up): 'This email can't be used to register' with 'Sign up with a different email address or Google account.' when Google sign-up is refused for a blocked or reserved email domain. | keep | approved by owner 2026-11-12; group 63 part approved by owner 2026-11-20; group 71 part approved by owner 2026-11-21 | 2026-11-20 | 4c5c023ccc53 |
 | `src/app/(auth)/register/page.tsx` | wording-behaviour | Every sign-up showed 'Account created!', even for addresses that cannot register yet. Group 71: while sign-up is by invitation, no message after 'Create account' (the sign-in page's 'Check your email' box says it once). | While sign-up is by invitation only, 'Create account' shows no message and goes straight to the sign-in page, whose 'Check your email' box gives the server's one answer (the same for every address, so it never shows who is invited or registered). An open sign-up still shows 'Account created!'. | keep | approved by owner 2026-11-12; group 71 part approved by owner 2026-11-21 | 2026-11-20 | 3042e2e261b5 |
-| `src/components/ui/google-oauth-button.test.tsx` | test              | Tests that the Terms and Privacy line and its two links show under both Google buttons.                                        | Nothing (not part of a page)                                                                                                                                                                                                                                                                                              | keep     | approved by owner 2026-11-12 | 2026-11-12 | 7ecacb998493 |
+| `src/components/ui/google-oauth-button.test.tsx` | test | Tests that the Terms and Privacy line and its two links show under both Google buttons. Group 94: also checks the age rule at the end of the line. | Nothing (not part of a page) | keep | approved by owner 2026-11-12; group 94 part awaiting owner | 2026-11-22 | ac6dd7e157db |
 | `src/app/(auth)/login/page.test.tsx` | test | Tests for the invitation notice and the two Google sign-in messages. Group 63: also the blocked-domain message. Group 71: checks the new invite-only words. | Nothing (not part of a page) | keep | approved by owner 2026-11-12; group 63 part approved by owner 2026-11-20; group 71 part approved by owner 2026-11-21 | 2026-11-20 | 9df1a7a3a7c5 |
 
 ### 16. One terms step
@@ -3647,6 +3648,48 @@ Pictures (not published): `screenshots/hide-address/` (desktop 1280 and phone
 375, before and after; the address is blurred in the before pictures).
 
 Decision: approved by owner 2026-11-22 (answer: 'Approve').
+
+### 94. Terms posting-v6: the package rules (item 27)
+
+Launch checklist item 27. The Terms page (`/terms`) reads the current Terms
+from the database, so its text changes when database update
+`20261122181738_posting_terms_v6.sql` (pending, website-first) makes posting-v6
+current. The text is outside the checked scope
+(`src/lib/legal/terms-documents/posting-v6.json`; `src/lib/legal/terms-text.ts`
+shows it when the database cannot be read). The page's layout, navigation and
+other sections are unchanged. The words are new (owner rule 4).
+
+What visitors see on `/terms`:
+
+- Two new sections after 'Slots & prices': 'Multi-listing packages' (5 to 250
+  slots at R100 per slot per 30 days for 30, 90 or 180 days, all ending
+  together; fair use across the package; one package per account after the ID
+  review; Individual slots while a package runs; adding slots online or by
+  invoice; no renewal; posts when a package ends; no transfers) and 'Paid
+  add-ons' (Urgent R10, Boost R15, Featured R25, each for 7 days).
+- Changed paragraphs: a package example and the email before a term of 180
+  days or more ends, under 'Slots & prices'; packages above 100 slots paid by
+  invoice at the same price, and no interest or late fee, under 'Paying, VAT &
+  invoices'; cancelling a package, the first purchase refundable within 5
+  business days, refunds to the original method or an account in the member's
+  own name, and lost days after an overturned suspension, under 'Refunds &
+  cancelling'; the children rule and licence numbers under 'Account posting
+  obligations'; two more prohibited kinds, restricted goods and removal on a
+  credible complaint under 'Prohibited content'; the content licence under
+  'Promotion & distribution rights'.
+
+The posting tick on the create forms is unchanged ('I accept the VerifyMzansi
+posting terms, ...'). After the switch every member ticks it once more before
+their next submission or edit, as after earlier Terms changes.
+
+Settled legal answer D14: the line under the Google button on the sign-in and
+sign-up pages now ends ', and that you are 18 or older.' (its two rows are in
+group 15).
+
+Pictures (not published, synthetic data): `screenshots/item27-terms-v6/` (the
+Terms page and the posting tick, phone 375 and desktop 1280).
+
+Decision: awaiting owner.
 
 <!-- frontend-ledger:end -->
 

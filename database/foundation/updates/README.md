@@ -80,6 +80,79 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Posting terms posting-v6: the package rules, 22 November 2026
+
+`20261122181738_posting_terms_v6.sql` (launch checklist item 27) publishes
+posting terms `posting-v6` (`src/lib/legal/terms-documents/posting-v6.json`,
+canonical hash `loAwnttBi08l1tpiOaAxtsufqNIdeaQPnXKMma0lhSs`, also in
+`catalogue.json`) and makes it current, in one transaction. posting-v6 is
+posting-v5 plus:
+
+- a section "Multi-listing packages" with the rules as built: 5 to 250 slots,
+  R100 per slot per 30 days, terms of 30, 90 or 180 days, all slots starting on
+  payment and ending together, 4 posts going live per slot per 30 days counted
+  across the package, 10 photos and 1 video per post, one package per account,
+  ID review first, Individual slots closed while a package runs except in its
+  last 7 days, adding slots online (7 or more whole days left) or by invoice (10
+  or more), the added-slots invoice due date, no renewal, posts when a package
+  ends, and no transfers;
+- a section "Paid add-ons": Urgent R10, Boost R15 and Featured R25, each for 7
+  days;
+- packages of more than 100 slots paid by invoice at the same price; no interest
+  or late fee on an invoice;
+- the email about 60 business days before a slot or package of 180 days or more
+  ends (`20261122111209_term_ending_notice.sql`, which this update requires);
+- the settled legal answers that belong in the Terms: cancelling a package (one
+  R50 fee per package), the first purchase refundable in full within 5 business
+  days, refunds to the original method or an account in the member's own name,
+  lost days added back after an overturned suspension, the content licence and
+  ownership promise, the children rule, restricted goods and licence numbers,
+  two more prohibited kinds, and removal on a credible complaint.
+
+It changes only `private.posting_terms_versions` (one new row) and
+`private.posting_terms_current`: no function, table, grant, plan, price or
+acceptance, so the fingerprint does not change. Packages stay off sale
+(`private.slot_package_sales` is not touched). It refuses (55000) unless
+posting-v5 (or posting-v6) is current, posting-v6 is absent or has the hash
+above, and the term-ending notice update is applied. Every member then accepts
+posting-v6 once before their next submission or edit, and new payments record
+posting-v6 with their cooling-off consent. Run again, it changes nothing.
+
+**Order: website-first.** Apply it straight **after** the website release that
+contains `posting-v6.json` is deployed. That release serves posting-v5 or
+posting-v6, whichever is current. The earlier website knows no posting-v6 and
+would refuse the current terms, so no post could be submitted or edited. The
+full order:
+
+1. apply `20261122111209_term_ending_notice.sql` (if not applied yet);
+2. merge, which deploys;
+3. apply this update.
+
+Preflight: `../preflight/20261122181738_posting_terms_v6.check.sql`. It should
+read "current posting-v5 (update not applied); posting-v6 not published" before,
+and "current posting-v6 (update already applied); posting-v6 published" after.
+Open `/terms`: "Multi-listing packages" and "Paid add-ons" show.
+
+**Rollback.** `../rollback/20261122181738_posting_terms_v6.down.sql` makes
+posting-v5 current again. The posting-v6 row and acceptances of it stay as
+history (published terms are immutable). The website release can stay deployed.
+
+**Never revert the website alone while posting-v6 is current.** The earlier
+website does not know posting-v6, so nobody could post or edit. Roll back this
+update first, then revert the website.
+
+**Tests.** `scripts/test-foundation-posting-terms-v6.mjs` (in
+`pnpm db:foundation:lifecycle-test`, 6 checks) proves on the throwaway database:
+the preflight is read only and reports each state; the update refuses a
+different posting-v6 document, a current version other than posting-v5 and a
+database without the term-ending notice; it publishes and switches without
+changing the schema; members accept posting-v6 once (a posting-v5 acceptance
+does not carry over); a new payment records posting-v6; the rollback, a refused
+second rollback and two re-applies. `src/lib/legal/posting-v6.test.ts` checks
+that the package and add-on prices and rules the site uses
+(`src/lib/billing/slot-packages.ts`, `src/lib/constants/pricing.ts`) are the
+ones posting-v6 states and the database catalogue charges.
+
 ## Fair showroom for every post, 21 November 2026
 
 `20261122023000_fair_showroom.sql` was applied on 22 November 2026 at 15:45 UTC
@@ -7508,5 +7581,7 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   replay (except the known schema grant difference)
 
 - `20261122111209_term_ending_notice.sql`: pending
+
+- `20261122181738_posting_terms_v6.sql`: pending
 
 <!-- applied-register:end -->

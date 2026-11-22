@@ -94,6 +94,8 @@ describe("GoogleOAuthButton", () => {
     (mode) => {
       render(<GoogleOAuthButton mode={mode} />);
       expect(screen.getByText(/By continuing with Google, you agree to the/)).toBeTruthy();
+      // Settled legal answer D14: the Google line also states the age rule.
+      expect(screen.getByText(/, and that you are 18 or older\./)).toBeTruthy();
       expect(screen.getByRole("link", { name: "Terms of Service" }).getAttribute("href")).toBe(
         "/terms"
       );
