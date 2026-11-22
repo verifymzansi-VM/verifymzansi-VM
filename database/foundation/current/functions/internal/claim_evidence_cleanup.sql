@@ -12,7 +12,9 @@ begin
   if p_limit is null or p_limit not between 1 and 100 then raise exception 'limit 1 to 100' using errcode='22023'; end if;
   for candidate in select a.id,a.owner_id,a.case_id from private.evidence_artifacts a
     where ((a.state='intent' and a.created_at<statement_timestamp()-interval '1 hour')
-      or (a.state in('uploaded','clean','rejected') and coalesce(a.retain_until,a.created_at+interval '90 days')<=statement_timestamp())
+      or (a.state in('uploaded','clean','rejected') and coalesce(a.retain_until,a.created_at+interval '90 days')<=statement_timestamp()
+        and not exists(select 1 from private.verification_identity_submissions s
+          where s.selfie_artifact_id=a.id and internal.identity_record_kept(s.id)))
       or (a.state='cleanup_required' and coalesce(a.cleanup_lease_until,'-infinity'::timestamptz)<=statement_timestamp()))
       -- Filter holds before the batch limit, and check them again under locks.
       -- Otherwise a held prefix can starve every later unheld artifact forever.
@@ -28,7 +30,9 @@ begin
     if exists(select 1 from private.legal_holds h where h.subject_id=art.owner_id and h.released_at is null)
       or internal.evidence_fraud_held(art.case_id) then continue; end if;
     if not ((art.state='intent' and art.created_at<statement_timestamp()-interval '1 hour')
-      or (art.state in('uploaded','clean','rejected') and coalesce(art.retain_until,art.created_at+interval '90 days')<=statement_timestamp())
+      or (art.state in('uploaded','clean','rejected') and coalesce(art.retain_until,art.created_at+interval '90 days')<=statement_timestamp()
+        and not exists(select 1 from private.verification_identity_submissions s
+          where s.selfie_artifact_id=art.id and internal.identity_record_kept(s.id)))
       or (art.state='cleanup_required' and coalesce(art.cleanup_lease_until,'-infinity'::timestamptz)<=statement_timestamp())) then continue; end if;
     token:=pg_catalog.gen_random_uuid();
     update private.evidence_artifacts set state='cleanup_required',cleanup_token=token,cleanup_lease_until=statement_timestamp()+interval '5 minutes' where id=art.id;
