@@ -455,6 +455,14 @@ try {
     assert.ok(!drainProviderDeletions().includes(m.check.check), "day 29");
     shift(m, "2 days");
     assert.ok(drainProviderDeletions().includes(m.check.check), "day 31");
+    // A deletion more than a day overdue is counted, so a stalled job shows.
+    const before = retention().overdue_partner_deletions;
+    q(
+      `update private.identity_checks set provider_delete_due=now()-interval '2 days' where id='${m.check.check}';`
+    );
+    assert.equal(retention().overdue_partner_deletions, before + 1);
+    json(service(`select api.mark_identity_check_provider_deleted('${m.check.check}');`));
+    assert.equal(retention().overdue_partner_deletions, before);
   });
 
   // ----------------------------------------- closed in good standing
@@ -463,7 +471,13 @@ try {
     () => {
       const m = keptMember;
       closeAccount(m);
-      assert.ok(drainCleanup().includes(m.selfie), "the selfie goes after closure");
+      assert.ok(!drainCleanup().includes(m.selfie), "kept just after closure");
+      shift(m, "89 days");
+      assert.ok(!drainCleanup().includes(m.selfie), "day 89 after closure");
+      retention();
+      assert.equal(record(m).numbers, 1, "the ID number too, at day 89");
+      shift(m, "2 days");
+      assert.ok(drainCleanup().includes(m.selfie), "day 91 after closure");
       deleteClaimed(m);
       retention();
       const after = record(m);
@@ -504,14 +518,23 @@ try {
       closeAccount(replaced);
       retention();
       assert.equal(record(replaced).phones, 0);
+      // Without an accepted identity, the number goes 30 days after closure.
+      const unverified = namedMember("closed-unverified");
+      closeAccount(unverified);
+      shift(unverified, "29 days");
+      retention();
+      assert.equal(record(unverified).phones, 1, "29 days after closure");
+      shift(unverified, "2 days");
+      retention();
+      assert.equal(record(unverified).phones, 0, "31 days after closure");
     }
   );
   await check("the five-year sweep waits for the partner's copy, then removes the record", () => {
     const m = keptMember;
     // The partner's copy of its check (accepted 5 years ago) is not yet deleted.
     q(`update private.identity_checks set provider_delete_due=null where owner_id='${m.id}';`);
-    // Closed 31 days ago so far: 4 years 364 days after closure.
-    shift(m, "4 years 333 days");
+    // Closed 122 days ago so far: 4 years 364 days after closure.
+    shift(m, "4 years 242 days");
     retention();
     assert.equal(record(m).submissions, 1, "under 5 years after closure");
     shift(m, "2 days");
@@ -535,17 +558,20 @@ try {
 
   // -------------------------------------------------------------- bans
   await check(
-    "banned: the selfie and ID number stay 5 years from the ban, even after closure",
+    "a ban approved within 90 days of closure keeps the selfie and ID number 5 years from the ban",
     () => {
       const print = fp();
       const m = accepted("banned-member", { fingerprint: print });
       const [selfie] = filesOf(m, "selfie");
+      closeAccount(m);
+      shift(m, "60 days");
       q(`set session_replication_role=replica;
       insert into private.banned_identities(identity_hmac,decision_id,category,banned_at,retain_until)
         values('${print}',gen_random_uuid(),'fraud',now(),now()+interval '5 years');
       set session_replication_role=origin;`);
-      closeAccount(m);
-      shift(m, "4 years 364 days");
+      shift(m, "31 days");
+      assert.ok(!drainCleanup().includes(selfie), "day 91 after closure, banned");
+      shift(m, "4 years 333 days");
       assert.ok(!drainCleanup().includes(selfie), "under 5 years from the ban");
       retention();
       assert.equal(record(m).numbers, 1);
@@ -556,7 +582,61 @@ try {
     }
   );
 
+  await check("an open report on a closed account keeps the selfie and ID number", () => {
+    const m = accepted("reported-member");
+    const [selfie] = filesOf(m, "selfie");
+    closeAccount(m);
+    const report = q(`set session_replication_role=replica;
+      insert into private.reports(subject_account_id,category,description,reporter_ip_hmac)
+        values('${m.id}','scam','A synthetic open report on this account.',
+          '${"r".repeat(43)}') returning id;
+      set session_replication_role=origin;`)
+      .split("\n")
+      .find((line) => /^[0-9a-f-]{36}$/.test(line));
+    shift(m, "91 days");
+    assert.ok(!drainCleanup().includes(selfie), "the report is open");
+    retention();
+    assert.equal(record(m).numbers, 1);
+    q(`set session_replication_role=replica; delete from private.reports where id='${report}';
+      set session_replication_role=origin;`);
+    assert.ok(drainCleanup().includes(selfie), "the report is resolved");
+    retention();
+    assert.equal(record(m).numbers, 0);
+  });
+
   // --------------------------------------------------- failed attempts
+  await check("a submission replaced by a newer one keeps its files 5 days", () => {
+    setMode("staff_final", "Didit checks, staff have the final say.");
+    const m = namedMember("replaced-submission");
+    const first = startWithSession(m);
+    finish(first, "approved", { reasons: ["names_differ"] });
+    const oldFiles = [...filesOf(m, "id_front"), ...filesOf(m, "selfie")];
+    assert.equal(
+      q(`select count(*) from private.evidence_artifacts where id in (${oldFiles.map(sqlLiteral).join(",")})
+        and retain_until is null;`),
+      "2",
+      "waiting for staff"
+    );
+    // A new automatic result while the first waits for staff replaces it.
+    const second = startWithSession(m);
+    finish(second, "approved", { reasons: ["names_differ"] });
+    shift(m, "4 days 23 hours");
+    assert.deepEqual(
+      drainCleanup().filter((id) => oldFiles.includes(id)),
+      [],
+      "inside the 5 days"
+    );
+    shift(m, "2 hours");
+    assert.deepEqual(
+      drainCleanup()
+        .filter((id) => oldFiles.includes(id))
+        .sort(),
+      [...oldFiles].sort(),
+      "after the 5 days"
+    );
+    assert.equal(checkRow(second.check).status, "with_staff", "the newer one still waits");
+  });
+
   // LIM-SQL-IDENTITY-ATTEMPT-FILES (5 days) and LIM-SQL-IDENTITY-CHECK-ROW (7 days).
   await check(
     "an automatic decline keeps its files 5 days; then only the fingerprint is left",

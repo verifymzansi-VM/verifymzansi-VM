@@ -18,11 +18,9 @@ begin
   if c.version<>p_expected_version or c.version>=2147483647 or c.subject_id=actor
     or exists(select 1 from private.decisions d where d.case_id=c.id and d.status='proposed') then raise exception 'reviewed case changed' using errcode='PT409'; end if;
   update private.evidence_cases set version=version+1,claimed_by=null,claim_expires_at=null,claim_nonce=null where id=c.id returning * into c;
-  update private.evidence_artifacts a
-    set retain_until=least(coalesce(a.retain_until,'infinity'::timestamptz),statement_timestamp()+interval '5 days')
-    from private.verification_current_submissions v join private.verification_identity_submissions s on s.id=v.submission_id
-    where v.case_id=c.id and a.id in(s.id_artifact_id,s.selfie_artifact_id) and a.state in('clean','uploaded','rejected');
-  update private.evidence_artifacts set retain_until=statement_timestamp()+interval '90 days' where case_id=c.id and state in('clean','uploaded','rejected') and retain_until is null;
+  update private.evidence_artifacts
+    set retain_until=least(coalesce(retain_until,'infinity'::timestamptz),statement_timestamp()+interval '5 days')
+    where case_id=c.id and state in('clean','uploaded','rejected');
   insert into private.verification_return_requests(case_id,case_version,reason,reviewer_id) values(c.id,c.version,reason,actor) returning id into returned;
   -- The member is told: a notice in the account and an email. Neither carries
   -- the reason or any identity detail; the member reads the reason on the

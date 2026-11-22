@@ -9,7 +9,7 @@ CREATE OR REPLACE FUNCTION internal.retention_verification(p_limit integer)
 AS $function$
 declare candidate record; numbers integer:=0; challenges integer; proofs integer; localities integer;
   acceptances integer; signup_acceptances integer; choice_events integer; histories integer:=0; cases uuid[];
-  attempt_names integer; checks integer; ask_reasons integer; disclosures integer; mode_events integer;
+  attempt_names integer; checks integer; ask_reasons integer; disclosures integer; mode_events integer; overdue integer;
 begin
   -- The encrypted ID number goes with the selfie: once the selfie is deleted
   -- or due, unless its identity record is kept (internal.identity_record_kept).
@@ -54,10 +54,7 @@ begin
     where k.status<>'started' and k.finished_at<statement_timestamp()-interval '7 days'
       and (k.session_id is null or k.provider_deleted_at is not null)
       and not exists(select 1 from private.accepted_identity_facts f where f.submission_id=k.submission_id)
-      and not exists(select 1 from private.evidence_cases c
-        join private.verification_current_submissions v on v.case_id=c.id and v.submission_id=k.submission_id
-        join private.verification_identity_submissions s on s.id=k.submission_id
-        where c.id=k.case_id and c.status='open' and c.version=s.case_version)
+      and not internal.identity_submission_waiting(k.submission_id)
       and not internal.evidence_fraud_held(k.case_id)
       and not exists(select 1 from private.legal_holds h where h.subject_id=k.owner_id and h.released_at is null)
     order by k.finished_at,k.id limit p_limit for update skip locked);
@@ -68,16 +65,18 @@ begin
   update private.identity_checks set ask_reason=null where id in(select k.id from private.identity_checks k
     join private.account_closures x on x.user_id=k.owner_id
     where k.ask_reason is not null and x.evidence_delete_after<=statement_timestamp()
+      and not internal.evidence_fraud_held(k.case_id)
       and not exists(select 1 from private.legal_holds h where h.subject_id=k.owner_id and h.released_at is null)
     order by x.closed_at,k.id limit p_limit for update of k skip locked);
   get diagnostics ask_reasons=row_count;
 
   -- Revoked phone proofs go 30 days after revocation, except the numbers an
-  -- account had verified when it closed: those stay with its identity record
-  -- for the five-year sweep below.
+  -- account with an accepted identity had verified when it closed: those stay
+  -- with its identity record for the five-year sweep below.
   delete from private.verification_phone_proofs where id in(select p.id from private.verification_phone_proofs p
     where p.revoked_at<statement_timestamp()-interval '30 days'
-      and not exists(select 1 from private.account_closures x where x.user_id=p.owner_id and p.revoked_at>=x.closed_at)
+      and not (exists(select 1 from private.account_closures x where x.user_id=p.owner_id and p.revoked_at>=x.closed_at)
+        and exists(select 1 from private.accepted_identity_facts f where f.owner_id=p.owner_id))
     order by p.revoked_at limit p_limit for update skip locked);
   get diagnostics proofs=row_count;
   delete from private.verification_phone_challenges where id in(select c.id from private.verification_phone_challenges c
@@ -165,17 +164,17 @@ begin
     histories:=histories+1;
   end loop;
 
-  -- Authority-request logs: kept while a named account exists and 5 years
-  -- after it closed; a search that named nobody, 5 years from the search. An
-  -- open legal hold on a named account keeps the log.
+  -- Authority-request logs: deleted 5 years after the search once every
+  -- named account closed more than 5 years ago and none has an open legal
+  -- hold (a search that named nobody: 5 years after the search).
   delete from private.identity_disclosures where id in(select d.id from private.identity_disclosures d
     where d.opened_at<statement_timestamp()-interval '5 years'
-      and not exists(select 1 from unnest(d.subject_ids) a(id)
-        where (not exists(select 1 from private.account_closures x where x.user_id=a.id
+      and coalesce((select bool_and((exists(select 1 from private.account_closures x where x.user_id=a.id
             and x.closed_at<statement_timestamp()-interval '5 years')
-          and not exists(select 1 from private.account_erasures e where e.user_id=a.id
+          or exists(select 1 from private.account_erasures e where e.user_id=a.id
             and e.closed_at<statement_timestamp()-interval '5 years'))
-          or exists(select 1 from private.legal_holds h where h.subject_id=a.id and h.released_at is null))
+          and not exists(select 1 from private.legal_holds h where h.subject_id=a.id and h.released_at is null))
+        from unnest(d.subject_ids) a(id)),true)
     order by d.opened_at,d.id limit p_limit for update skip locked);
   get diagnostics disclosures=row_count;
   -- The automatic ID check setting's change log: 5 years.
@@ -183,13 +182,20 @@ begin
     where e.changed_at<statement_timestamp()-interval '5 years'
     order by e.changed_at,e.id limit p_limit for update skip locked);
   get diagnostics mode_events=row_count;
+  -- Partner deletions overdue by more than a day (holds excepted): a stalled
+  -- deletion job shows here.
+  select count(*) into overdue from private.identity_checks k
+    where k.session_id is not null and k.provider_deleted_at is null
+      and k.provider_delete_due<statement_timestamp()-interval '1 day'
+      and not exists(select 1 from private.legal_holds h where h.subject_id=k.owner_id and h.released_at is null)
+      and not internal.evidence_fraud_held(k.case_id);
 
   return jsonb_build_object('identity_numbers_erased',numbers,'phone_proofs',proofs,'phone_challenges',challenges,
     'closed_account_localities',localities,'closed_account_terms_acceptances',acceptances,
     'closed_account_signup_terms',signup_acceptances,'closed_account_communication_choices',choice_events,
     'closed_account_verification_histories',histories,'failed_attempt_names',attempt_names,
     'identity_checks',checks,'closed_account_ask_reasons',ask_reasons,'identity_disclosures',disclosures,
-    'identity_check_mode_events',mode_events);
+    'identity_check_mode_events',mode_events,'overdue_partner_deletions',overdue);
 end;
 $function$;
 alter function internal.retention_verification(integer) owner to postgres;

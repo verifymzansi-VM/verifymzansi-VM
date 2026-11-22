@@ -94,26 +94,31 @@ or staff until an admin changes the setting, except the keep-for periods below.
   and `automatic` (it refused all but `manual` with PT409
   `identity_check_retention_pending`).
 - **Accepted identities:** the selfie and the encrypted ID number are kept while
-  the identity is current (the account is open) and while its ID number is
-  banned (5 years from the ban), even after the account closes. They went 30
-  days after the decision before. `internal.identity_record_kept(submission)`
-  decides it for the file clean-up (`internal.claim_evidence_cleanup`) and the
-  ID number erasure (`internal.retention_verification`, which now follows the
-  selfie instead of the ID photo). The ID photo still goes 30 days after the
-  decision, and the partner's copy of an accepted check is due 30 days after the
+  the identity is current (the account is open), during the 90 days after the
+  account closes, while a report on the account or its posts is open (as account
+  erasure waits for one) and while its ID number is banned (5 years from the
+  ban, so a ban approved within the 90 days keeps them). They went 30 days after
+  the decision before. `internal.identity_record_kept(submission)` decides it
+  for the file clean-up (`internal.claim_evidence_cleanup`) and the ID number
+  erasure (`internal.retention_verification`, which now follows the selfie
+  instead of the ID photo). The ID photo still goes 30 days after the decision,
+  and the partner's copy of an accepted check is due 30 days after the
   acceptance.
-- **Closed in good standing:** closing revokes the identity, so the selfie and
-  the ID number go with the account's other files, at the latest 90 days after
-  closure. The blocking code (the submission's fingerprint), the legal names and
-  the verified phone stay until the five-year history sweep; the phone numbers
-  an account had verified when it closed are no longer deleted 30 days after
-  closure. A number replaced before closure still goes 30 days after it was
-  replaced.
+- **Closed in good standing:** the selfie and the ID number go when the 90 days
+  after closure end (unless a ban or an open report keeps them). The blocking
+  code (the submission's fingerprint), the legal names and the verified phone
+  stay until the five-year history sweep: the phone numbers an account with an
+  accepted identity had verified when it closed are no longer deleted 30 days
+  after closure. Without an accepted identity, and for a number replaced before
+  closure, the phone still goes 30 days after it was revoked.
 - **Failed or not accepted attempts keep only the fingerprint:** an automatic
   decline's files are due 5 days after the decline ("ask a person" keeps them
-  until a person decides); a submission staff send back has its files due 5 days
-  later (90 before); the partner's copy of a check sent back, or whose case
-  closed without an acceptance, is due 5 days after
+  until a person decides); when staff send a submission back, the case's files
+  are due 5 days later (90 before); a submission replaced by a newer one (a
+  resubmission, or a new automatic result while an earlier one waited for staff)
+  has its files due 5 days later (trigger `identity_submission_replaced` on
+  `private.verification_current_submissions`); the partner's copy of a check
+  sent back, or whose case closed without an acceptance, is due 5 days after
   (`internal.claim_identity_check_deletions` schedules it). The ID number is
   erased when the selfie goes, then the submission's names snapshot. The check
   row, with its "ask a person" reason, goes 7 days after it finished once the
@@ -122,7 +127,10 @@ or staff until an admin changes the setting, except the keep-for periods below.
 - **The check row:** its start context (typed names at start, network hash,
   device kind) is cleared when it leaves `started` (trigger
   `identity_check_clear_start`, two constraints). The five-year sweep skips an
-  account while a partner copy of one of its checks is not yet deleted.
+  account while a partner copy of one of its checks is not yet deleted. The
+  retention result's `verification.overdue_partner_deletions` counts partner
+  deletions overdue by more than a day (holds excepted), so a stalled deletion
+  job shows.
 - **Results:** `session_moved` always goes to the staff queue, on `automatic`
   too. A result whose names at start differ from the submission's names gets
   `names_differ` (staff on `manual` and `staff_final`, a decline on
@@ -138,13 +146,27 @@ or staff until an admin changes the setting, except the keep-for periods below.
 - **The clean-up and the case version:** on an open identity case, deleting a
   file that no current submission uses no longer changes the case version
   (`internal.evidence_artifact_submission_guard`), so deleting a sent-back
-  attempt's files cannot make the newer submission stale.
+  attempt's files cannot make the newer submission stale. A second review
+  already proposed can still be refused as changed when an earlier attempt's
+  file goes during it; nothing is accepted wrongly, and staff propose again.
 - **Not in this update:** the privacy export does not yet list the member's
   checks; it waits for the pending updates that also replace
   `internal.frontend_privacy_export_data`.
 
 Holds keep everything, as before (an open legal hold on the account, a fraud
 hold on the case).
+
+**If the partner is dropped:** the five-year sweep waits for every partner copy
+of an account's checks to be recorded as deleted, so those accounts' records
+stay until then (the overdue count grows). Before ending the contract, let the
+deletion job empty its queue (`api.claim_identity_check_deletions`); for copies
+the partner confirms it deleted in bulk (for example under its data processing
+agreement at termination), the website's server records each with
+`api.mark_identity_check_provider_deleted`. Never mark a copy deleted without
+that confirmation.
+
+**Before the setting leaves `manual`:** recorded ID consent (the screens part),
+the privacy notice (checklist item 41) and the privacy export follow-up.
 
 **Applying.**
 
@@ -162,8 +184,8 @@ The reviewed rollback is `../rollback/20261122022323_identity_keep_for.down.sql`
 (only with the owner's decision; prefer a forward fix). It refuses (55000)
 unless every function has the update's body, the setting is `manual` and no
 check has finished since the update; then it puts back the 11 bodies byte for
-byte, drops the helper and the trigger and restores the check row's constraints.
-Data the retention job already deleted stays deleted.
+byte, drops the two helpers and the two triggers and restores the check row's
+constraints. Data the retention job already deleted stays deleted.
 
 `node --import tsx scripts/test-foundation-identity-keep-for.mjs` (part of
 `pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
@@ -172,16 +194,18 @@ refused; apply, rollback and re-apply return the same fingerprints; the three
 settings; `session_moved` and names at start on each setting; the cleared start
 context; each decline category; the ID photo at day 29 and 31, the selfie and ID
 number kept for an open account (also after 5 years); the partner's copy at day
-29 and 31 after an acceptance; good-standing closure (selfie and number gone,
-code, names and phone kept, the 90-day cap at day 89 and 91, a replaced number
-still deleted); the five-year sweep waiting for the partner's copy (4 years 364
-days, then 5 years 1 day); a ban keeping the selfie and number 5 years from the
-ban; an automatic decline's files at 4 days 23 hours and 5 days 1 hour, then
-only the fingerprint, and the check row at 6 and 8 days; "ask a person" answered
-by a return (5 days) and by an acceptance (30 days, the reason cleared 91 days
-after closure, not 89); a sent-back attempt's files deleted without making the
-newer submission stale; the authority-request logs and the change log at their
-5-year edges; a legal hold keeping a failed attempt.
+29 and 31 after an acceptance; good-standing closure (selfie and number kept at
+day 89 and gone at day 91, code, names and phone kept, a ban approved at day 60
+and an open report keeping them, the 90-day cap for unreviewed files, a replaced
+number and a number without an accepted identity still deleted); a replaced
+submission's files at 5 days; the five-year sweep waiting for the partner's copy
+(4 years 364 days, then 5 years 1 day); a ban keeping the selfie and number 5
+years from the ban; an automatic decline's files at 4 days 23 hours and 5 days 1
+hour, then only the fingerprint, and the check row at 6 and 8 days; "ask a
+person" answered by a return (5 days) and by an acceptance (30 days, the reason
+cleared 91 days after closure, not 89); a sent-back attempt's files deleted
+without making the newer submission stale; the authority-request logs and the
+change log at their 5-year edges; a legal hold keeping a failed attempt.
 
 ## Business storefront, 21 November 2026
 

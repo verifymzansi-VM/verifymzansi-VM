@@ -13256,7 +13256,7 @@
     },
     {
       "id": "LIM-SQL-IDENTITY-ATTEMPT-FILES",
-      "title": "Identity checks: a failed attempt's files are kept 5 days (after an automatic decline, unless the member asks a person, or after staff send it back)",
+      "title": "Identity checks: a failed attempt's files are kept 5 days (after an automatic decline unless the member asks a person, after staff send it back, or once a newer submission replaces it)",
       "value": "5 days",
       "category": "retention",
       "enforcedAt": [
@@ -13268,6 +13268,11 @@
         {
           "file": "database/foundation/current/functions/internal/return_identity_submission.sql",
           "symbol": "internal.return_identity_submission",
+          "contains": "set retain_until=least(coalesce(retain_until,'infinity'::timestamptz),statement_timestamp()+interval '5 days')"
+        },
+        {
+          "file": "database/foundation/current/functions/internal/identity_submission_replaced.sql",
+          "symbol": "internal.identity_submission_replaced",
           "contains": "set retain_until=least(coalesce(a.retain_until,'infinity'::timestamptz),statement_timestamp()+interval '5 days')"
         }
       ],

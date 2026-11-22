@@ -61,16 +61,16 @@
       "fingerprint": "821f7d069c595c075754fad9309136ac"
     },
     "function_bodies": {
-      "items": 1143,
-      "fingerprint": "d6111985d63adc5c84e05249cf0c6f56"
+      "items": 1145,
+      "fingerprint": "b6220698fb26d20e29cc15d994bbda9a"
     },
     "function_grants": {
       "items": 831,
       "fingerprint": "e6112db339632367bbd40057e324438f"
     },
     "function_metadata": {
-      "items": 1143,
-      "fingerprint": "58160b968fcb7a58e85cbbd453cd4b7b"
+      "items": 1145,
+      "fingerprint": "b70caa18e7bd72df7d558736fd54bd55"
     },
     "indexes": {
       "items": 596,
@@ -89,8 +89,8 @@
       "fingerprint": "a68294e7a9bcf7c20492a72f7c724252"
     },
     "triggers": {
-      "items": 143,
-      "fingerprint": "f6eb5e07297bc53d94e5b64559c4b5cd"
+      "items": 144,
+      "fingerprint": "4816c018b1246be3213c8a41b925495f"
     }
   }
 }

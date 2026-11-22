@@ -7,17 +7,19 @@
 --    manual (PT409 identity_check_retention_pending).
 -- 2. Selfie and encrypted ID number (the blocking code, the legal names and the
 --    verified phone were already kept): kept with an accepted identity while
---    the account is open, and while its ID number is banned (5 years from the
---    ban), even after the account closes. When an account closes in good
---    standing they are deleted with its other files, at the latest 90 days
---    after closure; the blocking code, the names and the verified phone stay 5
---    years (the five-year history sweep). Until now the selfie and the ID
---    number went 30 days after the decision. Helper
+--    the account is open, during the 90 days after it closes, while a report
+--    on the account or its posts is open, and while its ID number is banned (5
+--    years from the ban, so a ban approved within the 90 days keeps them).
+--    When an account closed in good standing passes its 90 days they are
+--    deleted; the blocking code, the names and the verified phone stay 5 years
+--    (the five-year history sweep). Until now the selfie and the ID number
+--    went 30 days after the decision. Helper
 --    internal.identity_record_kept(submission), used by the file clean-up
 --    (internal.claim_evidence_cleanup) and the ID number erasure
 --    (internal.retention_verification), which now follows the selfie instead
---    of the ID photo. The numbers an account had verified when it closed are
---    no longer deleted 30 days after closure: they go with the five-year sweep.
+--    of the ID photo. The numbers an account with an accepted identity had
+--    verified when it closed are no longer deleted 30 days after closure: they
+--    go with the five-year sweep.
 -- 3. The ID photo: 30 days after the decision at our end (unchanged), and the
 --    partner's copy of an accepted check is deleted 30 days after the
 --    acceptance (provider_delete_due, set by
@@ -26,7 +28,11 @@
 --    - an automatic decline's files are due 5 days after the decline (the
 --      "ask a person" window); asking a person keeps them until a person
 --      decides;
---    - a submission staff send back: its files are due 5 days later (were 90);
+--    - a submission staff send back: the case's files are due 5 days later
+--      (were 90);
+--    - a submission replaced by a newer one (a resubmission, or a new
+--      automatic result while an earlier one waited for staff): its files are
+--      due 5 days later (trigger identity_submission_replaced);
 --    - a check staff sent back or that ended without acceptance (also an "ask
 --      a person" answered by a return, or its case closed): the partner's copy
 --      is due 5 days after;
@@ -40,7 +46,9 @@
 -- 5. A check's start context (the typed names at start, the network hash and
 --    the device kind) is cleared when it leaves "started" (trigger
 --    identity_check_clear_start); a closed account's "ask a person" reasons go
---    90 days after closure, with its selfie.
+--    90 days after closure, with its selfie. The retention result counts the
+--    partner deletions overdue by more than a day (overdue_partner_deletions),
+--    so a stalled deletion job shows.
 -- 6. The five-year history sweep skips an account while a partner copy of one
 --    of its checks is not yet deleted.
 -- 7. "Moved" always goes to staff: a result flagged session_moved goes to the
@@ -64,8 +72,8 @@
 --     make a newer submission stale (internal.evidence_artifact_submission_guard).
 --
 -- Holds keep everything, as before: an open legal hold on the account or a
--- fraud hold on the case. Replaces 11 functions with full bodies and adds a
--- helper, a trigger and two constraints; no command is added or removed
+-- fraud hold on the case. Replaces 11 functions with full bodies and adds two
+-- helpers, two triggers and a constraint; no command is added or removed
 -- (expand). ORDER: apply first, then merge.
 -- Read-only preflight: ../preflight/20261122022323_identity_keep_for.check.sql.
 -- Rollback: ../rollback/20261122022323_identity_keep_for.down.sql.
@@ -74,20 +82,24 @@ begin;
 set local lock_timeout='5s';
 
 -- Precondition: every function this update replaces has its reviewed body (or
--- this update's); the helper, the trigger and the new constraint are all
+-- this update's); the helpers, the triggers and the new constraint are all
 -- absent or all present.
 do $$
 declare present integer; body record;
 begin
   select (to_regprocedure('internal.identity_record_kept(uuid)') is not null)::integer
+    + (to_regprocedure('internal.identity_submission_waiting(uuid)') is not null)::integer
     + (to_regprocedure('internal.identity_check_clear_start()') is not null)::integer
+    + (to_regprocedure('internal.identity_submission_replaced()') is not null)::integer
     + (exists(select 1 from pg_trigger where tgrelid='private.identity_checks'::regclass
         and tgname='identity_check_clear_start'))::integer
+    + (exists(select 1 from pg_trigger where tgrelid='private.verification_current_submissions'::regclass
+        and tgname='identity_submission_replaced'))::integer
     + (exists(select 1 from pg_constraint where conrelid='private.identity_checks'::regclass
         and conname='identity_checks_start_cleared_check'))::integer
   into present;
-  if present not in (0, 4) then
-    raise exception 'identity keep-for precondition: % of 4 objects exist', present using errcode='55000';
+  if present not in (0, 7) then
+    raise exception 'identity keep-for precondition: % of 7 objects exist', present using errcode='55000';
   end if;
   for body in select * from (values
       ('internal.set_identity_check_mode(text,text)', '0747acd14aa377ab9895a3dbe7929052', '7fdea80d198a0df84be848ed1bd934f9'),
@@ -95,11 +107,11 @@ begin
       ('internal.complete_identity_check(uuid,uuid,text,text[],jsonb,jsonb,jsonb,jsonb,integer)', 'fbd21093a62801be26748413932aafcb', '8c27fff47923ec0b410ce8dbd6927fbb'),
       ('internal.decline_automatic_identity_submission(uuid,uuid)', 'abf3f15f72e11a9b6cb9717572929661', '0b5bd2ed7702e07fb42468650b5a7281'),
       ('internal.ask_person_identity_check(uuid,text)', 'd8102d38e3c284bf4050994add9af219', '30979a736f6878a22977b4fde70d1fb6'),
-      ('internal.claim_identity_check_deletions(integer)', '40673de778e844021698427b4809c5cf', '141d6c589f1c2269382906d9428539f2'),
+      ('internal.claim_identity_check_deletions(integer)', '40673de778e844021698427b4809c5cf', 'b85ec55a7283a4c897b5b5f50e1dc5e8'),
       ('internal.identity_check_summary(private.identity_checks)', '2ba0f50d74bc624d4a4e1d8caeca6fa1', '73fdd37368b8112a6e0af490a29e935c'),
-      ('internal.return_identity_submission(uuid,integer,text,uuid,text)', 'bc4304d1f5191cae942d30780ce0c29c', '302cb5964e71417ab0d5d44e175b1b83'),
+      ('internal.return_identity_submission(uuid,integer,text,uuid,text)', 'bc4304d1f5191cae942d30780ce0c29c', 'be358fa7134821b7759a69d691e61aa6'),
       ('internal.claim_evidence_cleanup(integer)', '7b3da1337260bcd71a5c9f2fd55480a5', 'cbf7f8505087f2807fae496d2d5c6b59'),
-      ('internal.retention_verification(integer)', 'fe726b6672545b8b33901361eaf91226', '708479107a014a4504d7d57e60419cf7'),
+      ('internal.retention_verification(integer)', 'fe726b6672545b8b33901361eaf91226', '75df892c01832a48cc1ab60ab559499a'),
       ('internal.evidence_artifact_submission_guard()', '2cf882f651413912b4d9cc67d8db01b7', '9bad086a99cfd7626dfc7253048dd5e7')
     ) v(sig, reviewed, updated) loop
     if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure(body.sig))
@@ -112,8 +124,10 @@ end$$;
 -- ------------------------------------------------------------ the record kept
 
 -- Whether a submission's selfie and encrypted ID number are kept: it was
--- accepted and that identity is still current (closing the account revokes
--- it) or its ID number is banned (5 years from the ban).
+-- accepted, and that identity is still current (closing the account revokes
+-- it), or the account closed less than 90 days ago, or a report on the
+-- account or its posts is open (as account erasure waits for one), or its ID
+-- number is banned (5 years from the ban).
 CREATE OR REPLACE FUNCTION internal.identity_record_kept(p_submission uuid)
  RETURNS boolean
  LANGUAGE sql
@@ -122,11 +136,54 @@ CREATE OR REPLACE FUNCTION internal.identity_record_kept(p_submission uuid)
 AS $function$
   select exists(select 1 from private.accepted_identity_facts f
     where f.submission_id=p_submission and (f.revoked_at is null
+      or exists(select 1 from private.account_closures x where x.user_id=f.owner_id
+        and x.evidence_delete_after>statement_timestamp())
+      or exists(select 1 from private.reports r where r.status='open'
+        and (r.subject_account_id=f.owner_id or r.post_id in(select p.id from private.posts p where p.owner_id=f.owner_id)))
       or exists(select 1 from private.banned_identities b where b.identity_hmac=f.identity_hmac
         and b.retain_until>statement_timestamp())));
 $function$;
 alter function internal.identity_record_kept(uuid) owner to postgres;
 revoke all on function internal.identity_record_kept(uuid) from public, anon, authenticated, service_role;
+
+-- Whether a person is still to decide a submission: it is the current,
+-- unchanged submission of its open case.
+CREATE OR REPLACE FUNCTION internal.identity_submission_waiting(p_submission uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'pg_catalog'
+AS $function$
+  select exists(select 1 from private.verification_current_submissions v
+    join private.evidence_cases c on c.id=v.case_id
+    join private.verification_identity_submissions s on s.id=v.submission_id
+    where v.submission_id=p_submission and c.status='open' and c.version=s.case_version);
+$function$;
+alter function internal.identity_submission_waiting(uuid) owner to postgres;
+revoke all on function internal.identity_submission_waiting(uuid) from public, anon, authenticated, service_role;
+
+-- A submission replaced by a newer one is a failed attempt: its files are due
+-- 5 days later.
+CREATE OR REPLACE FUNCTION internal.identity_submission_replaced()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'pg_catalog'
+AS $function$
+begin
+  update private.evidence_artifacts a
+    set retain_until=least(coalesce(a.retain_until,'infinity'::timestamptz),statement_timestamp()+interval '5 days')
+    from private.verification_identity_submissions s
+    where s.id=old.submission_id and a.id in(s.id_artifact_id,s.selfie_artifact_id)
+      and a.state in('uploaded','clean','rejected');
+  return null;
+end$function$;
+alter function internal.identity_submission_replaced() owner to postgres;
+revoke all on function internal.identity_submission_replaced() from public, anon, authenticated, service_role;
+
+drop trigger if exists identity_submission_replaced on private.verification_current_submissions;
+create trigger identity_submission_replaced after update of submission_id on private.verification_current_submissions
+  for each row when (old.submission_id is distinct from new.submission_id)
+  execute function internal.identity_submission_replaced();
 
 -- ---------------------------------------------------------- the check's row
 
@@ -158,7 +215,7 @@ alter table private.identity_checks
   drop constraint if exists identity_checks_start_cleared_check,
   drop constraint if exists identity_checks_asked_check;
 -- Checks that finished before this update lose their start context now.
-update private.identity_checks set status=status
+update private.identity_checks set start_first_name=null,start_last_name=null,network_hash=null,device_kind=null
   where status<>'started' and (start_first_name is not null or network_hash is not null);
 alter table private.identity_checks
   -- A started check has the typed names it started with; a finished one none.
@@ -454,10 +511,7 @@ begin
     where k.status in('with_staff','declined') and k.provider_delete_due is null and k.provider_deleted_at is null
       and k.session_id is not null
       and not exists(select 1 from private.accepted_identity_facts f where f.submission_id=k.submission_id)
-      and not exists(select 1 from private.evidence_cases c
-        join private.verification_current_submissions v on v.case_id=c.id and v.submission_id=k.submission_id
-        join private.verification_identity_submissions s on s.id=k.submission_id
-        where c.id=k.case_id and c.status='open' and c.version=s.case_version);
+      and not internal.identity_submission_waiting(k.submission_id);
   with due as (
     select k.id from private.identity_checks k
     where k.provider_delete_due<=now_at and k.provider_deleted_at is null and k.session_id is not null
@@ -512,8 +566,8 @@ revoke all on function internal.set_identity_check_mode(text,text) from public, 
 grant execute on function internal.set_identity_check_mode(text,text) to authenticated;
 
 -- A staff member sends an identity submission back. The member is told; the
--- sent-back submission's files are due 5 days later (a failed attempt keeps
--- only its fingerprint), other files of the case 90 days later, as before.
+-- case's files are due 5 days later (a failed attempt keeps only its
+-- fingerprint).
 CREATE OR REPLACE FUNCTION internal.return_identity_submission(p_case uuid, p_expected_version integer, p_claim_generation text, p_claim_nonce uuid, p_reason text)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -531,11 +585,9 @@ begin
   if c.version<>p_expected_version or c.version>=2147483647 or c.subject_id=actor
     or exists(select 1 from private.decisions d where d.case_id=c.id and d.status='proposed') then raise exception 'reviewed case changed' using errcode='PT409'; end if;
   update private.evidence_cases set version=version+1,claimed_by=null,claim_expires_at=null,claim_nonce=null where id=c.id returning * into c;
-  update private.evidence_artifacts a
-    set retain_until=least(coalesce(a.retain_until,'infinity'::timestamptz),statement_timestamp()+interval '5 days')
-    from private.verification_current_submissions v join private.verification_identity_submissions s on s.id=v.submission_id
-    where v.case_id=c.id and a.id in(s.id_artifact_id,s.selfie_artifact_id) and a.state in('clean','uploaded','rejected');
-  update private.evidence_artifacts set retain_until=statement_timestamp()+interval '90 days' where case_id=c.id and state in('clean','uploaded','rejected') and retain_until is null;
+  update private.evidence_artifacts
+    set retain_until=least(coalesce(retain_until,'infinity'::timestamptz),statement_timestamp()+interval '5 days')
+    where case_id=c.id and state in('clean','uploaded','rejected');
   insert into private.verification_return_requests(case_id,case_version,reason,reviewer_id) values(c.id,c.version,reason,actor) returning id into returned;
   -- The member is told: a notice in the account and an email. Neither carries
   -- the reason or any identity detail; the member reads the reason on the
@@ -655,7 +707,7 @@ CREATE OR REPLACE FUNCTION internal.retention_verification(p_limit integer)
 AS $function$
 declare candidate record; numbers integer:=0; challenges integer; proofs integer; localities integer;
   acceptances integer; signup_acceptances integer; choice_events integer; histories integer:=0; cases uuid[];
-  attempt_names integer; checks integer; ask_reasons integer; disclosures integer; mode_events integer;
+  attempt_names integer; checks integer; ask_reasons integer; disclosures integer; mode_events integer; overdue integer;
 begin
   -- The encrypted ID number goes with the selfie: once the selfie is deleted
   -- or due, unless its identity record is kept (internal.identity_record_kept).
@@ -700,10 +752,7 @@ begin
     where k.status<>'started' and k.finished_at<statement_timestamp()-interval '7 days'
       and (k.session_id is null or k.provider_deleted_at is not null)
       and not exists(select 1 from private.accepted_identity_facts f where f.submission_id=k.submission_id)
-      and not exists(select 1 from private.evidence_cases c
-        join private.verification_current_submissions v on v.case_id=c.id and v.submission_id=k.submission_id
-        join private.verification_identity_submissions s on s.id=k.submission_id
-        where c.id=k.case_id and c.status='open' and c.version=s.case_version)
+      and not internal.identity_submission_waiting(k.submission_id)
       and not internal.evidence_fraud_held(k.case_id)
       and not exists(select 1 from private.legal_holds h where h.subject_id=k.owner_id and h.released_at is null)
     order by k.finished_at,k.id limit p_limit for update skip locked);
@@ -714,16 +763,18 @@ begin
   update private.identity_checks set ask_reason=null where id in(select k.id from private.identity_checks k
     join private.account_closures x on x.user_id=k.owner_id
     where k.ask_reason is not null and x.evidence_delete_after<=statement_timestamp()
+      and not internal.evidence_fraud_held(k.case_id)
       and not exists(select 1 from private.legal_holds h where h.subject_id=k.owner_id and h.released_at is null)
     order by x.closed_at,k.id limit p_limit for update of k skip locked);
   get diagnostics ask_reasons=row_count;
 
   -- Revoked phone proofs go 30 days after revocation, except the numbers an
-  -- account had verified when it closed: those stay with its identity record
-  -- for the five-year sweep below.
+  -- account with an accepted identity had verified when it closed: those stay
+  -- with its identity record for the five-year sweep below.
   delete from private.verification_phone_proofs where id in(select p.id from private.verification_phone_proofs p
     where p.revoked_at<statement_timestamp()-interval '30 days'
-      and not exists(select 1 from private.account_closures x where x.user_id=p.owner_id and p.revoked_at>=x.closed_at)
+      and not (exists(select 1 from private.account_closures x where x.user_id=p.owner_id and p.revoked_at>=x.closed_at)
+        and exists(select 1 from private.accepted_identity_facts f where f.owner_id=p.owner_id))
     order by p.revoked_at limit p_limit for update skip locked);
   get diagnostics proofs=row_count;
   delete from private.verification_phone_challenges where id in(select c.id from private.verification_phone_challenges c
@@ -811,17 +862,17 @@ begin
     histories:=histories+1;
   end loop;
 
-  -- Authority-request logs: kept while a named account exists and 5 years
-  -- after it closed; a search that named nobody, 5 years from the search. An
-  -- open legal hold on a named account keeps the log.
+  -- Authority-request logs: deleted 5 years after the search once every
+  -- named account closed more than 5 years ago and none has an open legal
+  -- hold (a search that named nobody: 5 years after the search).
   delete from private.identity_disclosures where id in(select d.id from private.identity_disclosures d
     where d.opened_at<statement_timestamp()-interval '5 years'
-      and not exists(select 1 from unnest(d.subject_ids) a(id)
-        where (not exists(select 1 from private.account_closures x where x.user_id=a.id
+      and coalesce((select bool_and((exists(select 1 from private.account_closures x where x.user_id=a.id
             and x.closed_at<statement_timestamp()-interval '5 years')
-          and not exists(select 1 from private.account_erasures e where e.user_id=a.id
+          or exists(select 1 from private.account_erasures e where e.user_id=a.id
             and e.closed_at<statement_timestamp()-interval '5 years'))
-          or exists(select 1 from private.legal_holds h where h.subject_id=a.id and h.released_at is null))
+          and not exists(select 1 from private.legal_holds h where h.subject_id=a.id and h.released_at is null))
+        from unnest(d.subject_ids) a(id)),true)
     order by d.opened_at,d.id limit p_limit for update skip locked);
   get diagnostics disclosures=row_count;
   -- The automatic ID check setting's change log: 5 years.
@@ -829,13 +880,20 @@ begin
     where e.changed_at<statement_timestamp()-interval '5 years'
     order by e.changed_at,e.id limit p_limit for update skip locked);
   get diagnostics mode_events=row_count;
+  -- Partner deletions overdue by more than a day (holds excepted): a stalled
+  -- deletion job shows here.
+  select count(*) into overdue from private.identity_checks k
+    where k.session_id is not null and k.provider_deleted_at is null
+      and k.provider_delete_due<statement_timestamp()-interval '1 day'
+      and not exists(select 1 from private.legal_holds h where h.subject_id=k.owner_id and h.released_at is null)
+      and not internal.evidence_fraud_held(k.case_id);
 
   return jsonb_build_object('identity_numbers_erased',numbers,'phone_proofs',proofs,'phone_challenges',challenges,
     'closed_account_localities',localities,'closed_account_terms_acceptances',acceptances,
     'closed_account_signup_terms',signup_acceptances,'closed_account_communication_choices',choice_events,
     'closed_account_verification_histories',histories,'failed_attempt_names',attempt_names,
     'identity_checks',checks,'closed_account_ask_reasons',ask_reasons,'identity_disclosures',disclosures,
-    'identity_check_mode_events',mode_events);
+    'identity_check_mode_events',mode_events,'overdue_partner_deletions',overdue);
 end;
 $function$;
 alter function internal.retention_verification(integer) owner to postgres;

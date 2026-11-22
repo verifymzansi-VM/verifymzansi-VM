@@ -5832,7 +5832,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Admin (identity_check:configure) with an authenticator code from the last 15 minutes: sets the automatic ID check setting with a reason of 5 to 500 characters (no control or direction characters); a change is logged append-only and setting a mode, even the current one, ends a pause. Until the retention update replaces it, only manual is accepted (PT409 identity_check_retention_pending)."
+      "authority": "Admin (identity_check:configure) with an authenticator code from the last 15 minutes: sets the automatic ID check setting with a reason of 5 to 500 characters (no control or direction characters); a change is logged append-only and setting a mode, even the current one, ends a pause. Accepts manual, staff_final and automatic (20261122022323_identity_keep_for)."
     },
     {
       "name": "get_identity_check_for_case",
