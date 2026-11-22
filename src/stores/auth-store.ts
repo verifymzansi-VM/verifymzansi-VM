@@ -7,6 +7,8 @@ interface AuthUser {
   email: string;
   displayName: string;
   role: string;
+  /** Header back-office link. Missing means hidden. */
+  showAdminLink?: boolean;
 }
 
 interface AuthState {

@@ -65,6 +65,19 @@ export function foundationSessionRole(staff: FoundationAccountContext["staff"]):
   return staff.role === "governor" ? "governance_controller" : staff.role;
 }
 
+/**
+ * Whether the header shows the back-office link. Staff whose two-step check
+ * has only lapsed (an authenticator app is enrolled) keep it; an account that
+ * carries only the owner-invitation setup hint (no authenticator yet, so no
+ * role) does not. Presentation only: the server checks role and two-step on
+ * every staff page and command, and `/staff/two-step` stays reachable.
+ */
+export function foundationShowsAdminLink(
+  account: Pick<FoundationAccountContext, "staff" | "totp_enrolled">
+): boolean {
+  return !!account.staff && (account.staff.can_access === true || account.totp_enrolled === true);
+}
+
 const STAFF_ROLES = new Set(["moderator", "governance_controller", "admin"]);
 
 export function isStaffRole(role: string | null | undefined): boolean {

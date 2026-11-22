@@ -8,6 +8,7 @@ import { createLogger } from "@/lib/utils/logger";
 import {
   foundationSessionDisplayName,
   foundationSessionRole,
+  foundationShowsAdminLink,
   isStaffRole,
 } from "@/lib/auth/session-display";
 import { toast } from "@/hooks/use-toast";
@@ -173,6 +174,7 @@ export function useAuth() {
             account.email ?? authUser.email
           ),
           role: foundationSessionRole(account.staff),
+          showAdminLink: foundationShowsAdminLink(account),
         });
         setProfile(nextProfile);
       } catch (err) {
@@ -242,6 +244,9 @@ export function useAuth() {
   // Any staff role, including governors. A UI hint only: staff pages and
   // commands check role and two-step on the server.
   const isStaff = isStaffRole(user?.role);
+  // Narrower than isStaff: hides the header's Admin link from an invited
+  // administrator who has not set up an authenticator app yet.
+  const showAdminLink = user?.showAdminLink === true;
   const isVerified = readAccountVerificationStatus(profile) === "verified";
 
   return {
@@ -253,6 +258,7 @@ export function useAuth() {
     isAdmin,
     isModerator,
     isStaff,
+    showAdminLink,
     isVerified,
     signOut,
     refresh: () => fetchUser({ force: true }),

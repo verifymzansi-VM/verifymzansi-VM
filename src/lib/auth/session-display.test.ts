@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   foundationSessionDisplayName,
   foundationSessionRole,
+  foundationShowsAdminLink,
   isStaffRole,
   readSessionDisplayName,
 } from "./session-display";
@@ -71,5 +72,28 @@ describe("isStaffRole", () => {
     expect(isStaffRole("governance_controller")).toBe(true);
     expect(isStaffRole("user")).toBe(false);
     expect(isStaffRole(undefined)).toBe(false);
+  });
+});
+
+describe("foundationShowsAdminLink", () => {
+  const admin = { role: "admin" as const, can_access: false, assigned_capabilities: [] };
+
+  it("hides the link for an invited administrator who has no authenticator app yet", () => {
+    expect(foundationShowsAdminLink({ staff: admin, totp_enrolled: false })).toBe(false);
+  });
+
+  it("shows the link to enrolled staff whose two-step check has lapsed", () => {
+    expect(foundationShowsAdminLink({ staff: admin, totp_enrolled: true })).toBe(true);
+  });
+
+  it("shows the link to staff with a current two-step check", () => {
+    expect(
+      foundationShowsAdminLink({ staff: { ...admin, can_access: true }, totp_enrolled: true })
+    ).toBe(true);
+  });
+
+  it("hides the link from members, enrolled or not", () => {
+    expect(foundationShowsAdminLink({ staff: null, totp_enrolled: true })).toBe(false);
+    expect(foundationShowsAdminLink({ staff: null, totp_enrolled: false })).toBe(false);
   });
 });
