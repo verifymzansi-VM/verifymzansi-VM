@@ -17,6 +17,8 @@ begin
   c := internal.lock_queue_claim(s.post_id, s.report_id);
   actor := internal.staff_actor('queue:claim');
   perform internal.assert_queue_claim(c, actor, p_claim_generation, p_claim_nonce);
+  -- A post claim is renewed only for a reviewer who may still review it.
+  if s.post_id is not null then perform internal.assert_post_reviewer(actor, s.post_id); end if;
   if c.renewals >= 4 then
     raise exception 'renewal limit reached; claim the item again after it expires' using errcode = 'PT409';
   end if;
