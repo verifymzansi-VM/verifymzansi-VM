@@ -82,14 +82,14 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Authority requests under rule D9, 22 November 2026
 
-`20261122013616_authority_request_types.sql` is pending (see the applied
-register). Launch checklist item 69, owner decision D9 of 21 November ("Keep
-both"): staff may disclose a member's kept identity record to an authority only
-on a subpoena (Criminal Procedure Act s205, issued by a magistrate or judge), a
-court order or a search warrant, each checked with the issuing court or the
-named prosecutor on an official number; or on an urgent written request from
-SAPS where a life is at risk, checked by calling the station. An urgent request
-gives only the minimum, never the selfie.
+`20261122013616_authority_request_types.sql` was applied on 22 November 2026 at
+13:00 UTC (see the applied register). Launch checklist item 69, owner decision
+D9 of 21 November ("Keep both"): staff may disclose a member's kept identity
+record to an authority only on a subpoena (Criminal Procedure Act s205, issued
+by a magistrate or judge), a court order or a search warrant, each checked with
+the issuing court or the named prosecutor on an official number; or on an urgent
+written request from SAPS where a life is at risk, checked by calling the
+station. An urgent request gives only the minimum, never the selfie.
 
 - **The request types:** `subpoena`, `court_order`, `search_warrant` and
   `urgent_life_risk`. The earlier `warrant`, `police_case` and `regulator` rows
@@ -7177,6 +7177,12 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   (fingerprint.sql) matched the full replay (except the known schema grant
   difference)
 
-- `20261122013616_authority_request_types.sql`: pending; apply-first
+- `20261122013616_authority_request_types.sql`: applied 2026-11-22 13:00 UTC;
+  owner-approved, apply-first, Supabase SQL editor (pull request #346); update
+  sha256 starting 3528b0f5; preflight (sha256 starting 10c3307f) before: update
+  not applied (4 of 4 bodies reviewed, new objects 0 of 6, disclosures 0, no
+  problems), after: already applied (4 of 4 bodies updated, 6 of 6 new objects,
+  disclosures 0); production fingerprint after it (fingerprint.sql) matched the
+  full replay (except the known schema grant difference)
 
 <!-- applied-register:end -->
