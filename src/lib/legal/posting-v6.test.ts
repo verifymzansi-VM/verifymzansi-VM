@@ -52,7 +52,7 @@ describe("the active Terms state the site's package and add-on prices", () => {
     );
     for (const rule of [
       `one purchase of ${PACKAGE_MIN_SLOTS} to ${PACKAGE_MAX_SLOTS} slots for one term of ${list(PACKAGE_TERMS.map(String))} days`,
-      `Each slot costs ${rand(PACKAGE_SLOT_PRICE_CENTS_PER_30_DAYS)} for each 30 days: ${list(perTerm)}.`,
+      `The price is ${rand(PACKAGE_SLOT_PRICE_CENTS_PER_30_DAYS)} per slot for each 30 days: ${list(perTerm)}.`,
       `Package slots cost ${rand(PACKAGE_SLOT_PRICE_CENTS_PER_30_DAYS)} each for 30 days, and Individual slots ${rand(individual30.priceCents)}.`,
       `at most ${PACKAGE_POSTS_PER_SLOT_PER_30_DAYS} posts going live for each of its slots in any 30 days, counted across the whole package`,
       `each added slot costs ${rand(PACKAGE_SLOT_PRICE_CENTS_PER_30_DAYS)} × days left ÷ 30, rounded to the cent`,
@@ -165,7 +165,7 @@ describe("posting-v6", () => {
 
   it("is the site's one set of Terms, with its pinned hash", () => {
     expect(manifest.active_version).toBe("posting-v6");
-    expect(v6.document_hash).toBe("5cAClZNQXGLoMM17BDDA3QGCJvwSRcfbC4NEcDH5EJM");
+    expect(v6.document_hash).toBe("TwxXHEzcLDjXIorkdb_i1ygOHJ6ZYX492xRrXeNlJbs");
     expect(text).not.toMatch(/version/i);
   });
 
@@ -249,7 +249,9 @@ describe("posting-v6", () => {
       "liquor, tobacco and vaping products, medicines, loans and other financial products, and live animals and wildlife products",
       "Show your licence or registration number in the post when the law requires one",
       "Job ads that ask applicants to pay to apply or to get the job",
-      "when we receive a credible complaint that it is unlawful or breaks these Terms",
+      "use Report on the post, or email abuse@verifymzansi.com",
+      "We act on a report within 2 business days and keep a record of every report",
+      "on a credible complaint, and restrict the account that posted it",
     ])
       expect(text).toContain(rule);
     // Never a partner commission figure, and no tax invoice.

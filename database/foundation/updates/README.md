@@ -84,7 +84,7 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 `20261122181738_posting_terms_v6.sql` (launch checklist item 27) publishes
 posting terms `posting-v6` (`src/lib/legal/terms-documents/posting-v6.json`,
-canonical hash `5cAClZNQXGLoMM17BDDA3QGCJvwSRcfbC4NEcDH5EJM`, also in
+canonical hash `TwxXHEzcLDjXIorkdb_i1ygOHJ6ZYX492xRrXeNlJbs`, also in
 `catalogue.json`) and makes it current, in one transaction. posting-v6 is
 posting-v5 plus:
 
@@ -107,7 +107,9 @@ posting-v5 plus:
   days, refunds to the original method or an account in the member's own name,
   lost days added back after an overturned suspension, the content licence and
   ownership promise, the children rule, restricted goods and licence numbers,
-  two more prohibited kinds, and removal on a credible complaint.
+  two more prohibited kinds, how to report a post (Report or
+  abuse@verifymzansi.com, 2 business days, every report recorded), and removal
+  of a post and restriction of its account on a credible complaint.
 
 It changes only `private.posting_terms_versions` (one new row) and
 `private.posting_terms_current`: no function, table, grant, plan, price or

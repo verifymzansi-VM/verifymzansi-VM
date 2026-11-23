@@ -154,7 +154,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 91. Email before a long paid term ends (item 68b) (no file rows: email only) | awaiting owner | Members with a paid slot or package of 180 days or more get one email about 12 weeks before it ends: the end date, that nothing renews and nothing more is charged, and how to buy again (My slots for an Individual slot, otherwise Billing; an Individual slot whose post moves into the member's running Multi-listing package is told only that; a banned or suspended member is told only that nothing more is needed). Nothing changes on any page. |
 | 92. Registered street address no longer shown (no file rows: data setting only) | approved by owner 2026-11-22 | Trust & Safety (and the Terms and PAIA pages, which list the same company details) no longer show a 'Registered address' row with the street address. The other company details (registered name, trading name, CIPC number, officers, contacts) are unchanged. |
 | 93. Free credits for businesses you recruit (item 70) | awaiting owner (with the group 93 part of 4 rows elsewhere) | Admins only: a 'Free credits' page under Commercial in the staff menu to give an ID-verified member 1 to 6 free posts for 1 to 30 days with a reason, list every gift (masked email, posts, end date, Active or Ended, views) and extend one by 1 to 30 days. Members with a gift: 'Free credits from VerifyMzansi: 1 post' with its end date on My slots, and 'Free credits from VerifyMzansi' on the posting slots card of My posts. |
-| 94. Terms posting-v6: the package rules (item 27) (no file rows: Terms text outside the checked scope) | awaiting owner | The Terms page gains two sections, 'Multi-listing packages' and 'Paid add-ons', and changed paragraphs on prices, paying, refunds, prohibited content and the content licence. Members tick the posting terms again before their next post or edit (the same tick as today). |
+| 95. Terms posting-v6: the package rules (item 27) (no file rows: Terms text outside the checked scope) | awaiting owner | The Terms page gains two sections, 'Multi-listing packages' and 'Paid add-ons', and changed paragraphs on prices, paying, refunds, prohibited content and the content licence. Members tick the posting terms again before their next post or edit (the same tick as today). |
 
 Questions for the owner:
 
@@ -3743,7 +3743,7 @@ Pictures (not published): `screenshots/hide-address/` (desktop 1280 and phone
 
 Decision: approved by owner 2026-11-22 (answer: 'Approve').
 
-### 94. Terms posting-v6: the package rules (item 27)
+### 95. Terms posting-v6: the package rules (item 27)
 
 Launch checklist item 27. The Terms page (`/terms`) reads the current Terms
 from the database, so its text changes when database update
@@ -3768,8 +3768,10 @@ What visitors see on `/terms`:
   business days, refunds to the original method or an account in the member's
   own name, and lost days after an overturned suspension, under 'Refunds &
   cancelling'; the children rule and licence numbers under 'Account posting
-  obligations'; two more prohibited kinds, restricted goods and removal on a
-  credible complaint under 'Prohibited content'; the content licence under
+  obligations'; two more prohibited kinds, restricted goods, how to report a
+  post (Report or abuse@verifymzansi.com, action within 2 business days, every
+  report recorded), and removal of a post and restriction of its account on a
+  credible complaint, under 'Prohibited content'; the content licence under
   'Promotion & distribution rights'.
 
 The posting tick on the create forms is unchanged ('I accept the VerifyMzansi
