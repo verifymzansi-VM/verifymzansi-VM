@@ -4,7 +4,7 @@ import { InvoiceDocument, formatInvoiceAmount, invoiceStatusLabel } from "./invo
 import { FAKE_INVOICE_BANK, FIXTURE_INVOICE } from "@/test/customer-invoice";
 
 describe("the customer invoice document", () => {
-  it("is an invoice of a seller not registered for VAT, with no VAT line", () => {
+  it("is an invoice of a seller not registered for VAT, with no VAT charged", () => {
     render(<InvoiceDocument invoice={FIXTURE_INVOICE} sellerAddress={null} bank={null} />);
     const doc = screen.getByRole("article");
     expect(within(doc).getByRole("heading", { name: "Invoice" })).toBeInTheDocument();
@@ -14,6 +14,9 @@ describe("the customer invoice document", () => {
     expect(doc).toHaveTextContent("VerifyMzansi is not registered for VAT.");
     expect(doc.textContent).not.toMatch(/tax invoice|VAT \(|15%/i);
     expect(screen.getByTestId("invoice-total")).toHaveTextContent("R621.00");
+    // CPA s26(3): total before tax, the tax line, then the total.
+    expect(within(doc).getByRole("rowheader", { name: "Total before VAT" })).toBeInTheDocument();
+    expect(screen.getByTestId("invoice-vat")).toHaveTextContent("None");
     expect(doc).toHaveTextContent("Individual slot — 90 days");
     expect(doc).toHaveTextContent("Billing details not added yet.");
   });

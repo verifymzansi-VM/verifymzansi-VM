@@ -23,6 +23,9 @@ export const SECURITY_CONTACT_EMAIL =
   optionalPublicEnv(process.env.NEXT_PUBLIC_VERIFYMZANSI_SECURITY_EMAIL) ??
   "security@verifymzansi.com";
 
+/** Where legal notices go (the Terms' 'Who we are' and 'Privacy & contact'). */
+export const LEGAL_CONTACT_EMAIL = "legal@verifymzansi.com";
+
 const BILLING_CONTACT_EMAIL = "billing@verifymzansi.com";
 const VERIFICATION_CONTACT_EMAIL = "verification@verifymzansi.com";
 const ABUSE_CONTACT_EMAIL = "abuse@verifymzansi.com";

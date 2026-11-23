@@ -5,6 +5,7 @@ import {
   SECURITY_CONTACT_EMAIL,
   SUPPORT_CONTACT_EMAIL,
 } from "@/lib/contact-email";
+import { COMPANY_LEGAL_NAME, COMPANY_REGISTRATION_NUMBER } from "@/lib/legal/company-identity";
 
 export interface TrustPublicConfig {
   legalName?: string;
@@ -63,9 +64,16 @@ const publicConfigRows = [
   label: string;
 }[];
 
-function getConfiguredRows(config: TrustPublicConfig, group: PublicConfigRowGroup) {
+function getConfiguredRows(
+  config: TrustPublicConfig,
+  group: PublicConfigRowGroup,
+  omit: readonly (keyof TrustPublicConfig)[] = []
+) {
   return publicConfigRows.flatMap((row): Array<{ label: string; value: string }> => {
-    if (!(row.groups as readonly PublicConfigRowGroup[]).includes(group)) {
+    if (
+      !(row.groups as readonly PublicConfigRowGroup[]).includes(group) ||
+      omit.includes(row.key)
+    ) {
       return [];
     }
 
@@ -76,9 +84,9 @@ function getConfiguredRows(config: TrustPublicConfig, group: PublicConfigRowGrou
 
 export function getTrustPublicConfig(): TrustPublicConfig {
   return {
-    legalName: envOrDefault("VERIFYMZANSI_LEGAL_NAME", "VERIFYMZANSI (PTY) LTD"),
+    legalName: envOrDefault("VERIFYMZANSI_LEGAL_NAME", COMPANY_LEGAL_NAME),
     tradingName: envOrDefault("VERIFYMZANSI_TRADING_NAME", "VerifyMzansi"),
-    cipcNumber: envOrDefault("VERIFYMZANSI_CIPC_NUMBER", "2026/155305/07"),
+    cipcNumber: envOrDefault("VERIFYMZANSI_CIPC_NUMBER", COMPANY_REGISTRATION_NUMBER),
     responsibleOfficer: envOrDefault("VERIFYMZANSI_RESPONSIBLE_OFFICER", "Senzo Mqondisi Mhlongo"),
     informationOfficerName: envOrDefault(
       "VERIFYMZANSI_INFORMATION_OFFICER_NAME",
@@ -111,6 +119,33 @@ export function getConfiguredLegalIdentityRows(config = getTrustPublicConfig()) 
   return getConfiguredRows(config, "legal");
 }
 
+/**
+ * The legal identity rows for the Terms and the PAIA manual: the director and
+ * the Information Officer share one row when they are the same person, so the
+ * name is shown once.
+ */
+export function getConfiguredLegalNoticeRows(config = getTrustPublicConfig()) {
+  const rows = getConfiguredRows(config, "legal", ["responsibleOfficer", "informationOfficerName"]);
+  const director = config.responsibleOfficer;
+  const officer = config.informationOfficerName;
+  if (director && director === officer) {
+    return [...rows, { label: "Director and Information Officer", value: director }];
+  }
+  return [
+    ...rows,
+    ...(director ? [{ label: "Director", value: director }] : []),
+    ...(officer ? [{ label: "Information Officer", value: officer }] : []),
+  ];
+}
+
 export function getConfiguredContactRows(config = getTrustPublicConfig()) {
   return getConfiguredRows(config, "contact");
+}
+
+/**
+ * Where legal documents reach us. Pages name the registered address as
+ * recorded at CIPC and never print a street address.
+ */
+export function registeredAddressNote() {
+  return "Our registered address, as recorded at CIPC";
 }

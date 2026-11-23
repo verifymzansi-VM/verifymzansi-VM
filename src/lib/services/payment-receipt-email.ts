@@ -1,4 +1,5 @@
 import { formatZAR } from "@/lib/utils/format";
+import { COMPANY_LEGAL_NAME, COMPANY_REGISTRATION_NUMBER } from "@/lib/legal/company-identity";
 import { brandedEmail, detailList, paragraph, sanitizeAppUrl } from "./email-template";
 
 /** What the "Payment received" email shows, read from the database command
@@ -61,6 +62,7 @@ export function buildPaymentReceiptEmail(receipt: PaymentReceipt, appUrl?: strin
     rows.map(([label, value]) => `${label}: ${value}`).join("\n"),
     note,
     `${cta.label}: ${cta.href}`,
+    `${COMPANY_LEGAL_NAME} · Registration number ${COMPANY_REGISTRATION_NUMBER}`,
   ].join("\n\n");
   return { subject: PAYMENT_RECEIPT_SUBJECT, html, text };
 }
