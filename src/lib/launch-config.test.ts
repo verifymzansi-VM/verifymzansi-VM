@@ -27,10 +27,6 @@ afterEach(() => {
  * launch checklist item 71): the organisation report (item 46) and package
  * teams (item 15). Every other switch is on. */
 const STILL_OFF = new Set(["SHOW_ORGANISATION_REPORT", "SHOW_PACKAGE_TEAMS"]);
-/** Switches whose database update is not applied yet (post templates,
- * 20261122191646_post_templates.sql, website-first): off in production and on
- * only in the launch-configuration test build until the owner switches them on. */
-const AWAITING_DATABASE = new Set(["SHOW_POST_TEMPLATES"]);
 
 describe("launch configuration switches", () => {
   for (const value of [undefined, "0", "", "true", "yes", " 1"])
@@ -39,13 +35,12 @@ describe("launch configuration switches", () => {
       expect(flag.LAUNCH_CONFIG_BUILD).toBe(false);
       const switches = Object.entries(hidden);
       expect(switches.length).toBeGreaterThanOrEqual(12);
-      for (const [name, on] of switches)
-        expect(on, name).toBe(!STILL_OFF.has(name) && !AWAITING_DATABASE.has(name));
+      for (const [name, on] of switches) expect(on, name).toBe(!STILL_OFF.has(name));
       expect(pricing.PACKAGES_ON_SALE).toBe(true);
       expect(banner.PRELAUNCH_BANNER_ENABLED).toBe(true);
     });
 
-  it("turn the pre-launch pop-up off and pending features on in the launch-configuration test build", async () => {
+  it("turn only the pre-launch pop-up off in the launch-configuration test build", async () => {
     const { flag, hidden, pricing, banner } = await loadSwitches("1");
     expect(flag.LAUNCH_CONFIG_BUILD).toBe(true);
     for (const [name, on] of Object.entries(hidden)) expect(on, name).toBe(!STILL_OFF.has(name));
@@ -53,11 +48,8 @@ describe("launch configuration switches", () => {
     expect(banner.PRELAUNCH_BANNER_ENABLED).toBe(false);
   });
 
-  it("list only the pre-launch pop-up and pending features in the launch table", async () => {
+  it("list only the pre-launch pop-up in the launch table", async () => {
     const { flag } = await loadSwitches(undefined);
-    expect(flag.LAUNCH_VALUES).toEqual({
-      SHOW_POST_TEMPLATES: true,
-      PRELAUNCH_BANNER_ENABLED: false,
-    });
+    expect(flag.LAUNCH_VALUES).toEqual({ PRELAUNCH_BANNER_ENABLED: false });
   });
 });

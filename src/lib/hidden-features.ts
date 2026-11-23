@@ -7,16 +7,11 @@
  * is invite only and the owner checks each function before inviting anyone).
  * Two stay off because what they show is not built (the review of launch
  * checklist item 71): SHOW_ORGANISATION_REPORT and SHOW_PACKAGE_TEAMS.
- * SHOW_POST_TEMPLATES stays off in production until its database update is
- * applied and the owner switches it on; only the launch-configuration test
- * build (LAUNCH_VALUES in src/lib/launch-config.ts) shows it.
  * Changing a switch is a frontend change that needs the owner's approval.
  *
  * Typed as `boolean`, not as the literal, so the code on both sides of each
  * switch still type-checks and a switch can be turned off without other edits.
  */
-
-import { LAUNCH_CONFIG_BUILD, LAUNCH_VALUES } from "@/lib/launch-config";
 
 /**
  * View counts, the like button and like totals. The live backend stores them
@@ -69,12 +64,10 @@ export const SHOW_ORGANISATION_REPORT: boolean = false;
  * opens the "Post an item" form filled in. Calls the live backend's
  * api.save_my_post_template, api.list_my_post_templates,
  * api.rename_my_post_template and api.delete_my_post_template (database update
- * 20261122191646_post_templates.sql). Off until launch switch-on (item 60;
- * frontend ledger group 87): while off, the pages are as before and
- * /api/post-templates answers 404.
+ * 20261122191646_post_templates.sql). Frontend ledger group 87. If switched
+ * off, the pages are as before and /api/post-templates answers 404.
  */
-export const SHOW_POST_TEMPLATES: boolean =
-  LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_POST_TEMPLATES;
+export const SHOW_POST_TEMPLATES: boolean = true;
 
 /**
  * "Delete account" on the profile's Account tab, its confirmation dialog, and

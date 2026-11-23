@@ -30,10 +30,6 @@ export const LAUNCH_CONFIG_BUILD: boolean = process.env.VERIFYMZANSI_LAUNCH_CONF
  * production shows is a frontend change for the owner.
  */
 export const LAUNCH_VALUES = {
-  // Post templates stay off in production until their database update
-  // (20261122191646_post_templates.sql) is applied and the owner switches them
-  // on (frontend ledger group 87); the launch build shows them.
-  SHOW_POST_TEMPLATES: true,
   // The pop-up is gone on launch day.
   PRELAUNCH_BANNER_ENABLED: false,
 } as const satisfies Record<string, boolean>;

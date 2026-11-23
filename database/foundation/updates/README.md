@@ -1461,11 +1461,13 @@ runs saves a reusable starting point for Market listings.
   to the account that made it.
 
 Expand only: four new commands, a table and a trigger; the export gains a
-dataset. ORDER: **website-first**: the website calls the new commands only while
-`SHOW_POST_TEMPLATES` is on (off until launch switch-on), and the staff access
-export (`/api/admin/dsar/export`) accepts at least the live number of datasets
-(42), so it takes the 43rd once the update is applied. Merge and deploy the
-website, then apply the update.
+dataset. ORDER: **apply-first**: the website that ships with it has
+`SHOW_POST_TEMPLATES` on (like every other switch since the owner's decision of
+22 November 2026) and calls the new commands, so apply the update, then merge.
+The live website before it calls none of them, and its staff access export
+(`/api/admin/dsar/export`) accepts at least the live number of datasets (42), so
+it takes the 43rd. (The update file's own header still says website first, from
+before that decision; the file is left unchanged and this order applies.)
 
 **Applying.**
 
@@ -7733,6 +7735,6 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   (fingerprint.sql) matched the full replay (except the known schema grant
   difference)
 
-- `20261122191646_post_templates.sql`: pending; website-first
+- `20261122191646_post_templates.sql`: pending; apply-first
 
 <!-- applied-register:end -->
