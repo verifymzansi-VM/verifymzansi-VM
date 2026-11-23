@@ -23,6 +23,7 @@ import {
   PendingPaymentActions,
   usePendingPayment,
 } from "@/components/billing/pending-payment-actions";
+import { CheckoutTermsLinks } from "@/components/billing/checkout-terms-links";
 
 /** The running package as "Add slots" offers it (api.get_my_package_add_offer). */
 export interface PackageAddOffer {
@@ -72,15 +73,7 @@ function Consent({
         className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer rounded border-input accent-brand-green-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:accent-brand-green-400"
       />
       <label htmlFor={id} className="cursor-pointer text-sm leading-6 text-foreground/80">
-        {children}{" "}
-        <Link
-          href="/terms#refunds"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="font-medium text-brand-green-700 underline underline-offset-2 dark:text-brand-gold-300"
-        >
-          Refunds
-        </Link>
+        {children} <CheckoutTermsLinks />
       </label>
     </div>
   );

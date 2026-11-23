@@ -3,7 +3,9 @@ import {
   getConfiguredContactRows,
   getConfiguredIdentityRows,
   getConfiguredLegalIdentityRows,
+  getConfiguredLegalNoticeRows,
   getTrustPublicConfig,
+  registeredAddressNote,
 } from "./trust-public-config";
 
 vi.mock("server-only", () => ({}));
@@ -45,6 +47,28 @@ describe("trust public config", () => {
       label: "POPIA contact",
       value: "privacy@verifymzansi.com",
     });
+  });
+
+  it("shows the director and Information Officer once when they are the same person", () => {
+    const rows = getConfiguredLegalNoticeRows(getTrustPublicConfig());
+
+    expect(rows).toContainEqual({
+      label: "Director and Information Officer",
+      value: "Senzo Mqondisi Mhlongo",
+    });
+    expect(rows.filter((row) => row.value === "Senzo Mqondisi Mhlongo")).toHaveLength(1);
+    expect(rows.map((row) => row.label)).not.toContain("Responsible officer");
+    expect(registeredAddressNote()).toBe("Our registered address, as recorded at CIPC");
+  });
+
+  it("keeps two rows when the director and Information Officer differ", () => {
+    vi.stubEnv("VERIFYMZANSI_INFORMATION_OFFICER_NAME", "Synthetic Officer");
+
+    const rows = getConfiguredLegalNoticeRows(getTrustPublicConfig());
+
+    expect(rows).toContainEqual({ label: "Director", value: "Senzo Mqondisi Mhlongo" });
+    expect(rows).toContainEqual({ label: "Information Officer", value: "Synthetic Officer" });
+    expect(rows.map((row) => row.label)).not.toContain("Director and Information Officer");
   });
 
   it("renders configured legal identity fields", () => {

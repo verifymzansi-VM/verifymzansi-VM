@@ -30,6 +30,7 @@ describe("buildPaymentReceiptEmail", () => {
         ].join("\n"),
         "Your bank statement shows the bank reference. Questions about this payment? Reply to this email and include the invoice number.",
         `See your slots: ${APP}/dashboard/slots`,
+        "VERIFYMZANSI (PTY) LTD · Registration number 2026/155305/07",
       ].join("\n\n")
     );
   });
@@ -43,6 +44,8 @@ describe("buildPaymentReceiptEmail", () => {
       "R 69.00",
       "abcdef12345678",
       `${APP}/dashboard/slots`,
+      // Every email's footer names the company and its number (ECTA s43).
+      "VERIFYMZANSI (PTY) LTD · Registration number 2026/155305/07",
     ])
       expect(html).toContain(shown);
     expect(html).not.toContain("/billing");
