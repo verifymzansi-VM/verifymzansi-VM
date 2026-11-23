@@ -7648,6 +7648,10 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   and `20261122111209_term_ending_notice.sql` (fingerprint.sql) matched the full
   replay (except the known schema grant difference)
 
-- `20261122182304_free_credit_reminder.sql`: pending
+- `20261122182304_free_credit_reminder.sql`: applied 2026-11-23 22:00 UTC;
+  owner-approved, apply-first (pull request #355); update sha256 starting
+  479d18bf; preflight after: already applied; production fingerprint after it
+  (fingerprint.sql) matched the full replay (except the known schema grant
+  difference)
 
 <!-- applied-register:end -->
