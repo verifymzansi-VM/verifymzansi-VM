@@ -9,6 +9,8 @@ import type * as HiddenFeatures from "@/lib/hidden-features";
 const switches = vi.hoisted(() => ({ SHOW_POST_COPY: false }));
 vi.mock("@/lib/hidden-features", async (importOriginal) => ({
   ...(await importOriginal<typeof HiddenFeatures>()),
+  // Not about view totals: no totals read (post-engagement.test.ts tests it).
+  SHOW_ENGAGEMENT_TOTALS: false,
   get SHOW_POST_COPY() {
     return switches.SHOW_POST_COPY;
   },

@@ -35,8 +35,9 @@ export default defineConfig({
   // The picture checks run only inside the pinned Playwright image
   // (scripts/foundation-visual.mjs, playwright.visual.config.ts).
   // launch-config.spec.ts needs the launch-configuration build and runs only
-  // in playwright.launch-config.config.ts.
-  testIgnore: ["visual-regression.spec.ts", "launch-config.spec.ts"],
+  // in playwright.launch-config.config.ts, as does owner-pictures.spec.ts
+  // (pictures for the owner, kept in that lane's artifact).
+  testIgnore: ["visual-regression.spec.ts", "launch-config.spec.ts", "owner-pictures.spec.ts"],
   globalSetup: "./e2e/foundation/global.setup.ts",
   outputDir: "test-results/foundation",
   fullyParallel: false,

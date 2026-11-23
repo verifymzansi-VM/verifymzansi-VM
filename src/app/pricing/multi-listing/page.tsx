@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { ArrowRight, LockKeyhole, ReceiptText, Users } from "lucide-react";
 import { BrandSurface } from "@/components/brand";
 import { MultiListingPlans } from "@/components/billing/multi-listing-plans";
@@ -14,7 +13,6 @@ import {
   PACKAGE_POSTS_PER_SLOT_PER_30_DAYS,
   PACKAGE_SLOT_PRICE_CENTS_PER_30_DAYS,
 } from "@/lib/billing/slot-packages";
-import { readPackagesOnSale } from "@/lib/foundation/slot-package-offer";
 import { SHOW_PACKAGE_TEAMS } from "@/lib/hidden-features";
 
 export const dynamic = "force-dynamic";
@@ -42,13 +40,12 @@ const STEPS = [
 /**
  * The page a dealer, agency or shop lands on from the posting flow, billing,
  * pricing and advertise pages: buy a Multi-listing package (roadmap P4a, the
- * owner's decisions of 14 November 2026). Hidden (not found) while packages
- * are not on sale: the owner's switch in the database, off until business
- * tools P5-P7 pass.
+ * owner's decisions of 14 November 2026). Always shown (launch checklist
+ * item 71: no visible link leads to a 404). Buying still needs the owner's
+ * switch in the database (private.slot_package_sales); while it is off, the
+ * package checkout says packages are not on sale yet and refuses payment.
  */
 export default async function MultiListingPage() {
-  const offer = await readPackagesOnSale();
-  if (!offer) notFound();
   const onlineMaxCents = await readOnlinePaymentMaxCents();
   const heroPoints = [
     { icon: ReceiptText, label: "Does not renew automatically" },

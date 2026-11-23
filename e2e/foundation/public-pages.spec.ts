@@ -1,6 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { readTestCopy } from "./support/test-copy";
-import { switchOn } from "./support/switches";
 
 // Public pages of the restored website in foundation mode: the checks of the
 // stub suite's smoke.spec.ts and golden.spec.ts that need no account or data,
@@ -441,14 +440,8 @@ test.describe("pricing and organisations", () => {
     await expect(main.getByRole("radio")).toHaveCount(0);
     await expect(main).toContainText("Market, Business or Tourism");
     await expect(main).toContainText("Up to 4 posts per 30 days");
-    // The tab row follows PACKAGES_ON_SALE (support/switches.ts): none while
-    // Individual slots are the only offer on sale, as in production; in the
-    // launch lane an Individual and a Multi-listing tab, and the Multi-listing
-    // tab shows the package price and leads to its page.
-    if (!switchOn("PACKAGES_ON_SALE")) {
-      await expect(main.getByRole("tablist")).toHaveCount(0);
-      return;
-    }
+    // PACKAGES_ON_SALE is on: an Individual and a Multi-listing tab, and the
+    // Multi-listing tab shows the package price and leads to its page.
     const tabs = main.getByRole("tablist", { name: "Offers" });
     await expect(tabs).toBeVisible();
     await expect(tabs.getByRole("tab")).toHaveText(["Individual", "Multi-listing"]);
