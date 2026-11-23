@@ -64,9 +64,16 @@ const publicConfigRows = [
   label: string;
 }[];
 
-function getConfiguredRows(config: TrustPublicConfig, group: PublicConfigRowGroup) {
+function getConfiguredRows(
+  config: TrustPublicConfig,
+  group: PublicConfigRowGroup,
+  omit: readonly (keyof TrustPublicConfig)[] = []
+) {
   return publicConfigRows.flatMap((row): Array<{ label: string; value: string }> => {
-    if (!(row.groups as readonly PublicConfigRowGroup[]).includes(group)) {
+    if (
+      !(row.groups as readonly PublicConfigRowGroup[]).includes(group) ||
+      omit.includes(row.key)
+    ) {
       return [];
     }
 
@@ -112,6 +119,25 @@ export function getConfiguredLegalIdentityRows(config = getTrustPublicConfig()) 
   return getConfiguredRows(config, "legal");
 }
 
+/**
+ * The legal identity rows for the Terms and the PAIA manual: the director and
+ * the Information Officer share one row when they are the same person, so the
+ * name is shown once.
+ */
+export function getConfiguredLegalNoticeRows(config = getTrustPublicConfig()) {
+  const rows = getConfiguredRows(config, "legal", ["responsibleOfficer", "informationOfficerName"]);
+  const director = config.responsibleOfficer;
+  const officer = config.informationOfficerName;
+  if (director && director === officer) {
+    return [...rows, { label: "Director and Information Officer", value: director }];
+  }
+  return [
+    ...rows,
+    ...(director ? [{ label: "Director", value: director }] : []),
+    ...(officer ? [{ label: "Information Officer", value: officer }] : []),
+  ];
+}
+
 export function getConfiguredContactRows(config = getTrustPublicConfig()) {
   return getConfiguredRows(config, "contact");
 }
@@ -120,6 +146,6 @@ export function getConfiguredContactRows(config = getTrustPublicConfig()) {
  * Where legal documents reach us. Pages name the registered address as
  * recorded at CIPC and never print a street address.
  */
-export function registeredAddressNote(config = getTrustPublicConfig()) {
-  return `Our registered address, as recorded at CIPC (registration number ${config.cipcNumber ?? COMPANY_REGISTRATION_NUMBER})`;
+export function registeredAddressNote() {
+  return "Our registered address, as recorded at CIPC";
 }

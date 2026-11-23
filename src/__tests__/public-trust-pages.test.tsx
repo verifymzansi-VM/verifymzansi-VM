@@ -129,9 +129,24 @@ describe("public trust pages", () => {
       screen.getByText("Private company, registered in South Africa with CIPC")
     ).toBeInTheDocument();
     expect(screen.getByText("verifymzansi.com")).toBeInTheDocument();
+    // Legal notices go to legal@; the registered address is only named, and
+    // the registration number is not repeated in it.
     expect(
-      screen.getByText(/as recorded at CIPC \(registration number 2026\/155305\/07\)/)
+      screen.getByText(
+        "Our registered address, as recorded at CIPC. Legal notices may also be sent by email to legal@verifymzansi.com; we confirm receipt."
+      )
     ).toBeInTheDocument();
+    expect(document.body.textContent?.split("2026/155305/07")).toHaveLength(2);
+    // The director is also the Information Officer: one row, the name once.
+    expect(screen.getByText("Director and Information Officer")).toBeInTheDocument();
+    expect(document.body.textContent?.split("Senzo Mqondisi Mhlongo")).toHaveLength(2);
+    for (const label of ["Responsible officer", "Information Officer", "Directors"]) {
+      expect(screen.queryByText(label)).not.toBeInTheDocument();
+    }
+    expect(screen.getByRole("link", { name: "legal@verifymzansi.com" })).toHaveAttribute(
+      "href",
+      "mailto:legal@verifymzansi.com"
+    );
     // The registered address is only named; no street address row is shown.
     expect(screen.queryByText("Registered address")).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Reporting a post" })).toBeInTheDocument();
@@ -192,6 +207,13 @@ describe("public trust pages", () => {
     expect(screen.getByText("Deputy Information Officer")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Updates to this manual" })).toBeInTheDocument();
     expect(screen.getByText("2026/155305/07")).toBeInTheDocument();
+    // Each fact once: the registration number is not repeated in the address,
+    // and the director and Information Officer share one row.
+    expect(document.body.textContent?.split("2026/155305/07")).toHaveLength(2);
+    expect(screen.getByText("Our registered address, as recorded at CIPC")).toBeInTheDocument();
+    expect(screen.getByText("Director and Information Officer")).toBeInTheDocument();
+    expect(document.body.textContent?.split("Senzo Mqondisi Mhlongo")).toHaveLength(2);
+    expect(screen.queryByText("Responsible officer")).not.toBeInTheDocument();
     expect(screen.getByText(/Information Regulator South Africa/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Open data-subject request form/i })).toHaveAttribute(
       "href",

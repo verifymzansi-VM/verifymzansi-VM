@@ -5,8 +5,9 @@ import { Mail } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { LegalBlocks, LegalDocument, type LegalSection } from "@/components/safety/legal-document";
+import { LEGAL_CONTACT_EMAIL } from "@/lib/contact-email";
 import {
-  getConfiguredLegalIdentityRows,
+  getConfiguredLegalNoticeRows,
   getTrustPublicConfig,
   registeredAddressNote,
 } from "@/lib/trust-public-config";
@@ -20,7 +21,7 @@ export const metadata = {
 
 export default async function TermsPage() {
   const trustConfig = getTrustPublicConfig();
-  const legalRows = getConfiguredLegalIdentityRows(trustConfig);
+  const legalRows = getConfiguredLegalNoticeRows(trustConfig);
   let published: Awaited<ReturnType<typeof readCurrentPublishedPostingTerms>> = null;
   if (process.env.FOUNDATION_SUPABASE_URL) {
     try {
@@ -43,17 +44,16 @@ export default async function TermsPage() {
   const textSections = published?.sections ?? buildTermsTextSections(trustConfig);
   // ECTA s43(1): the details the registered identity rows do not already give.
   // The registered address is named (as recorded at CIPC), never printed.
-  const registeredAddress = registeredAddressNote(trustConfig);
+  const registeredAddress = registeredAddressNote();
   const aboutRows = [
     ...legalRows,
     {
       label: "Legal status",
       value: "Private company, registered in South Africa with CIPC",
     },
-    { label: "Directors", value: "Senzo Mqondisi Mhlongo" },
     {
       label: "Address for legal notices",
-      value: `${registeredAddress}. Legal notices may also be sent by email to ${trustConfig.supportEmail}; we confirm receipt.`,
+      value: `${registeredAddress}. Legal notices may also be sent by email to ${LEGAL_CONTACT_EMAIL}; we confirm receipt.`,
     },
     {
       label: "Phone",
@@ -124,11 +124,11 @@ export default async function TermsPage() {
               View Privacy Policy
             </Link>
             <a
-              href="mailto:legal@verifymzansi.com"
+              href={`mailto:${LEGAL_CONTACT_EMAIL}`}
               className="inline-flex min-h-11 items-center gap-2 rounded-sm text-sm font-semibold text-brand-green-700 underline underline-offset-4 hover:text-brand-green-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:text-brand-gold-300 dark:hover:text-brand-gold-100"
             >
               <Mail className="h-4 w-4" aria-hidden="true" />
-              legal@verifymzansi.com
+              {LEGAL_CONTACT_EMAIL}
             </a>
           </div>
         </div>

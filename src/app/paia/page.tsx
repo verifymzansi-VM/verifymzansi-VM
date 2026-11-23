@@ -4,7 +4,7 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { LegalBlocks, LegalDocument, type LegalSection } from "@/components/safety/legal-document";
 import {
-  getConfiguredLegalIdentityRows,
+  getConfiguredLegalNoticeRows,
   getTrustPublicConfig,
   registeredAddressNote,
 } from "@/lib/trust-public-config";
@@ -122,7 +122,7 @@ const MANUAL_TEXT = [
 
 export default function PaiaManualPage() {
   const trustConfig = getTrustPublicConfig();
-  const legalRows = getConfiguredLegalIdentityRows(trustConfig);
+  const legalRows = getConfiguredLegalNoticeRows(trustConfig);
   // The Information Regulator's template, "Key contact details".
   const contactRows = [
     ...legalRows,
@@ -134,7 +134,7 @@ export default function PaiaManualPage() {
     },
     {
       label: "Physical address",
-      value: registeredAddressNote(trustConfig),
+      value: registeredAddressNote(),
     },
     {
       label: "Postal address",
