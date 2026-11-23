@@ -255,4 +255,23 @@ describe("MySlots", () => {
     expect(screen.getByText(/of 25 Individual slots until 31 May 2027/)).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Buy a slot" })).toBeNull();
   });
+  it("names free credits from VerifyMzansi with their posts and end date, never renewable", () => {
+    render(
+      <MySlots
+        now={now}
+        buyHref={buyHref}
+        individual={individual}
+        slots={[
+          slot({ source: "free_credit", individual: false, label: null, places: 1 }),
+          slot({ id: uuid(4), source: "free_credit", individual: false, label: null, places: 3 }),
+        ]}
+      />
+    );
+    const [one, three] = screen.getAllByTestId("my-slot");
+    expect(within(one).getByText("Free credits from VerifyMzansi: 1 post")).toBeInTheDocument();
+    expect(within(one).getByText("Ends 10 December 2026")).toBeInTheDocument();
+    expect(within(three).getByText("Free credits from VerifyMzansi: 3 posts")).toBeInTheDocument();
+    expect(within(three).getByText("3 places empty")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Renew/ })).toBeNull();
+  });
 });

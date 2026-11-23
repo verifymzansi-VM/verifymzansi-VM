@@ -387,3 +387,36 @@ export function assertDriftRefused(kit, { label, signatures, rows: expected }) {
   }
   assert.equal(fingerprint(), before);
 }
+
+/**
+ * Posting helpers shared by the slot behaviour checks: a post's row (without
+ * its description), a draft Market listing (needs vmtest.draft), submitting it
+ * as its owner, which entitlement funds it, a reviewer's claim and approval,
+ * and the owner's free first post records.
+ */
+export function postReviewHelpers({ q, json, member, staff, count }) {
+  const row = (id) =>
+    json(`select to_jsonb(p)-'description' from private.posts p where p.id='${id}';`);
+  return {
+    row,
+    draft: (owner) => q(`select vmtest.draft('${owner.id}');`),
+    submitSql: (owner, id) => member(owner, `select api.submit_post('${id}',${row(id).revision});`),
+    fundedBy: (id) =>
+      q(
+        `select coalesce((select entitlement_id::text from private.post_activations where post_id='${id}' and released_at is null),'');`
+      ),
+    approveSql: (who, id) => {
+      const lease = json(staff(who, `select api.claim_queue_item('post','${id}');`));
+      return staff(
+        who,
+        `select api.moderate_post(p_post_id=>'${id}',p_expected_revision=>${row(id).revision},p_decision=>'approve',
+        p_reason=>null,p_claim_generation=>'${lease.claim_generation}',p_claim_nonce=>'${lease.claim_nonce}');`
+      );
+    },
+    freeFirstPost: (person) => ({
+      requests: count(`private.intro_trial_requests where owner_id='${person.id}'`),
+      identities: count(`private.trial_identities where owner_id='${person.id}'`),
+      trials: count(`private.entitlements where owner_id='${person.id}' and source='intro_trial'`),
+    }),
+  };
+}

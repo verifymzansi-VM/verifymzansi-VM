@@ -6235,6 +6235,82 @@
       "authority": "Current live member: the ids of their own unfinished copies (drafts made by api.copy_my_post) and when each will be deleted (14 days after its last change); nothing else."
     },
     {
+      "name": "give_free_credit",
+      "updates": ["updates/20261122130744_free_credits.sql"],
+      "arguments": [
+        {
+          "name": "p_email",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_posts",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_days",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current free_credit:give capability (admin role; authenticator code from the last 15 minutes): gives the member with this email (an active, confirmed account with a current accepted ID review; never the admin's own account or an account ever reviewed as the same person; the admin needs a current accepted ID review of their own; refused while the member already has a running gift) a free-credit entitlement of 1 to 6 posts for 1 to 30 days from now, with a reason of 5 to 200 characters; area null, 4 posts going live per post per 30 days, 10 photos and 1 video, no add-ons, no payment, never renewed; recorded in the append-only gift record."
+    },
+    {
+      "name": "extend_free_credit",
+      "updates": ["updates/20261122130744_free_credits.sql"],
+      "arguments": [
+        {
+          "name": "p_credit_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_days",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current free_credit:give capability (admin role; authenticator code from the last 15 minutes): adds 1 to 30 days to a free-credit entitlement, from its current end while it runs, otherwise from now, with a reason of 5 to 200 characters; the member must still be active and ID-verified and not the admin; refuses a revoked gift (an erased account); recorded in the append-only gift record."
+    },
+    {
+      "name": "list_free_credits",
+      "updates": ["updates/20261122130744_free_credits.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current free_credit:view capability (admin role; 12-hour authenticator rule): the latest 500 free-credit entitlements, newest first: id, the member's masked email (null after erasure), posts, start, end, active or ended, and the all-time views of the posts each funded; never the reason, the admin or an unmasked address."
+    },
+    {
       "name": "showroom_feed",
       "updates": ["updates/20261122023000_fair_showroom.sql"],
       "arguments": [

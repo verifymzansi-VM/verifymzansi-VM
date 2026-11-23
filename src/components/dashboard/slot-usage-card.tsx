@@ -33,6 +33,7 @@ const SOURCE_LABELS: Record<string, string> = {
   FOUNDING_ORGANISATION: "Founding Organisation",
   SPONSORED_ORGANISATION_MEMBER: "Sponsored by an organisation",
   ADMIN_GRANT: "VerifyMzansi grant",
+  FREE_CREDIT: "Free credits from VerifyMzansi",
 };
 
 const AREA_LABELS: Record<string, string> = {
@@ -93,8 +94,10 @@ export function SlotUsageCard({ entries }: { entries: SlotUsageEntry[] }) {
                     {entry.sponsored ? <Badge variant="secondary">Sponsored</Badge> : null}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {SOURCE_LABELS[entry.source] ?? entry.source} ·{" "}
-                    {entry.area ? AREA_LABELS[entry.area] : "All sections"}
+                    {entry.source === "FREE_CREDIT"
+                      ? "Never charged"
+                      : (SOURCE_LABELS[entry.source] ?? entry.source)}{" "}
+                    · {entry.area ? AREA_LABELS[entry.area] : "All sections"}
                   </p>
                   <div className="mt-2 flex items-baseline justify-between text-sm">
                     <span>
