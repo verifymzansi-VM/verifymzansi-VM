@@ -154,6 +154,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 91. Email before a long paid term ends (item 68b) (no file rows: email only) | awaiting owner | Members with a paid slot or package of 180 days or more get one email about 12 weeks before it ends: the end date, that nothing renews and nothing more is charged, and how to buy again (My slots for an Individual slot, otherwise Billing; an Individual slot whose post moves into the member's running Multi-listing package is told only that; a banned or suspended member is told only that nothing more is needed). Nothing changes on any page. |
 | 92. Registered street address no longer shown (no file rows: data setting only) | approved by owner 2026-11-22 | Trust & Safety (and the Terms and PAIA pages, which list the same company details) no longer show a 'Registered address' row with the street address. The other company details (registered name, trading name, CIPC number, officers, contacts) are unchanged. |
 | 93. Free credits for businesses you recruit (item 70) | awaiting owner (with the group 93 part of 4 rows elsewhere) | Admins only: a 'Free credits' page under Commercial in the staff menu to give an ID-verified member 1 to 6 free posts for 1 to 30 days with a reason, list every gift (masked email, posts, end date, Active or Ended, views) and extend one by 1 to 30 days. Members with a gift: 'Free credits from VerifyMzansi: 1 post' with its end date on My slots, and 'Free credits from VerifyMzansi' on the posting slots card of My posts. |
+| 94. Email before a free credit ends (item 70b) (no file rows: email only) | approved by owner 2026-11-23 (answer: 'Yes, approve both'), with 'cover' in place of 'pay for' | Members with free credits from VerifyMzansi get one email 3 days before they end: the end date, that the posts they cover are then hidden and, unless reactivated in another slot, deleted 3 days later with their photos and videos, and a 'See my slots' button. A gift extended after the email gets a new one 3 days before its new end; nothing is sent for a gift ended early or to a banned, suspended or closed account. Nothing changes on any page. |
 
 Questions for the owner:
 
@@ -3741,6 +3742,36 @@ Pictures (not published): `screenshots/hide-address/` (desktop 1280 and phone
 375, before and after; the address is blurred in the before pictures).
 
 Decision: approved by owner 2026-11-22 (answer: 'Approve').
+
+### 94. Email before a free credit ends (item 70b)
+
+Email only: no file in the checked scope changes, so this group has no file
+rows. Launch checklist item 70b. Database update
+`20261122182304_free_credit_reminder.sql` (pending, apply first) queues one
+email 3 days before a free credit (group 93) ends, once per end: a gift extended
+after its email gets a new one 3 days before its new end. Nothing is sent for a
+gift ended early, or to a member who is banned, suspended or closed. The words
+are new (owner rule 4). Text outside the checked scope:
+`src/lib/services/email.ts` (`free_credit_reminder`,
+`FREE_CREDIT_REMINDER_BODY`).
+
+Subject: 'Your free credits end soon'.
+
+> Your free credits from VerifyMzansi end on 20 December 2026 at 12:00 (South
+> African time).
+>
+> The posts they cover are then hidden. Unless you reactivate them in another
+> slot, they are deleted 3 days later, with their photos and videos.
+
+Button 'See my slots' (to `/dashboard/slots`, where the gift is listed). The
+email is not sent without its end date. No renewal, purchase or further gift
+is offered. The footer line stays 'This is an operational update about your
+VerifyMzansi account.' No bell notice is added.
+
+Picture (synthetic data, not published): `screenshots/item70b-reminder/`.
+
+Decision: approved by owner 2026-11-23 (answer: 'Yes, approve both'), with
+'cover' in place of 'pay for'.
 
 <!-- frontend-ledger:end -->
 
