@@ -3728,8 +3728,9 @@ The posting tick on the create forms is unchanged ('I accept the VerifyMzansi
 posting terms, ...'). After the switch every member ticks it once more before
 their next submission or edit, as after earlier Terms changes.
 
-Pictures (not published, synthetic data): `screenshots/item27-terms-v6/` (the
-Terms page and the posting tick, phone 375 and desktop 1280).
+Pictures (synthetic data, not published): still to be taken on the local test
+copy for `screenshots/item27-terms-v6/` (the Terms page and the posting tick,
+phone 375 and desktop 1280).
 
 Decision: awaiting owner.
 
