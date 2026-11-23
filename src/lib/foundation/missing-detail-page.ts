@@ -3,8 +3,6 @@ import type { DetailPage } from "@/lib/routing/detail-pages";
 import { readFoundationPublicOrganisation } from "./organisations";
 import { readFoundationPublicPost } from "./public-post";
 import { foundationServerPublicApi } from "./server-public";
-import { createFoundationServiceApi } from "./service-api";
-import { readFoundationSlotPackageOffer } from "./slot-package-offer";
 
 /**
  * Whether a well-formed detail address names nothing, read before the page
@@ -12,20 +10,18 @@ import { readFoundationSlotPackageOffer } from "./slot-package-offer";
  * after streaming has sent 200). Narrow on purpose:
  *
  * - true only when the read succeeded and found nothing the page would show
- *   (no public post of that page's kinds, no listed organisation, packages not
- *   on sale). The page still makes its own, finer check.
+ *   (no public post of that page's kinds, no listed organisation). The page
+ *   still makes its own, finer check.
  * - false when a read fails or is slow: the page renders as before.
  * - answers that a post or organisation exists are kept for a minute per
  *   server instance, so a busy post costs one extra read a minute, not one per
  *   view. A post that goes offline within that minute shows the page's "not
  *   available" design with 200 until the answer expires, as before. Missing
- *   answers are not kept: a new post is found at once. The packages switch is
- *   kept for a minute either way.
+ *   answers are not kept: a new post is found at once.
  */
 export interface MissingDetailPageReads {
   postKind(id: string): Promise<"listing" | "business" | "event" | null>;
   organisationListed(slug: string): Promise<boolean>;
-  packagesOnSale(): Promise<boolean>;
 }
 
 const ANSWER_TTL_MS = 60_000;
@@ -40,7 +36,6 @@ const POST_PAGE_KINDS: Record<"listing" | "business" | "tourism", readonly strin
 };
 
 const remembered = new Map<string, { value: string; until: number }>();
-let packages: { onSale: boolean; until: number } | null = null;
 
 const defaultReads: MissingDetailPageReads = {
   async postKind(id) {
@@ -48,10 +43,6 @@ const defaultReads: MissingDetailPageReads = {
   },
   async organisationListed(slug) {
     return (await readFoundationPublicOrganisation(foundationServerPublicApi(), { slug })) !== null;
-  },
-  async packagesOnSale() {
-    const offer = await readFoundationSlotPackageOffer(createFoundationServiceApi());
-    return offer.on_sale && offer.plans.length > 0;
   },
 };
 
@@ -88,13 +79,6 @@ export async function isMissingDetailPage(
   now: () => number = Date.now
 ): Promise<boolean> {
   try {
-    if (page.area === "multi-listing") {
-      if (packages && packages.until > now()) return !packages.onSale;
-      const onSale = await withinTimeout(() => reads.packagesOnSale());
-      packages = { onSale, until: now() + ANSWER_TTL_MS };
-      return !onSale;
-    }
-
     if (page.area === "organisation") {
       const key = `organisation:${page.slug}`;
       if (recall(key, now())) return false;
@@ -119,5 +103,4 @@ export async function isMissingDetailPage(
 /** Tests only: forget remembered answers. */
 export function forgetMissingDetailPageAnswers() {
   remembered.clear();
-  packages = null;
 }

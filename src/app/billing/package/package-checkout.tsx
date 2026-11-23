@@ -32,11 +32,16 @@ import {
 } from "@/components/billing/pending-payment-actions";
 import { CheckoutTermsLinks } from "@/components/billing/checkout-terms-links";
 
-/** One package term on sale (api.get_slot_package_offer). */
+/** One package term: its plan (api.get_slot_package_offer) while packages
+ * are on sale, or null while the owner's sales switch is off, when the page
+ * shows the three fixed terms and nothing can be bought. */
 export interface PackageCheckoutTerm {
-  planId: string;
+  planId: string | null;
   days: PackageTerm;
 }
+
+/** Shown while packages are not on sale (the checkout route answers the same). */
+const PACKAGES_NOT_ON_SALE = "Multi-listing packages are not on sale yet.";
 
 /** Why the member cannot buy a package now. */
 export type PackageCheckoutBlock = "id_review" | "has_package";
@@ -64,8 +69,9 @@ interface InvoiceRequested {
  * days. Above Ozow's maximum for one payment (or 100 slots) the package is
  * bought by invoice: the member ticks the invoice's cooling-off box and asks
  * for it here (P4e); staff issue it and it is paid from Invoices. The
- * database applies every rule again; this page is shown only while packages
- * are on sale.
+ * database applies every rule again. While packages are not on sale the page
+ * is still shown (launch checklist item 71); paying is refused by the route
+ * and asking for an invoice says packages are not on sale yet.
  */
 export function PackageCheckout({
   terms,
@@ -178,6 +184,12 @@ export function PackageCheckout({
 
   async function askForInvoice() {
     if (!canAskInvoice || pending.current || !term || totalCents === null || slots === null) return;
+    if (term.planId === null) {
+      // Not on sale: no plan to ask for (the invoice route would refuse too).
+      setError(PACKAGES_NOT_ON_SALE);
+      setNeedsSignIn(false);
+      return;
+    }
     pending.current = true;
     setState("submitting");
     setError(null);
@@ -343,7 +355,7 @@ export function PackageCheckout({
                   const active = entry.days === days;
                   return (
                     <label
-                      key={entry.planId}
+                      key={entry.days}
                       className={cn(
                         "flex h-11 cursor-pointer items-center justify-center rounded-full text-sm font-semibold transition-colors focus-within:ring-2 focus-within:ring-ring",
                         active

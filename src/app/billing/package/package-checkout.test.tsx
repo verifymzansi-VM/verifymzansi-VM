@@ -155,6 +155,43 @@ describe("PackageCheckout (P4a)", () => {
     expect(screen.getByRole("button", { name: "Ask for an invoice" })).toBeEnabled();
   });
 
+  it("while packages are not on sale: three terms, no plan, and the route's refusal", async () => {
+    const offSale = [30, 90, 180].map((days) => ({ planId: null, days: days as 30 | 90 | 180 }));
+    const fetchMock = vi.fn(async () => ({
+      ok: false,
+      status: 403,
+      json: async () => ({ error: "Multi-listing packages are not on sale yet." }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { unmount } = render(
+      <PackageCheckout
+        terms={offSale}
+        initialSlots={25}
+        initialDays={90}
+        onlineMaxCents={130_000}
+      />
+    );
+    // "Ask for an invoice" says so on the page and calls no route.
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: /My slots start as soon as this invoice/ })
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Ask for an invoice" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Multi-listing packages are not on sale yet."
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+    unmount();
+    // "Pay" calls the checkout route, which refuses.
+    render(<PackageCheckout terms={offSale} initialSlots={5} initialDays={30} />);
+    fireEvent.click(screen.getByRole("checkbox", { name: /My slots start now/ }));
+    fireEvent.click(payButton());
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Multi-listing packages are not on sale yet."
+    );
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, { body: string }];
+    expect(JSON.parse(init.body)).toMatchObject({ planId: null, slots: 5 });
+  });
+
   it("pays only after the 'my slots start now' tick, with the total shown", async () => {
     const fetchMock = vi.fn(async () => ({
       ok: true,

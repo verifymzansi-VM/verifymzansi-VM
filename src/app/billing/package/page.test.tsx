@@ -1,17 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import PackageCheckoutPage from "./page";
-import { notFound } from "next/navigation";
 import { readPackagesOnSale } from "@/lib/foundation/slot-package-offer";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
 import { readFoundationMySlotPackage } from "@/lib/foundation/billing-runtime";
 import { readMyUnpaidIndividualInvoices } from "@/lib/foundation/customer-invoices";
 
-vi.mock("next/navigation", () => ({
-  notFound: vi.fn(() => {
-    throw new Error("NEXT_NOT_FOUND");
-  }),
-}));
 vi.mock("@/lib/foundation/slot-package-offer", () => ({ readPackagesOnSale: vi.fn() }));
 vi.mock("@/lib/foundation/server-session", () => ({ readFoundationServerSession: vi.fn() }));
 vi.mock("@/lib/foundation/billing-runtime", () => ({ readFoundationMySlotPackage: vi.fn() }));
@@ -20,16 +14,19 @@ vi.mock("@/lib/foundation/customer-invoices", () => ({
 }));
 vi.mock("./package-checkout", () => ({
   PackageCheckout: (props: {
-    terms: { days: number }[];
+    terms: { days: number; planId: string | null }[];
     initialSlots: number;
     initialDays: number;
     block: string | null;
     unpaidInvoices: string[];
   }) => (
-    <p>
-      {`${props.terms.map((t) => t.days).join("/")} ${props.initialSlots}x${props.initialDays} ${props.block ?? "open"}`}
-      {props.unpaidInvoices.length ? ` unpaid ${props.unpaidInvoices.join(",")}` : ""}
-    </p>
+    <>
+      <p>
+        {`${props.terms.map((t) => t.days).join("/")} ${props.initialSlots}x${props.initialDays} ${props.block ?? "open"}`}
+        {props.unpaidInvoices.length ? ` unpaid ${props.unpaidInvoices.join(",")}` : ""}
+      </p>
+      <p>{`plans ${props.terms.map((t) => t.planId ?? "none").join(",")}`}</p>
+    </>
   ),
 }));
 
@@ -53,10 +50,17 @@ describe("the package checkout page (P4a)", () => {
     } as never);
   });
 
-  it("is not found while packages are not on sale", async () => {
+  it("is shown while packages are not on sale, with the three terms and no plan", async () => {
     vi.mocked(readPackagesOnSale).mockResolvedValue(null);
-    await expect(PackageCheckoutPage(params({}))).rejects.toThrow("NEXT_NOT_FOUND");
-    expect(notFound).toHaveBeenCalled();
+    render(await PackageCheckoutPage(params({})));
+    expect(screen.getByText("30/90/180 25x30 open")).toBeInTheDocument();
+    expect(screen.getByText("plans none,none,none")).toBeInTheDocument();
+  });
+
+  it("passes the plans on sale", async () => {
+    vi.mocked(readPackagesOnSale).mockResolvedValue(offer as never);
+    render(await PackageCheckoutPage(params({})));
+    expect(screen.getByText("plans a,b,c")).toBeInTheDocument();
   });
 
   it("opens with the size and term from the link, within the rules", async () => {

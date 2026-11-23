@@ -8,10 +8,11 @@ import {
 } from "./support/test-copy";
 
 // Launch-configuration smoke (playwright.launch-config.config.ts only): the
-// test copy built with every switch that hides a feature set to its launch
-// value (LAUNCH_VALUES, src/lib/launch-config.ts). Each test opens one page
-// behind a switch that is on at launch, as the person who can see it, and
-// checks that
+// test copy built as on launch day (LAUNCH_VALUES, src/lib/launch-config.ts).
+// The switches that hid features are on in every build since 22 November 2026
+// (apart from two whose features are not built: src/lib/hidden-features.ts);
+// this spec still visits each page that sat behind one. Each test opens one
+// such page, as the person who can see it, and checks that
 //   - the page answers without a server error and is not sent elsewhere (a
 //     hidden staff or member page redirects to its home);
 //   - no console error and no uncaught page error happen while it loads;
@@ -85,11 +86,11 @@ const PAGES: Page_[] = [
     shows: [/Multi-listing/i],
   },
   {
-    feature: "PACKAGES_ON_SALE (and the copy's packages sales switch), SHOW_PACKAGE_TEAMS",
+    feature: "PACKAGES_ON_SALE (and the copy's packages sales switch)",
     path: "/pricing/multi-listing",
     viewer: "visitor",
     heading: /Keep your whole stock live/i,
-    shows: [/You \+ 1 person/],
+    shows: [/R100 per slot per 30 days/],
   },
   {
     feature: "SHOW_ENGAGEMENT_TOTALS",
@@ -126,11 +127,7 @@ const PAGES: Page_[] = [
  * session, so nothing is changed: each must be served and must not fail. */
 const ROUTES: { feature: string; method: "GET" | "POST"; path: string }[] = [
   { feature: "SHOW_ACCOUNT_DELETION", method: "POST", path: "/api/account/delete" },
-  {
-    feature: "SHOW_ORGANISATION_REPORT",
-    method: "GET",
-    path: "/api/organisations/00000000-0000-4000-8000-000000000000/report",
-  },
+  // SHOW_ORGANISATION_REPORT stays off (checklist item 46): its route answers 404.
 ];
 
 /** Staff pages removed for launch (old commercial settings, trial, programme

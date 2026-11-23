@@ -57,18 +57,33 @@ describe("PartnerOverview", () => {
     const band = screen.getByRole("region", { name: "This month" });
     expect(figure(band, "Earned this month")).toBe("R120");
     expect(figure(band, "Next payout")).toBe("R45");
-    expect(within(band).getByText("Includes commission still in its 30-day wait.")).toBeVisible();
+    expect(
+      within(band).getByText("Includes commission still in its waiting period.")
+    ).toBeVisible();
   });
 
-  it("keeps the 30-day wait line when the latest 50 commissions are all from this month", () => {
+  it("keeps the waiting-period line when the latest 50 commissions are all from this month", () => {
     const row = partner().recent[0]!;
     const recent = Array.from({ length: 50 }, (_, i) => ({ ...row, id: `r${i}` }));
     render(
       <PartnerOverview partner={partner({ recent })} appUrl="https://verifymzansi.com" now={NOW} />
     );
     const band = screen.getByRole("region", { name: "This month" });
-    expect(within(band).getByText("Includes commission still in its 30-day wait.")).toBeVisible();
+    expect(
+      within(band).getByText("Includes commission still in its waiting period.")
+    ).toBeVisible();
     expect(within(band).getByText("From your latest 50 commissions.")).toBeVisible();
+  });
+
+  it("states no commission rate or waiting period in numbers (owner decides them before sign-up opens)", () => {
+    const { container } = render(
+      <PartnerOverview partner={partner()} appUrl="https://verifymzansi.com" now={NOW} />
+    );
+    const text = container.textContent ?? "";
+    expect(text).toContain("You earn a share of each qualifying payment.");
+    expect(text).toContain("Commission is pending for a waiting period, then approved");
+    expect(text).not.toMatch(/\d+(\.\d+)?\s*%/);
+    expect(text).not.toMatch(/\d+[- ]days?\b/i);
   });
 
   it("shows progress counts and money by stage", () => {

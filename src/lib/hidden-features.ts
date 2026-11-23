@@ -1,127 +1,117 @@
 /**
- * Features hidden until they work on the live backend (owner's frontend rule 2:
- * a feature may be hidden until it works; each one is listed in
- * FRONTEND-CHANGES.md for the owner to review). Turning one back on is a
- * frontend change that needs the owner's approval.
+ * Switches for features that were hidden until they worked on the live backend
+ * (owner's frontend rule 2; each one is listed in FRONTEND-CHANGES.md).
  *
- * Typed as `boolean`, not as the literal, so the code behind each switch still
- * type-checks and can be switched back on without other edits.
+ * Every switch is on (true) in production and in every build, by the owner's
+ * decision of 22 November 2026: hide nothing while the site is pre-launch (sign-up
+ * is invite only and the owner checks each function before inviting anyone).
+ * Two stay off because what they show is not built (the review of launch
+ * checklist item 71): SHOW_ORGANISATION_REPORT and SHOW_PACKAGE_TEAMS.
+ * Changing a switch is a frontend change that needs the owner's approval.
  *
- * Every switch is off (false) in production. LAUNCH_CONFIG_BUILD is true only
- * in the launch-configuration browser-test build of the local test copy, where
- * each switch takes its launch-day value from LAUNCH_VALUES
- * (src/lib/launch-config.ts); a production build cannot be made with it.
+ * Typed as `boolean`, not as the literal, so the code on both sides of each
+ * switch still type-checks and a switch can be turned off without other edits.
  */
-
-import { LAUNCH_CONFIG_BUILD, LAUNCH_VALUES } from "@/lib/launch-config";
 
 /**
  * View counts, the like button and like totals. The live backend stores them
- * from database update 20261119172135_post_views_and_likes.sql; while this is
+ * from database update 20261119172135_post_views_and_likes.sql. If switched
  * off, the view and like routes answer 204 without storing anything and no
- * page reads the totals. On at launch (LAUNCH_VALUES), once the owner approves
- * showing them (frontend ledger, group "awaiting owner").
+ * page reads the totals.
  */
-export const SHOW_ENGAGEMENT_TOTALS: boolean =
-  LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_ENGAGEMENT_TOTALS;
+export const SHOW_ENGAGEMENT_TOTALS: boolean = true;
 
 /**
  * The member "Performance" page (/dashboard/metrics) and the links to it. The
- * page reads statistics the live backend does not record, so it was broken or
- * empty. While hidden, its address leads to the dashboard. To be rebuilt
- * after launch (OD-07).
+ * page reads the live backend's api.get_my_post_performance (frontend ledger
+ * group 81); it starts empty until views are recorded. If switched off, its
+ * address leads to the dashboard.
  */
-export const SHOW_OWNER_METRICS: boolean = LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_OWNER_METRICS;
+export const SHOW_OWNER_METRICS: boolean = true;
 
 /**
  * The "Detect province and city" button in the verification location step.
  * Its route (/api/verification/location/detect) suggests a listed province
- * and city from Cloudflare's request location and saves nothing. Hidden until
- * launch (owner decision: shown at launch; frontend ledger group 58);
- * meanwhile members pick their province and city from the list.
+ * and city from Cloudflare's request location and saves nothing (frontend ledger
+ * group 58). Members can still pick their province and city from the list.
  */
-export const SHOW_LOCATION_DETECTION: boolean =
-  LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_LOCATION_DETECTION;
+export const SHOW_LOCATION_DETECTION: boolean = true;
 
 /**
  * Staff "Operations health" page (/admin/operations), its menu entry and the
  * links to it on the staff home. The page reads the live backend's staff
  * command api.get_staff_operations_health (database update
  * 20261120163500_staff_operations_health.sql): late scheduled jobs, stuck
- * emails and notices, payment problems and blocked deletions. Off until launch
- * (on at launch in LAUNCH_VALUES; frontend ledger group 70). While hidden, the
- * page's address leads to the staff home.
+ * emails and notices, payment problems and blocked deletions (frontend ledger
+ * group 70). If switched off, the page's address leads to the staff home.
  */
-export const SHOW_STAFF_OPERATIONS: boolean =
-  LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_STAFF_OPERATIONS;
+export const SHOW_STAFF_OPERATIONS: boolean = true;
 
 /**
  * The "Performance" tab of an organisation's dashboard, with its two "CSV"
  * download links, and the route behind them (/api/organisations/<id>/report).
- * The live backend has no programme report yet, so the tab held only the
- * links, and the downloads failed. While hidden, the route answers 404.
+ * Off: the report is not built on the live database yet; checklist item 46
+ * ("Sponsors, part B: the pilot", which includes report version 1).
+ * Its route still reads the retired backend, so the downloads would fail.
+ * While off, the tab is hidden and the route answers 404.
  */
-export const SHOW_ORGANISATION_REPORT: boolean =
-  LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_ORGANISATION_REPORT;
+export const SHOW_ORGANISATION_REPORT: boolean = false;
 
 /**
  * "Delete account" on the profile's Account tab, its confirmation dialog, and
  * the route behind it (/api/account/delete), which closes the account through
- * api.close_my_account (M1.6c). Hidden until the owner approves it (frontend
- * ledger group 43). While hidden, the tab says to send a data request instead
- * and the route answers 404.
+ * api.close_my_account (M1.6c). Frontend ledger group 43. If
+ * switched off, the tab says to send a data request instead and the route
+ * answers 404.
  */
-export const SHOW_ACCOUNT_DELETION: boolean =
-  LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_ACCOUNT_DELETION;
+export const SHOW_ACCOUNT_DELETION: boolean = true;
 
 /**
  * Paid add-ons (Urgent, Boost, Featured) where they are offered or listed as
  * included: the "Get more eyes on a post" section on Advertise and the
  * "Urgent label add-on" line on the plan cards, and "Boost and Featured" on the
  * showroom help page. Add-on sales are paused
- * (ADDON_SALES_ENABLED) and paid add-ons do not deliver yet (roadmap M1.10),
- * so the pages promised something nobody could buy.
+ * (the runtime switch ADDON_SALES_ENABLED) and paid add-ons do not deliver yet
+ * (roadmap M1.10), so these pages describe something that cannot be bought yet.
  */
-export const SHOW_PAID_ADDONS: boolean = LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_PAID_ADDONS;
+export const SHOW_PAID_ADDONS: boolean = true;
 
 /**
  * The Business Sponsor offer: the sponsor package, founding pilots, sample
  * partner report and sponsor questions on Advertise, and the "Become a
  * Business Sponsor" buttons and call to action on the home page and
- * Business Sponsors page, the sponsor card and fees on the (hidden) pricing
+ * Business Sponsors page, the sponsor card and fees on the pricing
  * package section, and "See programme prices" on an organisation dashboard.
- * The sponsor programme is on hold by the owner's
- * decision, and the Terms (posting-v5) sell no sponsor package. Existing
- * sponsors and the businesses they support are still listed.
+ * The Terms (posting-v5) sell no sponsor package
+ * yet. Existing sponsors and the businesses they support are listed either way.
  */
-export const SHOW_SPONSOR_OFFER: boolean = LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_SPONSOR_OFFER;
+export const SHOW_SPONSOR_OFFER: boolean = true;
 
 /**
- * "You + 1 person (you + 4 from 50 slots)" on the (hidden) Multi-listing page.
- * Package teams are not built yet (roadmap P4c), so a package has one person.
+ * "You + 1 person (you + 4 from 50 slots)" on the Multi-listing page.
+ * Off: package teams are not built yet (checklist item 15; roadmap P4c), so a
+ * package has one person.
  */
-export const SHOW_PACKAGE_TEAMS: boolean = LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_PACKAGE_TEAMS;
+export const SHOW_PACKAGE_TEAMS: boolean = false;
 
 /**
  * The redesigned partner page (/dashboard/partner, frontend ledger group 80):
  * this month's earnings and next payout on the green band, sharing (link,
  * code, WhatsApp, QR download), progress, money and help. The partner
- * programme opens only once the partner agreement is signed, so this stays
- * off at launch too (LAUNCH_VALUES). While off, partners see today's page.
+ * agreement is not signed yet. If switched off, partners see the earlier page.
  */
-export const SHOW_PARTNER_PAGE: boolean = LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_PARTNER_PAGE;
+export const SHOW_PARTNER_PAGE: boolean = true;
 
 /**
  * The storefront of a Multi-listing package (business tools plan section 1,
  * item 17b): "All stock" on the package owner's checked business page, and on
  * each listing in it the business's name and "See all N cars". Reads the live
  * backend's api.get_public_storefront and the search filter 'storefront'
- * (database update 20261121131915_business_storefront.sql). Off until launch
- * switch-on (item 60; frontend ledger group 85): while off, both pages are as
- * before and /api/listings refuses the storefront filters.
+ * (database update 20261121131915_business_storefront.sql). Frontend ledger
+ * group 85. If switched off, both pages are as before and /api/listings
+ * refuses the storefront filters.
  */
-export const SHOW_BUSINESS_STOREFRONT: boolean =
-  LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_BUSINESS_STOREFRONT;
+export const SHOW_BUSINESS_STOREFRONT: boolean = true;
 
 /**
  * Copy a post (business tools plan section 3, item 17b): "More", then "Copy
@@ -130,8 +120,8 @@ export const SHOW_BUSINESS_STOREFRONT: boolean =
  * "Drafts" on My posts, and reviewers see "Copied from".
  * Calls the live backend's api.copy_my_post and
  * api.get_frontend_staff_copy_facts (database update
- * 20261121150309_copy_a_post.sql). Off until launch switch-on (item 60;
- * frontend ledger group 86): while off, My posts, the form and the review
- * queue are as before and /api/listings/[id]/copy answers 404.
+ * 20261121150309_copy_a_post.sql). Frontend ledger group 86. If switched
+ * off, My posts, the form and the review queue are as before and
+ * /api/listings/[id]/copy answers 404.
  */
-export const SHOW_POST_COPY: boolean = LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_POST_COPY;
+export const SHOW_POST_COPY: boolean = true;

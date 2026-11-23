@@ -2,7 +2,6 @@ import type { MarketplaceArea, PlanTier, RetailPlanTier } from "@/types/enums";
 import { formatRandAmount } from "@/lib/utils/format";
 import { getStablePlanId } from "@/lib/constants/plan-ids";
 import { SHOW_PAID_ADDONS } from "@/lib/hidden-features";
-import { LAUNCH_CONFIG_BUILD, LAUNCH_VALUES } from "@/lib/launch-config";
 
 export const ACTIVE_MARKETPLACE_AREAS = [
   "MZANSI_MARKET",
@@ -101,13 +100,15 @@ export const RETAIL_OFFERS: readonly RetailOffer[] = [
 /**
  * Multi-listing and Business Sponsor packages are not sold under posting-v4
  * (Pricing v2: their prices are published only with a terms version that
- * states them). While false, the pricing, multi-listing and Advertise pages
+ * states them). If set to false, the pricing, multi-listing and Advertise pages
  * and the posting flow show no multi-listing plans and no sponsor fees.
  *
- * False in production; in the launch-configuration browser-test build it takes
- * its launch value (true; LAUNCH_VALUES in src/lib/launch-config.ts).
+ * True in production and every build (owner's decision of 22 November 2026:
+ * hide nothing before launch). Selling a package also depends on the
+ * database's packages sales switch (private.slot_package_sales), which only the owner
+ * turns on. Typed as `boolean` so the code for both states still type-checks.
  */
-export const PACKAGES_ON_SALE: boolean = LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.PACKAGES_ON_SALE;
+export const PACKAGES_ON_SALE: boolean = true;
 
 const RETAIL_FEATURES: PlanDefinition["features"] = {
   maxPhotos: 10,

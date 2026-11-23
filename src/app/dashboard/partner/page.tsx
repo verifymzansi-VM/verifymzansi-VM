@@ -85,8 +85,8 @@ function PartnerDashboardContent({
               {appUrl}/?ref={partner.code}
             </p>
             <p className="text-sm text-muted-foreground">
-              Code <strong>{partner.code}</strong> · {partner.rateBps / 100}% of each qualifying
-              payment. Commission is pending for 30 days, then approved if the payment stands.
+              Code <strong>{partner.code}</strong> · A share of each qualifying payment. Commission
+              is pending for a waiting period, then approved if the payment stands.
             </p>
           </section>
 

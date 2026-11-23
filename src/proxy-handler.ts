@@ -234,8 +234,8 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     }
   }
 
-  // Unknown posts and organisations, and the multi-listing page while packages
-  // are not on sale. Their pages call notFound(), but streaming has already
+  // Unknown posts and organisations. Their pages call notFound(), but
+  // streaming has already
   // sent 200 by then, so answer the 404 status here, before rendering. A
   // malformed address costs no read; a well-formed one costs one public read
   // (remembered for a minute when it exists), and a failed read lets the page
