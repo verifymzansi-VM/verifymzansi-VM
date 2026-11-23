@@ -162,9 +162,9 @@ const TERM_ENDING_BODY = {
 /** The free credit reminder's second paragraph: no other slot takes a gift's
  * posts by itself (only an Individual slot's post moves into a Multi-listing
  * package), so they expire with it unless the member reactivates them in
- * another slot (awaiting the owner's approval). */
+ * another slot (approved by the owner 2026-11-23). */
 const FREE_CREDIT_REMINDER_BODY =
-  "The posts they pay for are then hidden. Unless you reactivate them in another slot, they are deleted 3 days later, with their photos and videos.";
+  "The posts they cover are then hidden. Unless you reactivate them in another slot, they are deleted 3 days later, with their photos and videos.";
 /** What the notification job knows about the post a lifecycle notice is about,
  * or, for trial_started, when the introductory trial ends and whether it
  * already pays for a post (a staff or service grant does not), or, for

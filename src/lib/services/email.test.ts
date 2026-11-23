@@ -316,7 +316,7 @@ describe("email service", () => {
     const [message, options] = mockSend.mock.calls.at(-1)!;
     expect(message.subject).toBe("Your free credits end soon");
     expect(message.text).toBe(
-      "Your free credits end soon\n\nYour free credits from VerifyMzansi end on 20 December 2026 at 12:00 (South African time).\n\nThe posts they pay for are then hidden. Unless you reactivate them in another slot, they are deleted 3 days later, with their photos and videos.\n\nSee my slots: https://verifymzansi.com/dashboard/slots"
+      "Your free credits end soon\n\nYour free credits from VerifyMzansi end on 20 December 2026 at 12:00 (South African time).\n\nThe posts they cover are then hidden. Unless you reactivate them in another slot, they are deleted 3 days later, with their photos and videos.\n\nSee my slots: https://verifymzansi.com/dashboard/slots"
     );
     expect(message.html).toContain("20 December 2026 at 12:00 (South African time)");
     expect(message.html).toContain("deleted 3 days later, with their photos and videos");
