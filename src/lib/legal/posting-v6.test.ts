@@ -1,19 +1,13 @@
 // Guard (launch checklist item 27): once posting-v6 is the active version, the
-// Multi-listing package prices and rules and the paid add-on prices the site
-// shows (src/lib/billing/slot-packages.ts, src/lib/constants/pricing.ts) must
-// be the ones the Terms state, and the database catalogue must charge them.
-import { readdirSync, readFileSync } from "node:fs";
+// Multi-listing package prices and rules the site shows
+// (src/lib/billing/slot-packages.ts) must be the ones the Terms state, and the
+// database catalogue must charge them. Paid add-ons are not offered, so
+// posting-v6 does not mention them.
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import manifest from "./terms-documents/catalogue.json";
 import { getPublishedPostingTerms } from "./published-posting-terms";
-import {
-  ADDON_PRICES,
-  BOOST_DURATION_DAYS,
-  FEATURED_DURATION_DAYS,
-  PLANS,
-  RETAIL_OFFERS,
-  URGENT_DURATION_DAYS,
-} from "@/lib/constants/pricing";
+import { PLANS, RETAIL_OFFERS } from "@/lib/constants/pricing";
 import {
   PACKAGE_ADD_INVOICE_DUE_DAYS,
   PACKAGE_ADD_MIN_DAYS,
@@ -40,7 +34,7 @@ const section = (id: string) => {
 };
 const individual30 = RETAIL_OFFERS.find((offer) => offer.durationDays === 30)!;
 
-describe("the active Terms state the site's package and add-on prices", () => {
+describe("the active Terms state the site's package prices", () => {
   it("is posting-v6 or later", () => {
     expect(Number(manifest.active_version.replace("posting-v", ""))).toBeGreaterThanOrEqual(6);
   });
@@ -92,18 +86,7 @@ describe("the active Terms state the site's package and add-on prices", () => {
     expect(paying).toContain("We never charge interest or a late fee on an invoice.");
   });
 
-  it("states each paid add-on at the site's price and duration", () => {
-    const addons = section("addons");
-    for (const [name, cents, days] of [
-      ["Urgent", ADDON_PRICES.urgent, URGENT_DURATION_DAYS],
-      ["Boost", ADDON_PRICES.boost, BOOST_DURATION_DAYS],
-      ["Featured", ADDON_PRICES.featured, FEATURED_DURATION_DAYS],
-    ] as const)
-      expect(addons).toContain(`• ${name}: ${rand(cents)} for ${days} days.`);
-    expect(rands(addons)).toEqual(Object.values(ADDON_PRICES).map(rand).sort());
-  });
-
-  it("matches what the database catalogue charges for packages and add-ons", () => {
+  it("matches what the database catalogue charges for packages", () => {
     const packageSql = readFileSync(
       "database/foundation/updates/20261114154823_slot_packages.sql",
       "utf8"
@@ -133,31 +116,11 @@ describe("the active Terms state the site's package and add-on prices", () => {
         videos: 1,
       }))
     );
-    // Add-on prices are seeded by the clean baseline and no update changes them.
-    for (const file of readdirSync("database/foundation/updates").filter((name) =>
-      name.endsWith(".sql")
-    ))
-      expect(readFileSync(`database/foundation/updates/${file}`, "utf8"), file).not.toMatch(
-        /(insert into|update) private\.addon_versions/
-      );
-    const candidate = readFileSync("database/foundation/candidate.sql", "utf8");
-    const seed =
-      /from \(values \('boost', 1, (\d+), (\d+)\), \('featured', 1, (\d+), (\d+)\), \('urgent', 1, (\d+), (\d+)\)\) as seed\(kind,version,days,price_cents\)/.exec(
-        candidate
-      );
-    expect(seed?.slice(1).map(Number)).toEqual([
-      BOOST_DURATION_DAYS,
-      ADDON_PRICES.boost,
-      FEATURED_DURATION_DAYS,
-      ADDON_PRICES.featured,
-      URGENT_DURATION_DAYS,
-      ADDON_PRICES.urgent,
-    ]);
   });
 });
 
-// posting-v6 is posting-v5 plus the package rules, the add-ons and the settled
-// legal answers that belong in the Terms; every other paragraph is unchanged.
+// posting-v6 is posting-v5 plus the package rules and the settled legal answers
+// that belong in the Terms; every other paragraph is unchanged.
 describe("posting-v6", () => {
   const v5 = getPublishedPostingTerms("posting-v5")!;
   const v6 = getPublishedPostingTerms("posting-v6")!;
@@ -165,11 +128,11 @@ describe("posting-v6", () => {
 
   it("is the site's one set of Terms, with its pinned hash", () => {
     expect(manifest.active_version).toBe("posting-v6");
-    expect(v6.document_hash).toBe("EFjJ5mJNkfaKNHH0gyVuY4bESPDUTsl6wdPytC7x4gM");
+    expect(v6.document_hash).toBe("UauuSM0-qjrP3AhiX1eHWOi0FLSSWpKfbW1dKZBAr_s");
     expect(text).not.toMatch(/version/i);
   });
 
-  it("adds two sections and keeps every other section's order and v5 text", () => {
+  it("adds one section and keeps every other section's order and v5 text", () => {
     expect(v6.sections.map((entry) => entry.id)).toEqual([
       "acceptance",
       "registration",
@@ -179,7 +142,6 @@ describe("posting-v6", () => {
       "verification-signals",
       "payments",
       "packages",
-      "addons",
       "paying",
       "refunds",
       "trials",
@@ -210,6 +172,7 @@ describe("posting-v6", () => {
       "payments[9]",
       "paying[2]",
       "refunds[0]",
+      "refunds[2]",
       "refunds[3]",
       "refunds[6]",
       "refunds[7]",
@@ -234,6 +197,7 @@ describe("posting-v6", () => {
       "Buyers that are not individuals, such as companies, close corporations, trusts, partnerships and associations, are not refunded for unused days",
       "A package cannot be transferred to another person or account",
       "Refunds are paid to the original payment method, through our payment provider's refund service, or by EFT into a bank account in your own name",
+      "If a suspension is later overturned, we add the days lost to your paid slots and package",
       // C2: the first purchase.
       "if you ask us in writing within 5 business days after its payment is confirmed, we cancel your first purchase and refund it in full",
       // C3: VAT.
@@ -247,14 +211,14 @@ describe("posting-v6", () => {
       "liquor, tobacco and vaping products, medicines, loans and other financial products, and live animals and wildlife products",
       "Show your licence or registration number in the post when the law requires one",
       "Job ads that ask applicants to pay to apply or to get the job",
-      "use Report on the post, or email abuse@verifymzansi.com",
+      "use Report on the post, or email abuse@verifymzansi.com with the post's link, what is wrong and how to contact you",
       "We act on a report within 2 business days and keep a record of every report",
       "on a credible complaint, and restrict the account that posted it",
     ])
       expect(text).toContain(rule);
-    // No lost days moved to a paid slot or package end date (no command does
-    // that yet), never a partner commission figure, and no tax invoice.
-    expect(text).not.toMatch(/add the lost days|add the days lost/);
+    // No paid add-ons (not offered), never a partner commission figure, and
+    // no tax invoice.
+    expect(text).not.toMatch(/add-on|Urgent|Boost|Featured/);
     expect(text).not.toMatch(/%|per cent|percent/i);
     expect(text).not.toMatch(/tax invoice/i);
   });

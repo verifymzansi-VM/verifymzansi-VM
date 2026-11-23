@@ -1,6 +1,6 @@
--- Posting terms posting-v6: the Multi-listing package rules, paid add-ons and
--- the settled legal answers (launch checklist item 27). Publishes posting-v6
--- and makes it current, in one transaction.
+-- Posting terms posting-v6: the Multi-listing package rules and the settled
+-- legal answers (launch checklist item 27). Publishes posting-v6 and makes it
+-- current, in one transaction.
 --
 -- posting-v6 (src/lib/legal/terms-documents/posting-v6.json, canonical hash
 -- pinned below and in src/lib/legal/terms-documents/catalogue.json) is
@@ -9,12 +9,13 @@
 -- together, fair use across the package, one package per account, ID review
 -- first, Individual slots while a package runs, adding slots part-way online
 -- or by invoice, no renewal, posts when a package ends, no transfers); paying
--- by invoice above 100 slots at the same price; the paid add-ons and their
--- prices; the written notice before a term of 180 days or more ends; no
--- interest or late fee on an invoice; the first purchase refundable within 5
--- business days; refunds to the original method or an account in the
--- member's own name; the content licence; the children rule; restricted
--- goods; and removal on a credible complaint.
+-- by invoice above 100 slots at the same price; the written notice before a
+-- term of 180 days or more ends; no interest or late fee on an invoice; the
+-- first purchase refundable within 5 business days; refunds to the original
+-- method or an account in the member's own name; lost days added back after
+-- an overturned suspension; the content licence; the children rule;
+-- restricted goods; how to report a post; and removal on a credible
+-- complaint.
 --
 -- It changes only private.posting_terms_versions (one new row) and
 -- private.posting_terms_current: no function, table, grant, plan, price,
@@ -47,7 +48,7 @@ begin
       coalesce(current_version,'missing') using errcode='55000';
   end if;
   select v.document_hash into v6_hash from private.posting_terms_versions v where v.version='posting-v6';
-  if v6_hash is not null and v6_hash<>'EFjJ5mJNkfaKNHH0gyVuY4bESPDUTsl6wdPytC7x4gM' then
+  if v6_hash is not null and v6_hash<>'UauuSM0-qjrP3AhiX1eHWOi0FLSSWpKfbW1dKZBAr_s' then
     raise exception 'posting-v6 is already published with a different document' using errcode='55000';
   end if;
   if to_regprocedure('internal.queue_term_ending_notices(integer)') is null then
@@ -56,14 +57,14 @@ begin
   end if;
 end$$;
 
-insert into private.posting_terms_versions(version,document_hash) values('posting-v6','EFjJ5mJNkfaKNHH0gyVuY4bESPDUTsl6wdPytC7x4gM')
+insert into private.posting_terms_versions(version,document_hash) values('posting-v6','UauuSM0-qjrP3AhiX1eHWOi0FLSSWpKfbW1dKZBAr_s')
   on conflict(version) do nothing;
 
 update private.posting_terms_current set version='posting-v6' where singleton and version<>'posting-v6';
 
 do $$begin
   if not exists(select 1 from private.posting_terms_versions v
-      where v.version='posting-v6' and v.document_hash='EFjJ5mJNkfaKNHH0gyVuY4bESPDUTsl6wdPytC7x4gM') then
+      where v.version='posting-v6' and v.document_hash='UauuSM0-qjrP3AhiX1eHWOi0FLSSWpKfbW1dKZBAr_s') then
     raise exception 'posting-v6 was not published';
   end if;
   if (select c.version from private.posting_terms_current c where c.singleton) is distinct from 'posting-v6' then

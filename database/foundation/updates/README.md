@@ -84,7 +84,7 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 `20261123225900_posting_terms_v6.sql` (launch checklist item 27) publishes
 posting terms `posting-v6` (`src/lib/legal/terms-documents/posting-v6.json`,
-canonical hash `EFjJ5mJNkfaKNHH0gyVuY4bESPDUTsl6wdPytC7x4gM`, also in
+canonical hash `UauuSM0-qjrP3AhiX1eHWOi0FLSSWpKfbW1dKZBAr_s`, also in
 `catalogue.json`) and makes it current, in one transaction. posting-v6 is
 posting-v5 plus:
 
@@ -96,8 +96,6 @@ posting-v5 plus:
   last 7 days, adding slots online (7 or more whole days left) or by invoice (10
   or more), the added-slots invoice due date, no renewal, posts when a package
   ends, and no transfers;
-- a section "Paid add-ons": Urgent R10, Boost R15 and Featured R25, each for 7
-  days;
 - packages of more than 100 slots paid by invoice at the same price; no interest
   or late fee on an invoice;
 - the email about 60 business days before a slot or package of 180 days or more
@@ -105,10 +103,12 @@ posting-v5 plus:
 - the settled legal answers that belong in the Terms: cancelling a package (one
   R50 fee per package), the first purchase refundable in full within 5 business
   days, refunds to the original method or an account in the member's own name,
-  the content licence and ownership promise, the children rule, restricted goods
-  and licence numbers, two more prohibited kinds, how to report a post (Report
-  or abuse@verifymzansi.com, 2 business days, every report recorded), and
-  removal of a post and restriction of its account on a credible complaint.
+  lost days added back after an overturned suspension, the content licence and
+  ownership promise, the children rule, restricted goods and licence numbers,
+  two more prohibited kinds, how to report a post (Report, or
+  abuse@verifymzansi.com with the post's link, what is wrong and how to contact
+  you; 2 business days; every report recorded), and removal of a post and
+  restriction of its account on a credible complaint.
 
 It changes only `private.posting_terms_versions` (one new row) and
 `private.posting_terms_current`: no function, table, grant, plan, price or
@@ -131,7 +131,8 @@ full order (`20261122111209_term_ending_notice.sql` is already applied):
 Preflight: `../preflight/20261123225900_posting_terms_v6.check.sql`. It should
 read "current posting-v5 (update not applied); posting-v6 not published" before,
 and "current posting-v6 (update already applied); posting-v6 published" after.
-Open `/terms`: "Multi-listing packages" and "Paid add-ons" show.
+Open `/terms`: "Multi-listing packages" shows, and the reporting rules appear
+once, under "Prohibited content".
 
 **Rollback.** `../rollback/20261123225900_posting_terms_v6.down.sql` makes
 posting-v5 current again. The posting-v6 row and acceptances of it stay as
@@ -149,9 +150,10 @@ database without the term-ending notice; it publishes and switches without
 changing the schema; members accept posting-v6 once (a posting-v5 acceptance
 does not carry over); a new payment records posting-v6; the rollback, a refused
 second rollback and two re-applies. `src/lib/legal/posting-v6.test.ts` checks
-that the package and add-on prices and rules the site uses
-(`src/lib/billing/slot-packages.ts`, `src/lib/constants/pricing.ts`) are the
-ones posting-v6 states and the database catalogue charges.
+that the package prices and rules the site uses
+(`src/lib/billing/slot-packages.ts`) are the ones posting-v6 states and the
+database catalogue charges. Paid add-ons are not offered, so posting-v6 does not
+mention them.
 
 ## A reminder 3 days before a free credit ends, 22 November 2026
 
