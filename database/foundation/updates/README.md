@@ -82,7 +82,7 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Posting terms posting-v6: the package rules, 22 November 2026
 
-`20261122181738_posting_terms_v6.sql` (launch checklist item 27) publishes
+`20261123225900_posting_terms_v6.sql` (launch checklist item 27) publishes
 posting terms `posting-v6` (`src/lib/legal/terms-documents/posting-v6.json`,
 canonical hash `TwxXHEzcLDjXIorkdb_i1ygOHJ6ZYX492xRrXeNlJbs`, also in
 `catalogue.json`) and makes it current, in one transaction. posting-v6 is
@@ -129,12 +129,12 @@ full order (`20261122111209_term_ending_notice.sql` is already applied):
 1. merge, which deploys;
 2. apply this update.
 
-Preflight: `../preflight/20261122181738_posting_terms_v6.check.sql`. It should
+Preflight: `../preflight/20261123225900_posting_terms_v6.check.sql`. It should
 read "current posting-v5 (update not applied); posting-v6 not published" before,
 and "current posting-v6 (update already applied); posting-v6 published" after.
 Open `/terms`: "Multi-listing packages" and "Paid add-ons" show.
 
-**Rollback.** `../rollback/20261122181738_posting_terms_v6.down.sql` makes
+**Rollback.** `../rollback/20261123225900_posting_terms_v6.down.sql` makes
 posting-v5 current again. The posting-v6 row and acceptances of it stay as
 history (published terms are immutable). The website release can stay deployed.
 
@@ -7728,6 +7728,6 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   (fingerprint.sql) matched the full replay (except the known schema grant
   difference)
 
-- `20261122181738_posting_terms_v6.sql`: pending
+- `20261123225900_posting_terms_v6.sql`: pending
 
 <!-- applied-register:end -->

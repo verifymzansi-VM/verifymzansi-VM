@@ -159,7 +159,7 @@ test("posting terms published after the baseline must come from a database updat
     "utf8"
   );
   const v6 = readFileSync(
-    "database/foundation/updates/20261122181738_posting_terms_v6.sql",
+    "database/foundation/updates/20261123225900_posting_terms_v6.sql",
     "utf8"
   );
   const update = [v3, v4, switchToV4, v5, switchToV5, v6].join("\n");

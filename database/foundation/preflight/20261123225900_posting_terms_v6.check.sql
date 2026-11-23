@@ -1,4 +1,4 @@
--- Read-only preflight for updates/20261122181738_posting_terms_v6.sql.
+-- Read-only preflight for updates/20261123225900_posting_terms_v6.sql.
 --
 -- Run this file unchanged in the Supabase SQL editor before applying the
 -- update, and again after it. It changes nothing: the first statement makes

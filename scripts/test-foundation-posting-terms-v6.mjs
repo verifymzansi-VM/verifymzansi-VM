@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Behaviour checks for 20261122181738_posting_terms_v6.sql (launch checklist
+// Behaviour checks for 20261123225900_posting_terms_v6.sql (launch checklist
 // item 27): posting-v6 is published with its catalogue hash and made current
 // in one step; members accept it once; new payments record it; the preflight
 // is read only; the rollback makes posting-v5 current again; re-applying is
@@ -27,7 +27,7 @@ import {
   runTwoAdminUpdateCheck,
 } from "./lib/foundation-staff-payment-world.mjs";
 
-const UPDATE = "20261122181738_posting_terms_v6.sql";
+const UPDATE = "20261123225900_posting_terms_v6.sql";
 const CATALOGUE = JSON.parse(readFileSync("src/lib/legal/terms-documents/catalogue.json", "utf8"));
 const V5 = { version: "posting-v5", document_hash: CATALOGUE.versions["posting-v5"] };
 const V6 = { version: "posting-v6", document_hash: CATALOGUE.versions["posting-v6"] };

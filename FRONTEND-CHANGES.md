@@ -3778,7 +3778,7 @@ Decision: approved by owner 2026-11-23 (answer: 'Yes, approve both'), with
 
 Launch checklist item 27. The Terms page (`/terms`) reads the current Terms
 from the database, so its text changes when database update
-`20261122181738_posting_terms_v6.sql` (pending, website-first) makes posting-v6
+`20261123225900_posting_terms_v6.sql` (pending, website-first) makes posting-v6
 current. The text is outside the checked scope
 (`src/lib/legal/terms-documents/posting-v6.json`; `src/lib/legal/terms-text.ts`
 shows it when the database cannot be read). The page's layout, navigation and

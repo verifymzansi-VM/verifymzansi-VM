@@ -34,8 +34,8 @@
 -- posting-v6, whichever the database says is current; an earlier website
 -- knows no posting-v6 and would refuse the current terms (no post could be
 -- submitted or edited) until it is replaced.
--- Read-only preflight: ../preflight/20261122181738_posting_terms_v6.check.sql.
--- Rollback: ../rollback/20261122181738_posting_terms_v6.down.sql.
+-- Read-only preflight: ../preflight/20261123225900_posting_terms_v6.check.sql.
+-- Rollback: ../rollback/20261123225900_posting_terms_v6.down.sql.
 begin;
 set local lock_timeout='5s';
 

@@ -407,7 +407,7 @@ try {
   if (later.length) {
     applySteps(database, later);
     await check("later updates keep the limit and posting-v5 (or a later version)", () => {
-      // 20261122181738_posting_terms_v6.sql makes posting-v6 current.
+      // 20261123225900_posting_terms_v6.sql makes posting-v6 current.
       const terms = currentTerms();
       if (terms.version === "posting-v6")
         assert.equal(terms.document_hash, CATALOGUE.versions["posting-v6"]);
