@@ -7,6 +7,12 @@ import assert from "node:assert/strict";
 import { replayFoundation } from "./foundation-replay.mjs";
 
 const FIXTURES = `create schema vmtest;
+  -- A distinct confirmed phone number (+2783 and 7 digits) for each synthetic
+  -- user: numbers derived from a hash could repeat and break the unique index
+  -- verification_phone_unique_active_idx. Each run has a fresh database.
+  create sequence vmtest.phone_seq maxvalue 9999999;
+  create function vmtest.next_phone() returns text language sql as $$
+    select '+2783'||lpad(nextval('vmtest.phone_seq')::text,7,'0') $$;
   create function vmtest.member(p_label text) returns jsonb language plpgsql as $$
   declare uid uuid:=gen_random_uuid(); sid uuid:=gen_random_uuid(); begin
     insert into auth.users(id,email,email_confirmed_at,raw_user_meta_data)
@@ -38,7 +44,7 @@ const FIXTURES = `create schema vmtest;
     insert into private.accepted_identity_facts(owner_id,submission_id,identity_hmac,reviewed_by)
       values(uid,sub,fp,gen_random_uuid());
     insert into private.verification_phone_proofs(owner_id,challenge_id,phone)
-      values(uid,gen_random_uuid(),'+2783'||lpad((abs(hashtext(uid::text))%10000000)::text,7,'0'));
+      values(uid,gen_random_uuid(),vmtest.next_phone());
     insert into private.verification_localities(owner_id,province_id,city_id) values(uid,'gp','gp_johannesburg');
     perform set_config('session_replication_role','origin',true);
     return m || jsonb_build_object('staff',true);
