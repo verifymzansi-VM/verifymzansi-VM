@@ -109,11 +109,11 @@ describe("admin navigation registry", () => {
     );
   });
 
-  it("lists no page that is hidden until it works", () => {
+  it("lists Operations health, which is shown (SHOW_STAFF_OPERATIONS)", () => {
     const hrefs = navFor("admin", { kyc_evidence_desk: true }).flatMap((s) =>
       s.items.map((i) => i.href)
     );
-    expect(hrefs).not.toContain("/admin/operations");
+    expect(hrefs).toContain("/admin/operations");
   });
 
   it("uses native assignments instead of expanding the admin presentation role", () => {

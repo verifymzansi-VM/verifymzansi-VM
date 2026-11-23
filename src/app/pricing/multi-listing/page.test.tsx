@@ -1,14 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import MultiListingPage from "./page";
-import { notFound } from "next/navigation";
-import { readPackagesOnSale } from "@/lib/foundation/slot-package-offer";
+import { readOnlinePaymentMaxCents } from "@/lib/foundation/payment-limits";
 
-vi.mock("next/navigation", () => ({
-  notFound: vi.fn(() => {
-    throw new Error("NEXT_NOT_FOUND");
-  }),
-}));
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: { children: React.ReactNode; href: string }) => (
     <a href={href} {...props}>
@@ -16,7 +10,6 @@ vi.mock("next/link", () => ({
     </a>
   ),
 }));
-vi.mock("@/lib/foundation/slot-package-offer", () => ({ readPackagesOnSale: vi.fn() }));
 vi.mock("@/lib/foundation/payment-limits", () => ({
   readOnlinePaymentMaxCents: vi.fn(async () => 130000),
 }));
@@ -27,25 +20,27 @@ vi.mock("@/components/brand", () => ({
   BrandSurface: ({ children }: { children: React.ReactNode }) => <section>{children}</section>,
 }));
 
-describe("the hidden Multi-listing page (P4a)", () => {
-  beforeEach(() => vi.mocked(readPackagesOnSale).mockReset());
+describe("the Multi-listing page (P4a)", () => {
+  beforeEach(() => vi.mocked(readOnlinePaymentMaxCents).mockClear());
 
-  it("stays hidden while packages are not on sale", async () => {
-    vi.mocked(readPackagesOnSale).mockResolvedValue(null);
-    await expect(MultiListingPage()).rejects.toThrow("NEXT_NOT_FOUND");
-    expect(notFound).toHaveBeenCalled();
+  it("is always shown: no visible link leads to a 404 (launch checklist item 71)", async () => {
+    const { container } = render(await MultiListingPage());
+    expect(container.textContent).toMatch(/Keep your whole stock live/);
+    expect(screen.getAllByRole("link", { name: /Choose/ }).length).toBeGreaterThan(0);
   });
 
-  it("states the new rules once on sale, and none of the old ones", async () => {
-    vi.mocked(readPackagesOnSale).mockResolvedValue({ on_sale: true, plans: [{}] } as never);
+  it("states the new rules, and none of the old ones", async () => {
     const { container } = render(await MultiListingPage());
     const text = container.textContent ?? "";
     expect(text).toMatch(/From 5 slots at R100 per slot per 30 days, for 30, 90 or 180 days/);
     expect(screen.getByText("Does not renew automatically")).toBeInTheDocument();
-    // Package teams are not built yet: hidden until they work.
+    // Package teams are not built yet (SHOW_PACKAGE_TEAMS is off).
     expect(text).not.toMatch(/You \+ 1 person|you \+ 4/);
-    // Advertise hides its Multi-listing section while packages are off sale there.
-    expect(screen.queryByRole("link", { name: /Who multi-listing is for/ })).toBeNull();
+    // Advertise shows its Multi-listing section (PACKAGES_ON_SALE).
+    expect(screen.getByRole("link", { name: /Who multi-listing is for/ })).toHaveAttribute(
+      "href",
+      "/advertise#multi-listing"
+    );
     expect(text).toMatch(/up to 4 posts going live per slot per 30 days/);
     expect(text).not.toMatch(/Paid once|never renews|administrators|10 to 100|for 90 or 180 days/);
     // Ozow's maximum (the database setting), never the old R10,000.

@@ -1,15 +1,13 @@
 import { expect, test, type Page } from "@playwright/test";
 import { readServerLogEntries, readTestCopy, type TestCopy } from "./support/test-copy";
-import { switchOn } from "./support/switches";
 
 // Roadmap M2.8: counters show only true facts. Post views and likes are stored
-// by the live backend (20261119172135_post_views_and_likes.sql) but shown,
-// read and recorded only while SHOW_ENGAGEMENT_TOTALS is on (the launch lane).
-// While it is off (the ordinary lane, as production today) post pages show no
-// view count and no like button, and the engagement and analytics beacons
-// answer 204 without calling a database. Either way no beacon logs an error.
+// by the live backend (20261119172135_post_views_and_likes.sql) and shown,
+// read and recorded while SHOW_ENGAGEMENT_TOTALS is on (in every build): post
+// pages show a view count (and, in the desktop viewer, the like button), the
+// view beacon is counted and the other analytics beacons answer 204. No beacon
+// logs an error.
 
-const ENGAGEMENT = switchOn("SHOW_ENGAGEMENT_TOTALS");
 const BEACONS = [
   "/api/analytics/visit",
   "/api/analytics/events",
@@ -34,11 +32,13 @@ const BEACON_ERRORS = [
 ];
 const LEGACY_CLIENT_EVENT = "legacy_client_in_foundation";
 
-/** Seeded posts (fixture/posts.json) and the page each one opens on. */
+/** Seeded posts (fixture/posts.json), the page each one opens on, and whether
+ * its classic page (phones and tablets) shows the views under "Details". */
 const POSTS = [
-  { title: "Fixture Mzansi Motor Workshop", path: "/mzansi-business/" },
-  { title: "Fixture Soweto Craft Market", path: "/tourism-events/" },
+  { title: "Fixture Mzansi Motor Workshop", path: "/mzansi-business/", viewsInDetails: false },
+  { title: "Fixture Soweto Craft Market", path: "/tourism-events/", viewsInDetails: true },
 ];
+const VIEW_COUNT = /\b\d[\d,.\s]*k?\s+views?\b/i;
 
 function beaconLogLines() {
   const errors = BEACON_ERRORS.flatMap((message) => readServerLogEntries(message));
@@ -66,9 +66,7 @@ test.describe("counters and chips show only true facts", () => {
   });
 
   for (const post of POSTS) {
-    test(`${post.title}: view count and like button ${ENGAGEMENT ? "shown" : "hidden"}`, async ({
-      page,
-    }) => {
+    test(`${post.title}: view count shown`, async ({ page, isMobile }) => {
       const id = state.posts.find((candidate) => candidate.title === post.title)?.id;
       expect(id).toBeTruthy();
       const logLines = beaconLogLines();
@@ -79,24 +77,31 @@ test.describe("counters and chips show only true facts", () => {
       await expect(page.locator("[data-immersive-pending]")).toHaveCount(0);
       await expect(page.getByText(post.title).filter({ visible: true }).first()).toBeVisible();
 
-      if (ENGAGEMENT) {
-        // Real totals: a number of views (screen-reader text included) and the heart.
-        await expect(page.getByText(/\b\d[\d,.\s]*k?\s+views?\b/i).first()).toBeAttached();
+      if (!isMobile) {
+        // The desktop viewer's rail: a number of views (screen-reader text
+        // included) and the heart.
+        await expect(page.getByText(VIEW_COUNT).first()).toBeAttached();
         await expect(page.getByRole("button", { name: /like this/i }).first()).toBeAttached();
+      } else if (post.viewsInDetails) {
+        // Phones keep the classic page, which has no like button (only the
+        // viewer, video mode and cards do). An event lists its views under
+        // "Details".
+        await page.locator('button[aria-controls="promotion-details-panel"]').click();
+        const views = page.locator("#promotion-details-panel dt", { hasText: /^Views$/ });
+        await expect(views).toBeVisible();
+        await expect(views.locator("xpath=following-sibling::dd[1]")).toHaveText(/^\s*\d/);
       } else {
-        // Anywhere in the document, visible or not (screen-reader text included).
-        await expect(page.getByText(/\b\d[\d,.\s]*k?\s+views?\b/i)).toHaveCount(0);
-        await expect(page.locator(".viewer-action-label", { hasText: /^Views$/ })).toHaveCount(0);
-        await expect(page.getByRole("button", { name: /like this/i })).toHaveCount(0);
+        // A business page says how many views it has.
+        await expect(page.getByText(VIEW_COUNT).filter({ visible: true }).first()).toBeVisible();
       }
 
       // The page's own beacons go out at once (visit), after 2 s on screen
       // (the post's view) or after a 1 s batch delay; give them time to
       // reach the server and return.
-      await page.waitForTimeout(ENGAGEMENT ? 4_000 : 2_500);
+      await page.waitForTimeout(4_000);
       for (const beacon of beacons)
         expect(beacon, beacon.path).toMatchObject({
-          status: ENGAGEMENT && beacon.path === "/api/engagement/view" ? 200 : 204,
+          status: beacon.path === "/api/engagement/view" ? 200 : 204,
         });
       expect(beaconLogLines()).toBe(logLines);
     });
@@ -125,11 +130,11 @@ test.describe("counters and chips show only true facts", () => {
         data: bodies[path],
       });
       expect(response.headers()["set-cookie"], path).toBeUndefined();
-      if (ENGAGEMENT && path === "/api/engagement/view") {
+      if (path === "/api/engagement/view") {
         // An automated client (this request's user agent) is never counted.
         expect(response.status(), path).toBe(200);
         expect(await response.json(), path).toMatchObject({ counted: [] });
-      } else if (ENGAGEMENT && path === "/api/engagement/like") {
+      } else if (path === "/api/engagement/like") {
         // No CSRF token: refused before anything is read or stored.
         expect(response.status(), path).toBe(403);
       } else {

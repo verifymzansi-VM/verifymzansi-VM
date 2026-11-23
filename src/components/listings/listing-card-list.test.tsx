@@ -5,6 +5,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import React from "react";
 import { render, screen } from "@testing-library/react";
 import { ListingCardList } from "./listing-card-list";
+import type * as HiddenFeatures from "@/lib/hidden-features";
+
+// These tests check the view and like display with SHOW_ENGAGEMENT_TOTALS
+// switched off, the branch kept for turning it off again. It is on in production (owner's decision of 22 November 2026).
+vi.mock("@/lib/hidden-features", async (importOriginal) => ({
+  ...(await importOriginal<typeof HiddenFeatures>()),
+  SHOW_ENGAGEMENT_TOTALS: false,
+}));
 
 const { videoCardPlayerMock } = vi.hoisted(() => ({
   videoCardPlayerMock: vi.fn(

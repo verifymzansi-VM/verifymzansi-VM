@@ -1,7 +1,15 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { MultiListingPlans, packageCheckoutHref } from "./multi-listing-plans";
 import { MultiListingNudge } from "./multi-listing-nudge";
+import type * as Pricing from "@/lib/constants/pricing";
+
+// The nudge is tested with package sales switched off, the branch kept for
+// turning them off again. It is on in production (owner's decision of 22 November 2026).
+vi.mock("@/lib/constants/pricing", async (importOriginal) => ({
+  ...(await importOriginal<typeof Pricing>()),
+  PACKAGES_ON_SALE: false,
+}));
 
 describe("MultiListingPlans (P4a rules)", () => {
   it("shows the common sizes at R100 per slot per 30 days, each term going to the package checkout", () => {
