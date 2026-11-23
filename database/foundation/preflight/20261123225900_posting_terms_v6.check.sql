@@ -20,7 +20,7 @@ select 'summary' as kind,
     || case t.current_version when 'posting-v5' then ' (update not applied)'
          when 'posting-v6' then ' (update already applied)' else ' (unexpected)' end
     || '; posting-v6 ' || case when t.v6_hash is null then 'not published'
-         when t.v6_hash = 'TwxXHEzcLDjXIorkdb_i1ygOHJ6ZYX492xRrXeNlJbs' then 'published' else 'published with another document' end
+         when t.v6_hash = 'EFjJ5mJNkfaKNHH0gyVuY4bESPDUTsl6wdPytC7x4gM' then 'published' else 'published with another document' end
     || '; accounts that accepted posting-v6: ' || (select count(*) from private.posting_terms_acceptances a where a.version = 'posting-v6')
     as detail
 from t
@@ -29,7 +29,7 @@ select 'problem', 'current posting terms are ' || coalesce(t.current_version, 'm
 from t where t.current_version is null or t.current_version not in ('posting-v5', 'posting-v6')
 union all
 select 'problem', 'posting-v6 is published with another document'
-from t where t.v6_hash is not null and t.v6_hash <> 'TwxXHEzcLDjXIorkdb_i1ygOHJ6ZYX492xRrXeNlJbs'
+from t where t.v6_hash is not null and t.v6_hash <> 'EFjJ5mJNkfaKNHH0gyVuY4bESPDUTsl6wdPytC7x4gM'
 union all
 select 'problem', 'the written notice before a long term ends is not applied (apply 20261122111209_term_ending_notice.sql first)'
 from t where not t.notice_applied;

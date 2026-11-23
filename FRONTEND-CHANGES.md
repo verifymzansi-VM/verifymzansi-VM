@@ -3796,10 +3796,9 @@ What visitors see on `/terms`:
   days or more ends, under 'Slots & prices'; packages above 100 slots paid by
   invoice at the same price, and no interest or late fee, under 'Paying, VAT &
   invoices'; cancelling a package, the first purchase refundable within 5
-  business days, refunds to the original method or an account in the member's
-  own name, and lost days after an overturned suspension, under 'Refunds &
-  cancelling'; the children rule and licence numbers under 'Account posting
-  obligations'; two more prohibited kinds, restricted goods, how to report a
+  business days, and refunds to the original method or an account in the
+  member's own name, under 'Refunds & cancelling'; the children rule and
+  licence numbers under 'Account posting obligations'; two more prohibited kinds, restricted goods, how to report a
   post (Report or abuse@verifymzansi.com, action within 2 business days, every
   report recorded), and removal of a post and restriction of its account on a
   credible complaint, under 'Prohibited content'; the content licence under

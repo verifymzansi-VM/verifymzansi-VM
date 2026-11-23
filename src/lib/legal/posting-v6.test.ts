@@ -165,7 +165,7 @@ describe("posting-v6", () => {
 
   it("is the site's one set of Terms, with its pinned hash", () => {
     expect(manifest.active_version).toBe("posting-v6");
-    expect(v6.document_hash).toBe("TwxXHEzcLDjXIorkdb_i1ygOHJ6ZYX492xRrXeNlJbs");
+    expect(v6.document_hash).toBe("EFjJ5mJNkfaKNHH0gyVuY4bESPDUTsl6wdPytC7x4gM");
     expect(text).not.toMatch(/version/i);
   });
 
@@ -210,7 +210,6 @@ describe("posting-v6", () => {
       "payments[9]",
       "paying[2]",
       "refunds[0]",
-      "refunds[2]",
       "refunds[3]",
       "refunds[6]",
       "refunds[7]",
@@ -235,7 +234,6 @@ describe("posting-v6", () => {
       "Buyers that are not individuals, such as companies, close corporations, trusts, partnerships and associations, are not refunded for unused days",
       "A package cannot be transferred to another person or account",
       "Refunds are paid to the original payment method, through our payment provider's refund service, or by EFT into a bank account in your own name",
-      "If a suspension is later overturned, we add the days lost to your paid slots and package",
       // C2: the first purchase.
       "if you ask us in writing within 5 business days after its payment is confirmed, we cancel your first purchase and refund it in full",
       // C3: VAT.
@@ -254,7 +252,9 @@ describe("posting-v6", () => {
       "on a credible complaint, and restrict the account that posted it",
     ])
       expect(text).toContain(rule);
-    // Never a partner commission figure, and no tax invoice.
+    // No lost days moved to a paid slot or package end date (no command does
+    // that yet), never a partner commission figure, and no tax invoice.
+    expect(text).not.toMatch(/add the lost days|add the days lost/);
     expect(text).not.toMatch(/%|per cent|percent/i);
     expect(text).not.toMatch(/tax invoice/i);
   });
