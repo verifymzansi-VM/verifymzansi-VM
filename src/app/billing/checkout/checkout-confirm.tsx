@@ -37,6 +37,7 @@ import {
   usePendingPayment,
   type PendingPayment,
 } from "@/components/billing/pending-payment-actions";
+import { CheckoutTermsLinks } from "@/components/billing/checkout-terms-links";
 
 export interface CheckoutSummary {
   planId: string;
@@ -659,14 +660,7 @@ export function CheckoutConfirm({
                       {" · "}
                     </>
                   ) : null}
-                  <Link
-                    href="/terms#refunds"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-medium text-brand-green-700 underline underline-offset-2 dark:text-brand-gold-300"
-                  >
-                    Refunds
-                  </Link>
+                  <CheckoutTermsLinks />
                 </label>
               </div>
             ) : null}

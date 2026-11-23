@@ -5,7 +5,12 @@ import { Mail } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { LegalBlocks, LegalDocument, type LegalSection } from "@/components/safety/legal-document";
-import { getConfiguredLegalIdentityRows, getTrustPublicConfig } from "@/lib/trust-public-config";
+import { LEGAL_CONTACT_EMAIL } from "@/lib/contact-email";
+import {
+  getConfiguredLegalNoticeRows,
+  getTrustPublicConfig,
+  registeredAddressNote,
+} from "@/lib/trust-public-config";
 
 export const metadata = {
   title: "Terms of Service",
@@ -16,7 +21,7 @@ export const metadata = {
 
 export default async function TermsPage() {
   const trustConfig = getTrustPublicConfig();
-  const legalRows = getConfiguredLegalIdentityRows(trustConfig);
+  const legalRows = getConfiguredLegalNoticeRows(trustConfig);
   let published: Awaited<ReturnType<typeof readCurrentPublishedPostingTerms>> = null;
   if (process.env.FOUNDATION_SUPABASE_URL) {
     try {
@@ -37,6 +42,30 @@ export default async function TermsPage() {
       );
   }
   const textSections = published?.sections ?? buildTermsTextSections(trustConfig);
+  // ECTA s43(1): the details the registered identity rows do not already give.
+  // The registered address is named (as recorded at CIPC), never printed.
+  const registeredAddress = registeredAddressNote();
+  const aboutRows = [
+    ...legalRows,
+    {
+      label: "Legal status",
+      value: "Private company, registered in South Africa with CIPC",
+    },
+    {
+      label: "Address for legal notices",
+      value: `${registeredAddress}. Legal notices may also be sent by email to ${LEGAL_CONTACT_EMAIL}; we confirm receipt.`,
+    },
+    {
+      label: "Phone",
+      value: trustConfig.supportPhone ?? trustConfig.informationOfficerPhone ?? "",
+    },
+    { label: "Email", value: trustConfig.supportEmail },
+    { label: "Website", value: "verifymzansi.com" },
+    {
+      label: "Dispute resolution code",
+      value: "None yet. You can escalate a complaint to the National Consumer Commission.",
+    },
+  ].filter((row) => row.value);
 
   const sections: LegalSection[] = [
     ...textSections.map((section) => ({
@@ -51,7 +80,7 @@ export default async function TermsPage() {
       title: "Who we are",
       content: (
         <dl className="grid max-w-prose gap-x-6 gap-y-2 text-[15px] leading-7 sm:grid-cols-[auto_1fr]">
-          {legalRows.map((row) => (
+          {aboutRows.map((row) => (
             <div key={row.label} className="contents">
               <dt className="font-semibold text-foreground">{row.label}</dt>
               <dd className="text-foreground/80">{row.value}</dd>
@@ -61,13 +90,31 @@ export default async function TermsPage() {
       ),
     },
     {
+      id: "reporting",
+      navLabel: "Reporting a post",
+      title: "Reporting a post",
+      content: (
+        <LegalBlocks
+          paragraphs={[
+            "To report a post that is unlawful, infringes your rights or breaks these Terms, use Report on the post, or email abuse@verifymzansi.com with the post's link, what is wrong and how to contact you.",
+            "We act on a report within 2 business days. We may remove a post on a credible complaint and restrict the account that posted it.",
+            "We keep a record of every report and notice we receive and what we did about it.",
+          ]}
+        />
+      ),
+    },
+    {
       id: "privacy-contact",
       navLabel: "Privacy & contact",
       title: "Privacy & contact",
       content: (
         <div className="max-w-prose space-y-4">
           <p className="text-[15px] leading-7 text-foreground/80">
-            Your use of VerifyMzansi is also governed by our Privacy Policy.
+            Your use of VerifyMzansi is also governed by our Privacy Policy, which also explains how
+            we keep your information secure.
+          </p>
+          <p className="text-[15px] leading-7 text-foreground/80">
+            To keep a copy of these Terms, use your browser&apos;s Print or Save as PDF.
           </p>
           <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap">
             <Link
@@ -77,11 +124,11 @@ export default async function TermsPage() {
               View Privacy Policy
             </Link>
             <a
-              href="mailto:legal@verifymzansi.com"
+              href={`mailto:${LEGAL_CONTACT_EMAIL}`}
               className="inline-flex min-h-11 items-center gap-2 rounded-sm text-sm font-semibold text-brand-green-700 underline underline-offset-4 hover:text-brand-green-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:text-brand-gold-300 dark:hover:text-brand-gold-100"
             >
               <Mail className="h-4 w-4" aria-hidden="true" />
-              legal@verifymzansi.com
+              {LEGAL_CONTACT_EMAIL}
             </a>
           </div>
         </div>

@@ -3,7 +3,11 @@ import { Mail } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { LegalBlocks, LegalDocument, type LegalSection } from "@/components/safety/legal-document";
-import { getConfiguredLegalIdentityRows, getTrustPublicConfig } from "@/lib/trust-public-config";
+import {
+  getConfiguredLegalNoticeRows,
+  getTrustPublicConfig,
+  registeredAddressNote,
+} from "@/lib/trust-public-config";
 
 export const metadata = {
   title: "PAIA Manual",
@@ -20,13 +24,23 @@ const REQUEST_STEPS = [
 
 const MANUAL_TEXT = [
   {
+    id: "abbreviations",
+    navLabel: "Abbreviations",
+    title: "Abbreviations",
+    content: [
+      "• CIPC: Companies and Intellectual Property Commission",
+      "• PAIA: Promotion of Access to Information Act 2 of 2000",
+      "• POPIA: Protection of Personal Information Act 4 of 2013",
+    ],
+  },
+  {
     id: "purpose",
     navLabel: "About this manual",
     title: "About this manual",
     content: [
       "This is the manual of VERIFYMZANSI (PTY) LTD, a private body, under section 51 of the Promotion of Access to Information Act 2 of 2000 (PAIA), as amended by the Protection of Personal Information Act 4 of 2013 (POPIA).",
       "It explains what records we hold, which records are available without a request, how we process personal information, and how to ask for access to a record.",
-      "The manual is published on this page and is available for inspection at our registered address, free of charge. You may print it or save it as a PDF from your browser.",
+      "The manual is published on this page and is available for inspection at our registered address, free of charge. We send a copy to anyone who asks, and to the Information Regulator on request. You may print it or save it as a PDF from your browser.",
     ],
   },
   {
@@ -91,25 +105,53 @@ const MANUAL_TEXT = [
       "• People who send enquiries: name, contact details and message",
       "• Employees, contractors, suppliers and partners: contact, contract and payment details",
       "Recipients: our own staff on a need-to-know basis, and operators who process information for us: Supabase (database, sign-in and file storage), Cloudflare (hosting, security and bot protection), Resend (email), Africa's Talking (SMS codes), Sentry (error monitoring) and Ozow (payments). We also disclose information where the law requires it.",
-      "Cross-border transfers: some of these operators store or process information outside South Africa. We only use operators bound by agreements that give a level of protection substantially similar to POPIA, as section 72 of POPIA requires.",
+      "Cross-border transfers: some of these operators store or process information outside South Africa, including in the United Kingdom, the European Union, the United States and Kenya. We only use operators bound by agreements that give a level of protection substantially similar to POPIA, as section 72 of POPIA requires.",
       "Security: encryption in transit, encryption of ID numbers at rest, restricted and logged access to verification files, private storage that is never public, deletion schedules for ID, selfie and business verification files, and audit logs.",
       "Retention periods are set out in our Privacy Policy.",
+    ],
+  },
+  {
+    id: "updates",
+    navLabel: "Updates to this manual",
+    title: "Updates to this manual",
+    content: [
+      "We update this manual whenever the records we hold or how we process personal information change, and review it at least once a year. The date at the top of this page shows the current version.",
     ],
   },
 ] as const;
 
 export default function PaiaManualPage() {
   const trustConfig = getTrustPublicConfig();
-  const legalRows = getConfiguredLegalIdentityRows(trustConfig);
+  const legalRows = getConfiguredLegalNoticeRows(trustConfig);
+  // The Information Regulator's template, "Key contact details".
+  const contactRows = [
+    ...legalRows,
+    { label: "Information Officer phone", value: trustConfig.informationOfficerPhone ?? "" },
+    { label: "Information Officer email", value: trustConfig.informationOfficerEmail },
+    {
+      label: "Deputy Information Officer",
+      value: "None appointed",
+    },
+    {
+      label: "Physical address",
+      value: registeredAddressNote(),
+    },
+    {
+      label: "Postal address",
+      value: "Same as the registered address",
+    },
+    { label: "General email", value: trustConfig.supportEmail },
+    { label: "Website", value: "verifymzansi.com" },
+  ].filter((row) => row.value);
 
   const sections: LegalSection[] = [
     {
       id: "legal-identity",
-      navLabel: "Legal identity",
-      title: "Legal identity",
+      navLabel: "Contact details",
+      title: "Company and contact details",
       content: (
         <dl className="grid gap-3 sm:grid-cols-2">
-          {legalRows.map((row) => (
+          {contactRows.map((row) => (
             <div key={row.label} className="surface-card px-4 py-3">
               <dt className="text-xs font-semibold text-muted-foreground">{row.label}</dt>
               <dd className="mt-1 break-words text-sm font-medium text-foreground">{row.value}</dd>
@@ -229,7 +271,7 @@ export default function PaiaManualPage() {
       <main id="main-content" className="flex-1">
         <LegalDocument
           title="PAIA Manual"
-          meta="Section 51 manual · Updated October 2026"
+          meta="Section 51 manual · Updated November 2026"
           description="Our records, how we process personal information, and how to request access."
           breadcrumbs={[{ label: "PAIA Manual" }]}
           summary={
