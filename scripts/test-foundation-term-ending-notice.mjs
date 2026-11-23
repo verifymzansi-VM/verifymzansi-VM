@@ -33,15 +33,15 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import {
-  assertReadOnlyPreflight,
-  completeSlotOrder,
-  executeGrants,
-} from "./lib/foundation-sql-checks.mjs";
+  assertClaimKinds,
+  assertNoticeGrants,
+  checkNoticeUpdate,
+  CLAIM,
+  RUN,
+} from "./lib/foundation-outbox-notice-checks.mjs";
+import { completeSlotOrder } from "./lib/foundation-sql-checks.mjs";
 import { applySteps } from "./lib/foundation-sql-lint.mjs";
 import {
-  applyAndProveRollback,
-  assertDriftRefused,
-  functionBodyMd5,
   ozowSettle,
   P180,
   P30,
@@ -49,8 +49,6 @@ import {
 } from "./lib/foundation-staff-payment-world.mjs";
 
 const UPDATE = "20261122111209_term_ending_notice.sql";
-const CLAIM = "internal.claim_supported_notification_outbox(text[],integer)";
-const RUN = "api.run_slot_renewals(integer)";
 const DUE = "internal.term_ending_notice_due(uuid,uuid)";
 const QUEUE = "internal.queue_term_ending_notices(integer)";
 const REVIEWED = {
@@ -79,8 +77,7 @@ const ALREADY_APPLIED =
 await runTwoAdminUpdateCheck(
   { update: UPDATE, label: "term", title: "Term ending notice" },
   async ({ database, check, kit, world, admin }) => {
-    const { q, json, fails, member, service, preflight, steps, index } = kit;
-    const bodyMd5 = (signature) => functionBodyMd5(kit, signature);
+    const { q, json, member, service, steps, index } = kit;
     const replica = (sql) =>
       q(`set session_replication_role=replica;\n${sql}\nset session_replication_role=origin;`);
     const verified = (label) => world.verified(label, admin);
@@ -118,58 +115,26 @@ await runTwoAdminUpdateCheck(
           });`
         )
       );
-    const SIGNATURES = [RUN, CLAIM, "api.claim_supported_notification_outbox(text[],integer)"];
 
     // ------------------------------------------------------------ before
     const early = verified("term-early");
     const earlyGrant = buy(early);
     endsIn(earlyGrant, 80);
-    await check(
-      "before the update: the reviewed bodies, and the preflight reads not applied",
-      () => {
-        for (const [signature, md5] of Object.entries(REVIEWED))
-          assert.equal(bodyMd5(signature), md5, signature);
-        const rows = preflight();
-        assert.deepEqual(
-          rows.map((r) => r[0]),
-          ["summary"],
-          JSON.stringify(rows)
-        );
-        assert.match(rows[0][1], NOT_APPLIED);
-        assertReadOnlyPreflight(database, kit.preflightSql);
-        // The renewal sweep queues no such notice yet.
-        sweep();
-        assert.equal(notices(earlyGrant), 0);
+    const grants = await checkNoticeUpdate(
+      { kit, database, check },
+      {
+        label: LABEL,
+        reviewed: REVIEWED,
+        updated: UPDATED,
+        notApplied: NOT_APPLIED,
+        applied: ALREADY_APPLIED,
+        before: () => {
+          // The renewal sweep queues no such notice yet.
+          sweep();
+          assert.equal(notices(earlyGrant), 0);
+        },
       }
     );
-    await check("drift and a premature rollback are refused", () => {
-      assertDriftRefused(kit, { label: LABEL, signatures: [CLAIM, RUN], rows: 2 });
-      const live = q(
-        "select pg_get_constraintdef(oid) from pg_constraint where conname='outbox_events_kind_check';"
-      );
-      q(`alter table private.outbox_events drop constraint outbox_events_kind_check;
-        alter table private.outbox_events add constraint outbox_events_kind_check check (kind <> '');`);
-      assert.match(preflight()[0][1], /^term ending notice: unexpected state;/);
-      assert.match(
-        fails(kit.step.sql, "55000"),
-        /term ending notice precondition: the outbox kind check is not the reviewed one/
-      );
-      q(`alter table private.outbox_events drop constraint outbox_events_kind_check;
-        alter table private.outbox_events add constraint outbox_events_kind_check ${live};`);
-      assert.match(preflight()[0][1], NOT_APPLIED);
-    });
-
-    // ------------------------------------------------------------- apply
-    const grants = executeGrants(json, SIGNATURES);
-    await applyAndProveRollback(kit, database, check, {
-      label: LABEL,
-      applied: ALREADY_APPLIED,
-      notApplied: NOT_APPLIED,
-    });
-    await check("after the update: the bodies are the update's", () => {
-      for (const [signature, md5] of Object.entries(UPDATED))
-        assert.equal(bodyMd5(signature), md5, signature);
-    });
 
     const thandi = verified("term-thandi");
     const thandiGrant = buy(thandi);
@@ -380,68 +345,10 @@ await runTwoAdminUpdateCheck(
         );
       }
     );
-    await check("the claim takes 22 kinds, each once", () => {
-      const kinds = [
-        "payment_completed",
-        "payment_reversed",
-        "payment_reconciliation_required",
-        "trial_started",
-        "post_expired",
-        "post_expiry_reminder",
-        "draft_deletion_warning",
-        "post_deleted",
-        "verification_phone_confirmed",
-        "identity_accepted",
-        "enquiry_received",
-        "account_warning",
-        "content_hidden",
-        "account_suspended",
-        "account_banned",
-        "appeal_decided",
-        "business_check_update",
-        "post_sold",
-        "post_kept",
-        "verification_returned",
-        "slot_renewal_reminder",
-        "term_ending_notice",
-      ];
-      const list = (k) => `array[${k.map((x) => `'${x}'`).join(",")}]`;
-      json(service(`select api.claim_supported_notification_outbox(${list(kinds)},1);`));
-      fails(
-        service(
-          `select api.claim_supported_notification_outbox(${list([...kinds, "post_kept"])},1);`
-        ),
-        "22023",
-        /supported mail kinds required/
-      );
-      fails(
-        service(`select api.claim_supported_notification_outbox(${list(["no_such_kind"])},1);`),
-        "22023",
-        /unsupported mail kind/
-      );
-    });
-    await check("who may run them is unchanged; the new functions are internal", () => {
-      assert.deepEqual(executeGrants(json, SIGNATURES), grants);
-      for (const signature of SIGNATURES)
-        assert.deepEqual(grants[signature], {
-          anon: false,
-          authenticated: false,
-          service_role: true,
-        });
-      assert.deepEqual(executeGrants(json, [QUEUE, DUE]), {
-        [QUEUE]: { anon: false, authenticated: false, service_role: true },
-        [DUE]: { anon: false, authenticated: false, service_role: false },
-      });
-      for (const [signature, definer] of [
-        [QUEUE, true],
-        [DUE, false],
-      ]) {
-        const meta =
-          json(`select jsonb_build_object('definer',prosecdef,'owner',proowner::regrole::text,'config',proconfig)
-            from pg_proc where oid='${signature}'::regprocedure;`);
-        assert.deepEqual(meta, { definer, owner: "postgres", config: ["search_path=pg_catalog"] });
-      }
-    });
+    await check("the claim takes 22 kinds, each once", () => assertClaimKinds(kit, 22));
+    await check("who may run them is unchanged; the new functions are internal", () =>
+      assertNoticeGrants(kit, grants, { queue: QUEUE, due: DUE })
+    );
 
     const later = steps.slice(index + 1);
     if (later.length) {
