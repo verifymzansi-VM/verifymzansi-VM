@@ -92,7 +92,6 @@ describe("proxy — real 404 for missing detail pages", () => {
     [`/mzansi-business/${POST}`, { area: "business", id: POST }],
     [`/tourism-events/${POST}`, { area: "tourism", id: POST }],
     ["/organisation/no-such-org", { area: "organisation", slug: "no-such-org" }],
-    ["/pricing/multi-listing", { area: "multi-listing" }],
   ])("answers %s with 404 when the read finds nothing", async (path, page) => {
     isMissingDetailPage.mockResolvedValue(true);
     const response = await routeRequest(request(path));

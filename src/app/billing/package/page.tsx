@@ -1,11 +1,15 @@
-import { notFound } from "next/navigation";
 import { PackageCheckout, type PackageCheckoutBlock } from "./package-checkout";
 import { readPackagesOnSale } from "@/lib/foundation/slot-package-offer";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
 import { readFoundationMySlotPackage } from "@/lib/foundation/billing-runtime";
 import { readOnlinePaymentMaxCents } from "@/lib/foundation/payment-limits";
 import { readMyUnpaidIndividualInvoices } from "@/lib/foundation/customer-invoices";
-import { isPackageTerm, PACKAGE_MAX_SLOTS, PACKAGE_MIN_SLOTS } from "@/lib/billing/slot-packages";
+import {
+  isPackageTerm,
+  PACKAGE_MAX_SLOTS,
+  PACKAGE_MIN_SLOTS,
+  PACKAGE_TERMS,
+} from "@/lib/billing/slot-packages";
 import { createLogger } from "@/lib/utils/logger";
 import { logDegradedRead } from "@/lib/utils/request-failure";
 
@@ -41,9 +45,11 @@ async function unpaidIndividualInvoices(): Promise<string[]> {
 }
 
 /**
- * The Multi-listing checkout (roadmap P4a). Hidden (not found) while packages
- * are not on sale: the owner's switch in the database, off until business
- * tools P5-P7 pass.
+ * The Multi-listing checkout (roadmap P4a). Always shown (launch checklist
+ * item 71: no visible link leads to a 404). While the owner's sales switch in
+ * the database is off it shows the three fixed terms with no plan: "Pay" is
+ * refused by the route ("Multi-listing packages are not on sale yet.") and
+ * "Ask for an invoice" says the same on the page. No plan id is ever made up.
  */
 export default async function PackageCheckoutPage({
   searchParams,
@@ -51,7 +57,6 @@ export default async function PackageCheckoutPage({
   searchParams: Promise<{ slots?: string; days?: string }>;
 }) {
   const offer = await readPackagesOnSale();
-  if (!offer) notFound();
   const { slots, days } = await searchParams;
   const typed = Number(slots);
   const initialSlots =
@@ -66,7 +71,11 @@ export default async function PackageCheckoutPage({
   ]);
   return (
     <PackageCheckout
-      terms={offer.plans.map((plan) => ({ planId: plan.id, days: plan.term_days }))}
+      terms={
+        offer
+          ? offer.plans.map((plan) => ({ planId: plan.id, days: plan.term_days }))
+          : PACKAGE_TERMS.map((days) => ({ planId: null, days }))
+      }
       initialSlots={initialSlots}
       initialDays={isPackageTerm(term) ? term : 30}
       block={block}

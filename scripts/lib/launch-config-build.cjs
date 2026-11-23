@@ -1,7 +1,8 @@
-// The launch-configuration test build: every switch that hides a feature
-// (src/lib/hidden-features.ts, PACKAGES_ON_SALE, the pre-launch pop-up) is
-// set to its launch value (LAUNCH_VALUES in src/lib/launch-config.ts), so
-// the browser tests can exercise the site as it will be on launch day. Only
+// The launch-configuration test build: the pre-launch pop-up is set to its
+// launch value (LAUNCH_VALUES in src/lib/launch-config.ts), so the browser
+// tests can exercise the site as it will be on launch day. (The switches that
+// hid features, src/lib/hidden-features.ts and PACKAGES_ON_SALE, are on in
+// every build.) Only
 // a build for the private local test copy may ask for it
 // (scripts/foundation-e2e.mjs with VERIFYMZANSI_LAUNCH_CONFIG=1).
 //

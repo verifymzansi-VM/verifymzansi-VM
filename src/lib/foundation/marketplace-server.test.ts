@@ -13,6 +13,15 @@ import {
   restoredEventHostBusiness,
   restoredSharePreview,
 } from "./marketplace-server";
+import type * as HiddenFeatures from "@/lib/hidden-features";
+
+// Not about view and like totals: SHOW_ENGAGEMENT_TOTALS is pinned off so no
+// totals read is made (that read is tested in post-engagement.test.ts).
+// It is on in production (owner's decision of 22 November 2026).
+vi.mock("@/lib/hidden-features", async (importOriginal) => ({
+  ...(await importOriginal<typeof HiddenFeatures>()),
+  SHOW_ENGAGEMENT_TOTALS: false,
+}));
 afterEach(() => vi.clearAllMocks());
 
 it("treats malformed detail identifiers as missing pages without a database request", async () => {

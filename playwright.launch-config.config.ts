@@ -2,13 +2,13 @@ import { defineConfig, devices } from "@playwright/test";
 import foundation from "./playwright.foundation.config";
 
 // Launch-configuration browser tests: the same private local test copy as
-// playwright.foundation.config.ts, but built with every switch that hides a
-// feature set to its launch value (LAUNCH_VALUES in src/lib/launch-config.ts:
-// the src/lib/hidden-features.ts switches and PACKAGES_ON_SALE on, the
-// pre-launch pop-up off), add-on sales open
+// playwright.foundation.config.ts, but built with the launch values
+// (LAUNCH_VALUES in src/lib/launch-config.ts: the pre-launch pop-up off; the
+// src/lib/hidden-features.ts switches and PACKAGES_ON_SALE are on in every
+// build), add-on sales open
 // (LAUNCH_CONFIG_SETTINGS in scripts/lib/foundation-e2e-website.mjs). It runs
 // every foundation spec plus launch-config.spec.ts, which visits each page
-// behind a switch. Desktop Chromium only.
+// that was behind a switch. Desktop Chromium only.
 //
 //   pnpm test:e2e:launch-config
 //   node --import tsx scripts/foundation-e2e.mjs down     # delete the copy afterwards

@@ -197,8 +197,10 @@ interface PackageDetail {
   audience: readonly string[];
   includes: readonly string[];
   notIncluded: string;
-  pricesHref: string;
-  pricesLabel: string;
+  /** The full-price link: Individual only (its prices are on /pricing; the
+   * other packages show their price sheet on this page). */
+  pricesHref?: string;
+  pricesLabel?: string;
   cta: { href: string; label: string };
 }
 
@@ -254,8 +256,6 @@ const PACKAGES: readonly PackageDetail[] = [
       `Paid online up to the most Ozow accepts in one payment; more than that, or more than ${PACKAGE_MAX_ONLINE_SLOTS} slots, by invoice at the same price`,
     ],
     notIncluded: "Not included: guaranteed views, enquiries or sales.",
-    pricesHref: "/pricing#multi-listing-prices",
-    pricesLabel: "See multi-listing prices",
     cta: { href: "/pricing/multi-listing", label: "Choose a multi-listing plan" },
   },
   {
@@ -282,8 +282,6 @@ const PACKAGES: readonly PackageDetail[] = [
     ],
     notIncluded:
       "Not included: site visits, on-site verification, professional filming, travel or any promise of views, enquiries, sales or B-BBEE recognition.",
-    pricesHref: "/pricing#programme-prices",
-    pricesLabel: "See sponsor fees",
     cta: { href: PROPOSAL_HREF, label: "Request a sponsor proposal" },
   },
 ];
@@ -404,7 +402,7 @@ function PackageSection({
             <Button asChild variant="outline" className="h-11 rounded-full">
               <Link href={pkg.cta.href}>{pkg.cta.label}</Link>
             </Button>
-            {PACKAGES_ON_SALE || pkg.id === "individual" ? (
+            {pkg.id === "individual" && pkg.pricesHref ? (
               <Button asChild variant="outline" className="h-11 rounded-full">
                 <Link href={pkg.pricesHref}>{pkg.pricesLabel}</Link>
               </Button>

@@ -2,6 +2,24 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { RETAIL_OFFERS } from "@/lib/constants/pricing";
 import AdvertisePage from "./page";
+import type * as HiddenFeatures from "@/lib/hidden-features";
+import type * as Pricing from "@/lib/constants/pricing";
+
+// Package sales switched off too (see above).
+vi.mock("@/lib/constants/pricing", async (importOriginal) => ({
+  ...(await importOriginal<typeof Pricing>()),
+  PACKAGES_ON_SALE: false,
+}));
+
+// These tests check Advertise with paid add-ons, the sponsor offer and package
+// sales switched off, the branch kept for turning them off again. All three
+// are on in production (owner's decision of 22 November 2026); the
+// launch-configuration and foundation browser tests check the page as served.
+vi.mock("@/lib/hidden-features", async (importOriginal) => ({
+  ...(await importOriginal<typeof HiddenFeatures>()),
+  SHOW_PAID_ADDONS: false,
+  SHOW_SPONSOR_OFFER: false,
+}));
 
 vi.mock("next/link", () => ({
   default: ({

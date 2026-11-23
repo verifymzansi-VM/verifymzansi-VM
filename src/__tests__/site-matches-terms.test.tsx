@@ -13,6 +13,24 @@ import postingTermsV6 from "@/lib/legal/terms-documents/posting-v6.json";
 import { TrialPolicy } from "@/components/billing/trial-policy";
 import { getPlanFeatureItems, PLANS, RETAIL_OFFERS } from "@/lib/constants/pricing";
 import type { PublicSponsor } from "@/lib/organisations/sponsors";
+import type * as HiddenFeatures from "@/lib/hidden-features";
+
+// Most guards here check the wording with paid add-ons and the sponsor offer
+// switched off, the branch kept for turning them off again. Both are on in
+// production (owner's decision of 22 November 2026); the wording they show is
+// listed for review in the launch checklist item 71 pull request. A test that
+// guards what production serves sets `pinned.sponsorOffer` to undefined.
+const pinned = vi.hoisted(() => ({ sponsorOffer: false as boolean | undefined }));
+vi.mock("@/lib/hidden-features", async (importOriginal) => {
+  const actual = await importOriginal<typeof HiddenFeatures>();
+  return {
+    ...actual,
+    SHOW_PAID_ADDONS: false,
+    get SHOW_SPONSOR_OFFER() {
+      return pinned.sponsorOffer ?? actual.SHOW_SPONSOR_OFFER;
+    },
+  };
+});
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/link", () => ({
@@ -159,12 +177,22 @@ describe("the sponsor offer, on hold", () => {
     expect(container.textContent).not.toMatch(/Give 25 to 250 businesses/);
   });
 
-  it("makes no 'first sponsors are joining' promise when none is listed", async () => {
-    sponsors.list = [];
-    const { default: SponsorsPage } = await import("@/app/sponsors/page");
-    const { container } = render(await SponsorsPage());
-    expect(container.textContent).not.toMatch(/are joining|Founding programmes open/);
-    expect(screen.getByText("No sponsors yet")).toBeInTheDocument();
+  it("makes no 'first sponsors are joining' promise when none is listed, as production serves it", async () => {
+    // Not pinned: the sponsor offer as production serves it (on).
+    pinned.sponsorOffer = undefined;
+    try {
+      sponsors.list = [];
+      const { default: SponsorsPage } = await import("@/app/sponsors/page");
+      const { container } = render(await SponsorsPage());
+      expect(container.textContent).not.toMatch(/are joining|Founding programmes open/);
+      expect(screen.getByText("No sponsors yet")).toBeInTheDocument();
+      // The offer is on here, as in production.
+      expect(
+        screen.getAllByRole("link", { name: "Become a Business Sponsor" }).length
+      ).toBeGreaterThan(0);
+    } finally {
+      pinned.sponsorOffer = false;
+    }
   });
 });
 

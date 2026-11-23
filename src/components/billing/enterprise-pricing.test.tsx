@@ -1,6 +1,14 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { EnterprisePricing } from "./enterprise-pricing";
+import type * as HiddenFeatures from "@/lib/hidden-features";
+
+// Tested with the sponsor offer switched off, the branch kept for turning it
+// off again. It is on in production (owner's decision of 22 November 2026).
+vi.mock("@/lib/hidden-features", async (importOriginal) => ({
+  ...(await importOriginal<typeof HiddenFeatures>()),
+  SHOW_SPONSOR_OFFER: false,
+}));
 
 describe("EnterprisePricing", () => {
   it("offers Individual and Multi-listing, each linking to its full details on the advertise page", () => {
