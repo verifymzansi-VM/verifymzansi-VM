@@ -12,7 +12,8 @@ begin
   select jsonb_build_object('account_id',actor,
     'slot_usage',coalesce((select jsonb_agg(jsonb_build_object(
       'id',e.id,'source',case e.source when 'retail_paid' then 'RETAIL_PAID' when 'intro_trial' then 'Free trial'
-        when 'sponsorship' then 'SPONSORED_ORGANISATION_MEMBER' when 'contract' then 'ENTERPRISE_CONTRACT' when 'staff_grant' then 'ADMIN_GRANT' end,
+        when 'sponsorship' then 'SPONSORED_ORGANISATION_MEMBER' when 'contract' then 'ENTERPRISE_CONTRACT' when 'staff_grant' then 'ADMIN_GRANT'
+        when 'free_credit' then 'FREE_CREDIT' end,
       'area',case e.area when 'market' then 'MZANSI_MARKET' when 'business' then 'MZANSI_BUSINESS' when 'tourism_events' then 'PROMOTIONS_EVENTS' end,
       'planName',pay.snapshot->>'label','status',e.status,'slotCapacity',e.slot_capacity,
       'activeUsage',internal.slot_posts_held(e.id),

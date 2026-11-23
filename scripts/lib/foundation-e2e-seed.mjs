@@ -162,7 +162,7 @@ function syntheticIdNumber(sequence) {
   throw new Error("Synthetic identity number unavailable");
 }
 
-async function verifyIdentity({ api, sql, owner, reviewer }) {
+async function verifyIdentity({ api, sql, owner, reviewer, sequence }) {
   const opened = await api.call("open_verification_case", {}, owner.token);
   const caseId = opened.case_id;
   assert.match(caseId, UUID);
@@ -191,7 +191,7 @@ async function verifyIdentity({ api, sql, owner, reviewer }) {
       );
   }
   // Throwaway keys: the encrypted number never leaves this local database.
-  const processed = processIdentityNumber(owner.id, syntheticIdNumber(1), {
+  const processed = processIdentityNumber(owner.id, syntheticIdNumber(sequence), {
     identityMatchKey: randomBytes(32).toString("hex"),
     numberEncryptionKey: randomBytes(32).toString("hex"),
     identityKeyId: "identity-match-v1",
@@ -444,15 +444,25 @@ export async function seedTestCopy({ root = process.cwd(), status, sql, log = ()
     ...(await signIn(api, people.moderator, factors.moderator)),
   };
 
-  log("Verified member: legal name, identity review by the admin, phone and area.");
-  for (const key of ["invitedMember", "verifiedMember"]) await claimLegalName(key);
-  await verifyIdentity({ api, sql, owner: session.verifiedMember, reviewer: session.admin });
-  await verifyPhone({ api, owner: session.verifiedMember });
-  await api.call(
-    "confirm_verification_locality",
-    { p_province: "gp", p_city: "gp_johannesburg" },
-    session.verifiedMember.token
-  );
+  log("Verified member and moderator: legal name, identity review by the admin, phone and area.");
+  for (const key of ["invitedMember", "verifiedMember", "moderator"]) await claimLegalName(key);
+  // Staff review posts only with an accepted ID review of their own, so the
+  // moderator is verified like the member.
+  for (const [sequence, key] of ["verifiedMember", "moderator"].entries()) {
+    await verifyIdentity({
+      api,
+      sql,
+      owner: session[key],
+      reviewer: session.admin,
+      sequence: sequence + 1,
+    });
+    await verifyPhone({ api, owner: session[key] });
+    await api.call(
+      "confirm_verification_locality",
+      { p_province: "gp", p_city: "gp_johannesburg" },
+      session[key].token
+    );
+  }
   const terms = await api.call("get_current_posting_terms", {}, null);
   await api.call(
     "accept_posting_terms",
@@ -478,6 +488,41 @@ export async function seedTestCopy({ root = process.cwd(), status, sql, log = ()
         spec,
       })
     );
+
+  // Showroom turns, through the website server's own recording command: the
+  // fair showroom (20261122023000_fair_showroom.sql) puts the posts seen least
+  // first and varies the order of posts on level turns at random. Giving the
+  // seeded posts turns a whole fair share apart makes the order the same on
+  // every run (the visual pictures; the test copy keeps the front card) and
+  // the same as publishing order, newest first: home 0, 2 and 4 appearances;
+  // tourism 0 and 2.
+  const turns = published
+    .slice()
+    .reverse()
+    .map((post, index) => ({
+      post,
+      home: 2 * index,
+      tourism: post.kind === "event" ? 2 * index : 0,
+    }));
+  for (let round = 0; round < 4; round += 1) {
+    const pairs = turns.flatMap(({ post, home, tourism }) => [
+      ...(round < home ? [[post.id, "showroom_home"]] : []),
+      ...(round < tourism ? [[post.id, "showroom_tourism"]] : []),
+    ]);
+    if (pairs.length > 0)
+      await api.call(
+        "record_post_activity",
+        {
+          p_post_ids: pairs.map(([id]) => id),
+          p_metrics: pairs.map(([, metric]) => metric),
+          // A showroom appearance counts once per browser a day: one per round.
+          p_device: randomUUID(),
+          p_account: null,
+        },
+        null,
+        true
+      );
+  }
 
   return {
     version: 1,

@@ -1,11 +1,13 @@
--- Reviewed rollback for updates/20261121162018_post_templates.sql.
+-- Reviewed rollback for updates/20261121150309_copy_a_post.sql.
 -- Not part of the replay. Run it only if that update must be undone, after the
--- owner has decided so; prefer a forward fix. Switch SHOW_POST_TEMPLATES off
--- first if it is on: a website offering templates would then get an error.
--- The rollback puts back internal.frontend_privacy_export_data byte for byte,
--- drops the trigger post_templates_account_closed, the nine new functions and
--- private.post_templates. Saved templates are deleted with the table; posts
--- made from them are not touched.
+-- owner has decided so; prefer a forward fix. Switch SHOW_POST_COPY off first
+-- if it is on: a website offering Copy would then get an error.
+-- The rollback puts back internal.run_retention and
+-- internal.frontend_privacy_export_data byte for byte, drops the trigger
+-- copy_new_photo_required, the eight new functions and private.post_copies.
+-- Copies already made stay as ordinary posts and drafts; only the record of
+-- which post each was copied from goes, and unfinished copies are no longer
+-- deleted after 14 days (their owner can delete them on My posts).
 begin;
 set local lock_timeout='5s';
 
@@ -13,35 +15,65 @@ do $$
 declare shape text;
 begin
   for shape in
-    select v.sig||' '||coalesce(case when v.sig = 'private.post_templates'
-        then case when to_regclass('private.post_templates') is not null then 'table' end
+    select v.sig||' '||coalesce(case when v.sig = 'private.post_copies'
+        then case when to_regclass('private.post_copies') is not null then 'table' end
         else (select md5(replace(p.prosrc,E'\r\n',E'\n')) from pg_proc p where p.oid=to_regprocedure(v.sig)) end,'absent')
-    from (values ('internal.frontend_privacy_export_data(uuid)'), ('private.post_templates'),
-      ('internal.save_my_post_template(text,jsonb)'), ('api.save_my_post_template(text,jsonb)'),
-      ('internal.list_my_post_templates()'), ('api.list_my_post_templates()'),
-      ('internal.rename_my_post_template(uuid,text)'), ('api.rename_my_post_template(uuid,text)'),
-      ('internal.delete_my_post_template(uuid)'), ('api.delete_my_post_template(uuid)'),
-      ('internal.clear_closed_account_post_templates()')) v(sig)
+    from (values ('internal.run_retention(integer)'), ('internal.frontend_privacy_export_data(uuid)'),
+      ('private.post_copies'), ('internal.copy_my_post(uuid,uuid)'), ('api.copy_my_post(uuid,uuid)'),
+      ('internal.copy_new_photo_guard()'), ('internal.get_frontend_staff_copy_facts(uuid[])'),
+      ('api.get_frontend_staff_copy_facts(uuid[])'), ('internal.purge_copy_drafts(integer)'),
+      ('internal.list_my_copy_drafts()'), ('api.list_my_copy_drafts()')) v(sig)
   loop
     if shape not in (
-        'internal.frontend_privacy_export_data(uuid) ab02f76bb5bb62b58521df6d584cf93b',
-        'private.post_templates table',
-        'internal.save_my_post_template(text,jsonb) 47c9a728c99a913ce45a38705f4ab11c',
-        'api.save_my_post_template(text,jsonb) 7b7c38ccb53d847bdbf5fbb5c7ac6ff2',
-        'internal.list_my_post_templates() 4ffe9bdfc9c0b380f2b6e59c0f8efa88',
-        'api.list_my_post_templates() f85908247e26dadcc725375bc1679bae',
-        'internal.rename_my_post_template(uuid,text) 006edc09d2c6cb3cc33355ae952d7a95',
-        'api.rename_my_post_template(uuid,text) b40de85a9040f0f014d4190312f817ad',
-        'internal.delete_my_post_template(uuid) ebfc6a0e2486f3b78df0aff1542f96c8',
-        'api.delete_my_post_template(uuid) 574ff2124c9b9cffe12c02ef79b6261d',
-        'internal.clear_closed_account_post_templates() c11685ff656cdf41c28ed8d0e6ed4b71') then
-      raise exception 'rollback precondition: the post templates update is not applied as reviewed (%)', shape
+        'internal.run_retention(integer) 55c133c8f2f031c62aac57eca13fb3b5',
+        'internal.frontend_privacy_export_data(uuid) 4aa0fa034c5c09e495530b5563ff3008',
+        'private.post_copies table',
+        'internal.copy_my_post(uuid,uuid) 2195159d14323575798a6ce2421e2c47',
+        'api.copy_my_post(uuid,uuid) 6e3e0f2b5320f23666814c7b798981a6',
+        'internal.copy_new_photo_guard() 43f568afc879ca564314f64ae7e3ba6f',
+        'internal.get_frontend_staff_copy_facts(uuid[]) 7944945fd7c86be18d5dbb69d09639a4',
+        'api.get_frontend_staff_copy_facts(uuid[]) c003659259239c0aed61f88adee6de55',
+        'internal.purge_copy_drafts(integer) 7eb58b557ed311b33b9087918dc21c9d',
+        'internal.list_my_copy_drafts() 7e7841deb0d75dbb6112c486a474978c',
+        'api.list_my_copy_drafts() 9d8551b32781bacb99abbb3ac9656cb9') then
+      raise exception 'rollback precondition: the copy a post update is not applied as reviewed (%)', shape
         using errcode='55000';
     end if;
   end loop;
 end$$;
 
--- The function as it was before the update.
+-- The functions as they were before the update.
+CREATE OR REPLACE FUNCTION internal.run_retention(p_limit integer)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare result jsonb;
+begin
+  if p_limit is null or p_limit not between 1 and 5000 then
+    raise exception 'limit 1 to 5000' using errcode='22023'; end if;
+  perform pg_catalog.set_config('vm.retention','on',true);
+  perform internal.purge_frontend_post_commands(p_limit);perform internal.purge_frontend_post_actions(p_limit); result:=jsonb_build_object(
+    'accounts',internal.run_account_erasures(least(p_limit,20)),
+    'privacy_requests',internal.retention_privacy_requests(p_limit),
+    'inbox',internal.purge_expired_inbox(p_limit),
+    'identity_bans',internal.purge_expired_identity_bans(p_limit),
+    'trial_identities',internal.purge_expired_trial_identities(p_limit),
+    'verification',internal.retention_verification(p_limit),
+    'staff_records',internal.retention_staff_records(p_limit),
+    'commerce',internal.retention_commerce(p_limit),
+    'operations',internal.retention_operations(p_limit),
+    'member_invitations',internal.purge_member_invitations(p_limit),
+    'capture_handoffs',internal.purge_capture_handoffs(p_limit));
+  perform pg_catalog.set_config('vm.retention','off',true);
+  return result;
+end;
+$function$;
+alter function internal.run_retention(integer) owner to postgres;
+revoke all on function internal.run_retention(integer) from public;
+grant execute on function internal.run_retention(integer) to service_role;
+
 CREATE OR REPLACE FUNCTION internal.frontend_privacy_export_data(p_subject uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -150,16 +182,15 @@ end$function$;
 alter function internal.frontend_privacy_export_data(uuid) owner to postgres;
 revoke all on function internal.frontend_privacy_export_data(uuid) from public;
 
-drop trigger post_templates_account_closed on private.account_closures;
-drop function internal.clear_closed_account_post_templates();
-drop function api.save_my_post_template(text, jsonb);
-drop function internal.save_my_post_template(text, jsonb);
-drop function api.list_my_post_templates();
-drop function internal.list_my_post_templates();
-drop function api.rename_my_post_template(uuid, text);
-drop function internal.rename_my_post_template(uuid, text);
-drop function api.delete_my_post_template(uuid);
-drop function internal.delete_my_post_template(uuid);
-drop table private.post_templates;
+drop trigger copy_new_photo_required on private.posts;
+drop function internal.copy_new_photo_guard();
+drop function api.copy_my_post(uuid, uuid);
+drop function internal.copy_my_post(uuid, uuid);
+drop function api.get_frontend_staff_copy_facts(uuid[]);
+drop function internal.get_frontend_staff_copy_facts(uuid[]);
+drop function internal.purge_copy_drafts(integer);
+drop function api.list_my_copy_drafts();
+drop function internal.list_my_copy_drafts();
+drop table private.post_copies;
 
 commit;

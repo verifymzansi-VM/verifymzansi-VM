@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Behaviour checks for 20261121162018_post_templates.sql: a member whose
+// Behaviour checks for 20261122191646_post_templates.sql: a member whose
 // Multi-listing package runs saves post templates for Market listings
 // (api.save_my_post_template), lists, renames and deletes their own
 // (api.list_my_post_templates, api.rename_my_post_template,
@@ -28,7 +28,7 @@ import {
   runTwoAdminUpdateCheck,
 } from "./lib/foundation-staff-payment-world.mjs";
 
-const UPDATE = "20261121162018_post_templates.sql";
+const UPDATE = "20261122191646_post_templates.sql";
 const API = [
   "api.save_my_post_template(text,jsonb)",
   "api.list_my_post_templates()",

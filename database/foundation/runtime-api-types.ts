@@ -17,6 +17,7 @@ export type FoundationRuntimePublicDatabase = {
       get_signup_mode: { Args: Record<never, never>; Returns: Json };
       get_vat_registration: { Args: Record<never, never>; Returns: Json };
       get_public_storefront: { Args: { p_post_id: string }; Returns: Json };
+      showroom_feed: { Args: { p_request: Json }; Returns: Json };
     };
   };
 };
@@ -73,6 +74,7 @@ export type FoundationRuntimeAuthenticatedDatabase = {
       get_payment_limits: { Args: Record<never, never>; Returns: Json };
       get_post_engagement: { Args: { p_post_ids: string[] }; Returns: Json };
       get_public_storefront: { Args: { p_post_id: string }; Returns: Json };
+      showroom_feed: { Args: { p_request: Json }; Returns: Json };
       get_my_communication_choices: { Args: Record<never, never>; Returns: Json };
       save_my_communication_choices: {
         Args: {
@@ -717,6 +719,20 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         };
         Returns: Json;
       };
+      open_authority_request: {
+        Args: {
+          p_request_type: string;
+          p_reference: string;
+          p_issued_by: string;
+          p_confirmed_number: string;
+          p_confirmed_by: string;
+          p_reason: string;
+          p_lookup_kind: string;
+          p_lookup_value: string;
+          p_attested: boolean;
+        };
+        Returns: Json;
+      };
       read_identity_disclosure: {
         Args: { p_disclosure: string; p_purpose: string; p_subject?: string };
         Returns: Json;
@@ -745,6 +761,18 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         Returns: Json;
       };
       get_my_post_performance: { Args: Record<never, never>; Returns: Json };
+      copy_my_post: { Args: { p_post: string; p_request: string }; Returns: Json };
+      get_frontend_staff_copy_facts: { Args: { p_posts: string[] }; Returns: Json };
+      list_my_copy_drafts: { Args: Record<never, never>; Returns: Json };
+      give_free_credit: {
+        Args: { p_email: string; p_posts: number; p_days: number; p_reason: string };
+        Returns: Json;
+      };
+      extend_free_credit: {
+        Args: { p_credit_id: string; p_days: number; p_reason: string };
+        Returns: Json;
+      };
+      list_free_credits: { Args: Record<never, never>; Returns: Json };
     };
   };
 };

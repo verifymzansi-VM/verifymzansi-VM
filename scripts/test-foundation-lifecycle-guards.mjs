@@ -2018,6 +2018,9 @@ try {
   });
 
   applySteps(database, steps.slice(returnedIndex + 1));
+  // Staff review posts only with an accepted ID review of their own since
+  // 20261121143000_one_person_admin_mode.sql (in the steps just applied).
+  scalar(`select vmtest.verified('${moderator.id}','${staff.id}');`);
   console.log(`Applied ${TRIAL}, ${RETURNED} and any later updates.`);
   // A later update may make a newer posting terms version current (posting-v4,
   // 20261112173841_switch_posting_terms_v4.sql): every member accepts it once.
@@ -2443,7 +2446,7 @@ try {
   });
   await check("events: the member's privacy export includes their submissions", () => {
     const exported = json(`select internal.frontend_privacy_export_data('${cara.id}');`);
-    // 43 datasets since 20261121162018_post_templates.sql added post_templates
+    // 43 datasets since 20261122191646_post_templates.sql added post_templates
     // (42 since 20261119172135_post_views_and_likes.sql added post_likes and
     // post_likes_summary; 40 since 20261119082834_house_slots.sql
     // added house_slot_events; 39 since 20261119025106_package_invoices.sql added

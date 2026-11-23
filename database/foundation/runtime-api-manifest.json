@@ -5590,7 +5590,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current audit:view capability (governor, admin) and recent authenticator proof: every scheduled job with how often it runs, its last recorded run and whether it is late; counts and at most 50 rows each of stuck emails (kind, attempts, queued time, error code), stuck privacy request notices the notice job can still send (kind, attempts, queued time) with a separate count of notices from the last 30 days it can never send, payment problems seen in the past 7 days (an 8-character payment reference, reason, source, times, occurrences, whether staff were alerted), paid payments not activated, account deletions held back (reason and dates), file deletions stuck or queued, ID evidence past its deletion date outside holds, accounts on legal hold and open cost alarms; never an account id, name, email, phone or message text. Read only."
+      "authority": "Current audit:view capability (governor, admin) and recent authenticator proof: every scheduled job with how often it runs, its last recorded run and whether it is late; counts and at most 50 rows each of stuck emails (kind, attempts, queued time, error code), stuck privacy request notices the notice job can still send (kind, attempts, queued time) with a separate count of notices from the last 30 days it can never send, payment problems seen in the past 7 days (an 8-character payment reference, reason, source, times, occurrences, whether staff were alerted), paid payments not activated, account deletions held back (reason and dates), file deletions stuck or queued, ID evidence past its deletion date outside holds (a selfie kept with its identity record is not past it, 20261122022323_identity_keep_for), accounts on legal hold and open cost alarms; never an account id, name, email, phone or message text. Read only."
     },
     {
       "name": "record_scheduled_job_run",
@@ -5613,7 +5613,10 @@
     },
     {
       "name": "open_identity_disclosure",
-      "updates": ["updates/20261121043124_identity_record_disclosure.sql"],
+      "updates": [
+        "updates/20261121043124_identity_record_disclosure.sql",
+        "updates/20261122013616_authority_request_types.sql"
+      ],
       "arguments": [
         {
           "name": "p_request_type",
@@ -5653,7 +5656,66 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Governor or admin (identity:disclose) with an authenticator code from the last 15 minutes: checks an authority request (type from a closed list, reference, a reason, and the confirmation that it is genuine and signed), looks the person up by post id or link slug, ID number fingerprint, phone number or email address (never by name), and writes the append-only log row before answering. Returns only the log row id, number, outcome, match count and closing time (15 minutes); a search that finds nobody is logged too."
+      "authority": "Retired by rule D9 (updates/20261122013616_authority_request_types.sql): runs the same checks as open_authority_request with no issuer, number called or confirmer, so every call is refused (an earlier type with disclosure_request_type_invalid, a D9 type with disclosure_issued_by_required) and nothing is logged. To be removed by a later contract step."
+    },
+    {
+      "name": "open_authority_request",
+      "updates": ["updates/20261122013616_authority_request_types.sql"],
+      "arguments": [
+        {
+          "name": "p_request_type",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reference",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_issued_by",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_confirmed_number",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_confirmed_by",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_lookup_kind",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_lookup_value",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_attested",
+          "sqlType": "boolean",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Governor or admin (identity:disclose) with an authenticator code from the last 15 minutes, under rule D9: checks an authority request (subpoena, court_order, search_warrant or urgent_life_risk; the reference; who issued it, the official number that was called and who confirmed it; a reason; the confirmation that it was checked), looks the person up by post id or link slug, ID number fingerprint, phone number or email address (never by name), and writes the append-only log row before answering. Returns only the log row id, number, outcome, match count and closing time (15 minutes); a search that finds nobody is logged too. An urgent_life_risk record never discloses the selfie or ID photo."
     },
     {
       "name": "read_identity_disclosure",
@@ -5682,7 +5744,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Governor or admin (identity:disclose, authenticator code from the last 15 minutes), only the staff member who opened the disclosure, while it still holds the capability, until it closes 15 minutes after opening: logs the look (view, print or selfie) first, then returns the request and, per named account, the kept identity record (full names as on the ID, verification date, whether the ID number and selfie are still kept, the ID photo state, verified phone numbers with dates) or, for an ID number only ever tried, the dates of the attempts. Never object keys or the encrypted number."
+      "authority": "Governor or admin (identity:disclose, authenticator code from the last 15 minutes), only the staff member who opened the disclosure, while it still holds the capability, until it closes 15 minutes after opening: logs the look (view, print or selfie) first, then returns the request and, per named account, the kept identity record (full names as on the ID, verification date, whether the ID number and selfie are still kept, the ID photo state, verified phone numbers with dates) or, for an ID number only ever tried, the dates of the attempts. Never object keys or the encrypted number. Under rule D9 (updates/20261122013616_authority_request_types.sql) it adds issued_by, confirmed_number and confirmed_by when the record has them, leaves the selfie and ID photo out of an urgent_life_risk record and refuses its selfie purpose (disclosure_selfie_withheld) before logging."
     },
     {
       "name": "list_identity_disclosures",
@@ -5719,7 +5781,7 @@
         "authenticated": false,
         "service_role": true
       },
-      "authority": "Website server only, for a disclosure that is still open and was opened by that staff member: the encrypted ID number (unless erased) and the selfie stored object (unless deleted) of each named account with a kept record, so the server can decrypt the number and show the selfie."
+      "authority": "Website server only, for a disclosure that is still open and was opened by that staff member: the encrypted ID number (unless erased) and the selfie stored object (unless deleted) of each named account with a kept record, so the server can decrypt the number and show the selfie. Never the selfie's object for an urgent_life_risk request (rule D9)."
     },
     {
       "name": "get_staff_sales_summary",
@@ -5832,7 +5894,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Admin (identity_check:configure) with an authenticator code from the last 15 minutes: sets the automatic ID check setting with a reason of 5 to 500 characters (no control or direction characters); a change is logged append-only and setting a mode, even the current one, ends a pause. Until the retention update replaces it, only manual is accepted (PT409 identity_check_retention_pending)."
+      "authority": "Admin (identity_check:configure) with an authenticator code from the last 15 minutes: sets the automatic ID check setting with a reason of 5 to 500 characters (no control or direction characters); a change is logged append-only and setting a mode, even the current one, ends a pause. Accepts manual, staff_final and automatic (20261122022323_identity_keep_for)."
     },
     {
       "name": "get_identity_check_for_case",
@@ -6117,8 +6179,159 @@
       "authority": "Public: for a publicly live business with a storefront (current CIPC sticker, its owner's package running, the owner's first such business) or a live listing holding that package's slot, the business id and name, the listing count, categories, vehicle makes and property areas; null for any other post. Card facts only: no owner, package, slot, account or contact."
     },
     {
+      "name": "copy_my_post",
+      "updates": ["updates/20261121150309_copy_a_post.sql"],
+      "arguments": [
+        {
+          "name": "p_post",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_request",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current live owner of a Market listing submitted at least once and not held by staff, while the owner's Multi-listing package runs: a new draft through the draft allowance with the listing's fields, contact buttons (never numbers), photos and logo (the same stored files), never the video; a repeated request returns the same copy."
+    },
+    {
+      "name": "get_frontend_staff_copy_facts",
+      "updates": ["updates/20261121150309_copy_a_post.sql"],
+      "arguments": [
+        {
+          "name": "p_posts",
+          "sqlType": "uuid[]",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Staff with queue:view (fresh authenticator code), only for copies under review that the caller has claimed (up to 25): the post each was copied from (id, title, status; status deleted and no title once it is gone)."
+    },
+    {
+      "name": "list_my_copy_drafts",
+      "updates": ["updates/20261121150309_copy_a_post.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current live member: the ids of their own unfinished copies (drafts made by api.copy_my_post) and when each will be deleted (14 days after its last change); nothing else."
+    },
+    {
+      "name": "give_free_credit",
+      "updates": ["updates/20261122130744_free_credits.sql"],
+      "arguments": [
+        {
+          "name": "p_email",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_posts",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_days",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current free_credit:give capability (admin role; authenticator code from the last 15 minutes): gives the member with this email (an active, confirmed account with a current accepted ID review; never the admin's own account or an account ever reviewed as the same person; the admin needs a current accepted ID review of their own; refused while the member already has a running gift) a free-credit entitlement of 1 to 6 posts for 1 to 30 days from now, with a reason of 5 to 200 characters; area null, 4 posts going live per post per 30 days, 10 photos and 1 video, no add-ons, no payment, never renewed; recorded in the append-only gift record."
+    },
+    {
+      "name": "extend_free_credit",
+      "updates": ["updates/20261122130744_free_credits.sql"],
+      "arguments": [
+        {
+          "name": "p_credit_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_days",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current free_credit:give capability (admin role; authenticator code from the last 15 minutes): adds 1 to 30 days to a free-credit entitlement, from its current end while it runs, otherwise from now, with a reason of 5 to 200 characters; the member must still be active and ID-verified and not the admin; refuses a revoked gift (an erased account); recorded in the append-only gift record."
+    },
+    {
+      "name": "list_free_credits",
+      "updates": ["updates/20261122130744_free_credits.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current free_credit:view capability (admin role; 12-hour authenticator rule): the latest 500 free-credit entitlements, newest first: id, the member's masked email (null after erasure), posts, start, end, active or ended, and the all-time views of the posts each funded; never the reason, the admin or an unmasked address."
+    },
+    {
+      "name": "showroom_feed",
+      "updates": ["updates/20261122023000_fair_showroom.sql"],
+      "arguments": [
+        {
+          "name": "p_request",
+          "sqlType": "jsonb",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": true,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Public: the fair showroom order of publicly live posts for one showroom (home when omitted, business, market or tourism) and an optional province and city of the visitor, which are not stored; at most 15 or 7 public cards with their preview and is_new. Card facts only: no score, counts, owner or account. Writes nothing (volatile only for its random variety)."
+    },
+    {
       "name": "save_my_post_template",
-      "updates": ["updates/20261121162018_post_templates.sql"],
+      "updates": ["updates/20261122191646_post_templates.sql"],
       "arguments": [
         {
           "name": "p_name",
@@ -6142,7 +6355,7 @@
     },
     {
       "name": "list_my_post_templates",
-      "updates": ["updates/20261121162018_post_templates.sql"],
+      "updates": ["updates/20261122191646_post_templates.sql"],
       "arguments": [],
       "returns": "jsonb",
       "volatility": "v",
@@ -6155,7 +6368,7 @@
     },
     {
       "name": "rename_my_post_template",
-      "updates": ["updates/20261121162018_post_templates.sql"],
+      "updates": ["updates/20261122191646_post_templates.sql"],
       "arguments": [
         {
           "name": "p_template",
@@ -6179,7 +6392,7 @@
     },
     {
       "name": "delete_my_post_template",
-      "updates": ["updates/20261121162018_post_templates.sql"],
+      "updates": ["updates/20261122191646_post_templates.sql"],
       "arguments": [
         {
           "name": "p_template",

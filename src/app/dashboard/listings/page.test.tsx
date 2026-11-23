@@ -3,6 +3,23 @@ import { render, screen } from "@testing-library/react";
 import ListingsPage from "./page";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
 import { readRestoredPostManager } from "@/lib/foundation/post-manager";
+import { readFoundationMySlotPackage } from "@/lib/foundation/billing-runtime";
+import { readMyCopyDrafts } from "@/lib/foundation/post-copy";
+import type * as HiddenFeatures from "@/lib/hidden-features";
+const switches = vi.hoisted(() => ({ SHOW_POST_COPY: false }));
+vi.mock("@/lib/hidden-features", async (importOriginal) => ({
+  ...(await importOriginal<typeof HiddenFeatures>()),
+  get SHOW_POST_COPY() {
+    return switches.SHOW_POST_COPY;
+  },
+}));
+vi.mock("@/lib/foundation/billing-runtime", () => ({ readFoundationMySlotPackage: vi.fn() }));
+vi.mock("@/lib/foundation/post-copy", () => ({ readMyCopyDrafts: vi.fn() }));
+vi.mock("@/components/listings/post-more-menu", () => ({
+  PostMoreMenu: ({ title }: { title: string }) => (
+    <button type="button">{`More actions for ${title}`}</button>
+  ),
+}));
 vi.mock("@/lib/foundation/server-session", () => ({
   readFoundationServerSession: vi.fn(),
   FoundationServerSessionError: class extends Error {},
@@ -119,11 +136,86 @@ describe("Dashboard listings page", () => {
     vi.clearAllMocks();
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-05T00:00:00.000Z"));
+    vi.mocked(readMyCopyDrafts).mockResolvedValue(new Map());
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.useRealTimers();
+    switches.SHOW_POST_COPY = false;
+  });
+
+  const copyPosts = [
+    {
+      id: "listing-live",
+      title: "Demo bakkie",
+      status: "live",
+      created_at: "2026-03-04T00:00:00Z",
+      expires_at: "2026-04-04T00:00:00Z",
+      area: "MZANSI_MARKET",
+      photos: [],
+      price_cents: 28990000,
+      revision: 3,
+    },
+    {
+      id: "listing-copy",
+      title: "Demo bakkie",
+      status: "draft",
+      created_at: "2026-03-04T12:00:00Z",
+      area: "MZANSI_MARKET",
+      photos: [],
+      price_cents: 28990000,
+      revision: 1,
+    },
+    {
+      id: "draft-not-a-copy",
+      title: "Not a copy",
+      status: "draft",
+      created_at: "2026-03-04T12:00:00Z",
+      area: "MZANSI_MARKET",
+      photos: [],
+      price_cents: 1000,
+      revision: 1,
+    },
+  ];
+  const packageState = (state: "active" | "ended" | null) =>
+    vi.mocked(readFoundationMySlotPackage).mockResolvedValue({
+      package: state ? { state } : null,
+    } as unknown as Awaited<ReturnType<typeof readFoundationMySlotPackage>>);
+
+  it("copy a post: More and Drafts while the switch is on and the package runs", async () => {
+    switches.SHOW_POST_COPY = true;
+    packageState("active");
+    vi.mocked(readMyCopyDrafts).mockResolvedValue(
+      new Map([["listing-copy", "2026-03-18T12:00:00.000Z"]])
+    );
+    postManager(copyPosts);
+    render(await ListingsPage({ searchParams: Promise.resolve({}) }));
+    expect(
+      screen.getByRole("button", { name: "More actions for Demo bakkie" })
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Drafts (1)" })).toBeInTheDocument();
+    expect(document.querySelector('a[href="/post/create-listing?copy=listing-copy"]')).toBeTruthy();
+    expect(screen.getByText(/deleted 14 days after your last change/)).toBeInTheDocument();
+    expect(screen.getByText(/Will be deleted on 18 March 2026/)).toBeInTheDocument();
+    // Only copies are listed: the 14-day rule covers them alone.
+    expect(screen.queryByText("Not a copy")).not.toBeInTheDocument();
+    expect(readFoundationMySlotPackage).toHaveBeenCalledWith(session.api);
+  });
+
+  it("copy a post: no More without a running package; nothing new with the switch off", async () => {
+    switches.SHOW_POST_COPY = true;
+    packageState("ended");
+    postManager(copyPosts);
+    const { unmount } = render(await ListingsPage({ searchParams: Promise.resolve({}) }));
+    expect(screen.queryByRole("button", { name: /More actions/ })).not.toBeInTheDocument();
+    unmount();
+    switches.SHOW_POST_COPY = false;
+    postManager(copyPosts);
+    render(await ListingsPage({ searchParams: Promise.resolve({}) }));
+    expect(screen.queryByRole("button", { name: /More actions/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Drafts/ })).not.toBeInTheDocument();
+    expect(screen.queryByText("Live (1)")).toBeInTheDocument();
   });
 
   it("loads the preserved post manager from the verified native owner", async () => {

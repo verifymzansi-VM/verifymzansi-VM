@@ -391,3 +391,52 @@ describe("ModerationPreviewPanel", () => {
     expect(screen.getByText(/No field-level differences were detected/i)).toBeInTheDocument();
   });
 });
+
+describe("ModerationPreviewPanel copy facts", () => {
+  const source = "11111111-1111-4111-8111-111111111111";
+
+  it("links a live source", () => {
+    render(
+      <ModerationPreviewPanel
+        item={{
+          ...baseItem,
+          copy_facts: {
+            copied_from: { id: source, title: "Demo bakkie", status: "live" },
+          },
+        }}
+      />
+    );
+    expect(screen.getByRole("link", { name: /Demo bakkie/ })).toHaveAttribute(
+      "href",
+      `/listing/${source}`
+    );
+  });
+
+  it("does not link a source that is not live, or one that was deleted", () => {
+    const { unmount } = render(
+      <ModerationPreviewPanel
+        item={{
+          ...baseItem,
+          copy_facts: {
+            copied_from: { id: source, title: "Demo bakkie", status: "expired" },
+          },
+        }}
+      />
+    );
+    expect(screen.getByText("Demo bakkie")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Demo bakkie/ })).toBeNull();
+    expect(screen.getByText(/\(expired\)/)).toBeInTheDocument();
+    unmount();
+    render(
+      <ModerationPreviewPanel
+        item={{
+          ...baseItem,
+          copy_facts: {
+            copied_from: { id: source, title: null, status: "deleted" },
+          },
+        }}
+      />
+    );
+    expect(screen.getByText("a post that has since been deleted")).toBeInTheDocument();
+  });
+});

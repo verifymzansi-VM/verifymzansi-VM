@@ -42,10 +42,11 @@ import {
   applyAndProveRollback,
   fingerprintOf,
   functionBodyMd5,
+  grantHouseSlotsSql,
   P30,
+  postReviewHelpers,
   psqlSessions,
   runTwoAdminUpdateCheck,
-  sqlValue,
 } from "./lib/foundation-staff-payment-world.mjs";
 
 const UPDATE = "20261119082834_house_slots.sql";
@@ -65,8 +66,16 @@ const EXPORT_LATER = [
   "3dfe35ae5e93f0661ecd7dbf710cf45d",
   // 20261120045404_package_add_slots.sql (the request's kind, package and days)
   "e543b105fe264d5a683b5c570bf68cb5",
-  // 20261121162018_post_templates.sql (the post_templates dataset)
-  "ab02f76bb5bb62b58521df6d584cf93b",
+  // 20261121150309_copy_a_post.sql (the posts rows gain copied_from)
+  "4aa0fa034c5c09e495530b5563ff3008",
+  // 20261122191646_post_templates.sql (the post_templates dataset)
+  "fb567a31cf8ca166f117d5b02f744235",
+];
+/** The grant after later reviewed updates. */
+const GRANT_LATER = [
+  ADDED[GRANT],
+  // 20261121143000_one_person_admin_mode.sql (up to 25; single-administrator mode)
+  "6d72e0bc6a5f2bee76a43563f19278ac",
 ];
 const LIFECYCLE = "internal.run_post_lifecycle(integer)";
 const LIFECYCLE_BEFORE = "cb5770e3e71e9e6ed31d1eff3e06e3fc";
@@ -153,8 +162,7 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
   ready(admin);
   ready(admin2);
 
-  const grantSql = (recipient, slots, days, reason, approver) =>
-    `select internal.grant_house_slots(${sqlValue(recipient?.email ?? recipient)},${slots ?? "null"},${days ?? "null"},${sqlValue(reason)},${sqlValue(approver?.email ?? approver)});`;
+  const grantSql = grantHouseSlotsSql;
   const grant = (recipient, slots = 1, days = 90, approver = admin2, reason = REASON) =>
     json(grantSql(recipient, slots, days, reason, approver));
   const houseSlots = (person) =>
@@ -164,28 +172,7 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
     json(`select coalesce(jsonb_agg(to_jsonb(h) order by h.recorded_at, h.action, h.id),'[]')
       from private.house_slot_events h join private.entitlements e on e.id=h.entitlement_id
       where e.owner_id='${person.id}';`);
-  const row = (id) =>
-    json(`select to_jsonb(p)-'description' from private.posts p where p.id='${id}';`);
-  const draft = (owner) => q(`select vmtest.draft('${owner.id}');`);
-  const submitSql = (owner, id) =>
-    member(owner, `select api.submit_post('${id}',${row(id).revision});`);
-  const fundedBy = (id) =>
-    q(
-      `select coalesce((select entitlement_id::text from private.post_activations where post_id='${id}' and released_at is null),'');`
-    );
-  const approveSql = (who, id) => {
-    const lease = json(staff(who, `select api.claim_queue_item('post','${id}');`));
-    return staff(
-      who,
-      `select api.moderate_post(p_post_id=>'${id}',p_expected_revision=>${row(id).revision},p_decision=>'approve',
-        p_reason=>null,p_claim_generation=>'${lease.claim_generation}',p_claim_nonce=>'${lease.claim_nonce}');`
-    );
-  };
-  const freeFirstPost = (person) => ({
-    requests: count(`private.intro_trial_requests where owner_id='${person.id}'`),
-    identities: count(`private.trial_identities where owner_id='${person.id}'`),
-    trials: count(`private.entitlements where owner_id='${person.id}' and source='intro_trial'`),
-  });
+  const { row, draft, submitSql, fundedBy, approveSql, freeFirstPost } = postReviewHelpers(kit);
   const money = (person) => ({
     payments: count(`private.payments where owner_id='${person.id}'`),
     lines: count(
@@ -817,7 +804,8 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
     applySteps(database, later);
     await check("later updates keep the house slots", () => {
       for (const [signature, md5] of Object.entries(ADDED))
-        assert.equal(bodyMd5(signature), md5, signature);
+        if (signature !== GRANT) assert.equal(bodyMd5(signature), md5, signature);
+      assert.ok(GRANT_LATER.includes(bodyMd5(GRANT)), bodyMd5(GRANT));
       // 20261119172135_post_views_and_likes.sql adds the like datasets to the
       // export; house_slot_events stays.
       assert.ok(EXPORT_LATER.includes(bodyMd5(EXPORT)), bodyMd5(EXPORT));

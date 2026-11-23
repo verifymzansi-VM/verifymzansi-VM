@@ -38,6 +38,7 @@ const publicProbeAnswer = (name) =>
     get_post_engagement: { items: [] },
     get_signup_mode: { mode: "invite_only" },
     get_vat_registration: { status: "not_registered", vat_number: null },
+    showroom_feed: { items: [] },
   })[name] ?? (name === "get_public_storefront" ? null : []);
 
 const fn = (name, args = [], extra = {}) => ({

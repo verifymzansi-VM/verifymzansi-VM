@@ -81,11 +81,14 @@ begin
             and a.state_changed_at < now_at - interval '1 day'),
         'files_queued', (select count(*) from private.media_objects m where m.state = 'cleanup_required')
           + (select count(*) from private.evidence_artifacts a where a.state = 'cleanup_required'),
-        -- Due for deletion over a day ago (the cleanup claim's own rule) and
-        -- not kept by a legal or fraud hold.
+        -- Due for deletion over a day ago (the cleanup claim's own rule: a
+        -- selfie whose identity record is kept is not due) and not kept by a
+        -- legal or fraud hold.
         'evidence_overdue', (select count(*) from private.evidence_artifacts a
           where a.state in ('uploaded', 'clean', 'rejected')
             and coalesce(a.retain_until, a.created_at + interval '90 days') < now_at - interval '1 day'
+            and not exists(select 1 from private.verification_identity_submissions s
+              where s.selfie_artifact_id = a.id and internal.identity_record_kept(s.id))
             and not exists(select 1 from private.legal_holds h where h.subject_id = a.owner_id
               and h.released_at is null)
             and not internal.evidence_fraud_held(a.case_id)),

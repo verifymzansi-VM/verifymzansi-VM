@@ -80,6 +80,698 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Free credits for businesses VerifyMzansi recruits, 22 November 2026
+
+`20261122130744_free_credits.sql` was applied on 22 November 2026 at 17:35 UTC
+(see the applied register). Launch checklist item 70, the owner's design of 22
+November 2026: an admin gives an ID-verified member free posts for a short time
+and may extend the gift.
+
+- **The gift.** An entitlement (`private.entitlements`) with the new source
+  `free_credit`: every section (area null), 1 to 6 posts (slot capacity), the
+  fair use and media of a paid Individual slot per post (4 posts going live per
+  post per 30 days, 10 photos, 1 video), no add-ons, no payment, from now for 1
+  to 30 days. New constraint `entitlements_free_credit_check`: the admin who
+  gave it is named, and it has no payment, area or add-ons. It funds posts
+  through the existing posting, activation and media commands, which already
+  accept every source other than `retail_paid` without a payment. It never
+  renews and is never charged: renewals, renewal reminders, the 4 Individual
+  slots, sales figures, the VAT total and invoices read only `retail_paid`
+  entitlements and payments. It is not a house slot (`staff_grant` with
+  `private.house_slot_events`) and not the free first post (`intro_trial`);
+  giving one touches neither.
+- **Commands** (admins; internal twins security definer, `api` wrappers security
+  invoker, authenticated only):
+  - `api.give_free_credit(email, posts, days, reason)` (capability
+    `free_credit:give`, an authenticator code from the last 15 minutes) finds
+    the member by email (an active, confirmed account) and refuses: no such
+    account (PT409, `free_credit_member_not_found`), no current accepted ID
+    review (`free_credit_identity_required`), a member who already has a running
+    gift (`free_credit_active`: extend that one instead), posts outside 1 to 6
+    (22023, `free_credit_posts_invalid`), days outside 1 to 30
+    (`free_credit_days_invalid`), a reason that is not 5 to 200 characters of
+    plain text on one line (`free_credit_reason_required`).
+  - `api.extend_free_credit(gift, days, reason)` (`free_credit:give`, the same
+    fresh code) adds 1 to 30 days from the gift's current end while it runs,
+    otherwise from now, as often as needed; the member must still be active and
+    ID-verified; an unknown gift is refused (22023, `free_credit_not_found`),
+    one whose account was erased too (PT409, `free_credit_closed`). The search
+    end of its live posts follows (`internal.refresh_slot_chain_documents`).
+  - Both follow the rule of staff money actions
+    (`internal.assert_staff_payment_actor`): the admin needs a current accepted
+    ID review of their own (42501, `staff_review_required`) and never acts for
+    their own account or an account ever reviewed as the same person, past
+    reviews included (42501, `staff_same_identity`).
+  - `api.list_free_credits()` (`free_credit:view`, the 12-hour rule): the latest
+    500 gifts, newest first: the member's masked email, posts, start, end,
+    active or ended, and the all-time views of the posts each funded.
+- **Record.** `private.free_credit_events` (append-only, row level security, no
+  grants) keeps each gift (`given`) and extension (`extended`): the admin, the
+  time, the gift (its entitlement names the member), posts, days, the end it set
+  and the reason. It goes only with its entitlement (commerce retention, five
+  tax years after the gift ended).
+- **Member reads.** `internal.get_my_frontend_post_manager` (full body; the slot
+  list on My posts) names the source `FREE_CREDIT`; the member's My slots list
+  (`api.get_my_slots_v2`) and billing read already return every source.
+
+Expand only. ORDER: apply first, then merge. Until an admin gives the first gift
+no entitlement has the new source, so the website before this release reads
+nothing new.
+
+**Applying.**
+
+1. Run `../preflight/20261122130744_free_credits.check.sql` unchanged in the SQL
+   editor. It is read only. Continue only if its result is the single "summary"
+   row reading "free credits: update not applied; entitlements: N".
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "free credits: already applied; entitlements: N; gifts: 0
+   (active: 0); events: 0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is `../rollback/20261122130744_free_credits.down.sql`
+(only with the owner's decision; prefer a forward fix; deploy a website without
+the Free credits page first). It refuses (55000) unless every piece has the
+update's body, and once any gift was given; otherwise it puts back
+`internal.get_my_frontend_post_manager` byte for byte and drops what the update
+added.
+
+`node --import tsx scripts/test-foundation-free-credits.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; a drifted body and a premature rollback
+refused; apply, rollback and re-apply return the same fingerprints; the grants;
+a gift's shape and record; each refusal (unverified member, own account, 0 or 7
+posts, 0 or 31 days, a missing reason, no such account, a moderator, a stale
+authenticator code); an admin without an accepted ID review of their own, and an
+admin whose ended review matches the member's current one, refused for giving
+and extending, while that admin can still give to another member; a second gift
+refused while the first runs and allowed once it ended; extending a running and
+an ended gift; posting with the gift (the free first post untouched); the sales
+figures and VAT total unchanged; the list; and the append-only record.
+
+## Fair showroom for every post, 21 November 2026
+
+`20261122023000_fair_showroom.sql` was applied on 22 November 2026 at 15:45 UTC
+(see the applied register). Launch checklist item 66 (design approved by the
+owner on 21 November 2026). It adds one public read,
+`api.showroom_feed(p_request)` (visitors and members, security invoker over a
+security definer `internal` twin), which the home showroom and each area
+showroom use, and replaces `internal.record_post_activity` so a showroom
+appearance counts at most once per browser, post and showroom a day.
+
+- **Request:** `showroom` (`home`, `business`, `market` or `tourism`; `home`
+  when omitted), `province` (a province id) and `city` (a city id of that
+  province, only with it). Strings only, at most 1,024 bytes; anything else is
+  refused (22023). The website sends the visitor's rough area from Cloudflare's
+  request data for that page only; the database never stores it.
+- **Answer:** `{"items": [...]}`, at most 15 cards for home and 7 for an area,
+  in showroom order. Each card has the public search card fields (no `score`),
+  its `preview` (as `api.search_post_cards`) and `is_new`. Only publicly live
+  posts, as public search shows them.
+- **Turns:** the posts seen least go first. A post's score is
+  `(fair share - its appearances) / fair share` over the last 7 days of
+  `private.post_activity_days` for that showroom, where the fair share is the
+  one the Performance page shows (the showroom's appearances in the last 7 days
+  divided by its posts now, at least 1). One turn is one fair share. A post's
+  appearances count up to 3 fair shares, so a flood of them cannot bury it more
+  than 2 turns behind.
+- **New:** for 72 hours after a post first went live it is `is_new` and gets one
+  extra turn that fades evenly to nothing. A post approved again after it was
+  live before (an earlier approval of the post itself in
+  `private.moderation_log`) is not new again; an unchanged reactivation keeps
+  its first `published_at`.
+- **Nudges** (all together under one turn, so none carries a post past one a
+  whole turn ahead): 0.15 of a turn for a ready video; likes per view (the
+  post's lifetime totals in `private.post_engagement_totals`), smoothed as 1
+  like in 20 views, at most 0.15 (reached at 1 like in 5 views); up to 0.3 of
+  randomness. The video and likes nudges grow with the showroom's appearances in
+  the last 7 days: none while it has had none (every post is then level, and
+  randomness shares the places; this is the case while the website does not
+  record appearances), in full once its posts average one appearance each.
+- **Area:** of every 7 places, 1, 4 and 6 go to the visitor's city, 2 and 5 to
+  the rest of the province, 3 and 7 to the rest of South Africa (home's 15: 7, 4
+  and 4). A group that runs out passes its places to the next one (city,
+  province, rest, then the city again). A post shown more than twice the fair
+  share this week loses its city and province places. Without a province every
+  place comes from one all-South-Africa queue.
+- **Recording** (`internal.record_post_activity`, full body; it was
+  `20261121100028_post_performance_stats.sql`'s): a showroom appearance
+  (`showroom_home`, `_business`, `_market`, `_tourism`, `_programme`) counts at
+  most once per browser, post and showroom a day, through a mark under the day's
+  salt in `private.post_view_marks`, as views use (the engagement clean-up
+  deletes it after 24 hours). Marks are stored only for posts that would count
+  (publicly live, not the viewer's own; `showroom_business`, `_market` and
+  `_tourism` only for a post of that area), never without a browser
+  (`p_device`). They add to the views' daily count (once per request and last,
+  like views), and stop at 200,000 of it, so showroom traffic alone never closes
+  the views' 300,000 storage valve. The website sends the browser's signed
+  `vmz_viewer` identifier for showroom appearances only, and only when it is at
+  least a day old; it drops them otherwise. They have their own per-post daily
+  limit (`engagement:activity:showroom`), and the carousel sends each card's
+  appearance once per page load. Every other counter, the arguments and the
+  answer are unchanged.
+
+**Cost.** Each call reads the showroom's live posts, 7 days of activity rows
+(for 2,000 live posts about 14,000 small rows), one view and like totals row per
+post, and the last 72 hours' approvals through one partial index,
+`private.moderation_log_post_approvals_idx` (`post_id`, a post's own approvals
+only). On a seed of 2,000 live posts, a year of view days (730,000 rows) and
+20,000 likes, a call takes about 23 ms in the throwaway Postgres 17 container
+(about 75 ms when likes and views were read from the day rows). The website
+remembers each order for 60 seconds per showroom and area on each server copy,
+so the database sees at most one call a minute per showroom and area per copy.
+No table is added. Recording adds one 32-byte mark per browser, post and
+showroom a day to `private.post_view_marks` (deleted after 24 hours), within the
+existing per-address and per-post limits.
+
+New command and index, and one replaced function body (expand). ORDER: apply
+first, then merge: the deploy check probes every command in
+`../runtime-api-manifest.json`, and the website falls back to the newest posts
+if the read fails.
+
+**Applying.**
+
+1. Run `../preflight/20261122023000_fair_showroom.check.sql` unchanged in the
+   SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "fair showroom: update not applied; showroom posts: N"
+   (any count).
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "fair showroom: already applied; showroom posts: N".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is `../rollback/20261122023000_fair_showroom.down.sql`
+(only with the owner's decision; prefer a forward fix). It refuses (55000)
+unless all four parts are the update's, then drops the new function, the read
+and the index and puts back `internal.record_post_activity` byte for byte; the
+showroom then shows the newest posts. No data is removed (the showroom marks
+already stored go with the engagement clean-up within 24 hours).
+
+`node --import tsx scripts/test-foundation-fair-showroom.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; a premature rollback, a half-present
+update and a drifted recording body refused; apply, rollback and re-apply return
+the same fingerprints; the grants (visitors and members, never the server key;
+the api wrapper security invoker); the request rules and the 1,024-byte bound;
+15 and 7 places; only publicly live posts with card fields only; the 3 / 2 / 2
+mix and each group running out; deficit order with an unknown area; the
+busy-city cap at and above twice the fair share; the New tag at 1, 71 and 73
+hours and never again after an earlier approval; the likes cap and the video
+nudge (each first about 80% and 87% of the time on level turns); with no
+appearances yet, no video or likes nudge (photo posts first about half the time
+against video posts); all nudges together under one turn (a post a turn behind
+with a video and farmed likes never first); the index; a showroom appearance
+recorded once per browser, post and showroom, and never without a browser;
+appearances counted up to 3 fair shares (two flooded posts level); no mark for
+random ids, a draft or an own post; the marks under the views' daily valve; and
+that reads write nothing.
+
+## Identity keep-for periods, 22 November 2026
+
+`20261122022323_identity_keep_for.sql` was applied on 22 November 2026 at 15:44
+UTC (see the applied register). Didit plan C1 (checklist item 61, part 3): how
+long identity check data is kept, and the last database rules before automatic
+ID checks may leave `manual`. **Order: apply-first** (the default). No command
+is added or removed; the website shows the new `decline_reason` only once the
+screens part ships, and its reader of the member's check accepts extra fields.
+Nothing changes for members or staff until an admin changes the setting, except
+the keep-for periods below.
+
+- **The setting:** `api.set_identity_check_mode` accepts `manual`, `staff_final`
+  and `automatic` (it refused all but `manual` with PT409
+  `identity_check_retention_pending`).
+- **Accepted identities:** the selfie and the encrypted ID number are kept while
+  the identity is current (the account is open), during the 90 days after the
+  account closes, while a report on the account or its posts is open (as account
+  erasure waits for one) and while its ID number is banned (5 years from the
+  ban, so a ban approved within the 90 days keeps them). They went 30 days after
+  the decision before. `internal.identity_record_kept(submission)` decides it
+  for the file clean-up (`internal.claim_evidence_cleanup`) and the ID number
+  erasure (`internal.retention_verification`, which now follows the selfie
+  instead of the ID photo). The ID photo still goes 30 days after the decision,
+  and the partner's copy of an accepted check is due 30 days after the
+  acceptance.
+- **Closed in good standing:** the selfie and the ID number go when the 90 days
+  after closure end (unless a ban or an open report keeps them). The blocking
+  code (the submission's fingerprint), the legal names and the verified phone
+  stay until the five-year history sweep: the phone numbers an account with an
+  accepted identity had verified when it closed are no longer deleted 30 days
+  after closure. Without an accepted identity, and for a number replaced before
+  closure, the phone still goes 30 days after it was revoked.
+- **Failed or not accepted attempts keep only the fingerprint:** an automatic
+  decline's files are due 5 days after the decline ("ask a person" keeps them
+  until a person decides); when staff send a submission back, the case's files
+  are due 5 days later (90 before); a submission replaced by a newer one (a
+  resubmission, or a new automatic result while an earlier one waited for staff)
+  has its files due 5 days later (trigger `identity_submission_replaced` on
+  `private.verification_current_submissions`); the partner's copy of a check
+  sent back, or whose case closed without an acceptance, is due 5 days after
+  (`internal.claim_identity_check_deletions` schedules it). The ID number is
+  erased when the selfie goes, then the submission's names snapshot. The check
+  row, with its "ask a person" reason, goes 7 days after it finished once the
+  partner's copy is deleted and no person is still to decide it. A closed
+  account's "ask a person" reasons go 90 days after closure.
+- **The check row:** its start context (typed names at start, network hash,
+  device kind) is cleared when it leaves `started` (trigger
+  `identity_check_clear_start`, two constraints). The five-year sweep skips an
+  account while a partner copy of one of its checks is not yet deleted. The
+  retention result's `verification.overdue_partner_deletions` counts overdue
+  partner deletions (holds excepted) from dates the deletion job does not move
+  (each claim pushes the due date 5 minutes ahead): a day after the 30 days from
+  an acceptance, otherwise 32 days after the check finished, while the deletion
+  is due. So a stalled or failing deletion job shows. A check waiting for a
+  person is not counted.
+- **Results:** `session_moved` always goes to the staff queue, on `automatic`
+  too. A result whose names at start differ from the submission's names gets
+  `names_differ` (staff on `manual` and `staff_final`, a decline on
+  `automatic`). The start inserts exactly one row (`strict`). The member's view
+  of a declined check carries `decline_reason`: `id_unreadable`, `names_differ`,
+  `under_18`, `photo_not_matched` or `not_confirmed` (a ban, a duplicate or a
+  high risk score is never named).
+- **Logs:** authority-request logs (`private.identity_disclosures` with their
+  events) are kept while a named account exists and 5 years after it closed, a
+  search that named nobody 5 years from the search, and every log at least 5
+  years from the search; an open legal hold on a named account keeps them. An
+  account whose Auth user and erasure record are both gone counts as gone, so a
+  request made after an erasure is deleted 5 years after the request. The
+  setting's change log is kept 5 years. Both are deleted by
+  `internal.retention_verification` under `api.run_retention`.
+- **Staff operations health:** `internal.get_staff_operations_health` counts an
+  evidence file as overdue only when the clean-up claim would take it, so a
+  selfie kept with its identity record is not reported as past its purge date.
+- **The clean-up and the case version:** on an open identity case, deleting a
+  file that no current submission uses no longer changes the case version
+  (`internal.evidence_artifact_submission_guard`), so deleting a sent-back
+  attempt's files cannot make the newer submission stale. A second review
+  already proposed can still be refused as changed when an earlier attempt's
+  file goes during it; nothing is accepted wrongly, and staff propose again.
+- **Not in this update:** the privacy export does not yet list the member's
+  checks; it waits for the pending updates that also replace
+  `internal.frontend_privacy_export_data`.
+
+Holds keep everything, as before (an open legal hold on the account, a fraud
+hold on the case).
+
+**If the partner is dropped:** the five-year sweep waits for every partner copy
+of an account's checks to be recorded as deleted, so those accounts' records
+stay until then (the overdue count grows). Before ending the contract, let the
+deletion job empty its queue (`api.claim_identity_check_deletions`); for copies
+the partner confirms it deleted in bulk (for example under its data processing
+agreement at termination), the website's server records each with
+`api.mark_identity_check_provider_deleted`. Never mark a copy deleted without
+that confirmation.
+
+**Before the setting leaves `manual`:** recorded ID consent (the screens part),
+the privacy notice (checklist item 41) and the privacy export follow-up.
+
+**Applying.**
+
+1. Run `../preflight/20261122022323_identity_keep_for.check.sql` unchanged in
+   the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "identity keep-for: update not applied; mode: manual;
+   checks: N; finished: M; accepted identities: K" (any counts).
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "identity keep-for: already applied; ...".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is `../rollback/20261122022323_identity_keep_for.down.sql`
+(only with the owner's decision; prefer a forward fix). It refuses (55000)
+unless every function has the update's body, the setting is `manual` and no
+check has finished since the update; then it puts back the 12 bodies byte for
+byte, drops the two helpers and the two triggers and restores the check row's
+constraints. Data the retention job already deleted stays deleted.
+
+`node --import tsx scripts/test-foundation-identity-keep-for.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; drifted bodies and a premature rollback
+refused; apply, rollback and re-apply return the same fingerprints; the three
+settings; `session_moved` and names at start on each setting; the cleared start
+context; each decline category; the ID photo at day 29 and 31, the selfie and ID
+number kept for an open account (also after 5 years); the partner's copy at day
+29 and 31 after an acceptance, and a deletion that keeps failing counted from
+day 31 and a half (a declined check's from 32 and a half days after it finished,
+a check waiting for a person never); good-standing closure (selfie and number
+kept at day 89 and gone at day 91, code, names and phone kept, a ban approved at
+day 60 and an open report keeping them, the 90-day cap for unreviewed files, a
+replaced number and a number without an accepted identity still deleted); a
+replaced submission's files at 5 days; the five-year sweep waiting for the
+partner's copy (4 years 364 days, then 5 years 1 day); a ban keeping the selfie
+and number 5 years from the ban; an automatic decline's files at 4 days 23 hours
+and 5 days 1 hour, then only the fingerprint, and the check row at 6 and 8 days;
+"ask a person" answered by a return (5 days) and by an acceptance (30 days, the
+reason cleared 91 days after closure, not 89); a sent-back attempt's files
+deleted without making the newer submission stale; the authority-request logs
+and the change log at their 5-year edges, and a request made 70 days after a
+closure whose account was erased and removed from Auth at day 31, deleted 5
+years and 40 days after the request (kept at 4 years 364 days, as is one about
+an existing account); staff operations health showing no overdue file for three
+accepted members at day 40 and counting a declined attempt's two files at day 7;
+a legal hold keeping a failed attempt.
+
+## Authority requests under rule D9, 22 November 2026
+
+`20261122013616_authority_request_types.sql` was applied on 22 November 2026 at
+13:00 UTC (see the applied register). Launch checklist item 69, owner decision
+D9 of 21 November ("Keep both"): staff may disclose a member's kept identity
+record to an authority only on a subpoena (Criminal Procedure Act s205, issued
+by a magistrate or judge), a court order or a search warrant, each checked with
+the issuing court or the named prosecutor on an official number; or on an urgent
+written request from SAPS where a life is at risk, checked by calling the
+station. An urgent request gives only the minimum, never the selfie.
+
+- **The request types:** `subpoena`, `court_order`, `search_warrant` and
+  `urgent_life_risk`. The earlier `warrant`, `police_case` and `regulator` rows
+  stay as they are and read as before; no row is rewritten.
+- **The confirmation:** `private.identity_disclosures` gains `issued_by` (the
+  court or prosecutor's office, or the SAPS station; 3 to 120 characters),
+  `confirmed_number` (the official number that was called; 5 to 20 digits with
+  single spaces between them, an optional leading +) and `confirmed_by` (who
+  confirmed it on that call; 3 to 120 characters). The reference (3 to 100) is
+  the subpoena, warrant or case number. The reference, issuer and confirmer each
+  need at least one letter or digit. A table check makes every `search_warrant`
+  and `urgent_life_risk` row carry all three; the command, the table's only
+  writer, checks the rest.
+- **Opening:** the new
+  `api.open_authority_request(type, reference, issued_by, confirmed_number, confirmed_by, reason, lookup kind, lookup value, attested)`
+  refuses each missing part with 22023 and its own detail
+  (`disclosure_issued_by_required`, `disclosure_confirmed_number_required`,
+  `disclosure_confirmed_by_required`, and the existing ones); the staff rule,
+  the search and log-before-show are unchanged. `api.open_identity_disclosure`
+  keeps its signature but now runs the same rule with no confirmation, so it is
+  always refused; a later contract step removes it.
+- **Urgent requests, in the database:** the record leaves out the selfie and the
+  ID photo and lists only the current verified phone numbers, never removed ones
+  (names, ID number state, current phones and dates only); reading the selfie is
+  refused with `disclosure_selfie_withheld` before anything is logged; the
+  server material never carries the selfie's stored object (the encrypted ID
+  number still). An urgent search by phone finds only the number's current
+  holder (never someone whose proof of it was removed), and an urgent search by
+  ID number never falls back to numbers that were only tried.
+- **Reading:** `api.read_identity_disclosure` adds `issued_by`,
+  `confirmed_number` and `confirmed_by` only when the row has them, so the live
+  website still reads every earlier row.
+
+One new command; no command or argument removed (expand). ORDER: apply first,
+then merge. Between the two, the live website cannot open a new record (its form
+has no confirmation fields and the earlier command is refused); records opened
+before read as they did.
+
+**Applying.**
+
+1. Run `../preflight/20261122013616_authority_request_types.check.sql` unchanged
+   in the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "authority request types: update not applied;
+   disclosures: N" (any count).
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "authority request types: already applied; disclosures:
+   N; under rule D9: 0; urgent: 0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is
+`../rollback/20261122013616_authority_request_types.down.sql` (only with the
+owner's decision; prefer a forward fix). It first locks the disclosure log
+against new openings, refuses unless the update is applied, and refuses while
+any record opened under rule D9 is kept. Otherwise it puts back the four
+functions byte for byte, drops the new command and removes the three columns and
+the check.
+
+`node --import tsx scripts/test-foundation-identity-record-disclosure.mjs` (part
+of `pnpm db:foundation:lifecycle-test`) now also runs
+`scripts/lib/foundation-authority-request-types.mjs` on the throwaway database:
+the preflight before and after, read only; drifted bodies and a premature
+rollback refused; apply, rollback and re-apply return the same fingerprints; the
+new command's grants; records opened under the first rule (subpoena, warrant,
+police case) read as they did and stay listed; the earlier command always
+refused, logging nothing; the three earlier and any other types refused; for
+each of the four types, each missing or malformed reference, issuer, number,
+confirmer, reason and confirmation refused with its own detail and nothing
+logged; each type opening with its trimmed reference and confirmation on the row
+and the record; text of only spaces or invisible marks refused; the table check
+refusing a new-type row without its confirmation; an urgent request showing
+names, ID number state and only the current phone without the selfie or ID photo
+(view and print), its selfie read refused before logging and its server material
+without the selfie; a court order still showing the selfie and the earlier phone
+numbers; an urgent phone search finding no removed holder, only a number's
+current holder, while a court order still finds both; an urgent ID number search
+never giving attempts; and the rollback refused while a D9 record is kept.
+
+## Copy a post, 21 November 2026
+
+`20261121150309_copy_a_post.sql` was applied on 22 November 2026 at 11:40 UTC
+(see the applied register). Launch checklist item 17b, business tools plan
+section 3 (owner-approved 20 November 2026 with all 10 recommendations): a
+member whose Multi-listing package runs makes a new Market listing from one of
+their own.
+
+- **The copy:** `api.copy_my_post(post, request)` (members) copies one of the
+  caller's own Market listings that was submitted at least once (not a draft,
+  not held by staff: PT423) into a new draft, only while the caller's package
+  runs (`internal.slot_package_now`; PT402, detail `package_required`). The
+  draft is made by `internal.create_core_draft`, so its category rules and draft
+  allowance (5 plus the package's places, PT429) apply. It gets the category,
+  title, description, area, price, details, which contact buttons to show (never
+  a number), the presentation fields, the photos and the listing logo; never the
+  video or its cover. A repeated request returns the same copy.
+- **Photos:** the copy links the same stored files. A file is deleted only when
+  no post uses it (`internal.claim_media_cleanup` checks every link), so
+  deleting either post never removes the other's photos; post edits already
+  share files the same way.
+- **New photo:** trigger `copy_new_photo_required` refuses moving a copy of a
+  vehicle or property into review (22023, detail `copy_new_photo_required`)
+  unless one of its photos has bytes (sha256) not among the source's photos when
+  it was copied (owner decision, question 5). The copy keeps that list
+  (`source_photo_sha256`), so deleting or re-photographing the source changes
+  nothing. Copying a draft or a business is refused with detail
+  `copy_source_invalid`.
+- **Reviewers:** `api.get_frontend_staff_copy_facts(posts)` (staff with
+  `queue:view`) returns, only for copies under review the caller has claimed (at
+  most 25 per call), the post each was copied from (status `deleted` and no
+  title once it is gone).
+- **Unfinished copies:** `private.post_copies` records the source (a plain id,
+  kept after the source is deleted), its photo bytes and the request.
+  `api.list_my_copy_drafts()` (members) lists the caller's unfinished copies and
+  when each will be deleted, for the Drafts tab on My posts.
+  `internal.purge_copy_drafts`, run by `internal.run_retention` (which now also
+  returns `copy_drafts`), deletes a copy still in draft 14 days after its last
+  change, never during a legal hold. Drafts that are not copies are untouched.
+- **Privacy export:** the `posts` rows gain `copied_from` (no new dataset).
+
+Expand only: three new commands, a table and a trigger; `run_retention` returns
+one more count and the export's posts rows one more field, both read without a
+strict field list. ORDER: apply first, then merge; the website offers Copy only
+while `SHOW_POST_COPY` is on (off until launch switch-on).
+
+**Applying.**
+
+1. Run `../preflight/20261121150309_copy_a_post.check.sql` unchanged in the SQL
+   editor. It is read only. Continue only if its result is the single "summary"
+   row reading "copy a post: update not applied; draft posts: N" (any count).
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "copy a post: already applied; draft posts: N; copies: 0;
+   unfinished copies: 0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is `../rollback/20261121150309_copy_a_post.down.sql` (only
+with the owner's decision; prefer a forward fix; switch `SHOW_POST_COPY` off
+first). It refuses (55000) unless every piece of the update has the update's
+body; then it puts back `internal.run_retention` and
+`internal.frontend_privacy_export_data` byte for byte and drops the trigger, the
+eight functions and `private.post_copies`. Copies already made stay as ordinary
+posts and drafts; only the record of their source goes.
+
+`node --import tsx scripts/test-foundation-copy-a-post.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; drifted bodies and a premature rollback
+refused; apply, rollback and re-apply return the same fingerprints; the grants
+(members only, wrappers security invoker, helpers for nobody, no table access);
+a copy's fields, buttons, photos (same files, focal point kept) and logo,
+without the video, its cover, contact numbers or video layout; replay of a
+request; refusals for another member, a visitor, a draft, a business, a held
+post, no package and the draft allowance; the new-photo rule for vehicles and
+property against the photos at copy time (the same bytes again do not count; a
+deleted or re-photographed source still needs one; the source later taking the
+copy's photo does not block it; other categories and posts that are not copies
+are not checked); photos kept when either post is deleted; the reviewer read
+only for claimed posts, refused to members, visitors, above 25 posts and with a
+stale authenticator code, and a deleted source shown as deleted; the member's
+list of unfinished copies; the 14-day deletion (and its bounds, the legal hold,
+other drafts and submitted copies kept); and `copied_from` in the privacy
+export.
+
+## A written notice before a long paid term ends, 22 November 2026
+
+`20261122111209_term_ending_notice.sql` was applied on 22 November 2026 at 17:33
+UTC (see the applied register). Launch checklist item 68b. The Consumer
+Protection Act, s14(2)(c), asks for a written notice 40 to 80 business days
+before a fixed-term agreement ends. The owner's rule: a paid term of 180 days or
+more gets one written notice about 60 business days before it ends; nothing ever
+renews automatically.
+
+- **Which terms.** A paid grant (`private.entitlements`, source `retail_paid`)
+  that runs 180 days or more from its own start to its own end: an Individual
+  slot of 180 days, each renewal of one (its own term), a Multi-listing package
+  of 180 days (its opening grant; slots added part-way run less than 180 days),
+  and any earlier 180-day plan still running. Free trials, sponsorships, staff
+  grants and house slots are not purchases and are left out. The grant must be
+  active, its payment complete and its line not refunded or charged back, and
+  the account must not be closed (`internal.term_ending_notice_due`; no API role
+  can run it). A banned or suspended member still gets the notice.
+- **When.** `internal.queue_term_ending_notices(p_limit)`, run by
+  `api.run_slot_renewals` (full body, the minute job; its result gains
+  `term_ending_notices`), queues one email (outbox kind `term_ending_notice`,
+  dedupe key `term_ending_notice:<grant id>`) once the term's end is 63 to 84
+  calendar days away. 84 days is 12 weeks, 60 weekdays, so about 60 business
+  days; 63 days still leaves at least 40 business days after public holidays.
+  The window also stops a second notice after retention removes the sent email
+  30 days after sending. A term already under 63 days from its end when the
+  update is applied gets no notice. Nothing is charged.
+- **The email.** `internal.claim_supported_notification_outbox` (full body, 22
+  kinds) gives the address only while the term still qualifies and the address
+  is confirmed (otherwise the job finishes it as skipped), with `term_ends_at`,
+  `term_kind` (`individual`, `package` or `other`), `term_has_access` (whether
+  `private.current_account_access` has the member) and, for an Individual slot,
+  `term_package_continues` (whether the package `internal.slot_package_now`
+  returns, the one the slot's post moves into when the slot ends, ends after
+  it). The website words it (`src/lib/services/email.ts`, wording awaiting the
+  owner in `FRONTEND-CHANGES.md` group 91): the end date, that nothing renews
+  and nothing more is charged, and how to buy again (My slots for an Individual
+  slot, Billing otherwise); a slot whose post moves into the package is told
+  only that; a member who cannot sign in is told only that nothing more is
+  needed. No in-app notice.
+- **Order.** Apply first, then merge. A website before the update drops the kind
+  (`laterKinds`); an earlier website never claims it, so queued notices wait.
+  Preflight: `../preflight/20261122111209_term_ending_notice.check.sql`;
+  rollback: `../rollback/20261122111209_term_ending_notice.down.sql` (refused
+  once any notice is queued). Behaviour test:
+  `scripts/test-foundation-term-ending-notice.mjs`.
+
+## Single-administrator mode for house slots and own posts, 21 November 2026
+
+`20261121143000_one_person_admin_mode.sql` was applied on 22 November 2026 at
+06:40 UTC (see the applied register). Launch checklist item 67 (owner's
+decisions of 21 November 2026, "Option A", cap 25, and 22 November 2026, "Yes,
+all my posts"). The owner has two admin accounts but one ID, so the two-person
+rules for house slots could not be met: a house-slot grant needs a second
+ID-verified administrator, and staff never review their own posts.
+
+- **The mode.** `internal.single_administrator(account)` (no API role can run
+  it) is true while the account holds an active admin role and an accepted ID
+  review, and no other account with an active staff role has one. It is worked
+  out at every call; nothing is stored. As soon as a second staff member's ID
+  review is accepted (any staff role), the normal two-person rules apply again,
+  also to an item already claimed. A suspended staff member does not count
+  (their ID review is not current while the account is not active).
+- **Self-grant (database owner only).** `internal.grant_house_slots` keeps its
+  signature and every rule; in this mode `p_approved_by_email` may name the
+  recipient's own account (otherwise 42501 `house_slots_self_approval`, as
+  before). The owner's second admin account, which has no ID review, can neither
+  receive nor approve (`house_slots_identity_required`,
+  `house_slots_approver_identity_required`). Each event it records is marked
+  `self_granted` (new column of the append-only `private.house_slot_events`,
+  check: only on `granted` and `extended`), and the result has
+  `self_granted: true`.
+- **Cap 25 in total.** The cap is on the account's total house slots: a grant
+  makes the recipient hold 1 to 25 house slots in all (was 15); outside that,
+  22023 `house_slots_count_invalid`. LIM-SQL-house-slots-count in
+  `docs/testing/limits-register.json` follows.
+- **Staff review posts only with an ID review.** `internal.queue_conflict`
+  counts every post as a conflict for a staff member without an accepted ID
+  review of their own (`internal.current_verified_identity`), so such an account
+  (the owner's second admin account, for one) can neither list, claim, open,
+  renew nor decide (approve or reject) posts. The per-item commands
+  (`claim_queue_item`, `staff_review_post`, `renew_queue_claim` for posts and
+  `moderate_post` for every decision) refuse through the new
+  `internal.assert_post_reviewer`: 42501 "ID verification required to review
+  posts" (detail `staff_identity_required`), otherwise "self-review is not
+  allowed" on a conflict. A moderator whose ID review ends while holding a claim
+  can no longer renew or decide it. Reports are unchanged.
+- **Self-approval of all own posts** (owner's decision of 22 November 2026,
+  "Yes, all my posts"). While the mode holds, `internal.queue_conflict` no
+  longer counts any of the administrator's own pending posts or edits as a
+  conflict, whatever funds them (house slot, free first post, paid or package
+  slot, an event), so the moderation queue lists them and `claim_queue_items`
+  (which now asks `queue_conflict` instead of comparing the owner),
+  `claim_queue_item`, `staff_review_post` and
+  `assert_posting_verification_ready` and `assert_event_duplicate_absent`
+  (likewise) accept them. The owner reviews members' posts and their own from
+  the verified account; the second account sees an empty queue.
+  `internal.moderate_post` lets them approve their own post, never reject it
+  ("self-review is not allowed"). The admin role's `post:moderate` already needs
+  an authenticator code from the last 15 minutes (`internal.staff_actor`); the
+  update refuses to run unless it still does. The decision is recorded with
+  `self_approved` (new column of the append-only `private.moderation_log`,
+  check: approvals only) and the staff Audit log shows it as
+  `post:self_approved` (`post_self_approved` on the page). House-slot grants
+  keep their own rules (above). Identity reviews, refunds, business checks,
+  reports and every other two-person rule are unchanged.
+
+No API command, argument, grant or result field changes (internal functions, two
+columns with a default, one branch of
+`private.frontend_staff_nonpayment_audit_events`). ORDER: apply first, then
+merge. No screen changes: the queue and the Audit log already show what the
+database returns.
+
+**Applying.**
+
+1. Run `../preflight/20261121143000_one_person_admin_mode.check.sql` unchanged
+   in the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "one-person admin mode: update not applied; ID-verified
+   staff: N; house slots: N; post claims by staff without an ID review: N" (any
+   counts). ID-verified staff 1 means the mode will apply; post claims by staff
+   without an ID review can no longer be decided or renewed after the update and
+   expire within 15 minutes.
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "one-person admin mode: already applied; ID-verified
+   staff: N; house slots: N; post claims by staff without an ID review: N;
+   self-granted slot events: 0; self-approved decisions: 0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+**Granting afterwards (the owner, in the SQL editor).** With the ID-verified
+admin account's own address in both places:
+`select internal.grant_house_slots('<verified admin email>', <1 to 25>, <7 to 180 days>, '<written reason, 5 to 500 characters>', '<verified admin email>');`
+
+The reviewed rollback is
+`../rollback/20261121143000_one_person_admin_mode.down.sql` (only with the
+owner's decision; prefer a forward fix). It refuses unless the update is applied
+and the nine functions still have its bodies (both records are locked first,
+access exclusive), and while any event is `self_granted` or any decision
+`self_approved` (those records are kept). Otherwise it puts back the nine
+function bodies and the audit view, drops `internal.single_administrator`,
+`internal.assert_post_reviewer` and the two columns.
+
+`node --import tsx scripts/test-foundation-one-person-admin-mode.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; drifted bodies and a premature rollback
+refused; apply, rollback and re-apply return the same fingerprints; no API role
+can run the grant, the mode check or the conflict check; with two ID-verified
+staff the mode is off and the cap is 25 (26 and a count below the slots held
+refused); with one, the self-grant needs a reason, the verified account itself
+(not the second account) and at most 25, and its events are marked and
+append-only; the own house-slot post is listed, claimed, opened, refused with a
+16-minute-old code and as a rejection, approved with a 14-minute-old code,
+logged `self_approved` and shown as `post_self_approved`; the own
+free-first-post, paid-slot and event posts and an edit are each refused as a
+rejection and self-approved, marked; another member's post is approved as
+before, unmarked; a second ID-verified staff member ends the mode for grants and
+for every kind of own post (house slot, event, edits of the free-first-post and
+paid-slot posts: listing, claims and items already claimed), and removing or
+suspending them brings it back; the second admin account without an ID review
+can neither claim the owner's post nor, with a lease written directly, open,
+approve, reject or renew it (`staff_identity_required`), and the preflight
+counts that claim; the owner's own ID review ending turns the mode off; the
+rollback refuses a changed function and once a marked record exists; and after
+every later update a 16-minute-old code is still refused.
+
 ## Business storefront, 21 November 2026
 
 `20261121131915_business_storefront.sql` was applied on 21 November 2026 at
@@ -695,7 +1387,7 @@ material).
 
 ## Post templates, 21 November 2026
 
-`20261121162018_post_templates.sql` is pending (see the applied register).
+`20261122191646_post_templates.sql` is pending (see the applied register).
 Launch checklist item 17b, business tools plan section 4 (owner-approved 20
 November 2026 with all 10 recommendations): a member whose Multi-listing package
 runs saves a reusable starting point for Market listings.
@@ -725,7 +1417,10 @@ runs saves a reusable starting point for Market listings.
   `template_name_taken`), also after the package ends.
 - **Deletion:** the trigger `post_templates_account_closed` deletes an account's
   templates when it closes; the Auth user's deletion cascades too.
-- **Privacy export:** one more dataset, `post_templates`.
+- **Privacy export:** one more dataset, `post_templates`. The full
+  `internal.frontend_privacy_export_data` body is the live one from
+  `20261121150309_copy_a_post.sql` (posts rows keep `copied_from`) with that one
+  dataset added.
 - **Teams:** package teams (P4c, item 15) are not built, so a template belongs
   to the account that made it.
 
@@ -738,7 +1433,7 @@ website, then apply the update.
 
 **Applying.**
 
-1. Run `../preflight/20261121162018_post_templates.check.sql` unchanged in the
+1. Run `../preflight/20261122191646_post_templates.check.sql` unchanged in the
    SQL editor. It is read only. Continue only if its result is the single
    "summary" row reading "post templates: update not applied; slot packages: N"
    (any count).
@@ -749,7 +1444,7 @@ website, then apply the update.
    compare with `../fingerprint.json`; once it matches, record it as described
    above.
 
-The reviewed rollback is `../rollback/20261121162018_post_templates.down.sql`
+The reviewed rollback is `../rollback/20261122191646_post_templates.down.sql`
 (only with the owner's decision; prefer a forward fix; switch
 `SHOW_POST_TEMPLATES` off first). It refuses (55000) unless every piece of the
 update has the update's body; then it puts back
@@ -6944,6 +7639,58 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   production fingerprint after it (fingerprint.sql) matched the full replay
   (except the known schema grant difference)
 
-- `20261121162018_post_templates.sql`: pending; website-first
+- `20261121143000_one_person_admin_mode.sql`: applied 2026-11-22 06:40 UTC;
+  owner-approved, apply-first, Supabase SQL editor (pull request #343); update
+  sha256 starting 3cceed8f; preflight (sha256 starting 7074a32b) before: update
+  not applied (ID-verified staff 1, no problems), after: already applied (11 of
+  11 bodies as updated, both new columns present; self-granted slot events: 0;
+  self-approved decisions: 0); production fingerprint after it (fingerprint.sql)
+  matched the full replay (except the known schema grant difference)
+
+- `20261121150309_copy_a_post.sql`: applied 2026-11-22 11:40 UTC;
+  owner-approved, apply-first, Supabase SQL editor (pull request #341); update
+  sha256 starting 1acd618f; preflight (sha256 starting 73f33a34) before: update
+  not applied (draft posts: 0, no problems), after: already applied (11 of 11
+  parts as updated; copies: 0); production fingerprint after it
+  (fingerprint.sql) matched the full replay (except the known schema grant
+  difference)
+
+- `20261122013616_authority_request_types.sql`: applied 2026-11-22 13:00 UTC;
+  owner-approved, apply-first, Supabase SQL editor (pull request #346); update
+  sha256 starting 3528b0f5; preflight (sha256 starting 10c3307f) before: update
+  not applied (4 of 4 bodies reviewed, new objects 0 of 6, disclosures 0, no
+  problems), after: already applied (4 of 4 bodies updated, 6 of 6 new objects,
+  disclosures 0); production fingerprint after it (fingerprint.sql) matched the
+  full replay (except the known schema grant difference)
+
+- `20261122022323_identity_keep_for.sql`: applied 2026-11-22 15:44 UTC;
+  owner-approved, apply-first (pull request #347); update sha256 starting
+  cc0a7d59; preflight after: already applied; applied in one sitting with
+  `20261122023000_fair_showroom.sql` a minute later and no production
+  fingerprint captured between the two, so it is checked by the capture after
+  that update (the full replay through both matched, except the known schema
+  grant difference)
+
+- `20261122023000_fair_showroom.sql`: applied 2026-11-22 15:45 UTC;
+  owner-approved, apply-first (pull request #344); update sha256 starting
+  0c6ae7a6; preflight after: already applied; production fingerprint after it
+  and `20261122022323_identity_keep_for.sql` (fingerprint.sql) matched the full
+  replay (except the known schema grant difference)
+
+- `20261122111209_term_ending_notice.sql`: applied 2026-11-22 17:33 UTC;
+  owner-approved, apply-first (pull request #349); update sha256 starting
+  ec2ffdb0; preflight after: already applied; applied in one sitting with
+  `20261122130744_free_credits.sql` two minutes later and no production
+  fingerprint captured between the two, so it is checked by the capture after
+  that update (the full replay through both matched, except the known schema
+  grant difference)
+
+- `20261122130744_free_credits.sql`: applied 2026-11-22 17:35 UTC;
+  owner-approved, apply-first (pull request #352); update sha256 starting
+  2cbdd9ab; preflight after: already applied; production fingerprint after it
+  and `20261122111209_term_ending_notice.sql` (fingerprint.sql) matched the full
+  replay (except the known schema grant difference)
+
+- `20261122191646_post_templates.sql`: pending; website-first
 
 <!-- applied-register:end -->

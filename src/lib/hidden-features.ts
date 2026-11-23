@@ -71,7 +71,7 @@ export const SHOW_ORGANISATION_REPORT: boolean =
  * opens the "Post an item" form filled in. Calls the live backend's
  * api.save_my_post_template, api.list_my_post_templates,
  * api.rename_my_post_template and api.delete_my_post_template (database update
- * 20261121162018_post_templates.sql). Off until launch switch-on (item 60;
+ * 20261122191646_post_templates.sql). Off until launch switch-on (item 60;
  * frontend ledger group 87): while off, the pages are as before and
  * /api/post-templates answers 404.
  */
@@ -136,3 +136,16 @@ export const SHOW_PARTNER_PAGE: boolean = LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.S
  */
 export const SHOW_BUSINESS_STOREFRONT: boolean =
   LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_BUSINESS_STOREFRONT;
+
+/**
+ * Copy a post (business tools plan section 3, item 17b): "More", then "Copy
+ * this post" on My posts for a member whose Multi-listing package runs; the
+ * copy opens in the "Post an item" form as a draft, unfinished copies wait under
+ * "Drafts" on My posts, and reviewers see "Copied from".
+ * Calls the live backend's api.copy_my_post and
+ * api.get_frontend_staff_copy_facts (database update
+ * 20261121150309_copy_a_post.sql). Off until launch switch-on (item 60;
+ * frontend ledger group 86): while off, My posts, the form and the review
+ * queue are as before and /api/listings/[id]/copy answers 404.
+ */
+export const SHOW_POST_COPY: boolean = LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_POST_COPY;

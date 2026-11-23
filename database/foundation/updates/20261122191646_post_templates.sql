@@ -41,8 +41,8 @@
 -- SHOW_POST_TEMPLATES is on (off until launch switch-on), and the staff access
 -- export (/api/admin/dsar/export) accepts at least the live number of datasets
 -- (42), so it takes the 43rd once this update is applied.
--- Read-only preflight: ../preflight/20261121162018_post_templates.check.sql.
--- Rollback: ../rollback/20261121162018_post_templates.down.sql.
+-- Read-only preflight: ../preflight/20261122191646_post_templates.check.sql.
+-- Rollback: ../rollback/20261122191646_post_templates.down.sql.
 begin;
 -- Never wait more than 5 seconds for anything this update needs.
 set local lock_timeout='5s';
@@ -68,7 +68,7 @@ begin
   end if;
   if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc
       where oid=to_regprocedure('internal.frontend_privacy_export_data(uuid)'))
-      not in ('e543b105fe264d5a683b5c570bf68cb5', 'ab02f76bb5bb62b58521df6d584cf93b') then
+      not in ('4aa0fa034c5c09e495530b5563ff3008', 'fb567a31cf8ca166f117d5b02f744235') then
     raise exception 'post templates precondition: internal.frontend_privacy_export_data is not the reviewed body' using errcode='55000';
   end if;
 end$$;
@@ -267,7 +267,9 @@ revoke all on function internal.clear_closed_account_post_templates() from publi
 create or replace trigger post_templates_account_closed after insert on private.account_closures
   for each row execute function internal.clear_closed_account_post_templates();
 
--- 5. REPLACE: internal.frontend_privacy_export_data (gains post_templates).
+-- 5. REPLACE: internal.frontend_privacy_export_data (gains post_templates). The
+-- full body is the live one from 20261121150309_copy_a_post.sql (posts rows
+-- keep copied_from) with the post_templates dataset added.
 CREATE OR REPLACE FUNCTION internal.frontend_privacy_export_data(p_subject uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -284,10 +286,11 @@ begin
     ('posts',$q$select p.id,p.kind,p.area,p.category_key,p.activity_key,p.title,p.description,p.province_id,p.city_id,p.locality_label,
       p.status,p.status_reason,p.created_at,p.submitted_at,p.published_at,p.visible_until,p.edit_of,
       l.price_mode,l.price_cents,l.price_negotiable,l.attributes,b.business_type,e.starts_at,e.ends_at,e.timezone,
-      s.slug,d.data presentation,d.contacts contact_details,c.channels
+      s.slug,d.data presentation,d.contacts contact_details,c.channels,cp.source_post_id copied_from
       from private.posts p left join private.listing_details l on l.post_id=p.id left join private.business_details b on b.post_id=p.id
       left join private.event_details e on e.post_id=p.id left join private.post_slugs s on s.post_id=p.id
       left join private.post_presentations d on d.post_id=p.id left join private.post_contacts c on c.post_id=p.id
+      left join private.post_copies cp on cp.post_id=p.id
       where p.owner_id=$1 order by p.created_at,p.id$q$),
     ('post_reviews',$q$select m.post_id,m.edit_id,m.decision,m.reason,m.decided_at,m.price_only
       from private.moderation_log m join private.posts p on p.id=m.post_id where p.owner_id=$1 order by m.decided_at,m.id$q$),

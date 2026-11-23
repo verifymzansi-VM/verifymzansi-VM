@@ -7,7 +7,10 @@ create view private.frontend_staff_nonpayment_audit_events with (security_invoke
     m.staff_id AS actor_id,
     m.post_id AS target_id,
     'post'::text AS target_type,
-    'post:'::text || m.decision AS action,
+        CASE
+            WHEN m.self_approved THEN 'post:self_approved'::text
+            ELSE 'post:'::text || m.decision
+        END AS action,
     m.reason
    FROM private.moderation_log m
 UNION ALL

@@ -1,4 +1,4 @@
--- Read-only preflight for updates/20261121162018_post_templates.sql.
+-- Read-only preflight for updates/20261122191646_post_templates.sql.
 --
 -- Run this file unchanged in the Supabase SQL editor before applying the
 -- update, and again after it. It changes nothing: the first statement makes
@@ -27,7 +27,7 @@ with bodies as (
       else (select md5(replace(p.prosrc, E'\r\n', E'\n')) from pg_proc p where p.oid = to_regprocedure(v.sig))
     end as body
   from (values
-    ('internal.frontend_privacy_export_data(uuid)', 'e543b105fe264d5a683b5c570bf68cb5', 'ab02f76bb5bb62b58521df6d584cf93b'),
+    ('internal.frontend_privacy_export_data(uuid)', '4aa0fa034c5c09e495530b5563ff3008', 'fb567a31cf8ca166f117d5b02f744235'),
     ('private.post_templates', null, 'table'),
     ('trigger post_templates_account_closed', null, 'trigger'),
     ('internal.save_my_post_template(text,jsonb)', null, '47c9a728c99a913ce45a38705f4ab11c'),

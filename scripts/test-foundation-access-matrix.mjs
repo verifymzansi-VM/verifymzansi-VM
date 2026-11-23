@@ -276,7 +276,7 @@ const OWNER_TABLES = [
   ],
   ["individual_slot_limits", "account_id=$1"],
   ["intro_trial_requests", "owner_id=$1"],
-  // Post templates (20261121162018_post_templates): A's saved templates.
+  // Post templates (20261122191646_post_templates): A's saved templates.
   ["post_templates", "owner_id=$1"],
   ["invoice_transfers", "account_id=$1"],
   ["invoices", ownPayments],
@@ -293,6 +293,14 @@ const OWNER_TABLES = [
   [
     "identity_disclosure_events",
     "subject_id=$1 or staff_id=$1 or disclosure_id in (select id from private.identity_disclosures where $1=any(subject_ids) or opened_by=$1)",
+  ],
+  // Copy a post (20261121150309_copy_a_post): which of A's posts a copy came from.
+  ["post_copies", ownPosts],
+  // Free credits (20261122130744_free_credits): a gift to A, or one A gave or
+  // extended as staff.
+  [
+    "free_credit_events",
+    "entitlement_id in (select id from private.entitlements where owner_id=$1) or actor_id=$1",
   ],
   ["listing_price_drafts", "owner_id=$1"],
   ["moderation_log", ownPosts],
@@ -892,7 +900,10 @@ try {
         call,
         sql,
         owner,
-        reviewer,
+        // Staff review posts only with an accepted ID review of their own
+        // (20261121143000_one_person_admin_mode.sql): the verified governor
+        // approves the post; the identity reviewer stays unverified.
+        reviewer: staff.governor,
         admin: staff.admin,
         orgAdmin,
         orgAdminEmail: orgAdmin.email,
@@ -966,7 +977,7 @@ try {
     );
     world.ids.privacyRequestId = request.id;
     world.ids.supportTicketId = ticket.id;
-    // A post template (20261121162018_post_templates). Saving needs a running
+    // A post template (20261122191646_post_templates). Saving needs a running
     // Multi-listing package, which A does not hold, so it is written as the
     // database owner.
     world.ids.templateId = sql(
