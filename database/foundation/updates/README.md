@@ -80,6 +80,42 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## A reminder 3 days before a free credit ends, 22 November 2026
+
+`20261122182304_free_credit_reminder.sql` is pending (see the applied register).
+Launch checklist item 70b: the member is told once, 3 days before a free credit
+(`20261122130744_free_credits.sql`) ends, through the reminder path the renewal
+reminder and the term-ending notice already use. No new job, table or worker.
+
+- **When.** `internal.queue_free_credit_reminders(p_limit)`, run by
+  `api.run_slot_renewals` (full body, the minute job; its result gains
+  `free_credit_reminders`), queues one email (outbox kind
+  `free_credit_reminder`) per key of
+  `internal.free_credit_reminder_key(gift, owner)` (no API role can run it):
+  `free_credit_reminder:<gift id>:<end in whole seconds since 1970>`, returned
+  only while the gift is active (not ended early), its end is at most 3 days
+  away and the account can sign in now (`private.current_account_access`: not
+  banned, suspended or closed, the check behind `term_has_access`). The key
+  names the end, so each end gets one email whatever the retries, and a gift
+  extended after its reminder gets a new one 3 days before its new end. A gift
+  of 3 days or less is reminded at once. Nothing is charged.
+- **The email.** `internal.claim_supported_notification_outbox` (full body, 23
+  kinds) gives the confirmed address only while the outbox row's key is still
+  the gift's current key (otherwise the job finishes it as skipped: the gift
+  ended early, was extended, or the member was banned, suspended or closed
+  since), with `credit_ends_at`. The website words it
+  (`src/lib/services/email.ts`, `free_credit_reminder`): the end in South
+  African time, that the posts it pays for are then hidden and, unless
+  reactivated in another slot, deleted 3 days later with their photos and
+  videos, and a button to My slots. No in-app notice.
+
+Expand only. ORDER: apply first, then merge (a website release before the update
+drops the refused kind until it is applied: `laterKinds` in
+`src/lib/foundation/operation-jobs.ts`). Read-only preflight:
+`../preflight/20261122182304_free_credit_reminder.check.sql`; rollback:
+`../rollback/20261122182304_free_credit_reminder.down.sql` (refused once a
+reminder was queued).
+
 ## Free credits for businesses VerifyMzansi recruits, 22 November 2026
 
 `20261122130744_free_credits.sql` was applied on 22 November 2026 at 17:35 UTC
@@ -7690,6 +7726,12 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   2cbdd9ab; preflight after: already applied; production fingerprint after it
   and `20261122111209_term_ending_notice.sql` (fingerprint.sql) matched the full
   replay (except the known schema grant difference)
+
+- `20261122182304_free_credit_reminder.sql`: applied 2026-11-23 22:00 UTC;
+  owner-approved, apply-first (pull request #355); update sha256 starting
+  479d18bf; preflight after: already applied; production fingerprint after it
+  (fingerprint.sql) matched the full replay (except the known schema grant
+  difference)
 
 - `20261122191646_post_templates.sql`: pending; website-first
 
