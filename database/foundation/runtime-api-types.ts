@@ -737,6 +737,10 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         Args: { p_disclosure: string; p_purpose: string; p_subject?: string };
         Returns: Json;
       };
+      save_my_post_template: { Args: { p_name: string; p_data: Json }; Returns: Json };
+      list_my_post_templates: { Args: Record<never, never>; Returns: Json };
+      rename_my_post_template: { Args: { p_template: string; p_name: string }; Returns: Json };
+      delete_my_post_template: { Args: { p_template: string }; Returns: Json };
       list_identity_disclosures: { Args: Record<never, never>; Returns: Json };
       get_staff_operations_health: { Args: Record<never, never>; Returns: Json };
       get_staff_sales_summary: { Args: Record<never, never>; Returns: Json };

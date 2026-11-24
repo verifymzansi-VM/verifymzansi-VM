@@ -355,6 +355,24 @@ export async function runTwoAdminUpdateCheck({ update, label, title }, body) {
   console.log(`${title} checks passed: ${passed.length} in ${seconds} s.`);
 }
 
+/** The Multi-listing package terms (20261114154823_slot_packages.sql). */
+const K30 = { id: "5b0f4c1e-2a7d-4c43-9b51-7e0d3f6a9c11", cents: 10000 };
+
+/**
+ * A running Multi-listing package of `slots` places for `owner`: the package
+ * checkout and a synthetic Ozow settlement notice, as the website's server
+ * does. Packages must be on sale.
+ */
+export function buyPackage(kit, owner, slots) {
+  const quoted = kit.json(
+    kit.member(
+      owner,
+      `select api.start_package_checkout('${K30.id}',${slots},${K30.cents * slots},true);`
+    )
+  );
+  assert.equal(ozowSettle(kit, owner, quoted.payment_id).fulfillment_status, "fulfilled");
+}
+
 /** The md5 of a function's body as the update preconditions compute it, or 'missing'. */
 export const functionBodyMd5 = ({ q }, signature) =>
   q(

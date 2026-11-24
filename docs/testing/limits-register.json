@@ -1035,6 +1035,25 @@
       ]
     },
     {
+      "id": "LIM-APP-post-templates",
+      "title": "Request body cap for /api/post-templates and /api/post-templates/[id]",
+      "value": 20000,
+      "unit": "bytes",
+      "category": "size",
+      "enforcedAt": [
+        {
+          "file": "src/lib/foundation/post-templates.ts",
+          "contains": "maxBytes: 20_000"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-BODY-READER"
+        }
+      ]
+    },
+    {
       "id": "LIM-APP-showroom-cache",
       "title": "Fair showroom: each server copy remembers a showroom order for 60 seconds per showroom and area",
       "value": 60000,
@@ -10171,6 +10190,70 @@
       ]
     },
     {
+      "id": "LIM-SQL-post-template-count",
+      "title": "Post templates: at most 20 per account",
+      "value": "20",
+      "category": "cap",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/save_my_post_template.sql",
+          "symbol": "internal.save_my_post_template",
+          "contains": "if (select count(*) from private.post_templates t where t.owner_id = actor) >= 20 then"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-post-templates.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-SQL-post-template-name",
+      "title": "Post templates: a name of 1 to 60 characters",
+      "value": "1 to 60",
+      "category": "length",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/save_my_post_template.sql",
+          "symbol": "internal.save_my_post_template",
+          "contains": "if clean is null or char_length(clean) not between 1 and 60 or clean ~ '[[:cntrl:]]' then"
+        },
+        {
+          "file": "database/foundation/current/functions/internal/rename_my_post_template.sql",
+          "symbol": "internal.rename_my_post_template",
+          "contains": "if clean is null or char_length(clean) not between 1 and 60 or clean ~ '[[:cntrl:]]' then"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-post-templates.mjs"
+        }
+      ],
+      "unit": "characters"
+    },
+    {
+      "id": "LIM-SQL-post-template-size",
+      "title": "Post templates: form fields of at most 16 KiB",
+      "value": 16384,
+      "category": "size",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/save_my_post_template.sql",
+          "symbol": "internal.save_my_post_template",
+          "contains": "bad := octet_length(p_data::text) > 16384"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-post-templates.mjs"
+        }
+      ],
+      "unit": "bytes"
+    },
+    {
       "id": "LIM-SQL-privacy-requests-hour",
       "title": "Privacy requests: at most 5 an hour per account",
       "value": "5 per account per hour",
@@ -13093,6 +13176,44 @@
           "file": "database/foundation/current/tables/private/post_search_documents.sql",
           "symbol": "private.post_search_documents (post_search_documents_title_check)",
           "contains": "constraint post_search_documents_title_check CHECK (length(title) >= 1 AND length(title) <= 120)"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "register",
+          "file": "scripts/limits-sql.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-T-post_templates_data_check",
+      "title": "private.post_templates: jsonb_typeof(data) = 'object'::text AND octet_length(data::text) <= 16384",
+      "value": "<= 16384",
+      "category": "length",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/tables/private/post_templates.sql",
+          "symbol": "private.post_templates (post_templates_data_check)",
+          "contains": "constraint post_templates_data_check CHECK (jsonb_typeof(data) = 'object'::text AND octet_length(data::text) <= 16384)"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "register",
+          "file": "scripts/limits-sql.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-T-post_templates_name_check",
+      "title": "private.post_templates: char_length(name) >= 1 AND char_length(name) <= 60",
+      "value": "1 to 60",
+      "category": "length",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/tables/private/post_templates.sql",
+          "symbol": "private.post_templates (post_templates_name_check)",
+          "contains": "constraint post_templates_name_check CHECK (char_length(name) >= 1 AND char_length(name) <= 60)"
         }
       ],
       "tests": [

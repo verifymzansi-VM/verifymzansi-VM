@@ -127,6 +127,7 @@ const PAGES: Page_[] = [
  * session, so nothing is changed: each must be served and must not fail. */
 const ROUTES: { feature: string; method: "GET" | "POST"; path: string }[] = [
   { feature: "SHOW_ACCOUNT_DELETION", method: "POST", path: "/api/account/delete" },
+  { feature: "SHOW_POST_TEMPLATES", method: "GET", path: "/api/post-templates" },
   // SHOW_ORGANISATION_REPORT stays off (checklist item 46): its route answers 404.
 ];
 
