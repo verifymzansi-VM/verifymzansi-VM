@@ -4,7 +4,7 @@ import { PostSelect } from "@/components/post/post-select";
 import { settleMediaUploads } from "@/app/post/_lib/settle-media-uploads";
 import { ListingQualityHint } from "@/components/post/listing-quality-hint";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { usePostTransport } from "@/hooks/use-post-transport";
 import Link from "next/link";
@@ -82,11 +82,22 @@ import {
 import { CATEGORIES } from "@/lib/constants/categories";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 import { checkUploadServiceReachable } from "@/lib/utils/upload-preflight";
-import type { ListingDraftData } from "@/lib/post-drafts/storage";
+import { loadDraft, type DraftEnvelope, type ListingDraftData } from "@/lib/post-drafts/storage";
 import { LISTING_CONDITIONS } from "@/lib/constants/listing-condition";
 import { ListingDetailContent } from "@/components/listings/listing-detail-content";
 import { readMediaDimensions } from "@/lib/utils/media-metadata";
 import { VIDEO_GUIDANCE, VIDEO_SOUND_OFF_TIP } from "@/lib/media/video-length";
+import {
+  announceTemplate,
+  announceTemplateFailed,
+  draftSnapshot,
+  dropTemplateFromAddress,
+  loadListingStart,
+  TemplateLoading,
+  templateLoading,
+  type ListingStart,
+} from "./listing-template";
+import { formFieldsFromTemplate } from "@/lib/post-templates";
 
 const STEPS: PostFormStep[] = [
   {
@@ -415,8 +426,17 @@ export default function CreateListingPage() {
     [videoCoverPreviewUrl]
   );
 
+  // While a template's fields are untouched (see settleStart), autosave waits
+  // and Undo stays offered; `pristine` is the form as the template left it.
+  const templateHold = useRef<{ pristine: string; end: () => void } | null>(null);
   useEffect(() => {
-    if (!profile) return;
+    const hold = templateHold;
+    return () => hold.current?.end();
+  }, []);
+
+  useEffect(() => {
+    // A template fills these itself (settleStart), so a later fill is no edit.
+    if (!profile || templateHold.current) return;
 
     queueMicrotask(() => {
       if (!province && profile.location_province) {
@@ -492,45 +512,50 @@ export default function CreateListingPage() {
     });
   }, []);
 
-  useEffect(() => {
-    if (copyId || !user?.id || isLoading || submitSucceeded) return;
-
-    void Promise.resolve(restoreDraft()).then((restored) => {
-      if (!restored) return;
-
-      const restoredData = restored.data;
-      queueMicrotask(() => {
-        setStep(Math.min(Math.max(restored.step ?? 0, 0), STEPS.length - 1));
-        setTitle(restoredData.title ?? "");
-        setDescription(restoredData.description ?? "");
-        setPrice(restoredData.price ?? "");
-        setNegotiable(Boolean(restoredData.negotiable));
-        setCategory((restoredData.category as ListingCategory | "") ?? "");
-        setCondition((restoredData.condition as ListingCondition | "") ?? "");
-        setCategoryAttributes(restoredData.categoryAttributes ?? {});
-        setProvince(restoredData.province ?? "");
-        setCity(restoredData.city ?? "");
-        setTown(restoredData.town ?? "");
-        setAddress(restoredData.address ?? "");
-        setContactMethods(
-          Array.isArray(restoredData.contactMethods) && restoredData.contactMethods.length > 0
-            ? withListingEnquiry(restoredData.contactMethods)
-            : DEFAULT_LISTING_CONTACT_METHODS
-        );
-        setLastSavedAt(restored.savedAt ?? null);
-        toast({
-          title: "Draft restored",
-          description: "You can continue from where you left off.",
-          variant: "success",
-        });
-      });
+  // The form's starting point, settled once in order: a template the address
+  // names (SHOW_POST_TEMPLATES, ?template=<id>), else the autosaved draft. A
+  // template that replaced a draft offers Undo, which puts the draft back.
+  const started = useRef(false);
+  // A kept page (opened again from Create Post) settles again only for a template.
+  // A copy (?copy=<id>) never starts from a template.
+  const templateParam = copyId ? null : (searchParams?.get("template") ?? null);
+  const applyDraft = (restored: DraftEnvelope<ListingDraftData>) => {
+    const restoredData = restored.data;
+    setStep(Math.min(Math.max(restored.step ?? 0, 0), STEPS.length - 1));
+    setTitle(restoredData.title ?? "");
+    setDescription(restoredData.description ?? "");
+    setPrice(restoredData.price ?? "");
+    setNegotiable(Boolean(restoredData.negotiable));
+    setCategory((restoredData.category as ListingCategory | "") ?? "");
+    setCondition((restoredData.condition as ListingCondition | "") ?? "");
+    setCategoryAttributes(restoredData.categoryAttributes ?? {});
+    setProvince(restoredData.province ?? "");
+    setCity(restoredData.city ?? "");
+    setTown(restoredData.town ?? "");
+    setAddress(restoredData.address ?? "");
+    setContactMethods(
+      Array.isArray(restoredData.contactMethods) && restoredData.contactMethods.length > 0
+        ? withListingEnquiry(restoredData.contactMethods)
+        : DEFAULT_LISTING_CONTACT_METHODS
+    );
+    setLastSavedAt(restored.savedAt ?? null);
+    toast({
+      title: "Draft restored",
+      description: "You can continue from where you left off.",
+      variant: "success",
     });
-  }, [copyId, user?.id, isLoading, submitSucceeded, restoreDraft, toast]);
-
-  useEffect(() => {
-    if (copyId || !user?.id || isLoading || isSubmitting || submitSucceeded) return;
-
-    saveDraft(step, {
+  };
+  const settleStart = useEffectEvent((start: ListingStart<ListingDraftData>, again: boolean) => {
+    dropTemplateFromAddress();
+    if (start.templateFailed) announceTemplateFailed(toast);
+    const { template } = start;
+    if (!template) {
+      if (start.draft && !again) applyDraft(start.draft);
+      return;
+    }
+    // What the template replaces: the saved draft on a first visit, or the work
+    // in the form when a kept page is opened again with a template.
+    const formData: ListingDraftData = {
       category,
       condition,
       categoryAttributes,
@@ -543,7 +568,104 @@ export default function CreateListingPage() {
       town,
       address,
       contactMethods,
+    };
+    const files = { photoFiles, videoFile, videoCoverFile };
+    const draft = again
+      ? title || description || category
+        ? { v: 1, savedAt: Date.now(), step, data: formData }
+        : null
+      : start.draft;
+    templateHold.current?.end();
+    const fields = formFieldsFromTemplate(template.data);
+    // The member's area when the template has none, as an empty form gets it.
+    const filled: ListingDraftData = {
+      ...fields,
+      title: "",
+      price: "",
+      negotiable: false,
+      province: fields.province || profile?.location_province || "",
+      city:
+        fields.city ||
+        (!fields.province || fields.province === profile?.location_province
+          ? profile?.location_city || ""
+          : ""),
+    };
+    setStep(0);
+    setTitle("");
+    setPrice("");
+    setNegotiable(false);
+    setPhotoFiles([]);
+    setVideoFile([]);
+    setVideoCoverFile([]);
+    setCategory(fields.category as ListingCategory);
+    setCondition(fields.condition as ListingCondition | "");
+    setCategoryAttributes(fields.categoryAttributes);
+    setDescription(fields.description);
+    setProvince(filled.province);
+    setCity(filled.city);
+    setTown(fields.town);
+    setAddress(fields.address);
+    setContactMethods(fields.contactMethods);
+    const userId = user?.id;
+    const undo = draft
+      ? () => {
+          // First visit: the stored draft as it is now (another tab may have
+          // saved newer work), since the template's fields were never saved.
+          applyDraft(
+            (!again && userId ? loadDraft<ListingDraftData>("listing", userId) : null) ?? draft
+          );
+          if (again) {
+            setPhotoFiles(files.photoFiles);
+            setVideoFile(files.videoFile);
+            setVideoCoverFile(files.videoCoverFile);
+          }
+        }
+      : null;
+    // Untouched template fields are not autosaved (a reload restores the earlier
+    // draft) and Undo stays offered; the first change to the form ends both.
+    const shown = announceTemplate(toast, template, undo);
+    templateHold.current = { pristine: draftSnapshot(filled), end: () => shown.dismiss() };
+  });
+
+  useEffect(() => {
+    if (copyId || !user?.id || isLoading || submitSucceeded) return;
+    if (started.current && !templateParam) return;
+    const again = started.current;
+    let cancelled = false;
+    // A kept page reads no saved draft: the form holds the latest work.
+    void loadListingStart<ListingDraftData>(again ? () => null : restoreDraft).then((start) => {
+      if (cancelled) return;
+      started.current = true;
+      queueMicrotask(() => settleStart(start, again));
     });
+    return () => {
+      cancelled = true;
+    };
+  }, [copyId, user?.id, isLoading, submitSucceeded, restoreDraft, templateParam]);
+
+  useEffect(() => {
+    if (copyId || !user?.id || isLoading || isSubmitting || submitSucceeded) return;
+    const data: ListingDraftData = {
+      category,
+      condition,
+      categoryAttributes,
+      title,
+      description,
+      price,
+      negotiable,
+      province,
+      city,
+      town,
+      address,
+      contactMethods,
+    };
+    const hold = templateHold.current;
+    if (hold) {
+      if (hold.pristine === draftSnapshot(data)) return;
+      templateHold.current = null;
+      hold.end();
+    }
+    saveDraft(step, data);
     queueMicrotask(() => {
       setLastSavedAt(Date.now());
     });
@@ -1115,6 +1237,9 @@ export default function CreateListingPage() {
       </div>
     );
   }
+
+  // While a template (?template=<id>) loads, the form waits, so nothing typed is lost.
+  if (templateLoading(templateParam)) return <TemplateLoading />;
 
   return (
     <div className="flex min-h-screen flex-col">

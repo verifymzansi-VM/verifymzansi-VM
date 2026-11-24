@@ -204,6 +204,8 @@ export const ROUTE_ACCESS: Record<string, Partial<Record<RouteMethod, RouteAcces
   "api/organisations/search": { GET: "public" },
   "api/otp/send": { POST: "signed-in" },
   "api/otp/verify": { POST: "signed-in" },
+  "api/post-templates": { GET: "signed-in", POST: "signed-in" },
+  "api/post-templates/[id]": { PATCH: "signed-in", DELETE: "signed-in" },
   "api/profile/avatar": { POST: "signed-in" },
   "api/profile/avatar/[id]": { GET: "signed-in" },
   "api/profile/update": { POST: "signed-in" },

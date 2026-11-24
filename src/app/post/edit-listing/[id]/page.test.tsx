@@ -9,6 +9,7 @@ import {
 import EditListingPage from "./page";
 import { useParams, useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
+import type * as HiddenFeatures from "@/lib/hidden-features";
 
 // The member accepted the current posting terms before (the edit form shows
 // no tick), unless a test serves them as not accepted yet.
@@ -22,6 +23,14 @@ const { listingCardSpy } = vi.hoisted(() => ({
 }));
 const { listingDetailPreviewSpy } = vi.hoisted(() => ({
   listingDetailPreviewSpy: vi.fn(),
+}));
+
+// Not about post templates: SHOW_POST_TEMPLATES is pinned off so the form
+// makes no template read and these tests count only the save requests
+// (src/components/post-templates/save-template-button.test.tsx covers it).
+vi.mock("@/lib/hidden-features", async (importOriginal) => ({
+  ...(await importOriginal<typeof HiddenFeatures>()),
+  SHOW_POST_TEMPLATES: false,
 }));
 
 vi.mock("next/navigation", () => ({

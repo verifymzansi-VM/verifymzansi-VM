@@ -68,6 +68,8 @@ const EXPORT_LATER = [
   "e543b105fe264d5a683b5c570bf68cb5",
   // 20261121150309_copy_a_post.sql (the posts rows gain copied_from)
   "4aa0fa034c5c09e495530b5563ff3008",
+  // 20261122191646_post_templates.sql (the post_templates dataset)
+  "fb567a31cf8ca166f117d5b02f744235",
 ];
 /** The grant after later reviewed updates. */
 const GRANT_LATER = [

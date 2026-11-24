@@ -1496,6 +1496,88 @@ person; both logs append-only with the retention exception; the rollback refused
 with a row; and a staff member who loses the role (no record and no server
 material).
 
+## Post templates, 21 November 2026
+
+`20261122191646_post_templates.sql` is pending (see the applied register).
+Launch checklist item 17b, business tools plan section 4 (owner-approved 20
+November 2026 with all 10 recommendations): a member whose Multi-listing package
+runs saves a reusable starting point for Market listings.
+
+- **What a template keeps:** `private.post_templates` holds up to 20 per
+  account, each with a name (1 to 60 characters, unique per account ignoring
+  case; otherwise 22023, detail `template_name_invalid`) and the form fields the
+  plan lists, at most 16 KiB: the category, the condition, the details that
+  repeat (text, yes/no or lists of text), the description, the location and
+  which contact buttons to show (by name, never a number). Refused (22023,
+  detail `template_invalid`): any other field (photos, video, title, price), an
+  empty category, price details (`monthly_rent_zar`, `salary_min`, `salary_max`,
+  `levy_zar`, `rates_taxes_zar`) and details of one item (`year`, `mileage_km`,
+  `number_of_owners`, `battery_health_pct`, `colour`, `accident_free`,
+  `registration_province`, `available_from`, `application_deadline`,
+  `age_months`, `quantity`).
+- **Saving:** `api.save_my_post_template(name, data)` (members) saves a
+  template, or replaces the caller's template with the same name ("save again
+  under the same name"), only while the caller's package runs
+  (`internal.slot_package_now`; PT402, detail `package_required`). A 21st
+  template is refused (PT429, detail `template_limit`).
+- **Reading and tidying up:** `api.list_my_post_templates()` returns the
+  caller's templates and whether their package runs;
+  `api.rename_my_post_template(template, name)` and
+  `api.delete_my_post_template(template)` act on the caller's own templates only
+  (PT404, detail `template_unavailable`; a name already used is PT409, detail
+  `template_name_taken`), also after the package ends.
+- **Deletion:** the trigger `post_templates_account_closed` deletes an account's
+  templates when it closes; the Auth user's deletion cascades too.
+- **Privacy export:** one more dataset, `post_templates`. The full
+  `internal.frontend_privacy_export_data` body is the live one from
+  `20261121150309_copy_a_post.sql` (posts rows keep `copied_from`) with that one
+  dataset added.
+- **Teams:** package teams (P4c, item 15) are not built, so a template belongs
+  to the account that made it.
+
+Expand only: four new commands, a table and a trigger; the export gains a
+dataset. ORDER: **website-first**: the live staff access export
+(`/api/admin/dsar/export`) accepts exactly 42 datasets and would refuse every
+export once the update adds the 43rd; the website in this change accepts 42 or
+more. `SHOW_POST_TEMPLATES` is on in that website (like every other switch since
+the owner's decision of 22 November 2026), and until the update is applied the
+template read fails, so nothing shows: 'Save as template' stays hidden and
+Create Post shows no templates. Merge and deploy the website, then apply the
+update.
+
+**Applying.**
+
+1. Run `../preflight/20261122191646_post_templates.check.sql` unchanged in the
+   SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "post templates: update not applied; slot packages: N"
+   (any count).
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "post templates: already applied; slot packages: N;
+   templates: 0; accounts with templates: 0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is `../rollback/20261122191646_post_templates.down.sql`
+(only with the owner's decision; prefer a forward fix; switch
+`SHOW_POST_TEMPLATES` off first). It refuses (55000) unless every piece of the
+update has the update's body; then it puts back
+`internal.frontend_privacy_export_data` byte for byte and drops the trigger, the
+nine functions and `private.post_templates` (saved templates go with it; posts
+made from them stay).
+
+`node --import tsx scripts/test-foundation-post-templates.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; a drifted body and a premature rollback
+refused; apply, rollback and re-apply return the same fingerprints; the grants
+(members only, wrappers security invoker, the trigger function for nobody, no
+table access); saving, replacing by name (ignoring case), listing, renaming and
+deleting; the limits (20 per account, names of 1 to 60 characters, 16 KiB);
+refusals for other fields, an empty category, a price detail, a detail of one
+item, a detail that is a number or an object, a number or an unknown contact
+button, without a running package, for another member's template and for a
+visitor; deletion when the account closes; and the export dataset.
+
 ## Staff operations health and a last-run record for every scheduled job, 20 November 2026
 
 `20261120163500_staff_operations_health.sql` was applied on 21 November 2026 at
@@ -7728,6 +7810,8 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   479d18bf; preflight after: already applied; production fingerprint after it
   (fingerprint.sql) matched the full replay (except the known schema grant
   difference)
+
+- `20261122191646_post_templates.sql`: pending; website-first
 
 - `20261123225900_posting_terms_v6.sql`: pending
 
