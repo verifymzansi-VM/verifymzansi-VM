@@ -144,6 +144,8 @@ export default function ProfilePage() {
   const [isPasswordAccount, setIsPasswordAccount] = useState(true);
   const [isDeleteVerifying, setIsDeleteVerifying] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const leaveTimerRef = useRef<number | null>(null);
+  const unmountedRef = useRef(false);
   const { toast } = useToast();
   const router = useRouter();
   const provinces = getProvinceNames();
@@ -162,6 +164,15 @@ export default function ProfilePage() {
     { label: `${PASSWORD_MIN_LENGTH}+ characters`, met: newPassword.length >= PASSWORD_MIN_LENGTH },
     { label: "Up to 128 characters", met: newPassword.length <= 128 },
   ];
+
+  // Once the page unmounts, no delayed redirect may still fire or be set.
+  useEffect(() => {
+    unmountedRef.current = false;
+    return () => {
+      unmountedRef.current = true;
+      if (leaveTimerRef.current !== null) window.clearTimeout(leaveTimerRef.current);
+    };
+  }, []);
 
   // Read tab from URL hash on mount
   useEffect(() => {
@@ -574,7 +585,8 @@ export default function ProfilePage() {
    * this session survives in memory; the delay lets the toast be read first. */
   async function leaveAfterSessionEnded(path: string) {
     await forgetBrowserSession();
-    window.setTimeout(() => {
+    if (unmountedRef.current) return;
+    leaveTimerRef.current = window.setTimeout(() => {
       window.location.assign(new URL(path, window.location.origin).toString());
     }, ACCOUNT_DELETED_REDIRECT_DELAY_MS);
   }

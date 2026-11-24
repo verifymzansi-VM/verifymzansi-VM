@@ -51,7 +51,7 @@ export async function acceptIdentity(h, user) {
     insert into private.accepted_identity_facts(id,owner_id,submission_id,identity_hmac,reviewed_by)
       values(${lit(ids.fact)},${lit(user.id)},${lit(ids.submission)},${fingerprintSql(user.id)},gen_random_uuid());
     insert into private.verification_phone_proofs(owner_id,challenge_id,phone)
-      values(${lit(user.id)},gen_random_uuid(),'+2783'||lpad((abs(hashtext(${lit(user.id)}))%10000000)::text,7,'0'));
+      values(${lit(user.id)},gen_random_uuid(),vmtest.next_phone());
     insert into private.verification_localities(owner_id,province_id,city_id) values(${lit(user.id)},'gp','gp_johannesburg');`);
   return ids;
 }

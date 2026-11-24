@@ -846,4 +846,42 @@ describe("ProfilePage", () => {
       Object.defineProperty(window, "location", { configurable: true, value: originalLocation });
     }
   });
+
+  it("drops the delayed redirect when the page unmounts before it fires", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ status: "closed" }) })
+    );
+    const originalLocation = window.location;
+    const assign = vi.fn();
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: {
+        origin: "http://localhost",
+        href: "http://localhost/dashboard/profile#account",
+        pathname: "/dashboard/profile",
+        search: "",
+        hash: "#account",
+        assign,
+        replace: vi.fn(),
+      },
+    });
+    try {
+      const { unmount } = render(<ProfilePage />);
+      await screen.findByRole("heading", { name: "My profile" });
+      fireEvent.click(screen.getByRole("button", { name: /^Delete$/i }));
+      fireEvent.change(screen.getByLabelText("Type DELETE to confirm"), {
+        target: { value: "DELETE" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: /^Continue$/i }));
+      await waitFor(() =>
+        expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: "Account closed" }))
+      );
+      unmount();
+      await new Promise((resolve) => setTimeout(resolve, 1800));
+      expect(assign).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(window, "location", { configurable: true, value: originalLocation });
+    }
+  });
 });
