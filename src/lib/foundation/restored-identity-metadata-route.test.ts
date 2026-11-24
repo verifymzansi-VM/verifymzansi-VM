@@ -236,3 +236,45 @@ it("fails closed when the capture read is unavailable or the claim changed", asy
     expect((await handleRestoredIdentityMetadata(request({ userId: owner }))).status).toBe(status);
   }
 });
+
+it("adds the case's latest Didit check with the names the member typed, and works without it", async () => {
+  const base = rpc.getMockImplementation()!;
+  const didit = {
+    status: "with_staff",
+    reasons: ["names_differ", "provider_in_review"],
+    created_at: "2026-11-04T09:00:00Z",
+    finished_at: "2026-11-04T09:05:00Z",
+    declined_at: null,
+    asked_at: null,
+    ask_reason: null,
+  };
+  rpc.mockImplementation(async (name: string, ...rest: unknown[]) =>
+    name === "get_identity_check_for_case"
+      ? { data: { check: didit }, error: null }
+      : base(name, ...rest)
+  );
+  const body = await (await handleRestoredIdentityMetadata(request({ userId: owner }))).json();
+  expect(rpc).toHaveBeenCalledWith(
+    "get_identity_check_for_case",
+    { p_case: id(1) },
+    { get: false }
+  );
+  expect(body.identityCheck).toEqual({
+    status: "with_staff",
+    reasons: ["names_differ", "provider_in_review"],
+    createdAt: "2026-11-04T09:00:00Z",
+    finishedAt: "2026-11-04T09:05:00Z",
+    declinedAt: null,
+    askedAt: null,
+    askReason: null,
+    typedNames: "Fixture Member",
+  });
+  rpc.mockImplementation(async (name: string, ...rest: unknown[]) =>
+    name === "get_identity_check_for_case"
+      ? { data: null, error: { code: "42501" } }
+      : base(name, ...rest)
+  );
+  const without = await handleRestoredIdentityMetadata(request({ userId: owner }));
+  expect(without.status).toBe(200);
+  expect((await without.json()).identityCheck).toBeNull();
+});

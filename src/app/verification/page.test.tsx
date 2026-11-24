@@ -1103,6 +1103,158 @@ describe("VerificationPage", () => {
     expect(await screen.findByLabelText(/13-digit SA ID number/i)).toBeInTheDocument();
   });
 
+  describe("the independent ID check", () => {
+    const phoneDone = () =>
+      jsonResponse(
+        buildStatusPayload({ steps: [{ step_type: "phone", status: "approved" }] }),
+        200
+      );
+    function withAvailability(...answers: unknown[]) {
+      const queue = [...answers];
+      const base = global.fetch as unknown as (input: string | URL, init?: RequestInit) => unknown;
+      global.fetch = vi.fn((input: string | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === "/api/verification/identity-check" && (init?.method ?? "GET") === "GET")
+          return Promise.resolve(jsonResponse(queue.length > 1 ? queue.shift() : queue[0], 200));
+        if (url === "/api/verification/identity-check")
+          return Promise.resolve(jsonResponse({ checkId: "c", url: "https://verify.didit.me/s" }));
+        return base(input, init);
+      }) as unknown as typeof fetch;
+    }
+
+    it("leaves the ID step exactly as today on the Manual setting", async () => {
+      statusResponse = phoneDone();
+      withAvailability({ route: "manual", reason: "mode", check: null });
+      render(<VerificationPage />);
+      await waitFor(() =>
+        expect(
+          fetchCalls().some(([input]) => String(input) === "/api/verification/identity-check")
+        ).toBe(true)
+      );
+      expect(screen.getByLabelText(/13-digit SA ID number/i)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Take test photo/i })).toBeInTheDocument();
+      expect(
+        screen.getByText(/Our team checks your ID, usually within 1–2 working days/i)
+      ).toBeTruthy();
+      expect(screen.queryByRole("button", { name: /Start ID check/i })).not.toBeInTheDocument();
+      expect(screen.queryByText(/independent verification/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/isn't available right now/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/kept until 5 years/i)).not.toBeInTheDocument();
+    });
+
+    it("says the automatic check isn't available when paused, on the camera route", async () => {
+      statusResponse = phoneDone();
+      withAvailability({ route: "manual", reason: "paused", check: null });
+      render(<VerificationPage />);
+      expect(await screen.findByText(/automatic check isn't available right now/i)).toBeTruthy();
+      expect(screen.getByLabelText(/13-digit SA ID number/i)).toBeInTheDocument();
+    });
+
+    it("starts a check only after the consent tick, sending the consent with it", async () => {
+      statusResponse = phoneDone();
+      withAvailability({ route: "automatic", reason: null, check: null });
+      render(<VerificationPage />);
+      const start = await screen.findByRole("button", { name: /Start ID check/i });
+      expect(screen.queryByLabelText(/13-digit SA ID number/i)).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /Take test photo/i })).not.toBeInTheDocument();
+      expect(screen.getByText(/kept until 5 years/i)).toBeTruthy();
+      expect(screen.getByRole("link", { name: /Verification Privacy Notice/i })).toHaveAttribute(
+        "href",
+        "https://didit.me/terms/verification-privacy-notice"
+      );
+      fireEvent.change(screen.getByLabelText(/All first names \(as on your ID\)/i), {
+        target: { value: "Thando Sipho" },
+      });
+      fireEvent.change(screen.getByLabelText(/Surname \(as on your ID\)/i), {
+        target: { value: "Dlamini" },
+      });
+      expect(start).toBeDisabled();
+      fireEvent.click(start);
+      const posts = () =>
+        fetchCalls().filter(
+          ([input, init]) =>
+            String(input) === "/api/verification/identity-check" &&
+            (init as RequestInit | undefined)?.method === "POST"
+        );
+      expect(posts()).toHaveLength(0);
+
+      fireEvent.click(screen.getByLabelText(/I agree that VerifyMzansi asks/i));
+      expect(start).toBeEnabled();
+      fireEvent.click(start);
+      await waitFor(() => expect(posts()).toHaveLength(1));
+      expect(JSON.parse(String((posts()[0][1] as RequestInit).body))).toEqual({
+        consent: true,
+        consentVersion: "identity-check-consent-v1",
+        firstName: "Thando Sipho",
+        lastName: "Dlamini",
+      });
+    });
+
+    it("shows the check in the page, then the result", async () => {
+      statusResponse = phoneDone();
+      withAvailability(
+        {
+          route: "automatic",
+          reason: null,
+          check: { id: "c", status: "started", session_url: "https://verify.didit.me/s" },
+        },
+        { route: "automatic", reason: null, check: { id: "c", status: "approved" } }
+      );
+      render(<VerificationPage />);
+      const frame = await screen.findByTitle(/Independent ID check/i);
+      expect(frame).toHaveAttribute("src", "https://verify.didit.me/s");
+      expect(frame).toHaveAttribute("allow", "camera");
+      // A message from another origin changes nothing.
+      window.dispatchEvent(
+        new MessageEvent("message", { origin: "https://evil.example", data: "didit:completed" })
+      );
+      expect(screen.queryByText(/Checking your ID/i)).not.toBeInTheDocument();
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          origin: "https://verify.didit.me",
+          data: { type: "didit:completed" },
+        })
+      );
+      expect(await screen.findByText(/Your ID is verified/i)).toBeTruthy();
+      expect(screen.getByRole("button", { name: /Continue to location/i })).toBeTruthy();
+    });
+
+    it("offers 'try again' and 'ask a person' after a fully automatic decline", async () => {
+      statusResponse = phoneDone();
+      withAvailability({
+        route: "automatic",
+        reason: null,
+        check: {
+          id: "22222222-2222-4222-8222-222222222222",
+          status: "declined",
+          decline_reason: "names_differ",
+          can_ask_person: true,
+          ask_person_until: "2026-11-25T10:00:00Z",
+          asked_at: null,
+        },
+      });
+      render(<VerificationPage />);
+      expect(await screen.findByText(/We couldn’t verify your ID/i)).toBeTruthy();
+      expect(screen.getByText(/don't match the names on your ID/i)).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: /Ask a person to look again/i }));
+      const send = screen.getByRole("button", { name: /Send to a person/i });
+      expect(send).toBeDisabled();
+      fireEvent.change(screen.getByLabelText(/Anything we should know/i), {
+        target: { value: "My ID book is old and the photo is faded." },
+      });
+      fireEvent.click(send);
+      await waitFor(() => {
+        const call = fetchCalls().find(
+          ([input]) => String(input) === "/api/verification/identity-check/ask"
+        );
+        expect(JSON.parse(String((call![1] as RequestInit).body))).toEqual({
+          checkId: "22222222-2222-4222-8222-222222222222",
+          reason: "My ID book is old and the photo is faded.",
+        });
+      });
+    });
+  });
+
   it("treats duplicate pending ID uploads as already submitted and advances to the selfie step", async () => {
     statusResponse = jsonResponse(
       buildStatusPayload({

@@ -34,6 +34,7 @@ import {
   ScanFace,
 } from "lucide-react";
 import { getKycEvidenceErrorMessage } from "./kyc-evidence-errors";
+import { IdentityCheckPanel, type CaseIdentityCheck } from "./identity-check-panel";
 import {
   getCachedKycArtifactBlob,
   setCachedKycArtifactBlob,
@@ -150,6 +151,7 @@ export function KycComparisonViewer({
   const [artifactErrors, setArtifactErrors] = useState<Record<string, string>>({});
   const [riskSignals, setRiskSignals] = useState<RiskSignal[]>([]);
   const [providerResults, setProviderResults] = useState<ProviderResult[]>([]);
+  const [identityCheck, setIdentityCheck] = useState<CaseIdentityCheck | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [retryToken, setRetryToken] = useState(0);
@@ -191,6 +193,7 @@ export function KycComparisonViewer({
       setArtifactErrors({});
       setRiskSignals([]);
       setProviderResults([]);
+      setIdentityCheck(null);
       setPanelZoom({ id_doc: 1, selfie: 1 });
       setReviewChecks([]);
       setReviewSubjectLabel(displayName);
@@ -256,6 +259,9 @@ export function KycComparisonViewer({
         setArtifacts(sorted);
         setRiskSignals(loadedSignals);
         setProviderResults(loadedProviderResults);
+        setIdentityCheck(
+          meta.identityCheck && typeof meta.identityCheck === "object" ? meta.identityCheck : null
+        );
 
         // Preload artifacts in parallel and reuse cached blobs when available.
         const results = await Promise.all(
@@ -849,6 +855,7 @@ export function KycComparisonViewer({
                   {renderArtifactPanel(selfieArtifact)}
                 </div>
               </div>
+              {identityCheck && <IdentityCheckPanel check={identityCheck} />}
               {/* Detailed fraud / risk signals for the two images on screen. */}
               {(() => {
                 const visibleIds = new Set(comparisonArtifacts.map((a) => a.id));

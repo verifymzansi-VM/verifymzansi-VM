@@ -60,6 +60,7 @@ export const ROUTE_ACCESS: Record<string, Partial<Record<RouteMethod, RouteAcces
   "api/admin/feature-flags/toggle": { POST: "staff" },
   "api/admin/flagging/action": { POST: "staff" },
   "api/admin/free-credits": { POST: "staff" },
+  "api/admin/identity-check-settings": { POST: "staff" },
   "api/admin/governance/appeal": { POST: "staff" },
   "api/admin/governance/decide": { POST: "staff" },
   "api/admin/governance/restrictions/lift": { POST: "staff" },

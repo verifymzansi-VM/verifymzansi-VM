@@ -54,6 +54,18 @@ import { LocationSelector } from "@/components/ui/location-selector";
 import { CameraCapture } from "@/components/ui/camera-capture";
 import { isValidSaPhone, sanitizeSaPhoneInput } from "@/lib/utils/phone";
 import { SHOW_LOCATION_DETECTION } from "@/lib/hidden-features";
+import { identityCheckView } from "@/lib/verification/identity-check-view";
+import {
+  AutomaticCheckFallbackNote,
+  IndependentCheckApproved,
+  IndependentCheckChecking,
+  IndependentCheckDeclined,
+  IndependentCheckFrame,
+  IndependentCheckStart,
+  IndependentCheckWithStaff,
+  useIdentityCheck,
+  useIdentityCheckPolling,
+} from "./independent-check";
 import {
   FieldGroupHeading,
   HelpLinkCard,
@@ -619,6 +631,21 @@ export default function VerificationPage() {
     !lastNameError;
   const isSelfieFormReady = !selfieFileError;
   const serverStepMap = useMemo(() => buildServerStepMap(serverSteps), [serverSteps]);
+  // The independent ID check (automatic ID checks plan, section 3): read when the ID step
+  // opens. On the Manual setting the view stays "manual", today's camera route.
+  const identityCheck = useIdentityCheck(step === "id_doc");
+  const [checkFinished, setCheckFinished] = useState(false);
+  const [checkTryAgain, setCheckTryAgain] = useState(false);
+  const [verifiedNames, setVerifiedNames] = useState<{
+    full: string;
+    public: string | null;
+  } | null>(null);
+  const checkView = identityCheckView(identityCheck.availability, {
+    finished: checkFinished,
+    tryAgain: checkTryAgain,
+    idStepPending: serverStepMap.get("id_doc")?.status === "pending",
+  });
+  useIdentityCheckPolling(step === "id_doc" ? checkView : null, identityCheck.refresh);
   const persistedPhoneVerified = ["approved", "pending"].includes(
     serverStepMap.get("phone")?.status ?? ""
   );
@@ -807,6 +834,55 @@ export default function VerificationPage() {
       cancelled = true;
     };
   }, [syncVerificationStatus]);
+
+  // A result arrived: refresh the steps, and show the verified name.
+  const checkResult = ["approved", "with_staff", "declined"].includes(checkView.kind)
+    ? checkView.kind
+    : null;
+  useEffect(() => {
+    if (!checkResult) return;
+    let cancelled = false;
+    async function showResult() {
+      await syncVerificationStatus();
+      if (cancelled || checkResult !== "approved") return;
+      await readVerifiedNames();
+    }
+    async function readVerifiedNames() {
+      await fetch("/api/foundation/profile", { cache: "no-store" })
+        .then((res) => (res.ok ? res.json() : null))
+        .then(
+          (
+            profile: {
+              legal_first_name?: string | null;
+              legal_last_name?: string | null;
+              public_name?: string | null;
+            } | null
+          ) => {
+            if (cancelled || !profile?.legal_first_name || !profile.legal_last_name) return;
+            setVerifiedNames({
+              full: `${profile.legal_first_name} ${profile.legal_last_name}`,
+              public: profile.public_name ?? null,
+            });
+          }
+        )
+        .catch(() => undefined);
+    }
+    void showResult();
+    return () => {
+      cancelled = true;
+    };
+  }, [checkResult, syncVerificationStatus]);
+
+  const refreshIdentityCheck = identityCheck.refresh;
+  const handleCheckStarted = useCallback(async () => {
+    setCheckFinished(false);
+    setCheckTryAgain(false);
+    await refreshIdentityCheck();
+  }, [refreshIdentityCheck]);
+  const handleCheckFinished = useCallback(() => {
+    setCheckFinished(true);
+    void refreshIdentityCheck();
+  }, [refreshIdentityCheck]);
 
   // SA ID number validation effect
   useEffect(() => {
@@ -1815,205 +1891,261 @@ export default function VerificationPage() {
                     icon={IdCard}
                     why={STEP_WHY.id_doc}
                   >
-                    {renderStepStatusNotice(true)}
+                    {(checkView.kind === "manual" || checkView.kind === "start") &&
+                      renderStepStatusNotice(true)}
+                    {checkView.kind === "manual" && checkView.fallback && (
+                      <AutomaticCheckFallbackNote />
+                    )}
 
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="firstName">All first names (as on your ID)</Label>
-                        <Input
-                          id="firstName"
-                          maxLength={100}
-                          autoComplete="given-name"
-                          value={firstName}
-                          disabled={verificationSubmissionBlocked}
-                          aria-invalid={showFirstNameError || undefined}
-                          aria-describedby={
-                            showFirstNameError ? "firstName-error names-hint" : "names-hint"
-                          }
-                          onBlur={() => setNameFieldsTouched((prev) => ({ ...prev, first: true }))}
-                          onChange={(e) => {
-                            setFirstName(e.target.value);
-                            setUploadReceipts((prev) => ({ ...prev, id_doc: undefined }));
-                            clearStepCompletion("id_doc");
-                          }}
-                          className="h-12 sm:h-12"
-                        />
-                        {showFirstNameError && (
-                          <p id="firstName-error" className="inline-form-error">
-                            {firstNameError}
-                          </p>
-                        )}
-                      </div>
+                    {(checkView.kind === "manual" || checkView.kind === "start") && (
+                      <>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label htmlFor="firstName">All first names (as on your ID)</Label>
+                            <Input
+                              id="firstName"
+                              maxLength={100}
+                              autoComplete="given-name"
+                              value={firstName}
+                              disabled={verificationSubmissionBlocked}
+                              aria-invalid={showFirstNameError || undefined}
+                              aria-describedby={
+                                showFirstNameError ? "firstName-error names-hint" : "names-hint"
+                              }
+                              onBlur={() =>
+                                setNameFieldsTouched((prev) => ({ ...prev, first: true }))
+                              }
+                              onChange={(e) => {
+                                setFirstName(e.target.value);
+                                setUploadReceipts((prev) => ({ ...prev, id_doc: undefined }));
+                                clearStepCompletion("id_doc");
+                              }}
+                              className="h-12 sm:h-12"
+                            />
+                            {showFirstNameError && (
+                              <p id="firstName-error" className="inline-form-error">
+                                {firstNameError}
+                              </p>
+                            )}
+                          </div>
 
-                      <div className="space-y-2">
-                        <Label htmlFor="lastName">Surname (as on your ID)</Label>
-                        <Input
-                          id="lastName"
-                          maxLength={100}
-                          autoComplete="family-name"
-                          value={lastName}
-                          disabled={verificationSubmissionBlocked}
-                          aria-invalid={showLastNameError || undefined}
-                          aria-describedby={
-                            showLastNameError ? "lastName-error names-hint" : "names-hint"
-                          }
-                          onBlur={() => setNameFieldsTouched((prev) => ({ ...prev, last: true }))}
-                          onChange={(e) => {
-                            setLastName(e.target.value);
-                            setUploadReceipts((prev) => ({ ...prev, id_doc: undefined }));
-                            clearStepCompletion("id_doc");
-                          }}
-                          className="h-12 sm:h-12"
-                        />
-                        {showLastNameError && (
-                          <p id="lastName-error" className="inline-form-error">
-                            {lastNameError}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <p id="names-hint" className="-mt-2 text-xs leading-5 text-muted-foreground">
-                      Type every first name in the same order as your ID. Your verified name
-                      can&apos;t be changed later.
-                    </p>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="idNumber">13-digit SA ID number</Label>
-                      <Input
-                        id="idNumber"
-                        maxLength={13}
-                        inputMode="numeric"
-                        autoComplete="off"
-                        value={idNumber}
-                        disabled={verificationSubmissionBlocked}
-                        aria-invalid={idChecksumValid === false || Boolean(idAgeError) || undefined}
-                        aria-describedby={
-                          idNumber.length === 13 && idChecksumValid !== null
-                            ? "idNumber-feedback"
-                            : undefined
-                        }
-                        onChange={(e) => {
-                          setIdNumber(e.target.value.replace(/\D/g, ""));
-                          setUploadReceipts((prev) => ({ ...prev, id_doc: undefined }));
-                          clearStepCompletion("id_doc");
-                        }}
-                        className="h-12 font-medium tabular-nums tracking-wide sm:h-12"
-                      />
-                      {idNumber.length === 13 && idChecksumValid !== null && (
-                        <div
-                          id="idNumber-feedback"
-                          className={cn(
-                            "rounded-xl border px-3.5 py-3 text-sm",
-                            idChecksumValid && !idAgeError
-                              ? "border-brand-green-600/20 bg-brand-green-50 text-brand-green-900 dark:border-brand-green-400/20 dark:bg-brand-green-500/10 dark:text-brand-gold-100"
-                              : "border-brand-red-600/20 bg-brand-red-50 text-brand-red-800 dark:border-brand-red-400/25 dark:bg-brand-red-500/10 dark:text-brand-red-100"
-                          )}
+                          <div className="space-y-2">
+                            <Label htmlFor="lastName">Surname (as on your ID)</Label>
+                            <Input
+                              id="lastName"
+                              maxLength={100}
+                              autoComplete="family-name"
+                              value={lastName}
+                              disabled={verificationSubmissionBlocked}
+                              aria-invalid={showLastNameError || undefined}
+                              aria-describedby={
+                                showLastNameError ? "lastName-error names-hint" : "names-hint"
+                              }
+                              onBlur={() =>
+                                setNameFieldsTouched((prev) => ({ ...prev, last: true }))
+                              }
+                              onChange={(e) => {
+                                setLastName(e.target.value);
+                                setUploadReceipts((prev) => ({ ...prev, id_doc: undefined }));
+                                clearStepCompletion("id_doc");
+                              }}
+                              className="h-12 sm:h-12"
+                            />
+                            {showLastNameError && (
+                              <p id="lastName-error" className="inline-form-error">
+                                {lastNameError}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <p
+                          id="names-hint"
+                          className="-mt-2 text-xs leading-5 text-muted-foreground"
                         >
-                          {idChecksumValid ? (
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-1.5 font-semibold">
-                                <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-                                ID number valid
-                              </div>
-                              {(idDob || idGender) && (
-                                <dl className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
-                                  {idDob && (
-                                    <div className="flex gap-1">
-                                      <dt>Date of birth:</dt>
-                                      <dd className="font-medium">{idDob}</dd>
-                                    </div>
-                                  )}
-                                  {idGender && (
-                                    <div className="flex gap-1">
-                                      <dt>Gender:</dt>
-                                      <dd className="font-medium">{idGender}</dd>
-                                    </div>
-                                  )}
-                                </dl>
+                          Type every first name in the same order as your ID. Your verified name
+                          can&apos;t be changed later.
+                        </p>
+                      </>
+                    )}
+
+                    {checkView.kind === "start" && (
+                      <IndependentCheckStart
+                        namesReady={!firstNameError && !lastNameError}
+                        firstName={normalizedFirstName}
+                        lastName={normalizedLastName}
+                        disabled={verificationSubmissionBlocked}
+                        onStarted={handleCheckStarted}
+                        onBack={() => setStep("phone")}
+                      />
+                    )}
+                    {checkView.kind === "frame" && (
+                      <IndependentCheckFrame url={checkView.url} onFinished={handleCheckFinished} />
+                    )}
+                    {checkView.kind === "checking" && <IndependentCheckChecking />}
+                    {checkView.kind === "approved" && (
+                      <IndependentCheckApproved
+                        fullName={verifiedNames?.full ?? null}
+                        publicName={verifiedNames?.public ?? null}
+                        onContinue={() => setStep("location")}
+                      />
+                    )}
+                    {checkView.kind === "with_staff" && (
+                      <IndependentCheckWithStaff onContinue={() => setStep("location")} />
+                    )}
+                    {checkView.kind === "declined" && (
+                      <IndependentCheckDeclined
+                        view={checkView}
+                        onTryAgain={() => setCheckTryAgain(true)}
+                        onAsked={async () => {
+                          await refreshIdentityCheck();
+                          await syncVerificationStatus();
+                        }}
+                      />
+                    )}
+
+                    {checkView.kind === "manual" && (
+                      <>
+                        <div className="space-y-2">
+                          <Label htmlFor="idNumber">13-digit SA ID number</Label>
+                          <Input
+                            id="idNumber"
+                            maxLength={13}
+                            inputMode="numeric"
+                            autoComplete="off"
+                            value={idNumber}
+                            disabled={verificationSubmissionBlocked}
+                            aria-invalid={
+                              idChecksumValid === false || Boolean(idAgeError) || undefined
+                            }
+                            aria-describedby={
+                              idNumber.length === 13 && idChecksumValid !== null
+                                ? "idNumber-feedback"
+                                : undefined
+                            }
+                            onChange={(e) => {
+                              setIdNumber(e.target.value.replace(/\D/g, ""));
+                              setUploadReceipts((prev) => ({ ...prev, id_doc: undefined }));
+                              clearStepCompletion("id_doc");
+                            }}
+                            className="h-12 font-medium tabular-nums tracking-wide sm:h-12"
+                          />
+                          {idNumber.length === 13 && idChecksumValid !== null && (
+                            <div
+                              id="idNumber-feedback"
+                              className={cn(
+                                "rounded-xl border px-3.5 py-3 text-sm",
+                                idChecksumValid && !idAgeError
+                                  ? "border-brand-green-600/20 bg-brand-green-50 text-brand-green-900 dark:border-brand-green-400/20 dark:bg-brand-green-500/10 dark:text-brand-gold-100"
+                                  : "border-brand-red-600/20 bg-brand-red-50 text-brand-red-800 dark:border-brand-red-400/25 dark:bg-brand-red-500/10 dark:text-brand-red-100"
                               )}
-                              {idAgeError && (
-                                <div className="flex items-center gap-1.5 pt-1 font-semibold text-brand-red-700 dark:text-brand-red-300">
+                            >
+                              {idChecksumValid ? (
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-1.5 font-semibold">
+                                    <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                                    ID number valid
+                                  </div>
+                                  {(idDob || idGender) && (
+                                    <dl className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
+                                      {idDob && (
+                                        <div className="flex gap-1">
+                                          <dt>Date of birth:</dt>
+                                          <dd className="font-medium">{idDob}</dd>
+                                        </div>
+                                      )}
+                                      {idGender && (
+                                        <div className="flex gap-1">
+                                          <dt>Gender:</dt>
+                                          <dd className="font-medium">{idGender}</dd>
+                                        </div>
+                                      )}
+                                    </dl>
+                                  )}
+                                  {idAgeError && (
+                                    <div className="flex items-center gap-1.5 pt-1 font-semibold text-brand-red-700 dark:text-brand-red-300">
+                                      <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+                                      {idAgeError}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1.5 font-medium">
                                   <AlertTriangle className="h-4 w-4" aria-hidden="true" />
-                                  {idAgeError}
+                                  Invalid ID number — please check and re-enter
                                 </div>
                               )}
                             </div>
-                          ) : (
-                            <div className="flex items-center gap-1.5 font-medium">
-                              <AlertTriangle className="h-4 w-4" aria-hidden="true" />
-                              Invalid ID number — please check and re-enter
-                            </div>
                           )}
                         </div>
-                      )}
-                    </div>
 
-                    <div className="space-y-3">
-                      <FieldGroupHeading
-                        title={idReviewing ? "Check your photo" : "Photo of your ID"}
-                        hint={
-                          idReviewing
-                            ? undefined
-                            : "Taken with your camera here. Photos from your gallery or files can't be used."
-                        }
-                      />
-                      <CameraCapture
-                        facingMode="environment"
-                        telemetryContext="id_doc"
-                        documentGuide
-                        onReviewChange={setIdReviewing}
-                        onContinueOnPhone={() => startHandoff("id_doc")}
-                        onReset={() => {
-                          setIdFile(null);
-                          setUploadReceipts((prev) => ({ ...prev, id_doc: undefined }));
-                          clearStepCompletion("id_doc");
-                        }}
-                        disabled={verificationSubmissionBlocked}
-                        getCaptureToken={() => requestCaptureToken("id_front")}
-                        onCapture={(file, meta) => {
-                          setIdFile(file);
-                          setIdCaptureToken(meta?.captureToken ?? null);
-                          setUploadReceipts((prev) => ({ ...prev, id_doc: undefined }));
-                          clearStepCompletion("id_doc");
-                        }}
-                      />
-                      {idFileError && idFile && (
-                        <p className="inline-form-error" role="alert">
-                          {idFileError}
-                        </p>
-                      )}
-                    </div>
+                        <div className="space-y-3">
+                          <FieldGroupHeading
+                            title={idReviewing ? "Check your photo" : "Photo of your ID"}
+                            hint={
+                              idReviewing
+                                ? undefined
+                                : "Taken with your camera here. Photos from your gallery or files can't be used."
+                            }
+                          />
+                          <CameraCapture
+                            facingMode="environment"
+                            telemetryContext="id_doc"
+                            documentGuide
+                            onReviewChange={setIdReviewing}
+                            onContinueOnPhone={() => startHandoff("id_doc")}
+                            onReset={() => {
+                              setIdFile(null);
+                              setUploadReceipts((prev) => ({ ...prev, id_doc: undefined }));
+                              clearStepCompletion("id_doc");
+                            }}
+                            disabled={verificationSubmissionBlocked}
+                            getCaptureToken={() => requestCaptureToken("id_front")}
+                            onCapture={(file, meta) => {
+                              setIdFile(file);
+                              setIdCaptureToken(meta?.captureToken ?? null);
+                              setUploadReceipts((prev) => ({ ...prev, id_doc: undefined }));
+                              clearStepCompletion("id_doc");
+                            }}
+                          />
+                          {idFileError && idFile && (
+                            <p className="inline-form-error" role="alert">
+                              {idFileError}
+                            </p>
+                          )}
+                        </div>
 
-                    <StepActions>
-                      <Button
-                        variant="outline"
-                        size="lg"
-                        onClick={() => setStep("phone")}
-                        className="w-full sm:w-auto"
-                      >
-                        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-                        Back
-                      </Button>
-                      <Button
-                        onClick={goToSelfieStep}
-                        disabled={!isIdReady || isUploadingId || verificationSubmissionBlocked}
-                        variant="trust-verified"
-                        size="lg"
-                        className="w-full sm:w-auto sm:min-w-40"
-                      >
-                        {isUploadingId ? (
-                          <>
-                            <Loader2
-                              className="h-4 w-4 animate-spin motion-reduce:animate-none"
-                              aria-hidden="true"
-                            />
-                            Sending…
-                          </>
-                        ) : (
-                          "Continue"
-                        )}
-                      </Button>
-                    </StepActions>
+                        <StepActions>
+                          <Button
+                            variant="outline"
+                            size="lg"
+                            onClick={() => setStep("phone")}
+                            className="w-full sm:w-auto"
+                          >
+                            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+                            Back
+                          </Button>
+                          <Button
+                            onClick={goToSelfieStep}
+                            disabled={!isIdReady || isUploadingId || verificationSubmissionBlocked}
+                            variant="trust-verified"
+                            size="lg"
+                            className="w-full sm:w-auto sm:min-w-40"
+                          >
+                            {isUploadingId ? (
+                              <>
+                                <Loader2
+                                  className="h-4 w-4 animate-spin motion-reduce:animate-none"
+                                  aria-hidden="true"
+                                />
+                                Sending…
+                              </>
+                            ) : (
+                              "Continue"
+                            )}
+                          </Button>
+                        </StepActions>
+                      </>
+                    )}
                   </StepCard>
                 )}
 
@@ -2373,10 +2505,20 @@ export default function VerificationPage() {
                     </ul>
                   </section>
                 ) : (
-                  step !== "complete" && <WhatHappensNextPanel />
+                  step !== "complete" && (
+                    <WhatHappensNextPanel
+                      independent={
+                        checkView.kind === "manual"
+                          ? null
+                          : checkView.kind === "declined"
+                            ? "declined"
+                            : "unclear"
+                      }
+                    />
+                  )
                 )}
                 {step === "complete" && accountVerified && <WhatHappensNextPanel verified />}
-                <PrivacyPanel />
+                <PrivacyPanel independent={checkView.kind !== "manual"} />
                 <HelpLinkCard />
               </aside>
             </div>

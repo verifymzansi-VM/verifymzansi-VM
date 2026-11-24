@@ -5,6 +5,9 @@ import {
   getClientIp,
   getClientRateLimitIdentity,
 } from "./rate-limit";
+import { recordSecurityEvent } from "@/lib/security/security-events";
+
+vi.mock("@/lib/security/security-events", () => ({ recordSecurityEvent: vi.fn() }));
 
 describe("rate-limit", () => {
   beforeEach(() => {
@@ -59,6 +62,23 @@ describe("rate-limit", () => {
       const result = await checkRateLimit({ key: "+27821234567", action: "otp:send" });
       expect(result.limited).toBe(true);
       expect(result.retryAfter).toBe(30);
+    });
+
+    it("records a security event for a limited answer unless the throttle is quiet", async () => {
+      vi.mocked(recordSecurityEvent).mockClear();
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({ status: 429, json: async () => ({ retryAfter: 30 }) })
+      );
+      await checkRateLimit({ key: "check-1", action: "verification:identity-check-look" });
+      expect(recordSecurityEvent).toHaveBeenCalledTimes(1);
+      const quiet = await checkRateLimit({
+        key: "check-1",
+        action: "verification:identity-check-look",
+        quiet: true,
+      });
+      expect(quiet.limited).toBe(true);
+      expect(recordSecurityEvent).toHaveBeenCalledTimes(1);
     });
 
     it("does not log raw identifiers from rate-limit keys", async () => {
