@@ -48,7 +48,7 @@ begin
       coalesce(current_version,'missing') using errcode='55000';
   end if;
   select v.document_hash into v6_hash from private.posting_terms_versions v where v.version='posting-v6';
-  if v6_hash is not null and v6_hash<>'UauuSM0-qjrP3AhiX1eHWOi0FLSSWpKfbW1dKZBAr_s' then
+  if v6_hash is not null and v6_hash<>'8N4U5nl2ACRgTqQ2MgpeLbk3wxrDrhiqLRy-PIIBcDw' then
     raise exception 'posting-v6 is already published with a different document' using errcode='55000';
   end if;
   if to_regprocedure('internal.queue_term_ending_notices(integer)') is null then
@@ -57,14 +57,14 @@ begin
   end if;
 end$$;
 
-insert into private.posting_terms_versions(version,document_hash) values('posting-v6','UauuSM0-qjrP3AhiX1eHWOi0FLSSWpKfbW1dKZBAr_s')
+insert into private.posting_terms_versions(version,document_hash) values('posting-v6','8N4U5nl2ACRgTqQ2MgpeLbk3wxrDrhiqLRy-PIIBcDw')
   on conflict(version) do nothing;
 
 update private.posting_terms_current set version='posting-v6' where singleton and version<>'posting-v6';
 
 do $$begin
   if not exists(select 1 from private.posting_terms_versions v
-      where v.version='posting-v6' and v.document_hash='UauuSM0-qjrP3AhiX1eHWOi0FLSSWpKfbW1dKZBAr_s') then
+      where v.version='posting-v6' and v.document_hash='8N4U5nl2ACRgTqQ2MgpeLbk3wxrDrhiqLRy-PIIBcDw') then
     raise exception 'posting-v6 was not published';
   end if;
   if (select c.version from private.posting_terms_current c where c.singleton) is distinct from 'posting-v6' then

@@ -56,6 +56,7 @@ import {
 } from "@/app/post/_lib/business-media-upload";
 import { CustomerAccessFields } from "@/components/post/customer-access-fields";
 import { BusinessCategoryPicker } from "@/components/post/business-category-picker";
+import { PostingTermsConsent } from "@/components/post/posting-terms-consent";
 import {
   legacyAccessFromRecord,
   readCustomerAccess,
@@ -104,7 +105,14 @@ const PAYMENT_METHOD_OPTIONS = [
 
 export default function EditBusinessPage() {
   const router = useRouter();
-  const { fields: postFields, captureRevision: capturePostRevision } = usePostTransport();
+  const {
+    fields: postFields,
+    captureRevision: capturePostRevision,
+    needsTerms,
+    acceptTerms,
+  } = usePostTransport();
+  // Only while the member has not accepted the current posting terms.
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const params = useParams<{ id: string }>();
   const businessId = params.id;
   const { toast } = useToast();
@@ -488,6 +496,8 @@ export default function EditBusinessPage() {
       if (newPromoVideoFile.length > 0 && !videoAllowed) {
         validationErrors.cover_video = "Video is not available on your current plan.";
       }
+      if (needsTerms && !termsAccepted)
+        validationErrors.termsAccepted = "Accept the posting terms before submitting.";
       if (Object.keys(validationErrors).length > 0) {
         setFieldErrors(validationErrors);
         setError(Object.values(validationErrors)[0]);
@@ -670,6 +680,7 @@ export default function EditBusinessPage() {
         focal_y: focalPoint.y,
       };
 
+      if (needsTerms) await acceptTerms();
       const res = await fetch(`/api/businesses/${businessId}`, {
         method: "PATCH",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
@@ -1573,6 +1584,18 @@ export default function EditBusinessPage() {
                   ))}
                 </div>
               </div>
+
+              {needsTerms && (
+                <PostingTermsConsent
+                  id="business-terms-checkbox"
+                  checked={termsAccepted}
+                  onCheckedChange={(checked) => {
+                    setTermsAccepted(checked);
+                    clearErrors("termsAccepted");
+                  }}
+                  error={fieldErrors.termsAccepted}
+                />
+              )}
 
               {/* Actions */}
               <UploadProgressPanel

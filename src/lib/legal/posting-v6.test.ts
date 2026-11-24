@@ -128,7 +128,7 @@ describe("posting-v6", () => {
 
   it("is the site's one set of Terms, with its pinned hash", () => {
     expect(manifest.active_version).toBe("posting-v6");
-    expect(v6.document_hash).toBe("UauuSM0-qjrP3AhiX1eHWOi0FLSSWpKfbW1dKZBAr_s");
+    expect(v6.document_hash).toBe("8N4U5nl2ACRgTqQ2MgpeLbk3wxrDrhiqLRy-PIIBcDw");
     expect(text).not.toMatch(/version/i);
   });
 
@@ -154,7 +154,6 @@ describe("posting-v6", () => {
       "registration",
       "our-role",
       "verification-signals",
-      "trials",
       "partners",
       "liability",
     ])
@@ -177,6 +176,7 @@ describe("posting-v6", () => {
       "refunds[6]",
       "refunds[7]",
       "refunds[8]",
+      "trials[2]",
     ]);
     for (const old of v5.sections) {
       const now = v6.sections.find((entry) => entry.id === old.id)!;
@@ -198,6 +198,8 @@ describe("posting-v6", () => {
       "A package cannot be transferred to another person or account",
       "Refunds are paid to the original payment method, through our payment provider's refund service, or by EFT into a bank account in your own name",
       "If a suspension is later overturned, we add the days lost to your paid slots and package",
+      // While nothing is on sale, checkout (not the pricing page) says so.
+      "While they are not on sale, checkout says so and nothing can be bought",
       // C2: the first purchase.
       "if you ask us in writing within 5 business days after its payment is confirmed, we cancel your first purchase and refund it in full",
       // C3: VAT.
@@ -218,7 +220,7 @@ describe("posting-v6", () => {
       expect(text).toContain(rule);
     // No paid add-ons (not offered), never a partner commission figure, and
     // no tax invoice.
-    expect(text).not.toMatch(/add-on|Urgent|Boost|Featured/);
+    expect(text).not.toMatch(/add-on|urgent|boost|featured/i);
     expect(text).not.toMatch(/%|per cent|percent/i);
     expect(text).not.toMatch(/tax invoice/i);
   });

@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { PostLabel as Label } from "@/components/post/post-label";
 import { Textarea } from "@/components/ui/textarea";
 import { PostEditActionBar, PostFormSection } from "@/components/post/post-form-scaffold";
+import { PostingTermsConsent } from "@/components/post/posting-terms-consent";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
@@ -102,7 +103,14 @@ export default function EditListingPage() {
   const [newVideoCoverFile, setNewVideoCoverFile] = useState<File[]>([]);
   const [focalPoint, setFocalPoint] = useState<FocalPoint>({ x: 0.5, y: 0.5 });
   const router = useRouter();
-  const { fields: postFields, captureRevision: capturePostRevision } = usePostTransport();
+  const {
+    fields: postFields,
+    captureRevision: capturePostRevision,
+    needsTerms,
+    acceptTerms,
+  } = usePostTransport();
+  // Only while the member has not accepted the current posting terms.
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const { toast } = useToast();
   const maxPhotos = usePlanMaxPhotos("MZANSI_MARKET");
   const maxVideos = usePlanMaxVideos("MZANSI_MARKET");
@@ -400,6 +408,8 @@ export default function EditListingPage() {
     if (totalVideos > maxVideos) {
       errors.videos = `You can upload up to ${maxVideos} videos on this plan.`;
     }
+    if (needsTerms && !termsAccepted)
+      errors.termsAccepted = "Accept the posting terms before submitting.";
 
     return errors;
   }
@@ -488,6 +498,7 @@ export default function EditListingPage() {
       setSubmitProgress("Saving listing...");
       setUploadStatuses((c) => ({ ...c, saving: "uploading" }));
 
+      if (needsTerms) await acceptTerms();
       // Submit via server-side API route for full validation & ownership check
       const res = await fetch(`/api/listings/${id}`, {
         method: "PUT",
@@ -986,6 +997,18 @@ export default function EditListingPage() {
                   layoutMode="review"
                 />
               </section>
+
+              {needsTerms && (
+                <PostingTermsConsent
+                  id="listing-terms-checkbox"
+                  checked={termsAccepted}
+                  onCheckedChange={(checked) => {
+                    setTermsAccepted(checked);
+                    clearErrors("termsAccepted");
+                  }}
+                  error={fieldErrors.termsAccepted}
+                />
+              )}
 
               <UploadProgressPanel
                 visible={isSubmitting}
