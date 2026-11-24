@@ -7736,6 +7736,12 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   (fingerprint.sql) matched the full replay (except the known schema grant
   difference)
 
-- `20261122191646_post_templates.sql`: pending; website-first
+- `20261122191646_post_templates.sql`: applied 2026-11-24 23:05 UTC;
+  owner-approved, website-first in practice: applied after the merge of pull
+  request #342 (90a5855a) and before its deploy succeeded, because the deploy
+  gate requires the four new API commands; update sha256 starting 336bf554;
+  preflight after: already applied; production fingerprint after it
+  (fingerprint.sql) matched the full replay (except the known schema grant
+  difference)
 
 <!-- applied-register:end -->
