@@ -993,7 +993,8 @@ test.describe("checkout to fulfilment", () => {
     const item = page
       .getByRole("listitem")
       .filter({ hasText: business.name })
-      .filter({ has: page.getByRole("button", { name: "Delete", exact: true }) });
+      // The post card: its Edit link stays while the delete confirmation shows.
+      .filter({ has: page.getByRole("link", { name: "Edit", exact: true }) });
     await expect(item).toHaveCount(1);
     await item.getByRole("button", { name: "Delete", exact: true }).click();
     await item
