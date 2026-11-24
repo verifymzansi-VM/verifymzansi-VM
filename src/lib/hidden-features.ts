@@ -58,6 +58,18 @@ export const SHOW_STAFF_OPERATIONS: boolean = true;
 export const SHOW_ORGANISATION_REPORT: boolean = false;
 
 /**
+ * Post templates (business tools plan section 4, item 17b): "Save as template"
+ * on the "Edit listing" form and "Start from a template" on Create Post (shown
+ * only once a template exists and while the Multi-listing package runs), which
+ * opens the "Post an item" form filled in. Calls the live backend's
+ * api.save_my_post_template, api.list_my_post_templates,
+ * api.rename_my_post_template and api.delete_my_post_template (database update
+ * 20261122191646_post_templates.sql). Frontend ledger group 87. If switched
+ * off, the pages are as before and /api/post-templates answers 404.
+ */
+export const SHOW_POST_TEMPLATES: boolean = true;
+
+/**
  * "Delete account" on the profile's Account tab, its confirmation dialog, and
  * the route behind it (/api/account/delete), which closes the account through
  * api.close_my_account (M1.6c). Frontend ledger group 43. If

@@ -16,12 +16,13 @@ const log = createLogger("DSARExport");
 
 const exportSchema = z.object({ requestId: uuidSchema });
 
-/** Datasets in a foundation access export: the registry entries of
- * internal.frontend_privacy_export_data (42 since database update
- * 20261119172135_post_views_and_likes.sql added post_likes and
- * post_likes_summary). An update that adds a dataset must first ship a website
- * that accepts the new count (website-first); foundation.test.ts checks this
- * number against database/foundation/current. */
+/** The fewest datasets a foundation access export holds: the registry entries
+ * of internal.frontend_privacy_export_data in production (42 since database
+ * update 20261119172135_post_views_and_likes.sql added post_likes and
+ * post_likes_summary). Fewer means a partial export and is refused; more is
+ * accepted, so an update that adds a dataset needs no website change first.
+ * Raise it once such an update is applied. foundation.test.ts checks it is
+ * not above the committed registry (database/foundation/current). */
 const FOUNDATION_EXPORT_DATASET_COUNT = 42;
 
 /**
@@ -98,7 +99,7 @@ export async function POST(request: NextRequest) {
           })
           .refine((v) =>
             v.account_found
-              ? Object.keys(v.datasets).length === FOUNDATION_EXPORT_DATASET_COUNT
+              ? Object.keys(v.datasets).length >= FOUNDATION_EXPORT_DATASET_COUNT
               : Object.keys(v.datasets).length === 0
           )
       );

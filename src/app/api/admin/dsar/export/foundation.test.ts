@@ -94,12 +94,21 @@ it("downloads an export holding every dataset the database returns through one n
   expect(checkSensitiveActionRateLimit).toHaveBeenCalledWith(staff, "admin:dsar:export");
   expect(createAdminClient).not.toHaveBeenCalled();
 });
-it("refuses an export with any other number of datasets instead of returning part of it", async () => {
-  for (const count of [registryCount - 1, registryCount + 1]) {
+/** The route's FOUNDATION_EXPORT_DATASET_COUNT: the live database's datasets. */
+const liveCount = 42;
+it("refuses an export with fewer datasets than the live count instead of returning part of it", async () => {
+  expect(registryCount).toBeGreaterThanOrEqual(liveCount);
+  rpc.mockResolvedValueOnce({ data: exported(true, liveCount - 1), error: null });
+  const response = await POST(request());
+  expect(response.status).toBe(503);
+  expect(await response.json()).not.toHaveProperty("datasets");
+});
+it("accepts more datasets than the live count, so an update can add one first", async () => {
+  for (const count of [liveCount, liveCount + 1]) {
     rpc.mockResolvedValueOnce({ data: exported(true, count), error: null });
     const response = await POST(request());
-    expect(response.status).toBe(503);
-    expect(await response.json()).not.toHaveProperty("datasets");
+    expect(response.status).toBe(200);
+    expect(Object.keys((await response.json()).datasets)).toHaveLength(count);
   }
 });
 it("returns no datasets when no account matches the request", async () => {

@@ -13,6 +13,9 @@ import { createLogger } from "@/lib/utils/logger";
 import type { AccountVerificationStatus } from "@/types/enums";
 import { cn } from "@/lib/utils";
 import { PostCreateClient } from "./post-create-client";
+import { SHOW_POST_TEMPLATES } from "@/lib/hidden-features";
+import { readMyPostTemplates } from "@/lib/foundation/post-templates";
+import { TemplatePicker } from "@/components/post-templates/template-picker";
 
 // How a post goes live, shown beside the headline on wide screens.
 const STEPS = ["Choose a section", "Fill in the form", "We review it, then it goes live"] as const;
@@ -33,6 +36,19 @@ async function readInitialVerificationStatus(
   }
 }
 
+/** Post templates (SHOW_POST_TEMPLATES) and whether the Multi-listing
+ * package runs; none when they cannot be read (the section cards still work). */
+async function readTemplates(session: Awaited<ReturnType<typeof readFoundationServerSession>>) {
+  const none = { package_running: false, templates: [] };
+  if (!SHOW_POST_TEMPLATES) return none;
+  try {
+    return await readMyPostTemplates(session.api);
+  } catch {
+    log.warn("Post templates unavailable", { reason: "read_failed" });
+    return none;
+  }
+}
+
 export const metadata = {
   title: "Create a Post",
   description: "Post an item, a business profile, or a stay or event on VerifyMzansi.",
@@ -48,7 +64,10 @@ export default async function PostCreatePage() {
   // redirect() throws, so it stays outside the try block above.
   if (!session) redirect("/login?returnUrl=%2Fpost%2Fcreate");
 
-  const initialVerificationStatus = await readInitialVerificationStatus(session);
+  const [initialVerificationStatus, templateList] = await Promise.all([
+    readInitialVerificationStatus(session),
+    readTemplates(session),
+  ]);
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -105,7 +124,14 @@ export default async function PostCreatePage() {
           </div>
         </BrandSurface>
 
-        <div className="container-page flex flex-1 flex-col py-5">
+        <div className="container-page flex flex-1 flex-col gap-5 py-5">
+          {templateList.templates.length > 0 ? (
+            <TemplatePicker
+              templates={templateList.templates}
+              packageRunning={templateList.package_running}
+              verificationStatus={initialVerificationStatus}
+            />
+          ) : null}
           <PostCreateClient initialVerificationStatus={initialVerificationStatus} isAuthenticated />
         </div>
       </main>

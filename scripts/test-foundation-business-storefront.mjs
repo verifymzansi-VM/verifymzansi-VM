@@ -31,13 +31,11 @@ import { executeGrants, sqlLiteral } from "./lib/foundation-sql-checks.mjs";
 import {
   applyAndProveRollback,
   assertDriftRefused,
-  ozowSettle,
+  buyPackage as buyPackageOf,
   runTwoAdminUpdateCheck,
 } from "./lib/foundation-staff-payment-world.mjs";
 
 const UPDATE = "20261121131915_business_storefront.sql";
-/** The Multi-listing package terms (20261114154823_slot_packages.sql). */
-const K30 = { id: "5b0f4c1e-2a7d-4c43-9b51-7e0d3f6a9c11", cents: 10000 };
 const SEARCH = "internal.search_posts(jsonb)";
 const READ = "api.get_public_storefront(uuid)";
 const HELPERS = [
@@ -85,15 +83,7 @@ await runTwoAdminUpdateCheck(SETUP, async ({ database, check, kit, world, admin 
       language sql stable set search_path to 'pg_catalog' as $fn$
       select internal.current_verified_identity(p_owner) is not null $fn$;`);
   const verified = (label) => world.verified(label, admin);
-  const buyPackage = (owner, slots) => {
-    const quoted = json(
-      member(
-        owner,
-        `select api.start_package_checkout('${K30.id}',${slots},${K30.cents * slots},true);`
-      )
-    );
-    assert.equal(ozowSettle(kit, owner, quoted.payment_id).fulfillment_status, "fulfilled");
-  };
+  const buyPackage = (owner, slots) => buyPackageOf(kit, owner, slots);
   /** The post goes live on the owner's slots, as a moderator's approval does. */
   const live = (owner, id) => {
     json(member(owner, `select api.activate_post('${id}');`));
