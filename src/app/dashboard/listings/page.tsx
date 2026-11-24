@@ -354,7 +354,7 @@ export default async function ListingsPage({
 
       <PageHeader
         title="My posts"
-        description="Edit, promote or take posts offline."
+        description="Edit or take posts offline."
         breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "My posts" }]}
       >
         {/* Filled when the member has posts. With no posts yet it is outlined,
