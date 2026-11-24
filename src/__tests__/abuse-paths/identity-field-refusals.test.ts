@@ -195,7 +195,6 @@ beforeAll(async () => {
   vi.stubEnv("FOUNDATION_PASSWORD_AUTH_MODE", "native-captcha");
   vi.stubEnv("FOUNDATION_AUTH_CALLBACK_ENABLED", "true");
   vi.stubEnv("FOUNDATION_RECOVERY_ENABLED", "true");
-  vi.stubEnv("ADDON_SALES_ENABLED", "true");
   vi.stubEnv("FOUNDATION_PHONE_OTP_KEY", "0123456789abcdef".repeat(4));
   vi.stubGlobal("fetch", async () => {
     work.commands.push("network");

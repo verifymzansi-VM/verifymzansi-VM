@@ -17,8 +17,6 @@ for (const key of [
   "FOUNDATION_REGISTRATION_ENABLED",
   "FOUNDATION_AUTH_CALLBACK_ENABLED",
   "FOUNDATION_RECOVERY_ENABLED",
-  // Paid add-on sales start paused, as in production; tests open them explicitly.
-  "ADDON_SALES_ENABLED",
   "INTERNAL_JOBS_SECRET",
   "OPS_JOBS_SECRET",
   "KYC_WEBHOOK_SECRET",

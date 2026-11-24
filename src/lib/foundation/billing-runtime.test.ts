@@ -22,7 +22,6 @@ import {
   readFoundationMySlots,
   reconcileFoundationPayment,
   runFoundationPaymentReconciliation,
-  startFoundationCheckout,
   startFoundationPackageCheckout,
   startFoundationSlotCheckout,
   startFoundationSlotRenewalCheckout,
@@ -99,6 +98,8 @@ const notification = (): NormalizedOzowWebhook => ({
 });
 const rpc = vi.fn(),
   machine = vi.fn();
+// One 30-day Individual slot at the quote's price.
+const slotOrder = { planId: product, slots: 1, expectedTotalCents: 5000, coolingOffConsent: true };
 const api = { rpc } as unknown as FoundationAuthenticatedApi;
 const service = { rpc: machine } as unknown as FoundationServiceApi;
 beforeEach(() => {
@@ -107,7 +108,7 @@ beforeEach(() => {
   vi.stubEnv("OZOW_ENV", "production");
   rpc.mockImplementation(async (name) => ({
     data:
-      name === "start_checkout"
+      name === "start_slot_checkout"
         ? quote
         : name === "get_my_billing"
           ? { payments: [], invoices: [], entitlements: [] }
@@ -145,7 +146,7 @@ afterEach(() => {
 });
 it("uses the server quote and durable provider keys, then attaches only with its claim", async () => {
   expect(
-    await startFoundationCheckout(api, owner, product, null, "https://verifymzansi.com", service)
+    await startFoundationSlotCheckout(api, owner, slotOrder, "https://verifymzansi.com", service)
   ).toEqual({ paymentId: payment, checkoutUrl });
   expect(createOzowHostedPayment).toHaveBeenCalledExactlyOnceWith({
     paymentId: payment,
@@ -176,7 +177,7 @@ const openRequest = (change: Record<string, unknown> = {}) => ({
 it("answers a plan's open request with continue, status and cancel, creating nothing", async () => {
   machine.mockResolvedValueOnce({ data: openRequest(), error: null });
   await expect(
-    startFoundationCheckout(api, owner, product, null, "https://verifymzansi.com", service)
+    startFoundationSlotCheckout(api, owner, slotOrder, "https://verifymzansi.com", service)
   ).rejects.toMatchObject({
     status: 409,
     code: "PENDING_PAYMENT_EXISTS",
@@ -198,7 +199,7 @@ it("offers no continue link once the open request's window has passed", async ()
     error: null,
   });
   await expect(
-    startFoundationCheckout(api, owner, product, null, "https://verifymzansi.com", service)
+    startFoundationSlotCheckout(api, owner, slotOrder, "https://verifymzansi.com", service)
   ).rejects.toMatchObject({
     status: 409,
     pendingPayment: { id: payment, checkoutUrl: null, canCancel: true },
@@ -248,7 +249,7 @@ it("never offers a provider address it would not redirect to", async () => {
     error: null,
   });
   await expect(
-    startFoundationCheckout(api, owner, product, null, "https://verifymzansi.com", service)
+    startFoundationSlotCheckout(api, owner, slotOrder, "https://verifymzansi.com", service)
   ).rejects.toMatchObject({ status: 503 });
 });
 it("offers no cancel for a mock checkout outside the test copy", async () => {
@@ -258,7 +259,7 @@ it("offers no cancel for a mock checkout outside the test copy", async () => {
     error: null,
   });
   await expect(
-    startFoundationCheckout(api, owner, product, null, "https://verifymzansi.com", service)
+    startFoundationSlotCheckout(api, owner, slotOrder, "https://verifymzansi.com", service)
   ).rejects.toMatchObject({ status: 409, pendingPayment: { canCancel: false } });
 });
 // PAY-03 (M3.1): after a failed first call, the database gives the next lease a
@@ -270,7 +271,7 @@ it("sends a retried lease's own window and key to the provider", async () => {
     idempotency_key: uuid(11),
   };
   machine.mockResolvedValueOnce({ data: retried, error: null });
-  await startFoundationCheckout(api, owner, product, null, "https://verifymzansi.com", service);
+  await startFoundationSlotCheckout(api, owner, slotOrder, "https://verifymzansi.com", service);
   expect(createOzowHostedPayment).toHaveBeenCalledWith(
     expect.objectContaining({ idempotencyKey: uuid(11), expireAt: "2031-02-03T04:05:06Z" })
   );
@@ -280,7 +281,7 @@ it.each([{ owner_id: uuid(9) }, { amount_cents: "1" }])(
   async (change) => {
     machine.mockResolvedValueOnce({ data: { ...claimDto(), ...change }, error: null });
     await expect(
-      startFoundationCheckout(api, owner, product, null, "https://verifymzansi.com", service)
+      startFoundationSlotCheckout(api, owner, slotOrder, "https://verifymzansi.com", service)
     ).rejects.toMatchObject({ status: 503 });
     expect(createOzowHostedPayment).not.toHaveBeenCalled();
   }
@@ -296,7 +297,7 @@ it("rejects an unapproved provider URL without attaching it", async () => {
     rawResponse: {},
   });
   await expect(
-    startFoundationCheckout(api, owner, product, null, "https://verifymzansi.com", service)
+    startFoundationSlotCheckout(api, owner, slotOrder, "https://verifymzansi.com", service)
   ).rejects.toMatchObject({ status: 503 });
   expect(machine.mock.calls.some(([name]) => name === "complete_checkout_request")).toBe(false);
 });
@@ -771,56 +772,32 @@ it("parses only the caller's bounded billing projection", async () => {
   expect(rpc).toHaveBeenCalledExactlyOnceWith("get_my_billing", {});
 });
 
-// Paid add-on sales are paused unless switched on (../billing/addon-sales.ts).
+// Paid add-ons are not sold (removed from the website, item 37); the database
+// can still hold add-on payments until its add-on commands are retired.
 const post = uuid(10);
-const addonPaused = {
+const addonNotSold = {
   status: 403,
-  message: "Add-ons open soon. You have not been charged.",
-  code: "addon_sales_paused",
+  message: "Paid add-ons are not sold. You have not been charged.",
+  code: "addon_not_sold",
 };
 const addonClaim = () => ({ ...claimDto(), product_kind: "addon", target_post_id: post });
-const addonCheckout = (target: string | null = post) =>
-  startFoundationCheckout(api, owner, product, target, "https://verifymzansi.com", service);
-it("refuses an add-on before its quote while add-on sales are paused", async () => {
-  await expect(addonCheckout()).rejects.toMatchObject(addonPaused);
-  expect(rpc).not.toHaveBeenCalled();
-  expect(machine).not.toHaveBeenCalled();
-  expect(createOzowHostedPayment).not.toHaveBeenCalled();
-});
-it.each(["", "false", "TRUE", "1", "yes", " true"])(
-  "keeps add-ons paused when the switch is %j",
-  async (value) => {
-    vi.stubEnv("ADDON_SALES_ENABLED", value);
-    await expect(addonCheckout()).rejects.toMatchObject(addonPaused);
-    expect(rpc).not.toHaveBeenCalled();
-    expect(createOzowHostedPayment).not.toHaveBeenCalled();
-  }
-);
-it("never sends an add-on payment to the provider while paused, whatever the quote was for", async () => {
+const addonCheckout = () =>
+  startFoundationSlotCheckout(api, owner, slotOrder, "https://verifymzansi.com", service);
+it("never sends an add-on payment to the provider, whatever the quote was for", async () => {
   machine.mockResolvedValueOnce({ data: addonClaim(), error: null });
-  await expect(addonCheckout(null)).rejects.toMatchObject(addonPaused);
+  await expect(addonCheckout()).rejects.toMatchObject(addonNotSold);
   expect(createOzowHostedPayment).not.toHaveBeenCalled();
   expect(machine.mock.calls.map(([name]) => name)).toEqual(["claim_checkout_request"]);
 });
-it("never hands back a stored add-on checkout address while paused", async () => {
+it("never hands back a stored add-on checkout address", async () => {
   machine.mockResolvedValueOnce({
     data: { ...addonClaim(), claim_token: null, checkout_url: checkoutUrl },
     error: null,
   });
-  await expect(addonCheckout(null)).rejects.toMatchObject(addonPaused);
+  await expect(addonCheckout()).rejects.toMatchObject(addonNotSold);
   expect(createOzowHostedPayment).not.toHaveBeenCalled();
 });
-it("starts an add-on checkout once add-on sales are switched on", async () => {
-  vi.stubEnv("ADDON_SALES_ENABLED", "true");
-  machine.mockImplementationOnce(async () => ({ data: addonClaim(), error: null }));
-  expect(await addonCheckout()).toEqual({ paymentId: payment, checkoutUrl });
-  expect(rpc).toHaveBeenCalledExactlyOnceWith("start_checkout", {
-    p_product_id: product,
-    p_target_post: post,
-  });
-  expect(createOzowHostedPayment).toHaveBeenCalledTimes(1);
-});
-it("still settles an add-on payment that already exists while sales are paused", async () => {
+it("still settles an add-on payment that already exists", async () => {
   machine.mockImplementation(async (name) => ({
     data:
       name === "get_checkout_payment"
@@ -837,7 +814,7 @@ it("still settles an add-on payment that already exists while sales are paused",
     expect.objectContaining({ p_event: expect.objectContaining({ status: "complete" }) })
   );
 });
-it("still reconciles an add-on payment that already exists while sales are paused", async () => {
+it("still reconciles an add-on payment that already exists", async () => {
   machine.mockImplementation(async (name) => ({
     data:
       name === "claim_payment_reconciliation"
@@ -852,15 +829,6 @@ it("still reconciles an add-on payment that already exists while sales are pause
     settled: true,
   });
 });
-it("keeps add-on sales paused with the default and production settings", () => {
-  const toml = parse(readFileSync("wrangler.toml", "utf8")) as {
-    vars: Record<string, string>;
-    env: Record<string, { vars: Record<string, string> }>;
-  };
-  for (const vars of [toml.vars, toml.env.production.vars])
-    expect(vars.ADDON_SALES_ENABLED).toBe("false");
-});
-
 // Payment problems: logged with the payment number and reason, kept for the
 // staff alerts and the daily summary (M3.3). Recording never changes what
 // happens to the payment.

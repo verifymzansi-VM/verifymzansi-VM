@@ -1,6 +1,6 @@
 // The public site must not promise what the Terms (posting-v5) or the live
-// product do not: paid add-ons and the sponsor offer are hidden until they
-// work (src/lib/hidden-features.ts), and the free first post is described as
+// product do not: paid add-ons were removed (item 37), the sponsor offer can be
+// hidden (src/lib/hidden-features.ts), and the free first post is described as
 // the Terms' "Free first post & visibility" section describes it.
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
@@ -15,9 +15,8 @@ import { getPlanFeatureItems, PLANS, RETAIL_OFFERS } from "@/lib/constants/prici
 import type { PublicSponsor } from "@/lib/organisations/sponsors";
 import type * as HiddenFeatures from "@/lib/hidden-features";
 
-// Most guards here check the wording with paid add-ons and the sponsor offer
-// switched off, the branch kept for turning them off again. Both are on in
-// production (owner's decision of 22 November 2026); the wording they show is
+// Most guards here check the wording with the sponsor offer switched off, the
+// branch kept for turning it off again. It is on in production (owner's decision of 22 November 2026); the wording they show is
 // listed for review in the launch checklist item 71 pull request. A test that
 // guards what production serves sets `pinned.sponsorOffer` to undefined.
 const pinned = vi.hoisted(() => ({ sponsorOffer: false as boolean | undefined }));
@@ -25,7 +24,6 @@ vi.mock("@/lib/hidden-features", async (importOriginal) => {
   const actual = await importOriginal<typeof HiddenFeatures>();
   return {
     ...actual,
-    SHOW_PAID_ADDONS: false,
     get SHOW_SPONSOR_OFFER() {
       return pinned.sponsorOffer ?? actual.SHOW_SPONSOR_OFFER;
     },
@@ -102,7 +100,7 @@ describe("the free first post (Terms: Free first post & visibility)", () => {
   });
 });
 
-describe("paid add-ons, hidden until they deliver", () => {
+describe("paid add-ons (removed, item 37)", () => {
   it("are not listed on the plan cards or in the plan features", () => {
     const { container } = render(
       <RetailPricing
@@ -110,11 +108,13 @@ describe("paid add-ons, hidden until they deliver", () => {
         onSale
       />
     );
-    expect(container.textContent).not.toMatch(/Urgent/);
+    expect(container.textContent).not.toMatch(/Urgent|Boost|Featured|add-on/i);
     for (const plan of PLANS) {
-      expect(getPlanFeatureItems(plan, { includeDisabled: true }).map((i) => i.text)).not.toContain(
-        "Optional Urgent label add-on"
-      );
+      expect(
+        getPlanFeatureItems(plan, { includeDisabled: true })
+          .map((i) => i.text)
+          .join(" ")
+      ).not.toMatch(/Urgent|add-on/i);
     }
   });
 });
@@ -215,7 +215,7 @@ describe("links to hidden sections and the hidden pricing package block", () => 
     expect(container.textContent).toMatch(
       /every live post gets an equal turn at the front of the showroom\./
     );
-    expect(container.textContent).not.toMatch(/Boost and Featured/);
+    expect(container.textContent).not.toMatch(/Boost|Featured/);
   });
 });
 

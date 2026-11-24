@@ -2,13 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import { readRestoredPostManager } from "./post-manager";
 import { listRestoredOwnerPosts, type RestoredOwnerPost } from "./restored-owner-posts";
-import { readFoundationOwnerDashboard } from "./owner-dashboard";
 
 vi.mock("./restored-owner-posts", async (original) => ({
   ...(await original<Record<string, unknown>>()),
   listRestoredOwnerPosts: vi.fn(),
 }));
-vi.mock("./owner-dashboard", () => ({ readFoundationOwnerDashboard: vi.fn() }));
 
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const owner = uuid(1);
@@ -91,24 +89,15 @@ const facts = (overrides: Record<string, unknown> = {}) => ({
   addons: [{ post_id: listing.id, boost_until: at, featured_until: null, urgent_until: at }],
   ...overrides,
 });
-const plan = (area: string | null, tier: string | null, n: number) => ({
-  id: uuid(30 + n),
-  area,
-  label: null,
-  tier,
-  status: "active",
-});
-
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(listRestoredOwnerPosts).mockImplementation(async (_api, kind) =>
     kind === "listing" ? [listing] : kind === "business" ? [business] : [event]
   );
-  vi.mocked(readFoundationOwnerDashboard).mockResolvedValue({ paid_plans: [] } as never);
 });
 
 describe("readRestoredPostManager", () => {
-  it("projects each kind of the owner's posts and attaches their add-ons", async () => {
+  it("projects each kind of the owner's posts and leaves out the retired add-on dates", async () => {
     rpc.mockResolvedValueOnce({ data: facts(), error: null });
     const result = await readRestoredPostManager(api, owner);
     expect(rpc).toHaveBeenCalledWith("get_my_frontend_post_manager", {}, { get: false });
@@ -118,56 +107,16 @@ describe("readRestoredPostManager", () => {
         id: listing.id,
         owner_id: owner,
         area: "MZANSI_MARKET",
-        boost_until: at,
-        urgent_until: at,
-        featured_until: null,
       }),
     ]);
+    expect(listings.data[0]).not.toHaveProperty("boost_until");
+    expect(listings.data[0]).not.toHaveProperty("urgent_until");
     expect(businesses.data[0]).toMatchObject({ id: business.id, area: "MZANSI_BUSINESS" });
     expect(businesses.data[0]).not.toHaveProperty("boost_until");
     expect(events.data[0]).toMatchObject({ id: event.id, area: "PROMOTIONS_EVENTS" });
     expect(result.sponsoredIds).toEqual(new Set([business.id]));
     expect(result.slotUsage).toEqual([slot]);
     expect(result.planAdmins).toEqual(facts().plan_admins);
-    expect(result.tiers).toEqual({
-      MZANSI_MARKET: "starter",
-      MZANSI_BUSINESS: "starter",
-      PROMOTIONS_EVENTS: "starter",
-    });
-  });
-
-  it("shows the longest paid plan per area and ignores plans without a tier", async () => {
-    rpc.mockResolvedValueOnce({ data: facts(), error: null });
-    vi.mocked(readFoundationOwnerDashboard).mockResolvedValueOnce({
-      paid_plans: [
-        plan("MZANSI_MARKET", "year", 1),
-        plan("MZANSI_MARKET", "month", 2),
-        plan("MZANSI_BUSINESS", "quarter", 3),
-        plan("MZANSI_BUSINESS", "enterprise", 4),
-        plan("PROMOTIONS_EVENTS", null, 6),
-      ],
-    } as never);
-    await expect(readRestoredPostManager(api, owner)).resolves.toMatchObject({
-      tiers: {
-        MZANSI_MARKET: "year",
-        MZANSI_BUSINESS: "enterprise",
-        PROMOTIONS_EVENTS: "starter",
-      },
-    });
-  });
-
-  it("counts a plan for any section (an Individual slot) in every area", async () => {
-    rpc.mockResolvedValueOnce({ data: facts(), error: null });
-    vi.mocked(readFoundationOwnerDashboard).mockResolvedValueOnce({
-      paid_plans: [plan(null, "month", 5), plan("MZANSI_MARKET", "half_year", 1)],
-    } as never);
-    await expect(readRestoredPostManager(api, owner)).resolves.toMatchObject({
-      tiers: {
-        MZANSI_MARKET: "half_year",
-        MZANSI_BUSINESS: "month",
-        PROMOTIONS_EVENTS: "month",
-      },
-    });
   });
 
   it("refuses facts for another account", async () => {

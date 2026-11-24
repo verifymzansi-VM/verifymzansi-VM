@@ -34,10 +34,6 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatRelativeTime, formatSaLongDate, formatZAR } from "@/lib/utils/format";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
-import { isAddonOffered } from "@/lib/billing/addon-availability";
-import { BoostButton } from "@/components/listings/boost-button";
-import { FeaturedButton } from "@/components/listings/featured-button";
-import { UrgentButton } from "@/components/listings/urgent-button";
 import { ResubmitButton } from "@/components/listings/resubmit-button";
 import { DeletePostButton } from "@/components/listings/delete-post-button";
 import { ContentLifecycleButton } from "@/components/listings/content-lifecycle-button";
@@ -46,15 +42,9 @@ import { PostAccountButton } from "@/components/listings/post-account-button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AreaFilter } from "@/components/dashboard/area-filter";
 import {
-  canBoost as checkCanBoost,
-  canFeatured as checkCanFeatured,
-  canUrgent as checkCanUrgent,
-} from "@/lib/services/entitlements";
-import {
   AREA_LABELS,
   PROMOTION_TYPE_LABELS,
   type MarketplaceArea,
-  type PlanTier,
   type PromotionType,
 } from "@/types/enums";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
@@ -83,9 +73,6 @@ type DashboardItem = {
   source: "listing" | "business" | "promotion";
   view_count?: number | null;
   photos?: string[];
-  boost_until?: string | null;
-  featured_until?: string | null;
-  urgent_until?: string | null;
   expires_at?: string | null;
   /** When the post is deleted (new backend only): 3 days after it ends, or an event's end. */
   deletes_at?: string | null;
@@ -108,24 +95,11 @@ type BusinessDashboardRow = {
   cover_photo?: string | null;
   logo_url?: string | null;
   gallery_photos?: string[] | null;
-  boost_until?: string | null;
-  featured_until?: string | null;
-  urgent_until?: string | null;
   expires_at?: string | null;
   deletes_at?: string | null;
   status_reason?: string | null;
   view_count?: number | null;
 };
-
-type ContentSource = DashboardItem["source"];
-
-function dashboardActionLabel(source: ContentSource) {
-  return source === "business"
-    ? "business profile"
-    : source === "promotion"
-      ? "Tourism & Events post"
-      : "listing";
-}
 
 function sortByNewest(items: DashboardItem[]) {
   return [...items].sort((a, b) => {
@@ -281,8 +255,6 @@ export default async function ListingsPage({
     ...toDashboardItems(listingResponse.data).map((listing) => ({
       ...listing,
       source: "listing" as const,
-      featured_until: listing.featured_until ?? null,
-      urgent_until: listing.urgent_until ?? null,
       expires_at: listing.expires_at ?? null,
       view_count: listing.view_count ?? null,
     })),
@@ -305,14 +277,11 @@ export default async function ListingsPage({
         business.logo_url,
         ...(Array.isArray(business.gallery_photos) ? business.gallery_photos : []),
       ].filter(Boolean) as string[],
-      boost_until: business.boost_until,
-      featured_until: business.featured_until,
       status_reason: business.status_reason,
       expires_at: business.expires_at ?? null,
       deletes_at: business.deletes_at ?? null,
       price_cents: null,
       view_count: business.view_count ?? null,
-      urgent_until: business.urgent_until ?? null,
     })),
     ...toDashboardItems(promotionResponse.data).map((promotion) => ({
       ...promotion,
@@ -323,7 +292,6 @@ export default async function ListingsPage({
         ((promotion as Record<string, unknown>).expires_at as string | null) ??
         ((promotion as Record<string, unknown>).end_date as string | null) ??
         null,
-      urgent_until: ((promotion as Record<string, unknown>).urgent_until as string | null) ?? null,
       promotion_type:
         ((promotion as Record<string, unknown>).promotion_type as string | null) ?? null,
       start_date: ((promotion as Record<string, unknown>).start_date as string | null) ?? null,
@@ -366,12 +334,6 @@ export default async function ListingsPage({
   const filteredExpired = byArea(expired);
   const filteredRejected = byArea(rejected);
   const filteredDrafts = byArea(drafts);
-
-  const planTiers: Record<MarketplaceArea, PlanTier> = {
-    MZANSI_MARKET: nativeData.tiers.MZANSI_MARKET,
-    MZANSI_BUSINESS: nativeData.tiers.MZANSI_BUSINESS,
-    PROMOTIONS_EVENTS: nativeData.tiers.PROMOTIONS_EVENTS,
-  };
 
   const { slotUsage, planAdmins } = nativeData;
 
@@ -443,7 +405,6 @@ export default async function ListingsPage({
           <TabsContent value="active" className="mt-4">
             <ListingList
               listings={filteredActive}
-              planTiers={planTiers}
               canCopy={canCopy}
               empty={
                 hasAnyItems
@@ -462,7 +423,6 @@ export default async function ListingsPage({
           <TabsContent value="pending" className="mt-4">
             <ListingList
               listings={filteredPending}
-              planTiers={planTiers}
               canCopy={canCopy}
               empty={{
                 title: `Nothing in review${inArea}`,
@@ -476,7 +436,6 @@ export default async function ListingsPage({
           <TabsContent value="expired" className="mt-4">
             <ListingList
               listings={filteredExpired}
-              planTiers={planTiers}
               canCopy={canCopy}
               empty={{
                 title: `No ended posts${inArea}`,
@@ -721,12 +680,10 @@ function DraftList({
 
 function ListingList({
   listings,
-  planTiers,
   empty,
   canCopy = false,
 }: {
   listings: DashboardItem[];
-  planTiers: Record<MarketplaceArea, PlanTier>;
   empty: { title: string; description: string; showCta?: boolean };
   /** "More" with "Copy this post" on Market listings (SHOW_POST_COPY, running package). */
   canCopy?: boolean;
@@ -799,70 +756,6 @@ function ListingList({
                       postHref={`/post/create-tourism?business_id=${listing.id}`}
                     />
                   )}
-
-                  <div
-                    role="group"
-                    aria-label="Promote this post"
-                    className="ml-auto flex items-center gap-0.5 rounded-full border border-border/70 bg-background/60 p-0.5"
-                  >
-                    {isAddonOffered("boost", listing.source, listing.promotion_type) && (
-                      <BoostButton
-                        listingId={listing.id}
-                        isBoosted={
-                          listing.boost_until ? new Date(listing.boost_until) > new Date() : false
-                        }
-                        canBoost={
-                          isLive && checkCanBoost(planTiers[listing.area], listing.area).allowed
-                        }
-                        itemTypeLabel={dashboardActionLabel(listing.source)}
-                        boostApiPath={
-                          listing.source === "business"
-                            ? `/api/businesses/${listing.id}/boost`
-                            : listing.source === "promotion"
-                              ? `/api/promotions/${listing.id}/boost`
-                              : undefined
-                        }
-                      />
-                    )}
-                    {isAddonOffered("featured", listing.source, listing.promotion_type) && (
-                      <FeaturedButton
-                        listingId={listing.id}
-                        isFeatured={
-                          listing.featured_until
-                            ? new Date(listing.featured_until) > new Date()
-                            : false
-                        }
-                        canFeature={
-                          isLive && checkCanFeatured(planTiers[listing.area], listing.area).allowed
-                        }
-                        itemTypeLabel={dashboardActionLabel(listing.source)}
-                        featuredApiPath={
-                          listing.source === "business"
-                            ? `/api/businesses/${listing.id}/featured`
-                            : listing.source === "promotion"
-                              ? `/api/promotions/${listing.id}/featured`
-                              : undefined
-                        }
-                      />
-                    )}
-                    <UrgentButton
-                      listingId={listing.id}
-                      isUrgent={
-                        listing.urgent_until ? new Date(listing.urgent_until) > new Date() : false
-                      }
-                      canMarkUrgent={
-                        isLive && checkCanUrgent(planTiers[listing.area], listing.area).allowed
-                      }
-                      itemTypeLabel={dashboardActionLabel(listing.source)}
-                      urgentApiPath={
-                        listing.source === "business"
-                          ? `/api/businesses/${listing.id}/urgent`
-                          : listing.source === "promotion"
-                            ? `/api/promotions/${listing.id}/urgent`
-                            : undefined
-                      }
-                    />
-                  </div>
                   {canCopy && listing.source === "listing" ? (
                     <PostMoreMenu postId={listing.id} title={listing.title} />
                   ) : null}

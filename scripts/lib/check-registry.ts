@@ -130,7 +130,7 @@ export const CHECKS: Check[] = [
   check(
     "payment-unit",
     ["test:payments"],
-    "billing, paid add-ons, invoices, reconciliation, signatures",
+    "billing, invoices, reconciliation, signatures",
     ["payments", "release"],
     { coveredBy: "unit" }
   ),

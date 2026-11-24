@@ -1,7 +1,7 @@
 /**
  * Whether this is the launch-configuration test build: the private local
  * browser-test copy built as on launch day: the pre-launch pop-up off
- * (LAUNCH_VALUES below) and add-on sales open (scripts/lib/launch-config-build.cjs,
+ * (LAUNCH_VALUES below) (scripts/lib/launch-config-build.cjs,
  * playwright.launch-config.config.ts).
  *
  * next.config.js replaces `process.env.VERIFYMZANSI_LAUNCH_CONFIG_BUILD` with

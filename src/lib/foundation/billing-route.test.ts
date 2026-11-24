@@ -7,7 +7,6 @@ import { handleFoundationBillingRoute } from "./billing-route";
 import {
   FoundationBillingError,
   FoundationPendingPaymentError,
-  startFoundationCheckout,
   startFoundationSlotCheckout,
   startFoundationSlotRenewalCheckout,
 } from "./billing-runtime";
@@ -25,7 +24,6 @@ vi.mock("../utils/rate-limit", () => ({
 }));
 vi.mock("./billing-runtime", async (importOriginal) => ({
   ...(await importOriginal<typeof BillingRuntime>()),
-  startFoundationCheckout: vi.fn(),
   startFoundationSlotCheckout: vi.fn(),
   startFoundationSlotRenewalCheckout: vi.fn(),
 }));
@@ -36,10 +34,6 @@ const planId = uuid(2);
 const addonId = uuid(3);
 const postId = uuid(4);
 const token = "c".repeat(64);
-const paused = {
-  error: "Add-ons open soon. You have not been charged.",
-  code: "addon_sales_paused",
-};
 const catalogue = {
   plans: [
     {
@@ -69,7 +63,6 @@ const request = (value?: unknown) =>
     },
     body: value === undefined ? undefined : JSON.stringify(value),
   });
-const addon = { postId, kind: "urgent" as const, days: 7 };
 /** One 30-day Individual slot, as the checkout page sends it. */
 const order = { planId, slots: 1, expectedTotalCents: 6900, coolingOffConsent: true };
 const json = async (response: NextResponse) => ({
@@ -87,10 +80,6 @@ beforeEach(() => {
   } as never);
   vi.mocked(checkRateLimit).mockResolvedValue({ limited: false } as never);
   vi.mocked(readFoundationBillingCatalogue).mockResolvedValue(catalogue as never);
-  vi.mocked(startFoundationCheckout).mockResolvedValue({
-    paymentId: uuid(5),
-    checkoutUrl: "https://one.ozow.com/checkout/synthetic",
-  });
   vi.mocked(startFoundationSlotCheckout).mockResolvedValue({
     paymentId: uuid(5),
     checkoutUrl: "https://one.ozow.com/checkout/synthetic",
@@ -101,29 +90,8 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("add-on checkouts while paid add-on sales are paused (the default)", () => {
-  it("refuses before the session, rate limit, catalogue or checkout", async () => {
-    expect(await json(await handleFoundationBillingRoute(request({}), "checkout", addon))).toEqual({
-      status: 403,
-      body: paused,
-    });
-    expect(createFoundationRouteContext).not.toHaveBeenCalled();
-    expect(checkRateLimit).not.toHaveBeenCalled();
-    expect(readFoundationBillingCatalogue).not.toHaveBeenCalled();
-    expect(startFoundationCheckout).not.toHaveBeenCalled();
-  });
-  it.each(["boost", "featured", "urgent"] as const)("refuses %s", async (kind) => {
-    const response = await handleFoundationBillingRoute(request({}), "checkout", {
-      ...addon,
-      kind,
-    });
-    expect(await json(response)).toEqual({ status: 403, body: paused });
-    expect(startFoundationCheckout).not.toHaveBeenCalled();
-  });
-});
-
 describe("plan checkouts are not add-ons", () => {
-  it("start the slot checkout while add-on sales are paused", async () => {
+  it("start the slot checkout", async () => {
     const response = await handleFoundationBillingRoute(request(order), "checkout");
     expect(response.status).toBe(200);
     expect(startFoundationSlotCheckout).toHaveBeenCalledExactlyOnceWith(
@@ -132,7 +100,6 @@ describe("plan checkouts are not add-ons", () => {
       { planId, slots: 1, expectedTotalCents: 6900, coolingOffConsent: true },
       "https://verifymzansi.com"
     );
-    expect(startFoundationCheckout).not.toHaveBeenCalled();
   });
   it.each([
     ["an add-on product as the plan", { planId: addonId }],
@@ -158,7 +125,6 @@ describe("plan checkouts are not add-ons", () => {
   ])("refuse %s before any checkout", async (_label, value) => {
     const response = await handleFoundationBillingRoute(request(value), "checkout");
     expect(response.status).toBe(400);
-    expect(startFoundationCheckout).not.toHaveBeenCalled();
     expect(startFoundationSlotCheckout).not.toHaveBeenCalled();
   });
   it.each([
@@ -258,33 +224,10 @@ describe("plan checkouts while no plan is on sale (paid plans paused)", () => {
       error: "Paid slots open soon. You have not been charged.",
       code: "plan_sales_paused",
     });
-    expect(startFoundationCheckout).not.toHaveBeenCalled();
+    expect(startFoundationSlotCheckout).not.toHaveBeenCalled();
   });
 });
 
-describe("once paid add-on sales are switched on", () => {
-  beforeEach(() => vi.stubEnv("ADDON_SALES_ENABLED", "true"));
-  it("starts the add-on checkout for the catalogue product and the post", async () => {
-    const response = await handleFoundationBillingRoute(request({}), "checkout", addon);
-    expect(response.status).toBe(200);
-    expect(startFoundationCheckout).toHaveBeenCalledExactlyOnceWith(
-      {},
-      account,
-      addonId,
-      postId,
-      "https://verifymzansi.com"
-    );
-  });
-});
-
-it("passes the paused code through when a deeper check refuses", async () => {
-  vi.stubEnv("ADDON_SALES_ENABLED", "true");
-  vi.mocked(startFoundationCheckout).mockRejectedValueOnce(
-    new FoundationBillingError(403, paused.error, paused.code)
-  );
-  const response = await handleFoundationBillingRoute(request({}), "checkout", addon);
-  expect(await json(response)).toEqual({ status: 403, body: paused });
-});
 it("keeps other billing errors without a code", async () => {
   vi.mocked(startFoundationSlotCheckout).mockRejectedValueOnce(
     new FoundationBillingError(409, "Check this payment's status before starting another checkout")
@@ -334,7 +277,7 @@ describe("the retired plan-change and cancel routes", () => {
         code: "LEGACY_PLAN_ROUTE_RETIRED",
       },
     });
-    expect(startFoundationCheckout).not.toHaveBeenCalled();
+    expect(startFoundationSlotCheckout).not.toHaveBeenCalled();
   });
   it("still require the CSRF token before answering", async () => {
     const forged = new NextRequest("https://verifymzansi.com/api/billing/change-plan", {
