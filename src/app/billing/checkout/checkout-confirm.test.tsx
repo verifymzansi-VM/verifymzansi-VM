@@ -158,6 +158,9 @@ describe("CheckoutConfirm for Individual slots", () => {
     expect(payButton()).toHaveAccessibleName("Pay R414 securely");
     // No tick, no payment.
     expect(payButton()).toBeDisabled();
+    // The Terms and the refund rules are one tap away before paying (ECTA s43).
+    expect(screen.getByRole("link", { name: "Terms" })).toHaveAttribute("href", "/terms");
+    expect(screen.getByRole("link", { name: "Refunds" })).toHaveAttribute("href", "/terms#refunds");
     fireEvent.click(
       screen.getByRole("checkbox", {
         name: /My slot starts now; the 7-day cooling-off does not apply/,

@@ -45,7 +45,7 @@ function Detail({ label, children }: { label: string; children: React.ReactNode 
 /**
  * The customer invoice (P2b): a plain document the browser prints or saves as
  * PDF. "Invoice", never "tax invoice": VerifyMzansi is not registered for VAT,
- * so there is no VAT line. The seller's address and the bank transfer section
+ * so the VAT line (CPA s26(3)) reads "None". The seller's address and the bank transfer section
  * appear only when the owner has set them (server-side settings).
  */
 export function InvoiceDocument({
@@ -169,6 +169,24 @@ export function InvoiceDocument({
             </tr>
           </tbody>
           <tfoot>
+            {/* CPA s26(3): the total before tax and the tax line. No VAT is
+                charged: VerifyMzansi is not registered for VAT. */}
+            <tr className="border-t border-border/60">
+              <th scope="row" colSpan={3} className="pt-3 text-right font-medium">
+                Total before VAT
+              </th>
+              <td className="pt-3 text-right tabular-nums">
+                {formatInvoiceAmount(invoice.total_cents)}
+              </td>
+            </tr>
+            <tr>
+              <th scope="row" colSpan={3} className="pb-3 pt-1 text-right font-medium">
+                VAT
+              </th>
+              <td className="pb-3 pt-1 text-right" data-testid="invoice-vat">
+                None
+              </td>
+            </tr>
             <tr className="border-t-2 border-foreground/80">
               <th scope="row" colSpan={3} className="pt-3 text-right font-semibold">
                 {invoice.status === "paid" ? "Total paid" : "Total due"}
