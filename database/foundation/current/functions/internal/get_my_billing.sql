@@ -20,7 +20,7 @@ begin
       join private.invoices i on i.payment_id=p.id),'[]'),
     'entitlements',coalesce((select jsonb_agg(jsonb_build_object('id',e.id,'area',e.area,
       'source',e.source,'status',e.status,'slot_capacity',e.slot_capacity,
-      'max_photos',e.max_photos,'max_videos',e.max_videos,'addon_capabilities',to_jsonb(e.addon_capabilities),
+      'max_photos',e.max_photos,'max_videos',e.max_videos,
       'starts_at',e.starts_at,'ends_at',e.ends_at,'used',(select count(*) from private.post_activations a
         where a.entitlement_id=e.id and a.released_at is null)))
       from private.entitlements e where (e.owner_id=actor or exists(select 1 from private.entitlement_members m

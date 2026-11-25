@@ -80,6 +80,41 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Paid add-ons retired, 25 November 2026
+
+`20261125044115_retire_paid_addons.sql` is pending (see the applied register).
+Launch checklist item 37: Urgent, Boost and Featured are no longer sold. The
+website stopped offering them in pull request #358, and its readers accept the
+add-on fields as missing since that release. This update is the database step.
+
+- **Versions retired.** The three add-on versions (`private.addon_versions`,
+  boost, featured and urgent, version 1) get `retired_at`. Catalogue versions
+  are immutable, so this is final; selling an add-on again needs a new version
+  in a new update.
+- **`api.start_checkout` stays, inert.** Since
+  `20261113002421_individual_slots_r69.sql` it sells only add-ons, and it reads
+  only versions that are not retired, so it now refuses every product with 22023
+  "product not available" and creates no payment. It is a baseline command
+  (`../candidate.sql`, `../api-manifest.json`) that nothing in `src/` or
+  `workers/` calls; keeping it needs no contract step and no change to the
+  baseline contracts.
+- **Replies without add-on fields** (full bodies; every other field unchanged):
+  `internal.billing_catalogue` (no `addons` list, no plan `addon_capabilities`),
+  `internal.get_my_billing` (no slot `addon_capabilities`) and
+  `internal.get_my_frontend_post_manager` (no `addons` dates).
+- **Kept.** The add-on tables and columns (history, checks, foreign keys and
+  immutability guards) and the settlement, staff activation and refund paths for
+  add-on payments, so an add-on payment already on record is still shown and can
+  still be refunded. Pending add-on payments expire within the hour as before.
+
+No API command, argument, return type or grant changes. ORDER: apply first, then
+merge. Read-only preflight:
+`../preflight/20261125044115_retire_paid_addons.check.sql` (expect "update not
+applied", 3 add-on versions on sale, no complete, refunded or charged-back
+add-on payment and 0 add-on windows running); rollback:
+`../rollback/20261125044115_retire_paid_addons.down.sql` (puts the three read
+bodies back; the versions stay retired).
+
 ## Posting terms posting-v6: the package rules, 22 November 2026
 
 `20261123225900_posting_terms_v6.sql` (launch checklist item 27) publishes
@@ -7820,10 +7855,12 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   difference)
 
 - `20261123225900_posting_terms_v6.sql`: applied 2026-11-25 01:22 UTC;
-  owner-approved, website-first (after the website release of pull request
-  #356, merged as aeb6c641); update sha256 starting febe65c5; preflight after:
-  current posting-v6 (update already applied), posting-v6 published, 0
-  acceptances; production fingerprint after it (fingerprint.sql) matched the
-  full replay (except the known schema grant difference)
+  owner-approved, website-first (after the website release of pull request #356,
+  merged as aeb6c641); update sha256 starting febe65c5; preflight after: current
+  posting-v6 (update already applied), posting-v6 published, 0 acceptances;
+  production fingerprint after it (fingerprint.sql) matched the full replay
+  (except the known schema grant difference)
+
+- `20261125044115_retire_paid_addons.sql`: pending
 
 <!-- applied-register:end -->
