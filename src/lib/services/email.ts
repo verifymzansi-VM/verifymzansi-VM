@@ -139,6 +139,12 @@ const platformNotices = {
   // which the claim always supplies: without it nothing is sent. Wording
   // awaiting the owner's approval (FRONTEND-CHANGES.md group 94).
   free_credit_reminder: ["Your free credits end soon", null],
+  // 30 days before a CIPC registered or Seen by VerifyMzansi sticker ends
+  // (update 20261125150215_small_lifecycle_rules.sql); always worded with the
+  // sticker and its end date, which the claim always supplies: without them
+  // nothing is sent. Wording awaiting the owner's approval
+  // (FRONTEND-CHANGES.md group 105).
+  sticker_renewal_reminder: ["Your VerifyMzansi sticker needs renewing soon", null],
 } as const;
 export type PlatformNoticeKind = keyof typeof platformNotices;
 /** The renewal reminder's second paragraph (awaiting the owner's approval). */
@@ -165,6 +171,13 @@ const TERM_ENDING_BODY = {
  * another slot (approved by the owner 2026-11-23). */
 const FREE_CREDIT_REMINDER_BODY =
   "The posts they cover are then hidden. Unless you reactivate them in another slot, they are deleted 3 days later, with their photos and videos.";
+/** The sticker renewal reminder's second paragraph: how to renew each kind
+ * (awaiting the owner's approval). */
+const STICKER_RENEWAL_BODY = {
+  cipc: "Renew it now from the business's verification page, so the sticker stays on your business without a break. Our team checks your company against CIPC's records again.",
+  seen: "Book a new Seen check now from the business's verification page, so the sticker stays on your business without a break.",
+} as const;
+const STICKER_NAMES = { cipc: "CIPC registered", seen: "Seen by VerifyMzansi" } as const;
 /** What the notification job knows about the post a lifecycle notice is about,
  * or, for trial_started, when the introductory trial ends and whether it
  * already pays for a post (a staff or service grant does not), or, for
@@ -190,6 +203,11 @@ export type PostLifecycleDetails = {
   termPackageContinues?: boolean | null;
   /** free_credit_reminder: when the free credit ends. */
   creditEndsAt?: string | null;
+  /** sticker_renewal_reminder: which sticker, when it ends and its business
+   * (the email links to that business's verification page). */
+  stickerKind?: "cipc" | "seen" | null;
+  stickerEndsAt?: string | null;
+  stickerBusinessId?: string | null;
 };
 function deletionTime(iso: string | null | undefined): string | null {
   const ms = iso ? Date.parse(iso) : Number.NaN;
@@ -235,6 +253,12 @@ function postLifecycleIntro(kind: PlatformNoticeKind, details?: PostLifecycleDet
     const ends = deletionTime(details?.creditEndsAt);
     if (!ends) return null;
     return `Your free credits from VerifyMzansi end on ${ends} (South African time).`;
+  }
+  if (kind === "sticker_renewal_reminder") {
+    const ends = deletionTime(details?.stickerEndsAt);
+    const sticker = details?.stickerKind;
+    if (!ends || (sticker !== "cipc" && sticker !== "seen")) return null;
+    return `The ${STICKER_NAMES[sticker]} sticker on one of your businesses ends on ${ends} (South African time).`;
   }
   const when = deletionTime(details?.deletesAt);
   if (!when) return null;
@@ -286,6 +310,13 @@ export async function sendPlatformNotice(
   const termIntoPackage = termSlot && details?.termPackageContinues === true;
   // The free credit reminder links to My slots, where the gift is listed.
   const creditEnding = kind === "free_credit_reminder";
+  // The sticker renewal reminder links to that business's verification page.
+  const stickerRenewal = kind === "sticker_renewal_reminder";
+  const stickerKind = details?.stickerKind === "seen" ? "seen" : "cipc";
+  const stickerPath =
+    details?.stickerBusinessId && /^[0-9a-f-]{36}$/i.test(details.stickerBusinessId)
+      ? `/dashboard/businesses/${details.stickerBusinessId}/verification`
+      : "/dashboard/businesses";
   const renewPath = details?.slotRenewAll
     ? "/billing/checkout?renew=soon"
     : details?.renewSlotId && /^[0-9a-f-]{36}$/i.test(details.renewSlotId)
@@ -314,7 +345,9 @@ export async function sendPlatformNotice(
                       : "/billing"
                     : creditEnding
                       ? "/dashboard/slots"
-                      : "/dashboard";
+                      : stickerRenewal
+                        ? stickerPath
+                        : "/dashboard";
   const body =
     kind === "account_warning"
       ? noticeReason!
@@ -332,7 +365,9 @@ export async function sendPlatformNotice(
             ]
           : creditEnding
             ? FREE_CREDIT_REMINDER_BODY
-            : "Sign in to your account to view the details.";
+            : stickerRenewal
+              ? STICKER_RENEWAL_BODY[stickerKind]
+              : "Sign in to your account to view the details.";
   const cta = renewal
     ? details?.slotRenewAll
       ? "Renew all"
@@ -343,10 +378,17 @@ export async function sendPlatformNotice(
         : "Go to Billing"
       : creditEnding
         ? "See my slots"
-        : "View your account";
-  const shownBody = kind === "account_warning" || renewal || termEnding || creditEnding;
+        : stickerRenewal
+          ? stickerKind === "seen"
+            ? "Book a Seen check"
+            : "Renew my sticker"
+          : "View your account";
+  const shownBody =
+    kind === "account_warning" || renewal || termEnding || creditEnding || stickerRenewal;
   const linkLabel =
-    renewal || termEnding || creditEnding ? `${cta}: ` : "Sign in to view the details: ";
+    renewal || termEnding || creditEnding || stickerRenewal
+      ? `${cta}: `
+      : "Sign in to view the details: ";
   return sendEmail({
     to,
     subject,

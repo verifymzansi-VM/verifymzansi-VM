@@ -65,7 +65,12 @@ type State = {
       position: string | null;
       showFullRegisteredOffice: boolean;
     } | null;
-    seen: { verifiedAt: string; method: string | null; city: string | null } | null;
+    seen: {
+      verifiedAt: string;
+      expiresAt: string | null;
+      method: string | null;
+      city: string | null;
+    } | null;
   };
   cases: Case[];
   linkable: Array<{ businessId: string; businessName: string; registeredName: string | null }>;
@@ -1064,10 +1069,19 @@ export function OwnerVerificationPanel({ businessId }: { businessId: string }) {
             </Button>
           </div>
         ) : stickers.seen ? (
-          <p className="text-sm text-muted-foreground">
-            {stickers.seen.method === "visit" ? "Visited" : "Seen on live video"} ·{" "}
-            {formatDate(stickers.seen.verifiedAt)}
-          </p>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              {stickers.seen.method === "visit" ? "Visited" : "Seen on live video"} ·{" "}
+              {formatDate(stickers.seen.verifiedAt)}
+              {renewDue(stickers.seen.expiresAt)
+                ? ` · renew by ${formatDate(stickers.seen.expiresAt as string)}`
+                : ""}
+            </p>
+            {/* Renewal opens 60 days before expiry, as for CIPC: book the next check now. */}
+            {renewDue(stickers.seen.expiresAt) && stickers.idReviewed && (
+              <SeenRequest businessId={businessId} onBooked={load} />
+            )}
+          </div>
         ) : !stickers.idReviewed ? (
           <p className="text-sm text-muted-foreground">Available once your ID is reviewed.</p>
         ) : (
