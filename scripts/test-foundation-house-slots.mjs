@@ -70,6 +70,8 @@ const EXPORT_LATER = [
   "4aa0fa034c5c09e495530b5563ff3008",
   // 20261122191646_post_templates.sql (the post_templates dataset)
   "fb567a31cf8ca166f117d5b02f744235",
+  // 20261125024039_add_lost_days.sql (the lost_day_additions dataset)
+  "b0d8e2600a63b8e5b298ee180f488c05",
 ];
 /** The grant after later reviewed updates. */
 const GRANT_LATER = [
