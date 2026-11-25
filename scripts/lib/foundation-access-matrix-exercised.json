@@ -1,6 +1,7 @@
 {
   "commands": [
     "activate_post",
+    "add_lost_days",
     "add_organisation_note",
     "approve_due_commissions",
     "attach_provider_request",
@@ -51,6 +52,7 @@
     "get_frontend_support_inbox",
     "get_frontend_support_metrics",
     "get_listing_attributes",
+    "get_lost_days_preview",
     "get_my_account_context",
     "get_my_billing",
     "get_my_communication_choices",

@@ -35,6 +35,12 @@ import {
   issueStaffPackageInvoice,
 } from "@/lib/foundation/package-invoices";
 import {
+  addLostDays,
+  lostDaysAddInput,
+  lostDaysPreviewInput,
+  previewLostDays,
+} from "@/lib/foundation/lost-days";
+import {
   inviteFrontendStaffOrganisationAdmin,
   manageFrontendStaffOrganisation,
   revokeFrontendStaffOrganisationInvite,
@@ -184,6 +190,9 @@ const schema = z.discriminatedUnion("action", [
     reason,
   }),
   z.object({ action: z.literal("organisation.revoke_invite"), inviteId: uuid, reason }),
+  // Lost days: the member's running paid terms, then the days added to them.
+  lostDaysPreviewInput,
+  lostDaysAddInput,
 ]);
 
 /**
@@ -243,6 +252,18 @@ export async function POST(request: NextRequest) {
         return {
           success: true,
           data: await readStaffBankTransferCustomer(api, body.accountEmail),
+        };
+      if (body.action === "slots.lost_days_preview")
+        return { success: true, data: await previewLostDays(api, body.accountEmail) };
+      if (body.action === "slots.add_lost_days")
+        return {
+          success: true,
+          data: await addLostDays(api, {
+            email: body.accountEmail,
+            days: body.days,
+            reason: body.reason,
+            requestId: body.requestId.toLowerCase(),
+          }),
         };
       if (body.action === "payment.record_transfer")
         return { success: true, data: await recordStaffBankTransfer(api, body) };
