@@ -271,6 +271,7 @@ export const FOUNDATION_ERROR_REASONS = {
   staff_review_required: ["42501"],
   staff_same_identity: ["42501"],
   staff_visibility_hold: ["PT423"],
+  subject_is_admin: ["PT409"],
   support_ticket_archived: ["PT409"],
   template_invalid: ["22023"],
   template_limit: ["PT429"],

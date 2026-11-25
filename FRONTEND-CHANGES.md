@@ -165,6 +165,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 100. Add lost days (item 75) (and the group 100 part of 1 row elsewhere) | approved by owner 2026-11-25 (answer: 'Approve both', for the v2 pictures and the database update) | Admins only, on Payments & refunds: an 'Add lost days' card. Staff enter a member's email, check their running paid slots and package (each with its end date), choose 1 to 30 days and a reason, and see each new end date before and after adding. Every running paid slot and package of the member gets the days; a queued renewal moves with its slot and a package's slots still end together. At most 30 days in all per slot; beyond that, or for an ended slot, staff refund instead. Members see only their later end dates; nobody is emailed. |
 | 102. Lost-email alert and staff deadline emails (item 28) (no file rows: email only) | approved by owner 2026-11-25 (answer: 'Approve with the fix', for the three email pictures, with '1 more is not listed' fixed) | Nothing for members or visitors. Staff with the role that handles them get one email about each new privacy request, appeal and report (up to 30 a day for all staff, never to the person a report is about): its type, a reference, when it came in and its deadline, with a button to the staff page. The support address gets one email listing queued emails that failed their last attempt, at most one every 15 minutes. |
 | 104. Staff refunds: first purchase and part refunds (item 77) (and the group 104 part of 5 rows elsewhere) | approved by owner 2026-11-25 (answer: 'Approve them') | Admins only, in the refund forms on Payments & refunds: an amount to refund (part of what is left) and, for an account's first purchase, the reason 'First purchase cancelled (within 5 business days)' with the date the customer asked. The form says whether the slot ends now or keeps running. Whole refunds and chargebacks look and work as before. |
+| 108. Staff told to end an admin role before restricting that person (item 20, part 3) (no file rows: wording outside the checked scope) | awaiting owner | Staff only: on Reports (Ban, Suspend, emergency containment) and Governance (Approve), an action against a person who holds an admin role is refused with 'End this person's admin role first. Another admin must approve that, then try again.' |
 
 Questions for the owner:
 
@@ -4297,6 +4298,27 @@ Decision: approved by owner 2026-11-25 (answer: 'Approve them').
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `src/components/admin/commercial/refund-amount.tsx` | visual | Group 104: the amount, first-purchase date and slot-effect fields shared by the refund forms. | Staff with the refund permission: everything described in group 104. | keep | approved by owner 2026-11-25 (answer: 'Approve them') | 2026-11-25 | d9783a6f664a |
 | `src/components/admin/commercial/refund-amount.test.tsx` | test | Group 104: reading rands, what the request carries, the slot effect, the unused-days suggestion and the fields. | Nothing (not part of a page) | keep | approved by owner 2026-11-25 (answer: 'Approve them') | 2026-11-25 | a4fecbf98c99 |
+
+### 108. Staff told to end an admin role before restricting that person (item 20, part 3)
+
+Wording only: no file in the checked scope changes, so this group has no file
+rows. Launch checklist item 20, part 3. Database update
+`20261125174942_end_admin_role_before_restriction.sql` (pending, website
+first): a ban, suspension or emergency containment of a person who holds an
+active admin role is refused. Text outside the checked scope:
+`src/lib/foundation/staff-command.ts`.
+
+- Staff only, on Reports (Ban, Suspend, emergency containment) and on
+  Governance (Approve): when the person holds an admin role, the action is
+  refused and the existing error line reads 'End this person's admin role
+  first. Another admin must approve that, then try again.' instead of 'The item
+  could not be confirmed. Reload the queue before continuing.'.
+- Nothing else changes; actions on everyone else are as before.
+
+Pictures (synthetic data, local preview, not published):
+`screenshots/item20-part3/` (desktop 1280 and phone 375).
+
+Decision: awaiting owner.
 
 <!-- frontend-ledger:end -->
 
