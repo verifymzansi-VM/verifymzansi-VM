@@ -1,7 +1,6 @@
 import type { MarketplaceArea, PlanTier, RetailPlanTier } from "@/types/enums";
 import { formatRandAmount } from "@/lib/utils/format";
 import { getStablePlanId } from "@/lib/constants/plan-ids";
-import { SHOW_PAID_ADDONS } from "@/lib/hidden-features";
 
 export const ACTIVE_MARKETPLACE_AREAS = [
   "MZANSI_MARKET",
@@ -42,9 +41,6 @@ export interface PlanDefinition {
     maxPostsPerMonth: number;
     videoAllowed: boolean;
     maxVideos?: number;
-    boostAllowed: boolean;
-    featuredAllowed: boolean;
-    urgentAllowed: boolean;
   };
 }
 
@@ -116,9 +112,6 @@ const RETAIL_FEATURES: PlanDefinition["features"] = {
   maxPostsPerMonth: 4,
   videoAllowed: true,
   maxVideos: 1,
-  boostAllowed: true,
-  featuredAllowed: true,
-  urgentAllowed: true,
 };
 
 const AREA_PLAN_NAMES: Record<MarketplaceArea, string> = {
@@ -175,8 +168,6 @@ type LegacyLimits = {
   maxPromotions?: number;
   maxVideos: number;
   videoAllowed?: boolean;
-  boost: boolean;
-  premium?: boolean;
 };
 
 function legacyPlan(
@@ -203,9 +194,6 @@ function legacyPlan(
       maxPostsPerMonth: capacity * 5,
       videoAllowed: limits.videoAllowed ?? true,
       maxVideos: limits.maxVideos,
-      boostAllowed: limits.boost,
-      featuredAllowed: limits.premium ?? false,
-      urgentAllowed: limits.premium ?? false,
     },
   };
 }
@@ -229,53 +217,29 @@ export const LEGACY_PLANS: PlanDefinition[] = [
     maxListings: 1,
     maxVideos: 0,
     videoAllowed: false,
-    boost: false,
   }),
-  legacyPlan("MZANSI_MARKET", "starter", 10000, { maxListings: 3, maxVideos: 1, boost: false }),
-  legacyPlan("MZANSI_MARKET", "growth", 25000, { maxListings: 9, maxVideos: 3, boost: true }),
+  legacyPlan("MZANSI_MARKET", "starter", 10000, { maxListings: 3, maxVideos: 1 }),
+  legacyPlan("MZANSI_MARKET", "growth", 25000, { maxListings: 9, maxVideos: 3 }),
   legacyPlan("MZANSI_MARKET", "pro", 65000, {
     maxListings: 27,
     maxVideos: 27,
-    boost: true,
-    premium: true,
   }),
-  legacyPlan("MZANSI_BUSINESS", "starter", 15000, { maxBusinesses: 1, maxVideos: 1, boost: false }),
-  legacyPlan("MZANSI_BUSINESS", "growth", 40000, { maxBusinesses: 3, maxVideos: 3, boost: true }),
+  legacyPlan("MZANSI_BUSINESS", "starter", 15000, { maxBusinesses: 1, maxVideos: 1 }),
+  legacyPlan("MZANSI_BUSINESS", "growth", 40000, { maxBusinesses: 3, maxVideos: 3 }),
   legacyPlan("MZANSI_BUSINESS", "pro", 100000, {
     maxBusinesses: 9,
     maxVideos: 9,
-    boost: true,
-    premium: true,
   }),
   legacyPlan("PROMOTIONS_EVENTS", "starter", 15000, {
     maxPromotions: 1,
     maxVideos: 1,
-    boost: false,
   }),
-  legacyPlan("PROMOTIONS_EVENTS", "growth", 40000, { maxPromotions: 3, maxVideos: 3, boost: true }),
+  legacyPlan("PROMOTIONS_EVENTS", "growth", 40000, { maxPromotions: 3, maxVideos: 3 }),
   legacyPlan("PROMOTIONS_EVENTS", "pro", 100000, {
     maxPromotions: 9,
     maxVideos: 9,
-    boost: true,
-    premium: true,
   }),
 ];
-
-/* ── Add-on Prices (cents) ───────────────────────────────── */
-export const ADDON_PRICES = {
-  boost: 1500,
-  featured: 2500,
-  urgent: 1000,
-} as const;
-
-/** How many days a single boost lasts */
-export const BOOST_DURATION_DAYS = 7;
-
-/** How many days a single featured add-on lasts */
-export const FEATURED_DURATION_DAYS = 7;
-
-/** How many days a single urgent add-on lasts */
-export const URGENT_DURATION_DAYS = 7;
 
 /**
  * @deprecated Use FREE_POST_CONFIG instead.
@@ -345,8 +309,6 @@ export function getPlanFeatureItems(
       : "Videos",
     features.videoAllowed
   );
-  // Hidden until paid add-ons deliver (src/lib/hidden-features.ts).
-  if (SHOW_PAID_ADDONS) push("Optional Urgent label add-on", features.boostAllowed);
   push("No automatic renewal");
 
   return items;

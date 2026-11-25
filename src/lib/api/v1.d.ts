@@ -208,23 +208,6 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  "/api/listings/{id}/boost": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /** Boost a listing for increased visibility */
-    post: operations["boostListing"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
   "/api/billing/create-checkout": {
     parameters: {
       query?: never;
@@ -432,14 +415,6 @@ export interface components {
     };
     Error: {
       error: string;
-    };
-    AddonCheckoutError: {
-      error: string;
-      /**
-       * @description addon_sales_paused: paid add-on sales are paused (the reply is the same for every caller and request). addon_unavailable: this add-on is not offered for this post.
-       * @enum {string}
-       */
-      code?: "addon_sales_paused" | "addon_unavailable";
     };
   };
   responses: {
@@ -858,38 +833,6 @@ export interface operations {
       };
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
-    };
-  };
-  boostListing: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Resource UUID */
-        id: components["parameters"]["ResourceId"];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Listing boosted */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      401: components["responses"]["Unauthorized"];
-      /** @description Refused. Paid add-on sales are paused (code addon_sales_paused, error "Add-ons open soon. You have not been charged."; no payment is created), this add-on is not offered for this post (code addon_unavailable), or the caller may not boost this listing. */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["AddonCheckoutError"];
-        };
-      };
-      404: components["responses"]["NotFound"];
     };
   };
   createCheckout: {

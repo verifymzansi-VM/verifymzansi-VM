@@ -134,8 +134,6 @@ beforeAll(async () => {
   vi.stubEnv("FOUNDATION_PASSWORD_AUTH_MODE", "native-captcha");
   vi.stubEnv("FOUNDATION_AUTH_CALLBACK_ENABLED", "true");
   vi.stubEnv("FOUNDATION_RECOVERY_ENABLED", "true");
-  // Paused add-on sales answer before any check; open them so the checks run.
-  vi.stubEnv("ADDON_SALES_ENABLED", "true");
   vi.stubGlobal("fetch", async () => {
     touch("network");
     throw new Error("no network in this test");

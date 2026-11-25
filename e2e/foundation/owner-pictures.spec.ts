@@ -50,6 +50,18 @@ test.describe("owner pictures at 1280 px", () => {
     await open(page, "/advertise");
     await picture(page, "advertise-1280");
   });
+
+  // Paid add-ons removed (item 37): the plan cards and My posts.
+  test("pricing-1280", async ({ page }) => {
+    await open(page, "/pricing");
+    await picture(page, "pricing-1280");
+  });
+
+  test("dashboard-listings-1280", async ({ context, page }) => {
+    await signIn(context);
+    await open(page, "/dashboard/listings");
+    await picture(page, "dashboard-listings-1280");
+  });
 });
 
 test.describe("owner pictures at 375 px", () => {
@@ -58,6 +70,17 @@ test.describe("owner pictures at 375 px", () => {
   test("advertise-375", async ({ page }) => {
     await open(page, "/advertise");
     await picture(page, "advertise-375");
+  });
+
+  test("pricing-375", async ({ page }) => {
+    await open(page, "/pricing");
+    await picture(page, "pricing-375");
+  });
+
+  test("dashboard-listings-375", async ({ context, page }) => {
+    await signIn(context);
+    await open(page, "/dashboard/listings");
+    await picture(page, "dashboard-listings-375");
   });
 
   test("sponsors-375", async ({ page }) => {

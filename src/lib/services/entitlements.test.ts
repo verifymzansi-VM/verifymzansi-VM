@@ -1,12 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  getEntitlements,
-  canCreateListing,
-  canBoost,
-  canFeatured,
-  canUrgent,
-  getPlan,
-} from "./entitlements";
+import { getEntitlements, canCreateListing, getPlan } from "./entitlements";
 
 describe("entitlements service", () => {
   describe("getPlan", () => {
@@ -30,42 +23,34 @@ describe("entitlements service", () => {
       const ent = getEntitlements("starter", "MZANSI_MARKET");
       expect(ent.maxAllowed).toBe(3);
       expect(ent.videoAllowed).toBe(true);
-      expect(ent.boostAllowed).toBe(false);
     });
 
     it("returns Basic tier entitlements for Mzansi Market", () => {
       const ent = getEntitlements("basic", "MZANSI_MARKET");
       expect(ent.maxAllowed).toBe(1);
       expect(ent.videoAllowed).toBe(false);
-      expect(ent.boostAllowed).toBe(false);
-      expect(ent.featuredAllowed).toBe(false);
-      expect(ent.urgentAllowed).toBe(false);
     });
 
     it("returns pro tier entitlements capped at 27 listings", () => {
       const ent = getEntitlements("pro", "MZANSI_MARKET");
       expect(ent.maxAllowed).toBe(27);
       expect(ent.videoAllowed).toBe(true);
-      expect(ent.boostAllowed).toBe(true);
-      expect(ent.featuredAllowed).toBe(true);
     });
 
-    it("gives bulk and programme slots the paid add-on features", () => {
+    it("gives bulk and programme slots the standard photo allowance", () => {
       const ent = getEntitlements("enterprise", "MZANSI_MARKET");
       expect(ent.maxPhotos).toBe(10);
-      expect(ent.boostAllowed).toBe(true);
     });
 
-    it("gives retail plans one slot with add-ons", () => {
+    it("gives retail plans one slot", () => {
       const ent = getEntitlements("half_year", "MZANSI_BUSINESS");
       expect(ent.maxAllowed).toBe(1);
-      expect(ent.boostAllowed).toBe(true);
       expect(ent.maxVideos).toBe(1);
     });
 
     it("works for all three marketplace areas", () => {
-      expect(getEntitlements("growth", "MZANSI_BUSINESS").boostAllowed).toBe(true);
-      expect(getEntitlements("starter", "PROMOTIONS_EVENTS").boostAllowed).toBe(false);
+      expect(getEntitlements("growth", "MZANSI_BUSINESS").maxAllowed).toBe(3);
+      expect(getEntitlements("starter", "PROMOTIONS_EVENTS").maxAllowed).toBe(1);
     });
   });
 
@@ -90,60 +75,6 @@ describe("entitlements service", () => {
       const result = canCreateListing(27, "pro", "MZANSI_MARKET");
       expect(result.allowed).toBe(false);
       expect(result.reason).toContain("All 27 active posting slots");
-    });
-  });
-
-  describe("canBoost", () => {
-    it("blocks boost on starter plan", () => {
-      const result = canBoost("starter", "MZANSI_MARKET");
-      expect(result.allowed).toBe(false);
-      expect(result.reason).toContain("paid plans");
-    });
-
-    it("allows boost on growth plan", () => {
-      const result = canBoost("growth", "MZANSI_MARKET");
-      expect(result.allowed).toBe(true);
-    });
-
-    it("allows boost on pro plan", () => {
-      const result = canBoost("pro", "MZANSI_MARKET");
-      expect(result.allowed).toBe(true);
-    });
-  });
-
-  describe("canFeatured", () => {
-    it("blocks featured on starter plan", () => {
-      const result = canFeatured("starter", "MZANSI_MARKET");
-      expect(result.allowed).toBe(false);
-      expect(result.reason).toContain("paid plans");
-    });
-
-    it("blocks featured on growth plan", () => {
-      const result = canFeatured("growth", "MZANSI_MARKET");
-      expect(result.allowed).toBe(false);
-    });
-
-    it("allows featured on pro plan", () => {
-      const result = canFeatured("pro", "MZANSI_MARKET");
-      expect(result.allowed).toBe(true);
-    });
-  });
-
-  describe("canUrgent", () => {
-    it("blocks urgent on starter plan", () => {
-      const result = canUrgent("starter", "MZANSI_MARKET");
-      expect(result.allowed).toBe(false);
-      expect(result.reason).toContain("paid plans");
-    });
-
-    it("blocks urgent on growth plan", () => {
-      const result = canUrgent("growth", "MZANSI_MARKET");
-      expect(result.allowed).toBe(false);
-    });
-
-    it("allows urgent on pro plan", () => {
-      const result = canUrgent("pro", "MZANSI_MARKET");
-      expect(result.allowed).toBe(true);
     });
   });
 });

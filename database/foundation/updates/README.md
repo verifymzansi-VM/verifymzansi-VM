@@ -7819,6 +7819,11 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   (fingerprint.sql) matched the full replay (except the known schema grant
   difference)
 
-- `20261123225900_posting_terms_v6.sql`: pending
+- `20261123225900_posting_terms_v6.sql`: applied 2026-11-25 01:22 UTC;
+  owner-approved, website-first (after the website release of pull request
+  #356, merged as aeb6c641); update sha256 starting febe65c5; preflight after:
+  current posting-v6 (update already applied), posting-v6 published, 0
+  acceptances; production fingerprint after it (fingerprint.sql) matched the
+  full replay (except the known schema grant difference)
 
 <!-- applied-register:end -->

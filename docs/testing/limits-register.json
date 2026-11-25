@@ -610,25 +610,6 @@
       ]
     },
     {
-      "id": "LIM-APP-foundation-billing-addon",
-      "title": "Request body cap for /api/foundation/billing/addon",
-      "value": 2048,
-      "unit": "bytes",
-      "category": "size",
-      "enforcedAt": [
-        {
-          "file": "src/app/api/foundation/billing/addon/route.ts",
-          "contains": "maxBytes: 2048"
-        }
-      ],
-      "tests": [
-        {
-          "kind": "behaviour",
-          "file": "src/__tests__/limits/route-body-limits.test.ts"
-        }
-      ]
-    },
-    {
       "id": "LIM-APP-foundation-billing-route",
       "title": "Request body cap for src/lib/foundation/billing-route.ts",
       "value": 4096,

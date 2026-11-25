@@ -111,7 +111,7 @@ it("shows only unambiguous native retail prices and features", () => {
   expect(offers).toHaveLength(1);
   expect(offers[0]).toMatchObject({
     priceCents: 7300,
-    features: { maxPhotos: 6, videoAllowed: false, urgentAllowed: true, boostAllowed: false },
+    features: { maxPhotos: 6, videoAllowed: false },
   });
   expect(
     restoredPostingPlans(

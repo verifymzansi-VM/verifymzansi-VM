@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import {
-  AlertTriangle,
   ArrowRight,
   BadgeCheck,
   BarChart3,
@@ -14,9 +13,7 @@ import {
   Landmark,
   MessageCircle,
   Mic,
-  Rocket,
   ShoppingBag,
-  Star,
   Timer,
   TreePalm,
   User,
@@ -39,12 +36,8 @@ import {
 } from "@/components/brand";
 import { Button } from "@/components/ui/button";
 import {
-  ADDON_PRICES,
-  BOOST_DURATION_DAYS,
-  FEATURED_DURATION_DAYS,
   SPONSOR_PROGRAMME_ADMINS,
   SPONSOR_PROGRAMME_PRICES,
-  URGENT_DURATION_DAYS,
   formatPlanPrice,
   PACKAGES_ON_SALE,
 } from "@/lib/constants/pricing";
@@ -62,7 +55,7 @@ import {
 } from "@/lib/billing/slot-packages";
 import { getCommercialCatalog } from "@/lib/commercial/plans";
 import { HELLO_CONTACT_EMAIL } from "@/lib/contact-email";
-import { SHOW_PAID_ADDONS, SHOW_SPONSOR_OFFER } from "@/lib/hidden-features";
+import { SHOW_SPONSOR_OFFER } from "@/lib/hidden-features";
 import { SLOT_EDIT_ALLOWANCE } from "@/lib/posting/package-rules";
 import { cn } from "@/lib/utils";
 
@@ -103,29 +96,6 @@ const AREAS = [
     body: "Stays, tours, venues and free event listings.",
     href: "/post/create-tourism",
     browse: "/tourism-events",
-  },
-] as const;
-
-// Boost and Featured only change the order of the events page; everywhere else
-// lists rotate fairly, so they are sold for events only (lib/billing/addon-availability).
-const EXTRAS = [
-  {
-    icon: AlertTriangle,
-    name: "Urgent",
-    price: `${formatPlanPrice(ADDON_PRICES.urgent)} for ${URGENT_DURATION_DAYS} days`,
-    body: "An Urgent label on the post wherever it appears. Not a safety endorsement.",
-  },
-  {
-    icon: Rocket,
-    name: "Boost",
-    price: `${formatPlanPrice(ADDON_PRICES.boost)} for ${BOOST_DURATION_DAYS} days`,
-    body: "Events only: listed first on the events page.",
-  },
-  {
-    icon: Star,
-    name: "Featured",
-    price: `${formatPlanPrice(ADDON_PRICES.featured)} for ${FEATURED_DURATION_DAYS} days`,
-    body: "Events only: listed next on the events page, with a Featured label.",
   },
 ] as const;
 
@@ -796,47 +766,6 @@ export default async function AdvertisePage() {
             What each badge means
           </Link>
         </section>
-
-        {/* 7 ── Get more eyes on a post (hidden until paid add-ons deliver) ── */}
-        {SHOW_PAID_ADDONS ? (
-          <section
-            aria-labelledby="advertise-extras-title"
-            className="border-y border-border/60 bg-card/50"
-          >
-            <div className="container-page py-12 sm:py-16">
-              <h2 id="advertise-extras-title" className="section-title">
-                Get more eyes on a post
-              </h2>
-              <p className="section-lede">
-                Optional, clearly labelled and still moderated. No guaranteed number of views.
-              </p>
-              <Reveal>
-                <ul className="mt-7 grid gap-4 sm:grid-cols-3">
-                  {EXTRAS.map(({ icon: Icon, name, price, body }) => (
-                    <SpotlightCard
-                      as="li"
-                      key={name}
-                      className="surface-card flex gap-4 p-4 sm:flex-col sm:gap-0 sm:p-5"
-                    >
-                      <span className="icon-tile h-11 w-11 bg-brand-gold/20 text-brand-gold-800 dark:bg-brand-gold/15 dark:text-brand-gold-300">
-                        <Icon aria-hidden="true" className="h-5 w-5" />
-                      </span>
-                      <div className="min-w-0">
-                        <h3 className="font-body text-base font-bold text-foreground sm:mt-4">
-                          {name}
-                        </h3>
-                        <p className="mt-0.5 text-sm font-semibold text-brand-green-700 dark:text-brand-gold-300">
-                          {price}
-                        </p>
-                        <p className="mt-1.5 text-sm leading-6 text-muted-foreground">{body}</p>
-                      </div>
-                    </SpotlightCard>
-                  ))}
-                </ul>
-              </Reveal>
-            </div>
-          </section>
-        ) : null}
 
         {/* 8 ── Sample report (sponsor programme, on hold) ──── */}
         {SHOW_SPONSOR_OFFER ? (
