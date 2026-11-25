@@ -2,11 +2,17 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import {
   expectFoundationPostFields,
+  expectTermsAcceptedBeforeSave,
   installFoundationPostFetch,
+  POSTING_TERMS_TICK,
 } from "@/test/foundation-post-transport";
 import EditPromotionPage from "./page";
 import { useParams, useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
+
+// The member accepted the current posting terms before (the edit form shows
+// no tick), unless a test serves them as not accepted yet.
+const ALREADY_ACCEPTED = { acceptedAt: "2026-11-01T10:00:00.000Z" };
 
 const { promotionDetailPreviewSpy } = vi.hoisted(() => ({
   promotionDetailPreviewSpy: vi.fn(),
@@ -87,6 +93,7 @@ describe("EditPromotionPage", () => {
   const mockToast = vi.fn();
   let fetchMock: Mock;
   let termsLoaded: () => Promise<void>;
+  let serveAcceptedAt: (value: string | null) => void;
 
   const createDefaultPromotion = (
     overrides: Partial<{
@@ -132,7 +139,11 @@ describe("EditPromotionPage", () => {
       revision: number | null;
     }> = {}
   ) {
-    ({ api: fetchMock, termsLoaded } = installFoundationPostFetch(
+    ({
+      api: fetchMock,
+      termsLoaded,
+      serveAcceptedAt,
+    } = installFoundationPostFetch(
       vi
         .fn()
         .mockResolvedValueOnce({
@@ -150,7 +161,8 @@ describe("EditPromotionPage", () => {
         .mockResolvedValueOnce({
           ok: true,
           json: async () => ({ success: true }),
-        })
+        }),
+      ALREADY_ACCEPTED
     ));
   }
 
@@ -183,6 +195,31 @@ describe("EditPromotionPage", () => {
     const payload = JSON.parse(fetchMock.mock.calls[2][1].body as string);
     expect(payload.price_zar).toBe(0);
     expectFoundationPostFields(payload, { expectedRevision: 11 });
+  });
+
+  it("shows no posting-terms tick while the current terms are accepted", async () => {
+    render(<EditPromotionPage />);
+    await termsLoaded();
+    await waitFor(() => expect(screen.getByDisplayValue("Night Market")).toBeInTheDocument());
+    expect(screen.queryByLabelText(POSTING_TERMS_TICK)).toBeNull();
+  });
+
+  it("asks for the current terms when not accepted yet, and accepts them before saving", async () => {
+    serveAcceptedAt(null);
+    render(<EditPromotionPage />);
+    await termsLoaded();
+    await waitFor(() => expect(screen.getByDisplayValue("Night Market")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+    expect(
+      (await screen.findAllByText("Accept the posting terms before submitting.")).length
+    ).toBeGreaterThan(0);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    fireEvent.click(screen.getByLabelText(POSTING_TERMS_TICK));
+    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expectTermsAcceptedBeforeSave("/api/promotions/promotion-1");
   });
 
   it("hydrates saved promotion details and sends normalized payload on save", async () => {
@@ -373,7 +410,8 @@ describe("EditPromotionPage", () => {
           ok: false,
           status: 409,
           json: async () => ({ code: "pending_edit_exists" }),
-        })
+        }),
+      ALREADY_ACCEPTED
     ));
 
     render(<EditPromotionPage />);

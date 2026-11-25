@@ -406,8 +406,12 @@ try {
   const later = steps.slice(index + 2);
   if (later.length) {
     applySteps(database, later);
-    await check("later updates keep the limit and posting-v5", () => {
-      assert.deepEqual(currentTerms(), V5);
+    await check("later updates keep the limit and posting-v5 (or a later version)", () => {
+      // 20261123225900_posting_terms_v6.sql makes posting-v6 current.
+      const terms = currentTerms();
+      if (terms.version === "posting-v6")
+        assert.equal(terms.document_hash, CATALOGUE.versions["posting-v6"]);
+      else assert.deepEqual(terms, V5);
     });
   }
 } catch (error) {
