@@ -82,10 +82,11 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Paid add-ons retired, 25 November 2026
 
-`20261125044115_retire_paid_addons.sql` is pending (see the applied register).
-Launch checklist item 37: Urgent, Boost and Featured are no longer sold. The
-website stopped offering them in pull request #358, and its readers accept the
-add-on fields as missing since that release. This update is the database step.
+`20261125044115_retire_paid_addons.sql` was applied on 25 November 2026 at 10:17
+UTC (see the applied register). Launch checklist item 37: Urgent, Boost and
+Featured are no longer sold. The website stopped offering them in pull request
+#358, and its readers accept the add-on fields as missing since that release.
+This update is the database step.
 
 - **Versions retired.** The three add-on versions (`private.addon_versions`,
   boost, featured and urgent, version 1) get `retired_at`. Catalogue versions
@@ -7926,6 +7927,14 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   production fingerprint after it (fingerprint.sql) matched the full replay
   (except the known schema grant difference)
 
-- `20261125044115_retire_paid_addons.sql`: pending
+- `20261125044115_retire_paid_addons.sql`: applied 2026-11-25 10:17 UTC;
+  apply-first, owner-approved, before pull request #364 was merged; Supabase SQL
+  editor (browser), file from raw GitHub at 435c0be4, update sha256 starting
+  a78b758dbfeae58b; preflight before "update not applied; add-on versions on
+  sale: 3; add-on payments: pending 0, complete 0, refunded or charged back 0,
+  other 0; add-on windows running: 0" with no problem rows, after "already
+  applied" with add-on versions on sale 0 and the same counts; production
+  fingerprint after it (fingerprint.sql) matched the full replay (except the
+  known schema grant difference)
 
 <!-- applied-register:end -->
