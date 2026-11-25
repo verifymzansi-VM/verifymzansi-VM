@@ -17,6 +17,19 @@ const extra = z.object({
     )
     .max(48),
 });
+/** The card read itself failed (not a refused reply), so repeating it would
+ * only wait on the database again. */
+export class FoundationPostsUnavailableError extends Error {
+  constructor() {
+    super("Posts could not be loaded");
+  }
+}
+/** Public cards with their preview pictures, without presentations. */
+export async function searchFoundationCards(api: FoundationPublicApi, input: unknown) {
+  const { data, error } = await api.rpc("search_post_cards", buildFoundationPostSearch(input));
+  if (error) throw new FoundationPostsUnavailableError();
+  return parseCards(data);
+}
 function parseCards(data: unknown) {
   const enriched = extra.parse(data);
   const plain = parseFoundationPostSearch({
@@ -48,7 +61,7 @@ export async function searchFoundationPresentedCards(api: FoundationPublicApi, i
   const { data, error } = await api.rpc("search_post_cards", {
     p_request: { ...request.p_request, presentation: true, frontend_presentation: true },
   });
-  if (error) throw new Error("Posts could not be loaded");
+  if (error) throw new FoundationPostsUnavailableError();
   const enriched = presented.parse(data);
   const { presentation_contract: _contract, ...body } = data as Record<string, unknown>;
   const plain = parseCards({
