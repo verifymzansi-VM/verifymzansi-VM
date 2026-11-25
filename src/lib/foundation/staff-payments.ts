@@ -227,6 +227,13 @@ export const STAFF_PART_REFUND_REFUSALS: ReadonlyArray<[FoundationErrorReason, [
       [409, "This refund was already recorded with other details. Reload the page to see it."],
     ],
     ["refund_request_id_required", [422, "Reload the page and record the refund again."]],
+    [
+      "refund_activate_first",
+      [
+        409,
+        "This payment is not activated yet. Use 'Activate what was paid for' first, then refund part of it.",
+      ],
+    ],
   ];
 
 /** Refusals of the payment commands that staff can act on, in plain words. */
@@ -647,6 +654,9 @@ const refundsLeftItem = z.strictObject({
   ozow_refund_until: z.iso.datetime({ offset: true }).nullable(),
   first_purchase: z.boolean(),
   first_purchase_ask_until: isoDay.nullable(),
+  // Optional: added by 20261125194727_part_refund_follow_ups.sql (the website
+  // is deployed before it is applied).
+  notice_ends_on: isoDay.optional(),
   lines: z
     .array(
       z.strictObject({
@@ -654,6 +664,8 @@ const refundsLeftItem = z.strictObject({
         left_cents: count,
         starts_at: z.iso.datetime({ offset: true }).nullable(),
         ends_at: z.iso.datetime({ offset: true }).nullable(),
+        paid_days: z.number().int().min(1).max(366).nullable().optional(),
+        lost_days: count.optional(),
       })
     )
     .max(25),
@@ -663,7 +675,9 @@ export type StaffRefundsLeft = z.infer<typeof refundsLeftItem>;
 /**
  * For up to 50 payments of the staff list: what was refunded and what is left
  * (per payment and per slot), each slot's paid dates, until when Ozow refunds
- * it, and whether it is the account's first purchase with the last day to ask.
+ * it, and whether it is the account's first purchase with the last day to ask;
+ * once 20261125194727_part_refund_follow_ups.sql is applied, also the end of
+ * 20 business days' notice given today and each slot's plan term and lost days.
  */
 export function readStaffRefundsLeft(api: FoundationAuthenticatedApi, paymentIds: string[]) {
   return settleStaffCommand(

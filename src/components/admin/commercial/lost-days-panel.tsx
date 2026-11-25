@@ -15,6 +15,7 @@ import {
   type LostDaysMove,
   type LostDaysTerm,
 } from "@/lib/admin/lost-days";
+import { formatPlanPrice } from "@/lib/constants/pricing";
 import { formatSaLongDate } from "@/lib/utils/format";
 import { ActionMessage, AdminCard } from "./commercial-action";
 
@@ -201,6 +202,12 @@ export function LostDaysPanel() {
                         ? ` → ${formatSaLongDate(endAfterDays(item.endsAt, chosenDays))}`
                         : ""}
                     </span>
+                    {item.refundedCents ? (
+                      <span role="note" className="w-full font-medium">
+                        {formatPlanPrice(item.refundedCents)} was already refunded for days we
+                        failed to provide. Give money or days for one failure, not both.
+                      </span>
+                    ) : null}
                   </li>
                 ))}
               </ul>

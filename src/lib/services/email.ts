@@ -63,9 +63,11 @@ const platformNotices = {
     "Payment received",
     "We received your payment. Need your invoice? Reply to this email.",
   ],
+  // Every refund or reversal, including a part refund that keeps the slot
+  // running, so the words name neither.
   payment_reversed: [
     "Payment update",
-    "A payment reversal has been recorded. Review the current details in Billing.",
+    "A refund or reversal of a payment has been recorded. Review the current details in Billing.",
   ],
   payment_reconciliation_required: [
     "Payment review in progress",

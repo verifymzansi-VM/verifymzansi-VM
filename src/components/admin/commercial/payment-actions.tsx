@@ -63,7 +63,8 @@ export type RefundTarget = {
   renewal?: boolean;
   /** The payment of a slot (scope "slot"). */
   paymentId?: string;
-  /** What is left to refund (refunds only): the amount can then be part of it. */
+  /** What is left to refund: a refund can then be part of it; a chargeback
+   * warns when money was already refunded on the payment. */
   room?: RefundRoom;
 };
 
@@ -75,21 +76,28 @@ export function RefundForm({
   busy,
   run,
   onDone,
+  requestId,
+  onRecorded,
 }: {
   target: RefundTarget;
   busy: boolean;
   run: Run;
   onDone: () => void;
+  /** The request id of this payment or slot, kept by the list until the
+   * refund is recorded: sent again after a lost answer, even when the form is
+   * opened again, so it is never refunded twice. */
+  requestId: string;
+  /** The refund was recorded: the list forgets its request id. */
+  onRecorded?: () => void;
 }) {
   const refund = target.kind === "refunded";
   // Part refunds and the first purchase (refunds only, once the page could
   // read what is left to refund).
   const room = refund ? target.room : undefined;
+  const refundedBefore = refund ? 0 : (target.room?.refundedCents ?? 0);
   const [reasonCode, setReasonCode] = useState("");
   const [amount, setAmount] = useState(room ? (room.leftCents / 100).toFixed(2) : "");
   const [problem, setProblem] = useState<string | null>(null);
-  // One id per form opening, sent again on a retry: never refunded twice.
-  const [requestId] = useState(() => crypto.randomUUID());
   const what = refund ? "refund" : "chargeback";
   const bank = target.method === "invoice" || (target.method === "bank" && refund);
   const priorCents = room ? room.refundedCents : target.priorCents;
@@ -140,7 +148,10 @@ export function RefundForm({
             ? `${refund ? "Refund" : "Chargeback"} recorded. It waits for another staff member's approval.`
             : "Payment updated"
         );
-        if (done) onDone();
+        if (done) {
+          onRecorded?.();
+          onDone();
+        }
       }}
     >
       <p className="text-sm">
@@ -155,6 +166,12 @@ export function RefundForm({
             : "."}
         </span>
       </p>
+      {refundedBefore > 0 ? (
+        <p role="note" className="text-sm font-medium">
+          Already refunded {formatPlanPrice(refundedBefore)} on this payment. A chargeback returns
+          the full amount again: check with Ozow or the bank before recording it.
+        </p>
+      ) : null}
       {bank && refund ? (
         <p className="text-sm font-medium">
           Before you pay:{" "}

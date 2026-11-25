@@ -22,6 +22,13 @@ export type RefundRoom = {
   /** The slot's paid dates (for the unused-days hint), when known. */
   startsAt: string | null;
   endsAt: string | null;
+  /** The plan's own term in days, when the database gave it
+   * (20261125194727_part_refund_follow_ups.sql). */
+  paidDays?: number | null;
+  /** Free lost days added to the slot: not paid for, so not refunded. */
+  lostDays?: number;
+  /** The end of 20 business days' notice given today (YYYY-MM-DD). */
+  noticeEndsOn?: string | null;
 };
 
 /** Reasons that always refund everything left (the amount is fixed). */
@@ -39,6 +46,9 @@ const day = new Intl.DateTimeFormat("en-ZA", {
   dateStyle: "medium",
   timeZone: "Africa/Johannesburg",
 });
+/** A South African calendar day (YYYY-MM-DD) in words. */
+const saDay = (value: string) => day.format(new Date(`${value}T12:00:00+02:00`));
+const daysText = (days: number) => (days === 1 ? "1 day" : `${days} days`);
 
 /** Today in South Africa, YYYY-MM-DD. */
 export function southAfricanToday(now = Date.now()) {
@@ -62,28 +72,42 @@ export function refundEndsPaidDays(reasonCode: string, amountCents: number, left
 }
 
 /**
- * The unused whole days of a slot and the section 14 credit they suggest:
- * the price divided by its paid days, times the whole days left, less R50.
+ * The unused paid days of a slot and the section 14 credit they suggest: the
+ * price divided by the plan's paid days, times the whole paid days left after
+ * the 20 business days' notice, less R50. Free lost days added to the slot
+ * come off its end first. Without the notice end (a database before
+ * 20261125194727_part_refund_follow_ups.sql) the days count from now, and the
+ * hint says "if recorded today".
  */
 export function cancellationCredit(
-  room: Pick<RefundRoom, "startsAt" | "endsAt">,
+  room: Pick<RefundRoom, "startsAt" | "endsAt" | "paidDays" | "lostDays" | "noticeEndsOn">,
   priceCents: number,
   now = Date.now()
 ) {
   if (!room.startsAt || !room.endsAt) return null;
   const starts = Date.parse(room.startsAt);
-  const ends = Date.parse(room.endsAt);
-  const paidDays = Math.round((ends - starts) / DAY_MS);
+  const lostDays = room.lostDays ?? 0;
+  const paidEnds = Date.parse(room.endsAt) - lostDays * DAY_MS;
+  const paidDays = room.paidDays ?? Math.round((paidEnds - starts) / DAY_MS);
   if (!(paidDays > 0)) return null;
+  // The notice ends at the end of that day in South Africa.
+  const from = room.noticeEndsOn ? Date.parse(`${room.noticeEndsOn}T00:00:00+02:00`) + DAY_MS : now;
   const daysLeft = Math.max(
     0,
-    Math.min(paidDays, Math.floor((ends - Math.max(now, starts)) / DAY_MS))
+    Math.min(paidDays, Math.floor((paidEnds - Math.max(from, starts)) / DAY_MS))
   );
   const creditCents = Math.max(
     0,
     Math.floor((priceCents * daysLeft) / paidDays) - CANCELLATION_FEE_CENTS
   );
-  return { paidDays, daysLeft, creditCents, endsAt: room.endsAt };
+  return {
+    paidDays,
+    daysLeft,
+    creditCents,
+    endsAt: new Date(paidEnds).toISOString(),
+    lostDays,
+    noticeEndsOn: room.noticeEndsOn ?? null,
+  };
 }
 
 /**
@@ -180,10 +204,20 @@ export function RefundAmountFields({
       </label>
       {credit ? (
         <p className="text-sm text-muted-foreground">
-          Unused whole days: {credit.daysLeft} of {credit.paidDays} (paid until{" "}
-          {day.format(new Date(credit.endsAt))}). At the daily price, less the R50 fee:{" "}
-          {formatPlanPrice(credit.creditCents)}. Count the days from the end of the 20 business
-          days&apos; notice.
+          {credit.noticeEndsOn
+            ? `Unused paid days after the 20 business days' notice (it ends ${saDay(credit.noticeEndsOn)}): `
+            : "Unused whole days if recorded today: "}
+          {credit.daysLeft} of {credit.paidDays} (paid until {day.format(new Date(credit.endsAt))}
+          {credit.lostDays > 0
+            ? `; the ${daysText(credit.lostDays)} added for lost days are free and not counted`
+            : ""}
+          ). At the daily price, less the R50 fee: {formatPlanPrice(credit.creditCents)}.
+        </p>
+      ) : null}
+      {room.lostDays ? (
+        <p role="note" className="text-sm font-medium">
+          {daysText(room.lostDays)} already added to this slot for lost days. Give money or days for
+          one failure, not both.
         </p>
       ) : null}
       {first ? (

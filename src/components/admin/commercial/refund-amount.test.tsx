@@ -97,7 +97,9 @@ describe("cancellationCredit", () => {
       paidDays: 180,
       daysLeft: 169,
       creditCents: 33_870,
-      endsAt: "2027-04-30T00:00:00Z",
+      endsAt: "2027-04-30T00:00:00.000Z",
+      lostDays: 0,
+      noticeEndsOn: null,
     });
     expect(
       cancellationCredit(
@@ -107,6 +109,30 @@ describe("cancellationCredit", () => {
       )?.creditCents
     ).toBe(0);
     expect(cancellationCredit({ startsAt: null, endsAt: null }, 6900)).toBeNull();
+  });
+  it("counts from the end of the notice, over the plan's term, without free lost days", () => {
+    const credit = cancellationCredit(
+      {
+        startsAt: "2026-11-01T00:00:00Z",
+        // 180 paid days and 10 lost days added.
+        endsAt: "2027-05-10T00:00:00Z",
+        paidDays: 180,
+        lostDays: 10,
+        noticeEndsOn: "2026-12-09",
+      },
+      41_400,
+      Date.parse("2026-11-11T12:00:00Z")
+    );
+    // Paid until 30 April 2027; from 10 December 2026 (SAST) 141 whole days:
+    // R414 x 141 / 180 = R324.30, less R50.
+    expect(credit).toEqual({
+      paidDays: 180,
+      daysLeft: 141,
+      creditCents: 27_430,
+      endsAt: "2027-04-30T00:00:00.000Z",
+      lostDays: 10,
+      noticeEndsOn: "2026-12-09",
+    });
   });
 });
 
@@ -149,8 +175,25 @@ describe("RefundAmountFields", () => {
     expect(screen.getByLabelText("Amount to refund (rand)")).toHaveAttribute("readonly");
     expect(screen.getByText(/asked by 0?2 Dec 2026/)).toBeInTheDocument();
   });
-  it("suggests the cancellation credit", () => {
+  it("suggests the cancellation credit, as of today without the notice end", () => {
     render(<Fields reasonCode="s14_cancellation" />);
-    expect(screen.getByText(/Unused whole days:/)).toBeInTheDocument();
+    expect(screen.getByText(/Unused whole days if recorded today:/)).toBeInTheDocument();
+    expect(screen.queryByRole("note")).toBeNull();
+  });
+  it("counts from the notice end and warns about lost days already added", () => {
+    render(
+      <Fields
+        reasonCode="s14_cancellation"
+        value={{ noticeEndsOn: "2026-12-09", paidDays: 180, lostDays: 1 }}
+      />
+    );
+    expect(
+      screen.getByText(
+        /Unused paid days after the 20 business days' notice \(it ends 0?9 Dec 2026\)/
+      )
+    ).toBeInTheDocument();
+    expect(screen.getByRole("note")).toHaveTextContent(
+      "1 day already added to this slot for lost days."
+    );
   });
 });
