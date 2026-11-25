@@ -65,8 +65,9 @@ describe("the ID step's view of the independent check", () => {
     // Shown as soon as the result arrives, before the page has read the steps
     // again (no step status yet, or still the earlier one).
     expect(identityCheckView(withStaff)).toEqual({ kind: "with_staff" });
-    // Staff already decided (sent back): the member can start again.
-    expect(identityCheckView(withStaff, { idStepReturned: true })).toEqual({ kind: "start" });
+    // Steps read after this result show staff settled it (sent back, rejected
+    // or no entry): the member can start again.
+    expect(identityCheckView(withStaff, { idStepSettled: true })).toEqual({ kind: "start" });
     expect(
       identityCheckView(
         route("automatic", null, {

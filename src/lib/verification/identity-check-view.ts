@@ -73,15 +73,17 @@ export function identityCheckView(
   {
     finished = false,
     tryAgain = false,
-    idStepReturned = false,
+    idStepSettled = false,
   }: {
     /** The frame said the member finished (a hint: the server has the result). */
     finished?: boolean;
     /** The member chose "Try the ID check again" after a decline. */
     tryAgain?: boolean;
-    /** Staff sent the ID step back or rejected it (the status the page
-     * already reads): a check that went to staff is then settled. */
-    idStepReturned?: boolean;
+    /** The steps, read again after this check's result, show the ID step
+     * no longer waits for staff (sent back, rejected, or no entry): a check
+     * that went to staff is then settled. Until that read succeeds, the
+     * check counts as with staff, so no second check can start meanwhile. */
+    idStepSettled?: boolean;
   } = {}
 ): IdentityCheckView {
   if (!availability) return { kind: "manual", fallback: false };
@@ -91,8 +93,8 @@ export function identityCheckView(
     return finished ? { kind: "checking" } : { kind: "frame", url: latest.session_url };
   if (latest?.status === "approved") return { kind: "approved" };
   // A person is still to decide: the member asked, or (staff final say) the
-  // check went to staff and staff have not sent the ID step back.
-  if (latest?.with_person || (latest?.status === "with_staff" && !idStepReturned))
+  // check went to staff and the steps do not show it settled.
+  if (latest?.with_person || (latest?.status === "with_staff" && !idStepSettled))
     return { kind: "with_staff" };
   if (latest?.status === "declined" && !latest.asked_at && !tryAgain) {
     const canAsk = latest.can_ask_person === true;

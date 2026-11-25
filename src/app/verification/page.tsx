@@ -520,6 +520,9 @@ function otpDeliveryHint(formattedPhone: string): string {
   return `SMS delivery can take up to 60 seconds. If nothing arrives, confirm ${formattedPhone} and resend once the timer ends.`;
 }
 
+/** Tries to read the steps again after an automatic check's result. */
+const STEP_READ_TRIES = 3;
+
 export default function VerificationPage() {
   const [step, setStep] = useState<WizardStep>("phone");
   const [phone, setPhone] = useState("");
@@ -642,11 +645,26 @@ export default function VerificationPage() {
     full: string;
     public: string | null;
   } | null>(null);
+  // A result of the latest check (its id and status), and the result the
+  // steps were last read again for (see the effect below).
+  const latestCheck = identityCheck.availability?.check;
+  const checkResult =
+    latestCheck && ["approved", "with_staff", "declined"].includes(latestCheck.status)
+      ? `${latestCheck.id}:${latestCheck.status}`
+      : null;
+  const [stepsReadFor, setStepsReadFor] = useState<string | null>(null);
   const idStepStatus = serverStepMap.get("id_doc")?.status;
   const checkView = identityCheckView(identityCheck.availability ?? null, {
     finished: checkFinished,
     tryAgain: checkTryAgain,
-    idStepReturned: idStepStatus === "rejected" || idStepStatus === "needs_resubmission",
+    // Only steps read after this result count: an older "sent back" must not
+    // reopen Start while the new submission waits for staff.
+    idStepSettled:
+      checkResult !== null &&
+      stepsReadFor === checkResult &&
+      (idStepStatus === undefined ||
+        idStepStatus === "rejected" ||
+        idStepStatus === "needs_resubmission"),
   });
   useIdentityCheckPolling(step === "id_doc" ? checkView : null, identityCheck.refresh);
   // The check's frame needs this page loaded as a document (useCheckDocument).
@@ -849,17 +867,20 @@ export default function VerificationPage() {
   }, [syncVerificationStatus]);
 
   // A result arrived (the latest check's own status, whatever the view): read
-  // the steps again, and show the verified name.
-  const latestCheck = identityCheck.availability?.check;
-  const checkResult =
-    latestCheck && ["approved", "with_staff", "declined"].includes(latestCheck.status)
-      ? `${latestCheck.id}:${latestCheck.status}`
-      : null;
+  // the steps again (up to 3 tries, 1 and 2 seconds apart), and show the
+  // verified name.
   useEffect(() => {
     if (!checkResult) return;
     let cancelled = false;
     async function showResult() {
-      await syncVerificationStatus();
+      for (let attempt = 0; attempt < STEP_READ_TRIES && !cancelled; attempt += 1) {
+        if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, attempt * 1_000));
+        if (cancelled) return;
+        if (await syncVerificationStatus()) {
+          if (!cancelled) setStepsReadFor(checkResult);
+          break;
+        }
+      }
       if (cancelled || !checkResult?.endsWith(":approved")) return;
       await readVerifiedNames();
     }

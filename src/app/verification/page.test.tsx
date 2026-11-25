@@ -1254,6 +1254,17 @@ describe("VerificationPage", () => {
       const statusReads = () =>
         fetchCalls().filter(([input]) => String(input).includes("/api/verification/status")).length;
       const before = statusReads();
+      // The website now has the check's photos waiting for staff.
+      statusResponse = jsonResponse(
+        buildStatusPayload({
+          steps: [
+            { step_type: "phone", status: "approved" },
+            { step_type: "id_doc", status: "pending" },
+            { step_type: "selfie", status: "pending" },
+          ],
+        }),
+        200
+      );
       window.dispatchEvent(
         new MessageEvent("message", {
           origin: "https://verify.didit.me",
@@ -1324,6 +1335,125 @@ describe("VerificationPage", () => {
               (init as RequestInit | undefined)?.method === "POST"
           )
         ).toBe(false);
+      } finally {
+        Object.defineProperty(window, "location", { configurable: true, value: realLocation });
+        entries.mockRestore();
+      }
+    });
+
+    describe("a check that went to staff", () => {
+      const stale = () =>
+        jsonResponse(
+          buildStatusPayload({
+            steps: [
+              { step_type: "phone", status: "approved" },
+              {
+                step_type: "id_doc",
+                status: "needs_resubmission",
+                reason_note: "Please retake your photo.",
+              },
+            ],
+          }),
+          200
+        );
+      const withStaff = {
+        route: "automatic",
+        reason: null,
+        check: { id: "c2", status: "with_staff" },
+      };
+      const statusReads = () =>
+        fetchCalls().filter(([input]) => String(input).includes("/api/verification/status")).length;
+      const startButton = () => screen.queryByRole("button", { name: /Start ID check/i });
+
+      it("never offers Start on an older 'sent back' while the steps cannot be read again", async () => {
+        statusResponse = stale();
+        const availability = deferred<ReturnType<typeof jsonResponse>>();
+        withAvailability(availability.promise);
+        render(<VerificationPage />);
+        await screen.findByText(/Loading the ID step/i);
+        const before = statusReads();
+        statusResponse = jsonResponse({ error: "unavailable" }, 500);
+        availability.resolve(jsonResponse(withStaff, 200));
+        expect(await screen.findByText(/A person will check your ID/i)).toBeTruthy();
+        expect(startButton()).not.toBeInTheDocument();
+        // Three tries, then it stays as it is.
+        await waitFor(() => expect(statusReads()).toBe(before + 3), { timeout: 6_000 });
+        expect(screen.getByText(/A person will check your ID/i)).toBeTruthy();
+        expect(startButton()).not.toBeInTheDocument();
+      });
+
+      it("shows the right screen once the steps are read again after a failed try", async () => {
+        statusResponse = stale();
+        const availability = deferred<ReturnType<typeof jsonResponse>>();
+        withAvailability(availability.promise);
+        render(<VerificationPage />);
+        await screen.findByText(/Loading the ID step/i);
+        const before = statusReads();
+        statusResponse = jsonResponse({ error: "unavailable" }, 500);
+        availability.resolve(jsonResponse(withStaff, 200));
+        expect(await screen.findByText(/A person will check your ID/i)).toBeTruthy();
+        await waitFor(() => expect(statusReads()).toBe(before + 1));
+        expect(startButton()).not.toBeInTheDocument();
+        // Staff really sent this check's submission back: Start is right now.
+        statusResponse = stale();
+        expect(
+          await screen.findByRole("button", { name: /Start ID check/i }, { timeout: 4_000 })
+        ).toBeTruthy();
+        expect(screen.queryByText(/A person will check your ID/i)).not.toBeInTheDocument();
+      });
+
+      it("keeps 'a person will check' when the fresh steps say the ID waits for review", async () => {
+        statusResponse = stale();
+        const availability = deferred<ReturnType<typeof jsonResponse>>();
+        withAvailability(availability.promise);
+        render(<VerificationPage />);
+        await screen.findByText(/Loading the ID step/i);
+        const before = statusReads();
+        statusResponse = jsonResponse(
+          buildStatusPayload({
+            steps: [
+              { step_type: "phone", status: "approved" },
+              { step_type: "id_doc", status: "pending" },
+              { step_type: "selfie", status: "pending" },
+            ],
+          }),
+          200
+        );
+        availability.resolve(jsonResponse(withStaff, 200));
+        expect(await screen.findByText(/A person will check your ID/i)).toBeTruthy();
+        await waitFor(() => expect(statusReads()).toBe(before + 1));
+        expect(screen.getByText(/A person will check your ID/i)).toBeTruthy();
+        expect(startButton()).not.toBeInTheDocument();
+      });
+
+      it("offers Start once the steps show no ID entry (an identity revoked later)", async () => {
+        statusResponse = phoneDone();
+        withAvailability(withStaff);
+        render(<VerificationPage />);
+        expect(await screen.findByRole("button", { name: /Start ID check/i })).toBeTruthy();
+        expect(screen.queryByText(/A person will check your ID/i)).not.toBeInTheDocument();
+      });
+    });
+
+    it("does not load the page again when it already did (no loop)", async () => {
+      statusResponse = phoneDone();
+      withAvailability({ route: "automatic", reason: null, check: null });
+      const entries = vi
+        .spyOn(performance, "getEntriesByType")
+        .mockReturnValue([{ name: "http://localhost:3000/dashboard" } as PerformanceEntry]);
+      const replace = vi.fn();
+      const realLocation = window.location;
+      Object.defineProperty(window, "location", {
+        configurable: true,
+        value: { href: "http://localhost:3000/verification?check-reload=1", replace },
+      });
+      try {
+        render(<VerificationPage />);
+        expect(await screen.findByText(/The ID check couldn't open on this page/i)).toBeTruthy();
+        // Effects have run by now (the loop guard lives in one).
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        expect(replace).not.toHaveBeenCalled();
+        expect(screen.queryByRole("button", { name: /Start ID check/i })).not.toBeInTheDocument();
       } finally {
         Object.defineProperty(window, "location", { configurable: true, value: realLocation });
         entries.mockRestore();
