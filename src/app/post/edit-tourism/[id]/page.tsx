@@ -21,6 +21,7 @@ import { PackageRulesNote } from "@/components/posting/package-rules-note";
 import { editLimitReachedMessage } from "@/lib/posting/package-rules";
 import { MediaUpload } from "@/components/ui/media-upload";
 import { OnlinePresenceFields } from "@/components/post/online-presence-fields";
+import { PostingTermsConsent } from "@/components/post/posting-terms-consent";
 import { UploadProgressPanel, type UploadSlotStatus } from "@/components/ui/upload-progress-panel";
 import { LocationSelector } from "@/components/ui/location-selector";
 import { type BusinessCategory, type PromotionType } from "@/types/enums";
@@ -58,7 +59,14 @@ const selectClass =
 
 export default function EditPromotionPage() {
   const router = useRouter();
-  const { fields: postFields, captureRevision: capturePostRevision } = usePostTransport();
+  const {
+    fields: postFields,
+    captureRevision: capturePostRevision,
+    needsTerms,
+    acceptTerms,
+  } = usePostTransport();
+  // Only while the member has not accepted the current posting terms.
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const params = useParams<{ id: string }>();
   const promotionId = params.id;
 
@@ -360,6 +368,8 @@ export default function EditPromotionPage() {
       } else if (totalVideoCount > effectiveMaxVideos) {
         validationErrors.videos = `You can upload up to ${effectiveMaxVideos} videos on this plan.`;
       }
+      if (needsTerms && !termsAccepted)
+        validationErrors.termsAccepted = "Accept the posting terms before submitting.";
       if (Object.keys(validationErrors).length > 0) {
         setFieldErrors(validationErrors);
         setError(Object.values(validationErrors)[0]);
@@ -535,6 +545,7 @@ export default function EditPromotionPage() {
         },
       };
 
+      if (needsTerms) await acceptTerms();
       const res = await fetch(`/api/promotions/${promotionId}`, {
         method: "PUT",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
@@ -1326,6 +1337,22 @@ export default function EditPromotionPage() {
                             : null}
                   </p>
                 )}
+              {needsTerms && (
+                <PostingTermsConsent
+                  id="tourism-terms-checkbox"
+                  checked={termsAccepted}
+                  onCheckedChange={(checked) => {
+                    setTermsAccepted(checked);
+                    setError(null);
+                    setFieldErrors((current) => {
+                      const next = { ...current };
+                      delete next.termsAccepted;
+                      return next;
+                    });
+                  }}
+                  error={fieldErrors.termsAccepted}
+                />
+              )}
               <UploadProgressPanel
                 visible={isSubmitting}
                 slots={[

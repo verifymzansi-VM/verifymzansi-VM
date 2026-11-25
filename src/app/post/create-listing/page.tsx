@@ -66,6 +66,7 @@ import {
   resolveServerRedirect,
 } from "@/app/post/_lib/post-submit-navigation";
 import { PostSignInAction } from "@/components/post/post-sign-in-action";
+import { PostingTermsConsent } from "@/components/post/posting-terms-consent";
 import {
   getListingMediaUploadErrorState,
   uploadListingImages,
@@ -1767,36 +1768,15 @@ export default function CreateListingPage() {
                       ) : null}
 
                       {(!copyId || needsTerms) && (
-                        <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-border bg-muted/30 p-4 text-sm leading-6">
-                          <input
-                            id="listing-terms-checkbox"
-                            type="checkbox"
-                            checked={termsAccepted}
-                            onChange={(event) => {
-                              setTermsAccepted(event.target.checked);
-                              clearErrors("termsAccepted");
-                            }}
-                            className="mt-1 h-4 w-4 shrink-0 rounded accent-brand-green-600"
-                            aria-invalid={!!fieldErrors.termsAccepted}
-                          />
-                          <span>
-                            I accept the VerifyMzansi posting terms, including the free-post
-                            visibility period and my responsibility for the accuracy and legality of
-                            this post.{" "}
-                            <a
-                              className="font-semibold text-brand-green-700 underline underline-offset-2 dark:text-brand-gold-300"
-                              href="/terms"
-                            >
-                              View terms
-                            </a>
-                            .
-                            {fieldErrors.termsAccepted && (
-                              <span className="mt-1 block text-destructive">
-                                {fieldErrors.termsAccepted}
-                              </span>
-                            )}
-                          </span>
-                        </label>
+                        <PostingTermsConsent
+                          id="listing-terms-checkbox"
+                          checked={termsAccepted}
+                          onCheckedChange={(checked) => {
+                            setTermsAccepted(checked);
+                            clearErrors("termsAccepted");
+                          }}
+                          error={fieldErrors.termsAccepted}
+                        />
                       )}
                     </PostFormSection>
 

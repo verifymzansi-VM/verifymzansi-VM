@@ -532,6 +532,8 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
     () => {
       assert.equal(single(admin), "t");
       assert.notEqual(bodyMd5(SINGLE), "missing");
+      // A later update may make newer posting terms current (posting-v6).
+      ready(admin);
       const post = submitted(admin);
       const lease = claimOne(admin, post);
       fails(
