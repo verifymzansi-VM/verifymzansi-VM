@@ -7940,7 +7940,14 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   production fingerprint after it (fingerprint.sql) matched the full replay
   (except the known schema grant difference)
 
-- `20261124235920_identity_check_consent.sql`: pending; website-first
+- `20261124235920_identity_check_consent.sql`: applied 2026-11-25 08:02 UTC;
+  owner-approved, website-first (after the website release of pull request #361,
+  merged as 5fb18f09); Supabase SQL editor (browser), file from raw GitHub at
+  5fb18f09, update sha256 starting 99e9c7120814ffa0; preflight before "update
+  not applied; mode: manual; checks: 0; started: 0" with no problem rows, after
+  "already applied; mode: manual; checks: 0; started: 0; with consent: 0";
+  production fingerprint after it (fingerprint.sql) matched the full replay
+  (except the known schema grant difference)
 
 - `20261125024039_add_lost_days.sql`: pending; apply-first
 
