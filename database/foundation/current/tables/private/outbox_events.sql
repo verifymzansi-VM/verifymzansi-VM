@@ -26,6 +26,7 @@ alter table private.outbox_events enable row level security;
 CREATE INDEX outbox_delivery_due_idx ON private.outbox_events USING btree (delivery_after, created_at) WHERE (processed_at IS NULL);
 CREATE INDEX outbox_lost_unreported_idx ON private.outbox_events USING btree (created_at, id) WHERE ((processed_at IS NULL) AND (delivery_attempts >= 8) AND (lost_alert_id IS NULL));
 CREATE INDEX outbox_owner_history_idx ON private.outbox_events USING btree (owner_id, created_at DESC);
+CREATE INDEX outbox_staff_recent_idx ON private.outbox_events USING btree (created_at) WHERE (kind = ANY (ARRAY['staff_privacy_request'::text, 'staff_appeal'::text, 'staff_report'::text]));
 CREATE TRIGGER notify_member_of_outbox_event AFTER INSERT ON private.outbox_events FOR EACH ROW EXECUTE FUNCTION internal.notify_member_of_outbox_event();
 CREATE TRIGGER outbox_events_unlinked BEFORE INSERT ON private.outbox_events FOR EACH ROW EXECUTE FUNCTION internal.outbox_skip_unlinked();
 revoke all on private.outbox_events from public;

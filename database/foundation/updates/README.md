@@ -82,7 +82,7 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Lost-email alert and staff deadline emails, 25 November 2026
 
-`20261125105322_lost_email_alert_staff_deadlines.sql` is pending (see the
+`20261125131322_lost_email_alert_staff_deadlines.sql` is pending (see the
 applied register). Launch checklist item 28.
 
 - **Lost-email alert, kept in the database.** A queued email (outbox) or a
@@ -103,22 +103,28 @@ applied register). Launch checklist item 28.
   `staff_appeal` and `staff_report`. A trigger on each new privacy request,
   appeal and public report queues one email per staff member whose role holds
   `dsar:manage`, `appeal:decide` or `report:resolve` and who has a confirmed
-  address, except whoever submitted it; at most 20 report emails a staff member
-  an hour. `internal.claim_supported_notification_outbox` (full body) accepts 26
-  kinds and hands a staff email out only while the staff member can sign in,
-  still holds the capability and the item is still open (otherwise it is
-  finished as skipped). It adds the type, the report's severity, the received
-  time and the deadline: the privacy request's effective due date, an appeal 3
-  and a report 2 business days after receipt (weekends are skipped, public
-  holidays are not, so the date is never later than the real one).
+  address, except whoever submitted it and the person a report is about. At most
+  30 staff deadline emails are queued in any 24 hours, all staff and kinds
+  together, so the email provider's 100 a day keep room for members' emails (an
+  advisory lock makes overlapping submissions queue one at a time); items past
+  the cap are still in the staff queues.
+  `internal.claim_supported_notification_outbox` (full body) accepts 26 kinds
+  and hands a staff email out only while the staff member can sign in, still
+  holds the capability and the item is still open, and never for a report about
+  or by that staff member (otherwise it is finished as skipped). It adds the
+  type, the report's severity, the received time and the deadline: the privacy
+  request's effective due date, an appeal 3 and a report 2 business days after
+  receipt (weekends are skipped, public holidays are not, so the date is never
+  later than the real one).
 
 New API commands; no command, argument or grant is removed. ORDER: apply first,
 then merge (the deploy gate needs the two new commands). Read-only preflight:
-`../preflight/20261125105322_lost_email_alert_staff_deadlines.check.sql` (expect
+`../preflight/20261125131322_lost_email_alert_staff_deadlines.check.sql` (expect
 "update not applied" and "staff emails queued: 0"; it also counts the lost
 emails the first alert will list); rollback:
-`../rollback/20261125105322_lost_email_alert_staff_deadlines.down.sql` (refused
-once a staff email or an alert is recorded: fix forward).
+`../rollback/20261125131322_lost_email_alert_staff_deadlines.down.sql` (deletes
+the staff deadline emails, which are notifications only, and the sent alerts;
+refused while an alert is not sent yet).
 
 ## Paid add-ons retired, 25 November 2026
 
@@ -7977,6 +7983,6 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   fingerprint after it (fingerprint.sql) matched the full replay (except the
   known schema grant difference)
 
-- `20261125105322_lost_email_alert_staff_deadlines.sql`: pending
+- `20261125131322_lost_email_alert_staff_deadlines.sql`: pending
 
 <!-- applied-register:end -->

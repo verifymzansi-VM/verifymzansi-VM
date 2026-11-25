@@ -6424,7 +6424,7 @@
     },
     {
       "name": "claim_lost_email_alert",
-      "updates": ["updates/20261125105322_lost_email_alert_staff_deadlines.sql"],
+      "updates": ["updates/20261125131322_lost_email_alert_staff_deadlines.sql"],
       "arguments": [
         {
           "name": "p_limit",
@@ -6443,7 +6443,7 @@
     },
     {
       "name": "complete_lost_email_alert",
-      "updates": ["updates/20261125105322_lost_email_alert_staff_deadlines.sql"],
+      "updates": ["updates/20261125131322_lost_email_alert_staff_deadlines.sql"],
       "arguments": [
         {
           "name": "p_claim",

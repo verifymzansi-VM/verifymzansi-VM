@@ -1,4 +1,4 @@
--- Read-only preflight for updates/20261125105322_lost_email_alert_staff_deadlines.sql.
+-- Read-only preflight for updates/20261125131322_lost_email_alert_staff_deadlines.sql.
 --
 -- Run this file unchanged in the Supabase SQL editor before applying the
 -- update, and again after it. It changes nothing: the first statement makes
@@ -28,8 +28,8 @@ with bodies as (
       'f659e9ebf7dcf269e4759879537a10f0', '368f515805291682c74f28b163c50687'),
     ('internal.staff_email_capability(text)', 'absent', 'dcb7b5e6846f24efe17eb7800184dd59'),
     ('internal.staff_due_after(timestamp with time zone,integer)', 'absent', 'b755ae0538f37eaf91c6d6818584db91'),
-    ('internal.staff_email_due(text,uuid,uuid)', 'absent', '535f20babfd9b03ea13cd852c0270ab8'),
-    ('internal.queue_staff_deadline_emails()', 'absent', '78c72d9e0075a00cb7fa9a94ccf0b0f1'),
+    ('internal.staff_email_due(text,uuid,uuid)', 'absent', '33aed641726695e14ea1f64c4b0ba2eb'),
+    ('internal.queue_staff_deadline_emails()', 'absent', '69ea078b94ffc5d1116dcfbd63e50744'),
     ('internal.claim_lost_email_alert(integer)', 'absent', '25fee44314e2556ef9bea1f44e05c9bc'),
     ('api.claim_lost_email_alert(integer)', 'absent', '70303c452ab6cda4848c333b1247efd3'),
     ('internal.complete_lost_email_alert(uuid,boolean)', 'absent', '5575975a22aab2cf647d7bccafe2c8a2'),

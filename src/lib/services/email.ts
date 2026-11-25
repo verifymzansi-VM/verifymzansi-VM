@@ -1242,7 +1242,7 @@ export async function sendLostEmailAlert(alert: LostEmailAlert): Promise<SendEma
   });
 }
 
-/** The staff deadline email kinds (update 20261125105322). */
+/** The staff deadline email kinds (update 20261125131322). */
 export type StaffDeadlineKind = "staff_privacy_request" | "staff_appeal" | "staff_report";
 
 /** What the email job's claim hands out with a staff deadline email. */

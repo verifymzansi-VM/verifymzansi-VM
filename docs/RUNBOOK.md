@@ -1221,7 +1221,7 @@ until the owner does those steps.
   sends one alert to the support address listing up to 50 of them (kind, queue
   id, attempts, when queued) with their total and a link to the operations page
   (`api.claim_lost_email_alert`, update
-  `20261125105322_lost_email_alert_staff_deadlines.sql`). At most one alert a
+  `20261125131322_lost_email_alert_staff_deadlines.sql`). At most one alert a
   run and none within 15 minutes of the last one sent: losses in between go into
   the next alert. Each message is reported once. An alert that cannot be sent is
   given back and sent again by a later run under the same key (never twice);
@@ -1248,13 +1248,15 @@ until the owner does those steps.
 - **Staff deadline emails.** Each new privacy request, appeal and public report
   queues one email to every staff member whose role handles it (`dsar:manage`,
   `appeal:decide`, `report:resolve`) and whose address is confirmed, except
-  whoever submitted it; at most 20 report emails a staff member an hour (the
-  rest are in the report queue). The email holds only the type, a reference,
-  when it was received and the deadline, with a link to the staff page: a
-  privacy request's due date (30 days, or its extension), an appeal 3 and a
-  report 2 business days after receipt (weekends skipped, public holidays not,
-  so the date shown is never later than the real one). It is not sent once the
-  item is closed or the staff member no longer holds the role.
+  whoever submitted it and the person a report is about. At most 30 staff
+  deadline emails go out in any 24 hours, all staff and kinds together (the
+  email provider's free plan allows 100 a day; this keeps 70 for members); items
+  past the cap are still in the staff queues. The email holds only the type, a
+  reference, when it was received and the deadline, with a link to the staff
+  page: a privacy request's due date (30 days, or its extension), an appeal 3
+  and a report 2 business days after receipt (weekends skipped, public holidays
+  not, so the date shown is never later than the real one). It is not sent once
+  the item is closed or the staff member no longer holds the role.
 
 - Known gap: an email that fails an earlier attempt is retried later and does
   not fail the run, and a storage object that could not be deleted yet does not

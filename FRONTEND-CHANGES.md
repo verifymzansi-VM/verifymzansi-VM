@@ -162,7 +162,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 98. Remove paid add-ons (item 37) (and the group 98 part of 10 rows elsewhere) | approved by owner 2026-11-25 (answer: 'Approve them') | Advertise, plan cards, billing FAQ, showroom help and My posts no longer mention or offer Urgent, Boost or Featured; the add-on buttons on My posts and the 'Boost level' column in the business 'Post' dialog are gone. |
 | 99. Automatic ID checks: member and staff screens (item 61, part 7) (with the group 99 part of 5 rows elsewhere) | approved by owner 2026-11-25 (answers: 'Approve them' for the main screens, 'Approve both' for the loading and staff-setting pictures); plan pictures approved 2026-11-20; consent wording per decision L | Nothing while the staff setting is Manual (today's value, and it stays Manual until the consent record is in the database). On a Didit setting, Get verified's ID step shows the independent check: names, what it asks, a consent tick naming Didit with links to its two notices, Start ID check, the check inside the page, then Checking, Verified, 'A person will check your ID' or a decline with 'Try the ID check again' and 'Ask a person to look again'. Staff: an 'ID checks' card on Verify accounts (three settings, admins change it) and a Didit panel in the case view. |
 | 101. Trust promise matches reality (item 41) (no file rows of its own: the group 101 part of 12 rows elsewhere) | approved by owner 2026-11-25 (answer: 'Approve them') | Privacy Policy: a 'Who we are' section, a 'Cookies and browser storage' section, the keep-for periods the system applies, every provider and country named, and no claims of screen replays or logged number taps. PAIA names the same recipients. Trust & Safety, Advertise and the business verification help no longer say only 'our team' reviews IDs. The posting plan box loses 30-day free-post branches that could never show. Home, the footer and the site description say 'businesses, products, services, tourism and events from ID-reviewed posters' instead of 'verified businesses, products, ...'. Get verified (independent check): the privacy panel's keep-for line follows the applied rules and the consent names Ireland (European Union) and the United States. |
-| 102. Lost-email alert and staff deadline emails (item 28) (no file rows: email only) | awaiting owner | Nothing for members or visitors. Staff with the role that handles them get one email about each new privacy request, appeal and report: its type, a reference, when it came in and its deadline, with a button to the staff page. The support address gets one email listing queued emails that failed their last attempt, at most one every 15 minutes. |
+| 102. Lost-email alert and staff deadline emails (item 28) (no file rows: email only) | awaiting owner | Nothing for members or visitors. Staff with the role that handles them get one email about each new privacy request, appeal and report (up to 30 a day for all staff, never to the person a report is about): its type, a reference, when it came in and its deadline, with a button to the staff page. The support address gets one email listing queued emails that failed their last attempt, at most one every 15 minutes. |
 
 Questions for the owner:
 
@@ -4159,13 +4159,14 @@ Decision: approved by owner 2026-11-25 (answer: 'Approve them').
 
 Email only: no file in the checked scope changes, so this group has no file
 rows. Launch checklist item 28. Database update
-`20261125105322_lost_email_alert_staff_deadlines.sql` (pending, apply first).
+`20261125131322_lost_email_alert_staff_deadlines.sql` (pending, apply first).
 The words are new (owner rule 4). Text outside the checked scope:
 `src/lib/services/email.ts` (`sendStaffDeadlineEmail`,
 `sendLostEmailAlert`).
 
 Staff deadline email, to each staff member whose role handles it, except whoever
-submitted it. Subject, for example: 'VerifyMzansi staff: new report (fake
+submitted it and the person a report is about; at most 30 a day across all
+staff. Subject, for example: 'VerifyMzansi staff: new report (fake
 listing, high priority), due 01 Dec 2026, 15:00'.
 
 > A new report is waiting. Deal with it by 01 Dec 2026, 15:00.

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Behaviour checks for 20261125105322_lost_email_alert_staff_deadlines.sql:
+// Behaviour checks for 20261125131322_lost_email_alert_staff_deadlines.sql:
 // the lost-email alert kept in the database and the staff deadline emails
 // (launch checklist item 28).
 //
@@ -22,14 +22,17 @@
 //   within 15 minutes of one sent; an alert being sent blocks a second one;
 // - a new privacy request, appeal and public report queue one email per staff
 //   member holding dsar:manage, appeal:decide or report:resolve with a
-//   confirmed address, never to whoever submitted it, never for a staff
-//   duplicate-event report; LIM-F-queue_staff_deadline_emails: at most 20
-//   report emails a staff member an hour;
+//   confirmed address, never to whoever submitted it or the person a report
+//   is about, never for a staff duplicate-event report;
+//   LIM-F-queue_staff_deadline_emails: at most 30 in any 24 hours, all staff
+//   and kinds together, also when submissions overlap;
 // - the claim hands each out with its type, severity, received time and
 //   deadline (2 or 3 business days, weekends skipped; a privacy request's
 //   effective due date), and skips it once the staff member lost the
-//   capability or the item was closed;
-// - the claim takes 26 kinds; who may run each command.
+//   capability or the item was closed, and for a report about or by them;
+// - the claim takes 26 kinds; who may run each command;
+// - the rollback deletes queued staff emails and sent alerts, and refuses
+//   while an alert is not sent.
 // Any later updates are applied at the end.
 //
 //   node --import tsx scripts/test-foundation-lost-email-alert.mjs
@@ -44,14 +47,14 @@ import {
 } from "./lib/foundation-outbox-notice-checks.mjs";
 import { executeGrants } from "./lib/foundation-sql-checks.mjs";
 import { applySteps } from "./lib/foundation-sql-lint.mjs";
-import { runTwoAdminUpdateCheck } from "./lib/foundation-staff-payment-world.mjs";
+import { psqlSessions, runTwoAdminUpdateCheck } from "./lib/foundation-staff-payment-world.mjs";
 
-const UPDATE = "20261125105322_lost_email_alert_staff_deadlines.sql";
+const UPDATE = "20261125131322_lost_email_alert_staff_deadlines.sql";
 const NEW_FUNCTIONS = {
   "internal.staff_email_capability(text)": "dcb7b5e6846f24efe17eb7800184dd59",
   "internal.staff_due_after(timestamp with time zone,integer)": "b755ae0538f37eaf91c6d6818584db91",
-  "internal.staff_email_due(text,uuid,uuid)": "535f20babfd9b03ea13cd852c0270ab8",
-  "internal.queue_staff_deadline_emails()": "78c72d9e0075a00cb7fa9a94ccf0b0f1",
+  "internal.staff_email_due(text,uuid,uuid)": "33aed641726695e14ea1f64c4b0ba2eb",
+  "internal.queue_staff_deadline_emails()": "69ea078b94ffc5d1116dcfbd63e50744",
   "internal.claim_lost_email_alert(integer)": "25fee44314e2556ef9bea1f44e05c9bc",
   "api.claim_lost_email_alert(integer)": "70303c452ab6cda4848c333b1247efd3",
   "internal.complete_lost_email_alert(uuid,boolean)": "5575975a22aab2cf647d7bccafe2c8a2",
@@ -78,6 +81,15 @@ await runTwoAdminUpdateCheck(
     const replica = (sql) =>
       q(`set session_replication_role=replica;\n${sql}\nset session_replication_role=origin;`);
     const member = (label) => world.user(label);
+    /** A day has passed: earlier staff emails no longer count towards the cap. */
+    const newDay = () =>
+      replica(`update private.outbox_events set created_at=created_at-interval '25 hours'
+        where kind like 'staff\\_%';`);
+    const staffToday = () =>
+      Number(
+        q(`select count(*) from private.outbox_events where kind like 'staff\\_%'
+          and created_at>now()-interval '24 hours';`)
+      );
 
     /** A queued email (owner `owner`) as the email job left it. */
     const queued = (
@@ -246,25 +258,64 @@ await runTwoAdminUpdateCheck(
       assert.deepEqual(got, owners(admin, admin2, governor));
     });
 
+    await check("a report about a staff member's own post never emails them", () => {
+      const item = report(admin2, { reporter: member("lost-buyer") });
+      assert.deepEqual(
+        staffEmails(item).map((r) => r.owner),
+        owners(admin, governor, moderator)
+      );
+      // Nor does the claim hand one out to the reported staff member or the reporter.
+      const due = (staffMember) =>
+        q(`select internal.staff_email_due('staff_report','${item}','${staffMember.id}');`);
+      assert.equal(due(admin2), "f");
+      assert.equal(due(admin), "t");
+      const byStaff = report(member("lost-shop2"), { reporter: governor });
+      assert.equal(
+        q(`select internal.staff_email_due('staff_report','${byStaff}','${governor.id}');`),
+        "f"
+      );
+    });
+
     await check(
-      "LIM-F-queue_staff_deadline_emails: at most 20 report emails a staff member an hour",
+      "LIM-F-queue_staff_deadline_emails: at most 30 staff emails in any 24 hours, all kinds together",
       () => {
-        const before = Number(
-          q(`select count(*) from private.outbox_events where owner_id='${moderator.id}' and kind='staff_report'
-          and created_at>now()-interval '1 hour';`)
-        );
+        newDay();
         const seller = member("lost-flood");
-        const items = Array.from({ length: 21 - before }, () => report(seller));
-        const mine = (item) => staffEmails(item).some((r) => r.owner === moderator.id);
-        // The first 20 in the hour reach the moderator; the 21st does not.
-        assert.ok(items.slice(0, 20 - before).every(mine));
-        assert.equal(mine(items.at(-1)), false);
-        // Reports an hour old no longer count (for any staff member).
-        replica(`update private.outbox_events set created_at=created_at-interval '61 minutes'
-        where kind='staff_report';`);
-        assert.equal(mine(report(seller)), true);
+        // Each report reaches 4 staff members: 7 reports make 28 emails.
+        for (let i = 0; i < 7; i++) assert.equal(staffEmails(report(seller)).length, 4);
+        // The 8th fills the cap with 2; an appeal or request after it gets none.
+        assert.equal(staffEmails(report(seller)).length, 2);
+        assert.equal(staffToday(), 30);
+        assert.deepEqual(staffEmails(appeal(member("lost-capped"))), []);
+        assert.deepEqual(staffEmails(privacyRequest(member("lost-capped2"))), []);
+        assert.equal(staffToday(), 30);
+        // A day later there is room again.
+        newDay();
+        assert.equal(staffEmails(report(seller)).length, 4);
       }
     );
+
+    await check("the cap holds when two submissions overlap", async () => {
+      newDay();
+      const seller = member("lost-race");
+      // 29 staff emails today: room for one more.
+      q(`insert into private.outbox_events(kind,subject_id,owner_id,dedupe_key)
+        select 'staff_report',gen_random_uuid(),'${admin.id}','vmtest-cap:'||gen_random_uuid()
+        from generate_series(1,29);`);
+      const insertReport = () =>
+        `insert into private.reports(subject_account_id,category,description,reporter_ip_hmac)
+          values('${seller.id}','scam','A synthetic report description.',
+            '${"B".repeat(42)}'||floor(random()*10)::text);`;
+      const { session, sessionAfter } = psqlSessions(database);
+      // The first holds its transaction open; the second starts meanwhile.
+      const [first, second] = await Promise.all([
+        session(`begin;\n${insertReport()}\nselect pg_sleep(2);\ncommit;`),
+        sessionAfter(500, insertReport()),
+      ]);
+      assert.equal(first.status, 0, first.stderr);
+      assert.equal(second.status, 0, second.stderr);
+      assert.equal(staffToday(), 30);
+    });
 
     // ------------------------------------------------------------ the claim
     await check("business days: weekends are skipped, the time of day is kept", () => {
@@ -280,6 +331,7 @@ await runTwoAdminUpdateCheck(
     q(
       `update private.outbox_events set processed_at=now() where kind like 'staff\\_%' and processed_at is null;`
     );
+    newDay();
     const naledi = member("lost-naledi");
     const request = privacyRequest(naledi, "deletion");
     const appealItem = appeal(naledi, "content_hidden");
@@ -498,13 +550,50 @@ await runTwoAdminUpdateCheck(
       fails(kit.member(bongi, "select api.claim_lost_email_alert(10);"), "42501");
     });
 
+    await check(
+      "the rollback deletes queued staff emails and sent alerts; an unsent alert stops it",
+      () => {
+        const applied = kit.fingerprint();
+        // Queued staff emails, a sent alert and, first, one not sent yet.
+        appeal(member("lost-rollback"));
+        assert.ok(
+          Number(q("select count(*) from private.outbox_events where kind like 'staff\\_%';")) > 0
+        );
+        q(`update private.lost_email_alerts set sent_at=sent_at-interval '16 minutes';`);
+        queued(bongi);
+        const unsent = claimAlert();
+        assert.ok(unsent.claim);
+        assert.match(fails(kit.rollbackSql, "55000"), /lost-email alerts are not sent yet/);
+        assert.equal(kit.fingerprint(), applied);
+        completeAlert(unsent.claim, true);
+        const otherEmails = Number(
+          q("select count(*) from private.outbox_events where kind not like 'staff\\_%';")
+        );
+        applySteps(database, [{ label: `${LABEL} rollback`, sql: kit.rollbackSql }]);
+        assert.equal(
+          q("select count(*) from private.outbox_events where kind like 'staff\\_%';"),
+          "0"
+        );
+        assert.equal(
+          Number(q("select count(*) from private.outbox_events;")),
+          otherEmails,
+          "member emails stay"
+        );
+        assert.equal(q("select to_regclass('private.lost_email_alerts') is null;"), "t");
+        applySteps(database, [kit.step]);
+        assert.equal(kit.fingerprint(), applied, "re-applying gives the same schema");
+      }
+    );
+
     const later = steps.slice(index + 1);
     if (later.length) {
       applySteps(database, later);
       await check("later updates keep the staff emails and the alert", () => {
         const item = appeal(member("lost-later"));
         assert.equal(staffEmails(item).length, 3);
-        assert.equal(claimAlert().claim, null);
+        // The re-applied update reports the lost emails again, in one alert.
+        const alert = claimAlert();
+        assert.ok(alert.claim && alert.total > 0, JSON.stringify(alert));
       });
     }
   }

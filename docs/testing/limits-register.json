@@ -4993,14 +4993,14 @@
     },
     {
       "id": "LIM-F-queue_staff_deadline_emails",
-      "title": "internal.queue_staff_deadline_emails: at most 20 report emails a staff member an hour",
-      "value": "< 20 in 1 hour",
+      "title": "internal.queue_staff_deadline_emails: at most 30 staff deadline emails in any 24 hours, all staff and kinds together",
+      "value": "30 in 24 hours",
       "category": "rate",
       "enforcedAt": [
         {
           "file": "database/foundation/current/functions/internal/queue_staff_deadline_emails.sql",
           "symbol": "internal.queue_staff_deadline_emails",
-          "contains": "and o.kind='staff_report' and o.created_at>statement_timestamp()-interval '1 hour')<20)"
+          "contains": "room := 30-(select count(*) from private.outbox_events o"
         }
       ],
       "tests": [

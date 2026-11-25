@@ -54,7 +54,7 @@ const kind = z.enum([
 ]);
 type Kind = z.infer<typeof kind>;
 // Emails to staff about a new privacy request, appeal or report, with its
-// deadline (20261125105322_lost_email_alert_staff_deadlines.sql).
+// deadline (20261125131322_lost_email_alert_staff_deadlines.sql).
 const staffKinds: ReadonlySet<Kind> = new Set<Kind>([
   "staff_privacy_request",
   "staff_appeal",
@@ -72,7 +72,7 @@ const otherKinds = kind.options.filter((k) => !paymentKinds.includes(k));
 // such a database the job drops them one update at a time until the claim is
 // accepted, and keeps that list.
 const laterKinds: ReadonlyArray<ReadonlySet<Kind>> = [
-  // 20261125105322_lost_email_alert_staff_deadlines.sql
+  // 20261125131322_lost_email_alert_staff_deadlines.sql
   staffKinds,
   // 20261122182304_free_credit_reminder.sql
   new Set<Kind>(["free_credit_reminder"]),
@@ -212,7 +212,7 @@ const jobSchema = z
     term_package_continues: z.boolean().nullable().optional(),
     // Only for free_credit_reminder (20261122182304): when the free credit ends.
     credit_ends_at: z.iso.datetime({ offset: true }).nullable().optional(),
-    // Only for the staff deadline emails (20261125105322): the request type,
+    // Only for the staff deadline emails (20261125131322): the request type,
     // appeal kind or report reason, the report's severity, when it was
     // received and its deadline.
     staff_item_type: z

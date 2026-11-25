@@ -26,13 +26,16 @@
 --    staff_appeal and staff_report. A new privacy request, appeal or public
 --    report queues one email to each staff member whose role holds the
 --    capability that handles it (dsar:manage, appeal:decide, report:resolve),
---    with a confirmed address, except the person who submitted it. A staff
---    member gets at most 20 report emails an hour; later reports are still in
---    the report queue. Staff duplicate-event reports queue none.
+--    with a confirmed address, except the person who submitted it and the
+--    person a report is about. At most 30 staff deadline emails are queued in
+--    any 24 hours, all staff and kinds together (an advisory lock makes
+--    overlapping submissions queue one at a time); later items are still in
+--    the staff queues. Staff duplicate-event reports queue none.
 --    internal.claim_supported_notification_outbox (full body) accepts the new
 --    kinds (26 kinds, each once) and hands each to its staff member only while
 --    the staff member can still sign in and still holds the capability and the
---    item is still open (otherwise it is finished as skipped), with what the
+--    item is still open, and never for a report about or by that staff member
+--    (otherwise it is finished as skipped), with what the
 --    email shows: the type (request type, appeal kind or report reason), the
 --    report's severity, when it was received and its deadline. Deadlines: a
 --    privacy request's effective due date; an appeal 3 business days and a
@@ -47,8 +50,8 @@
 -- It refuses with 55000 unless the claim has its reviewed body (or this
 -- update's), the outbox kind check is the reviewed one (or this update's) and
 -- the new functions are all absent or all present.
--- Read-only preflight: ../preflight/20261125105322_lost_email_alert_staff_deadlines.check.sql.
--- Rollback: ../rollback/20261125105322_lost_email_alert_staff_deadlines.down.sql.
+-- Read-only preflight: ../preflight/20261125131322_lost_email_alert_staff_deadlines.check.sql.
+-- Rollback: ../rollback/20261125131322_lost_email_alert_staff_deadlines.down.sql.
 begin;
 -- Never wait more than 5 seconds for anything this update needs.
 set local lock_timeout='5s';
@@ -223,6 +226,10 @@ alter table private.outbox_events add constraint outbox_events_kind_check check 
   'post_sold','post_kept','verification_returned','slot_renewal_reminder','term_ending_notice',
   'free_credit_reminder','staff_privacy_request','staff_appeal','staff_report']));
 
+-- The staff deadline emails of the last 24 hours, for their shared cap.
+create index if not exists outbox_staff_recent_idx on private.outbox_events(created_at)
+  where kind in('staff_privacy_request','staff_appeal','staff_report');
+
 -- The capability that handles what a staff deadline email is about.
 CREATE OR REPLACE FUNCTION internal.staff_email_capability(p_kind text)
  RETURNS text
@@ -274,7 +281,9 @@ AS $function$
       when 'staff_privacy_request' then exists(select 1 from private.privacy_requests x where x.id=p_item
         and x.status in('submitted','identity_pending','in_progress') and x.minimised_at is null)
       when 'staff_appeal' then exists(select 1 from private.frontend_appeals x where x.id=p_item and x.status='submitted')
-      when 'staff_report' then exists(select 1 from private.reports x where x.id=p_item and x.status='open')
+      -- Never to the person the report is about or its reporter.
+      when 'staff_report' then exists(select 1 from private.reports x where x.id=p_item and x.status='open'
+        and x.subject_account_id<>p_staff and x.reporter_id is distinct from p_staff)
       else false end;
 $function$;
 alter function internal.staff_email_due(text,uuid,uuid) owner to postgres;
@@ -292,14 +301,25 @@ declare
   email_kind text := tg_argv[0];
   needed text := internal.staff_email_capability(tg_argv[0]);
   submitters uuid[];
+  room bigint;
 begin
   if needed is null then raise exception 'unknown staff email kind' using errcode='22023'; end if;
   -- A staff duplicate-event report: the staff member raised it.
   if email_kind='staff_report' and item->>'report_origin' is distinct from 'public' then return null; end if;
   -- Whoever submitted it already knows: the member, the staff member who
   -- recorded a request received another way, the appellant, the reporter.
+  -- The person a report is about is never told of it.
   submitters := array_remove(array[(item->>'subject_user_id')::uuid,(item->>'intake_by')::uuid,
-    (item->>'appellant_id')::uuid,(item->>'reporter_id')::uuid],null);
+    (item->>'appellant_id')::uuid,(item->>'reporter_id')::uuid,(item->>'subject_account_id')::uuid],null);
+  -- At most 30 staff deadline emails in any 24 hours, all staff and kinds
+  -- together, so the email provider's daily allowance keeps room for members'
+  -- emails; items past it are still in the staff queues. Submissions queue one
+  -- at a time, so overlapping ones cannot pass the cap.
+  perform pg_advisory_xact_lock(hashtextextended('private.staff_deadline_emails',0));
+  room := 30-(select count(*) from private.outbox_events o
+    where o.kind in('staff_privacy_request','staff_appeal','staff_report')
+      and o.created_at>statement_timestamp()-interval '24 hours');
+  if room<=0 then return null; end if;
   insert into private.outbox_events(kind,subject_id,owner_id,dedupe_key)
   select email_kind,new.id,r.user_id,email_kind||':'||new.id::text||':'||r.user_id::text
   from private.staff_roles r
@@ -307,9 +327,8 @@ begin
   join auth.users u on u.id=r.user_id
   where r.revoked_at is null and u.email_confirmed_at is not null and not coalesce(u.is_anonymous,false)
     and not (r.user_id=any(submitters))
-    -- At most 20 report emails a staff member an hour.
-    and (email_kind<>'staff_report' or (select count(*) from private.outbox_events o where o.owner_id=r.user_id
-      and o.kind='staff_report' and o.created_at>statement_timestamp()-interval '1 hour')<20)
+  order by r.granted_at,r.user_id
+  limit room
   on conflict (dedupe_key) do nothing;
   return null;
 end;

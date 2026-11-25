@@ -1,19 +1,19 @@
--- Reviewed rollback for updates/20261125105322_lost_email_alert_staff_deadlines.sql.
+-- Reviewed rollback for updates/20261125131322_lost_email_alert_staff_deadlines.sql.
 -- Not part of the replay. Run it only if that update must be undone, after the
 -- owner has decided so. Prefer a forward fix.
 --
 -- It puts back the earlier body of internal.claim_supported_notification_outbox
 -- byte for byte (same signature, grants and owner; that of
 -- 20261122182304_free_credit_reminder.sql), drops the three staff deadline
--- triggers, the eight new functions, private.lost_email_alerts, the two
--- lost_alert_id columns and their indexes, and puts back the earlier outbox
--- kind check. A website from the update's pull request then needs the two
--- alert commands: roll the website back first. It refuses (55000) unless the
--- functions have this update's bodies (a later update changed one: undo that
--- update first), and while any staff deadline email is queued or recorded or
--- any lost-email alert is recorded (the earlier kind check would refuse those
--- emails, and an alert is the record of what was reported: fix forward
--- instead).
+-- triggers, the eight new functions, private.lost_email_alerts (with the
+-- alerts already sent), the two lost_alert_id columns and the three new
+-- indexes, deletes the staff deadline emails (notifications only: the
+-- requests, appeals and reports stay in their staff queues; never-claimed
+-- ones first), and puts back the earlier outbox kind check. A website from the
+-- update's pull request then needs the two alert commands: roll the website
+-- back first. It refuses (55000) unless the functions have this update's
+-- bodies (a later update changed one: undo that update first), and while a
+-- lost-email alert is not sent yet (let the email job send it first).
 begin;
 set local lock_timeout='5s';
 
@@ -32,8 +32,8 @@ begin
         'internal.claim_supported_notification_outbox(text[],integer) 368f515805291682c74f28b163c50687',
         'internal.staff_email_capability(text) dcb7b5e6846f24efe17eb7800184dd59',
         'internal.staff_due_after(timestamp with time zone,integer) b755ae0538f37eaf91c6d6818584db91',
-        'internal.staff_email_due(text,uuid,uuid) 535f20babfd9b03ea13cd852c0270ab8',
-        'internal.queue_staff_deadline_emails() 78c72d9e0075a00cb7fa9a94ccf0b0f1',
+        'internal.staff_email_due(text,uuid,uuid) 33aed641726695e14ea1f64c4b0ba2eb',
+        'internal.queue_staff_deadline_emails() 69ea078b94ffc5d1116dcfbd63e50744',
         'internal.claim_lost_email_alert(integer) 25fee44314e2556ef9bea1f44e05c9bc',
         'api.claim_lost_email_alert(integer) 70303c452ab6cda4848c333b1247efd3',
         'internal.complete_lost_email_alert(uuid,boolean) 5575975a22aab2cf647d7bccafe2c8a2',
@@ -41,18 +41,18 @@ begin
       raise exception 'rollback precondition: % is not this update''s body', shape using errcode='55000';
     end if;
   end loop;
-  select count(*) into recorded from private.outbox_events
-    where kind in('staff_privacy_request','staff_appeal','staff_report');
+  select count(*) into recorded from private.lost_email_alerts where sent_at is null;
   if recorded > 0 then
-    raise exception 'lost email alert rollback: % staff deadline emails were already queued; fix forward', recorded
-      using errcode='55000';
-  end if;
-  select count(*) into recorded from private.lost_email_alerts;
-  if recorded > 0 then
-    raise exception 'lost email alert rollback: % lost-email alerts were already recorded; fix forward', recorded
+    raise exception 'lost email alert rollback: % lost-email alerts are not sent yet; let the email job send them first', recorded
       using errcode='55000';
   end if;
 end$$;
+
+-- The staff deadline emails: never-claimed ones first, then the rest.
+delete from private.outbox_events
+  where kind in('staff_privacy_request','staff_appeal','staff_report') and delivery_attempts=0;
+delete from private.outbox_events
+  where kind in('staff_privacy_request','staff_appeal','staff_report');
 
 drop trigger queue_staff_deadline_email on private.privacy_requests;
 drop trigger queue_staff_deadline_email on private.frontend_appeals;
@@ -137,7 +137,9 @@ drop function api.complete_lost_email_alert(uuid,boolean);
 drop function internal.complete_lost_email_alert(uuid,boolean);
 drop function api.claim_lost_email_alert(integer);
 drop function internal.claim_lost_email_alert(integer);
+-- Every alert left is sent (checked above).
 drop table private.lost_email_alerts;
+drop index private.outbox_staff_recent_idx;
 drop index private.outbox_lost_unreported_idx;
 drop index private.privacy_notices_lost_unreported_idx;
 alter table private.outbox_events drop column lost_alert_id;

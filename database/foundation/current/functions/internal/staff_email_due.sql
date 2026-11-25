@@ -14,7 +14,9 @@ AS $function$
       when 'staff_privacy_request' then exists(select 1 from private.privacy_requests x where x.id=p_item
         and x.status in('submitted','identity_pending','in_progress') and x.minimised_at is null)
       when 'staff_appeal' then exists(select 1 from private.frontend_appeals x where x.id=p_item and x.status='submitted')
-      when 'staff_report' then exists(select 1 from private.reports x where x.id=p_item and x.status='open')
+      -- Never to the person the report is about or its reporter.
+      when 'staff_report' then exists(select 1 from private.reports x where x.id=p_item and x.status='open'
+        and x.subject_account_id<>p_staff and x.reporter_id is distinct from p_staff)
       else false end;
 $function$;
 alter function internal.staff_email_due(text,uuid,uuid) owner to postgres;

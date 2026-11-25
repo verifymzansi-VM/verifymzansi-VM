@@ -898,7 +898,7 @@ it("declares and delivers the sold-post notice within the database's kind limit"
   expect(await run()).toMatchObject({ succeeded: 1 });
   const lists = calls("claim_supported_notification_outbox").map(([, a]) => a.p_supported_kinds);
   expect(lists.flat()).toEqual(expect.arrayContaining(["post_sold", "post_kept"]));
-  // 26 kinds since the staff deadline emails (20261125105322), each claim within it.
+  // 26 kinds since the staff deadline emails (20261125131322), each claim within it.
   expect(new Set(lists.flat()).size).toBe(26);
   for (const list of lists) expect(list.length).toBeLessThanOrEqual(26);
   expect(deliver).toHaveBeenCalledExactlyOnceWith(
