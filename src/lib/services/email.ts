@@ -174,8 +174,8 @@ const FREE_CREDIT_REMINDER_BODY =
 /** The sticker renewal reminder's second paragraph: how to renew each kind
  * (awaiting the owner's approval). */
 const STICKER_RENEWAL_BODY = {
-  cipc: "Renew it now from the business's verification page, so the sticker stays on your business without a break. Our team checks your company against CIPC's records again.",
-  seen: "Book a new Seen check now from the business's verification page, so the sticker stays on your business without a break.",
+  cipc: "Renew it now from the business's verification page so the sticker does not lapse. Our team checks your company against CIPC's records again. A renewed sticker lasts 365 days from the day it is approved.",
+  seen: "Book a new Seen check now from the business's verification page so the sticker does not lapse. A renewed sticker lasts 365 days from the day it is approved.",
 } as const;
 const STICKER_NAMES = { cipc: "CIPC registered", seen: "Seen by VerifyMzansi" } as const;
 /** What the notification job knows about the post a lifecycle notice is about,

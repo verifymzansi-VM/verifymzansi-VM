@@ -353,7 +353,7 @@ describe("email service", () => {
 
 The CIPC registered sticker on one of your businesses ends on 20 December 2026 at 12:00 (South African time).
 
-Renew it now from the business's verification page, so the sticker stays on your business without a break. Our team checks your company against CIPC's records again.
+Renew it now from the business's verification page so the sticker does not lapse. Our team checks your company against CIPC's records again. A renewed sticker lasts 365 days from the day it is approved.
 
 Renew my sticker: https://verifymzansi.com/dashboard/businesses/${business}/verification`
     );
@@ -372,7 +372,9 @@ Renew my sticker: https://verifymzansi.com/dashboard/businesses/${business}/veri
     expect(seen.text).toContain(
       "The Seen by VerifyMzansi sticker on one of your businesses ends on 20 December 2026"
     );
-    expect(seen.text).toContain("Book a new Seen check now from the business's verification page");
+    expect(seen.text).toContain(
+      "Book a new Seen check now from the business's verification page so the sticker does not lapse. A renewed sticker lasts 365 days from the day it is approved."
+    );
     expect(seen.text).toContain(
       `Book a Seen check: https://verifymzansi.com/dashboard/businesses/${business}/verification`
     );
