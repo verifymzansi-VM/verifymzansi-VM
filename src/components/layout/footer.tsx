@@ -132,8 +132,8 @@ export function Footer({ showPostBand = true }: FooterProps = {}) {
               <BrandLogo size="sm" tone="inverse" />
             </Link>
             <p className="max-w-xs text-sm text-white/70">
-              A South African platform connecting people with verified businesses, products,
-              services, tourism and events.{" "}
+              A South African platform connecting people with businesses, products, services,
+              tourism and events from ID-reviewed posters.{" "}
               <Link
                 href="/help/business-verification"
                 prefetch={false}

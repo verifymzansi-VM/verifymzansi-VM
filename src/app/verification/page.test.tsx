@@ -1164,7 +1164,8 @@ describe("VerificationPage", () => {
       const start = await screen.findByRole("button", { name: /Start ID check/i });
       expect(screen.queryByLabelText(/13-digit SA ID number/i)).not.toBeInTheDocument();
       expect(screen.queryByRole("button", { name: /Take test photo/i })).not.toBeInTheDocument();
-      expect(screen.getByText(/kept until 5 years/i)).toBeTruthy();
+      expect(screen.getByText(/kept until 90 days after you close your account/i)).toBeTruthy();
+      expect(screen.getByText(/held in Ireland \(European Union\)/i)).toBeTruthy();
       expect(screen.getByRole("link", { name: /Verification Privacy Notice/i })).toHaveAttribute(
         "href",
         "https://didit.me/terms/verification-privacy-notice"
