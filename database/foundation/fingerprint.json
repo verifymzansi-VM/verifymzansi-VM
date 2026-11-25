@@ -1,7 +1,7 @@
 {
   "description": "Fingerprint of the production (foundation) schema rebuilt from this repository: platform-prelude.sql, candidate.sql, baseline-supplement.sql and updates/*.sql in filename order. Produced by `pnpm db:foundation:replay -- --write` with database/foundation/fingerprint.sql. CI fails when the replay differs.",
   "productionCheck": {
-    "capturedOn": "2026-11-24",
+    "capturedOn": "2026-11-25",
     "method": "Read-only catalogue capture of production, same query formats. table_grants returns no row in production or in the replay (no table privileges for the API roles), so it is listed as matching without a fingerprint.",
     "matching": [
       "function_bodies",
@@ -19,7 +19,7 @@
     ],
     "notYetCompared": [],
     "howToCompare": "In the Supabase SQL editor (read-only), run `set search_path to \"$user\", public;` first, so pg_get_indexdef prints `extensions.gin_trgm_ops` as the replay does, then run database/foundation/fingerprint.sql unchanged and compare each row with categories below.",
-    "matchedThroughUpdate": "20261122191646_post_templates.sql",
+    "matchedThroughUpdate": "20261123225900_posting_terms_v6.sql",
     "matchedFingerprints": {
       "column_grants": "5e5623672e80b927048d8553487d5442",
       "columns": "7bf9e54c3ac93c40f6538d70ecf022f6",
@@ -34,7 +34,6 @@
       "triggers": "d0d2ecc79988017a8abd47e54999d2b9"
     },
     "pendingApplication": [
-      "20261123225900_posting_terms_v6.sql",
       "20261124235920_identity_check_consent.sql"
     ]
   },
@@ -63,7 +62,7 @@
     },
     "function_bodies": {
       "items": 1180,
-      "fingerprint": "7933c854e42159c3123580c90a2f65fb"
+      "fingerprint": "36fc6addc1f4d9047ce51ceeab777540"
     },
     "function_grants": {
       "items": 859,

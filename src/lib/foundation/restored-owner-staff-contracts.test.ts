@@ -277,8 +277,11 @@ it("accepts the queue with and without each case's latest automatic ID check", a
   await expect(readFrontendStaffVerificationQueue(api, caller)).resolves.toMatchObject({
     total: 1,
   });
+  // The status only (after the update), or with the reason codes an earlier
+  // draft of the update sent.
   for (const identity_check of [
     null,
+    { status: "with_staff" },
     { status: "with_staff", reasons: ["names_differ", "session_moved"] },
   ]) {
     rpc.mockResolvedValueOnce(ok({ ...queue, groups: [{ ...group, identity_check }] }));
@@ -286,7 +289,7 @@ it("accepts the queue with and without each case's latest automatic ID check", a
       total: 1,
     });
   }
-  // Only the status and reason codes: anything more is refused.
+  // Anything more is refused.
   rpc.mockResolvedValueOnce(
     ok({
       ...queue,

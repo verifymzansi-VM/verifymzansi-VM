@@ -108,10 +108,12 @@ case's check status in the queue (picture 11).
   answers as before, except that it can no longer create a check.
 - **Staff reads.** `api.get_identity_check_for_case` adds `consent_version` and
   `consented_at` to the check. `api.get_frontend_staff_verification_queue` adds
-  `identity_check` to each case: `{status, reasons}` of the case's latest check
-  other than `unavailable` (the check the case read shows), or null. No names,
-  sessions or other personal data. The website's queue reader accepts the field
-  with or without this update.
+  `identity_check` to each case: `{status}` of the case's latest check other
+  than `unavailable` (the check the case read shows), or null. The reason codes
+  stay only in the case read (held claim, recent second factor, logged access),
+  as the staff data-minimisation rule asks; the queue shows no reasons, names or
+  sessions. The website's queue reader accepts the field with or without this
+  update.
 
 Expand only: the command keeps its name, every existing call still works and the
 new argument is optional; a later contract step (`require-argument`) makes it
@@ -121,10 +123,18 @@ then apply): the live queue reader is strict and would refuse the new
 Deploy gate's anonymous probe (`probeFoundationRuntimeApi`) leaves optional
 arguments out, so it passes on either side of the update. The website that sends
 `p_consent_version` (part 7) must deploy only after this update is applied.
+
+**Apply only while the setting is Manual; keep it Manual until part 7 (#360) is
+deployed.** On Staff final or Automatic a start without the argument is refused
+and the photo routes refuse while the route is automatic, so members could not
+verify. The update refuses unless the setting is Manual, and the preflight lists
+any other setting as a problem.
+
 Read-only preflight:
 `../preflight/20261124235920_identity_check_consent.check.sql`; rollback:
-`../rollback/20261124235920_identity_check_consent.down.sql` (set Manual first;
-the recorded consent is dropped with the columns).
+`../rollback/20261124235920_identity_check_consent.down.sql`. The rollback
+refuses unless the setting is Manual, and once any check has recorded a member's
+consent (that evidence is kept: write a forward update instead).
 
 ## Posting terms posting-v6: the package rules, 22 November 2026
 
@@ -7865,7 +7875,12 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   (fingerprint.sql) matched the full replay (except the known schema grant
   difference)
 
-- `20261123225900_posting_terms_v6.sql`: pending
+- `20261123225900_posting_terms_v6.sql`: applied 2026-11-25 01:22 UTC;
+  owner-approved, website-first (after the website release of pull request #356,
+  merged as aeb6c641); update sha256 starting febe65c5; preflight after: current
+  posting-v6 (update already applied), posting-v6 published, 0 acceptances;
+  production fingerprint after it (fingerprint.sql) matched the full replay
+  (except the known schema grant difference)
 
 - `20261124235920_identity_check_consent.sql`: pending; website-first
 

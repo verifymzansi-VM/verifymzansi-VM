@@ -15,6 +15,9 @@
 -- - "checks": rows in private.identity_checks, of which "started" are still
 --   running (they carry on unchanged; they have no recorded consent);
 -- - after the update, "with consent": checks that recorded the consent.
+-- Apply only while the setting is Manual and keep it Manual until part 7
+-- (pull request #360) is deployed: before the update, any other setting is a
+-- problem row (the update refuses it too).
 do $$begin
   set transaction read only;
 end$$;
@@ -25,7 +28,7 @@ with bodies as (
     ('internal.start_my_identity_check()', '22d86444b8cde7fdafd832f8b91da440', null),
     ('api.start_my_identity_check()', '5b05e790bcb4e799df2b33c3b05b7ef3', null),
     ('internal.get_identity_check_for_case(uuid)', '78f53342647b77ea1d0bc1edcb64261f', '3a84f2d71e895d74ac204535436964bd'),
-    ('internal.get_frontend_staff_verification_queue(integer,uuid[])', '9c87b1e5234ba46a5678cf6bb0b4d3c1', '9687e9f224306310699b8efef1df2bfd'),
+    ('internal.get_frontend_staff_verification_queue(integer,uuid[])', '9c87b1e5234ba46a5678cf6bb0b4d3c1', '60c7c04bbf0e93242f23105e34a6a04b'),
     ('internal.start_my_identity_check(text)', null, '4f7257c7fb03093617f70dcb6a9ae012'),
     ('api.start_my_identity_check(text)', null, 'f386295ef5231b9eee6d5ae36bed8974'),
     ('internal.identity_check_consent_version()', null, 'b4006d3e91c149d8b0abcd06ab5d93f4'),
@@ -55,6 +58,13 @@ problems as (
     from state s
     where not exists (select 1 from bodies where body is distinct from reviewed and body is distinct from updated)
       and not ((s.reviewed = s.total and s.present = 0) or (s.updated = s.total and s.present = 3))
+  union all
+  select 'problem', 'the automatic ID check setting is '
+      || coalesce((select x.mode from private.identity_check_settings x where x.id), 'missing')
+      || '; set it to Manual before applying the update and keep it Manual until part 7 is deployed'
+    from state s
+    where not (s.updated = s.total and s.present = 3)
+      and (select x.mode from private.identity_check_settings x where x.id) is distinct from 'manual'
 )
 select 'summary' as kind,
   'identity check consent: '

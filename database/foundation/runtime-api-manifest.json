@@ -3175,7 +3175,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current evidence reviewer and independent subjects; bounded waiting summaries/counts. Exact current claim tuple only for its holder; no document bytes, number or storage keys. Members are named by their public short name. Each case carries its latest automatic ID check as status and reason codes only."
+      "authority": "Current evidence reviewer and independent subjects; bounded waiting summaries/counts. Exact current claim tuple only for its holder; no document bytes, number or storage keys. Members are named by their public short name. Each case carries the status of its latest automatic ID check only; reason codes stay in the logged case read."
     },
     {
       "name": "get_my_frontend_identity_state",

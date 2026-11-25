@@ -171,7 +171,27 @@ try {
   setMode("manual", "Back to staff review.");
   const offMember = namedMember("setting-off");
   const beforeOff = refusal(offMember);
-  setMode("staff_final", "Didit checks, staff have the final say.");
+
+  await check("the update and its preflight refuse unless the setting is Manual", () => {
+    const before = fingerprint();
+    for (const mode of ["staff_final", "automatic"]) {
+      setMode(mode, `Testing the ${mode} setting.`);
+      const rows = preflight();
+      assert.deepEqual(
+        rows.map((r) => r[0]),
+        ["summary", "problem"],
+        JSON.stringify(rows)
+      );
+      assert.match(rows[0][1], NOT_APPLIED);
+      assert.match(
+        rows[1][1],
+        new RegExp(`^the automatic ID check setting is ${mode}; set it to Manual`)
+      );
+      fails(step.sql, "55000", /the automatic ID check setting must be Manual/);
+    }
+    setMode("manual", "Back to staff review.");
+    assert.equal(fingerprint(), before);
+  });
 
   // ------------------------------------------------------------- apply
   applyWithRollbackCheck(database, {
@@ -182,6 +202,7 @@ try {
     preflightRows: preflight,
     appliedSummary: APPLIED,
   });
+  setMode("staff_final", "Didit checks, staff have the final say.");
 
   await check("grants: the start for members only, security invoker; helpers for nobody", () => {
     const grants = executeGrants(json, [
@@ -239,6 +260,20 @@ try {
     assert.equal(start(m, CONSENT).check_id, begun.check_id);
     assert.equal(start(m).check_id, begun.check_id);
     assert.equal(start(m, "identity-check-consent-v0").created, false);
+  });
+
+  await check("the rollback refuses unless Manual, and once a consent is recorded", () => {
+    const before = fingerprint();
+    // Staff final, with a consented check from the check above.
+    fails(ROLLBACK, "55000", /rollback refused: the automatic ID check setting must be Manual/);
+    setMode("manual", "Back to staff review.");
+    fails(
+      ROLLBACK,
+      "55000",
+      /rollback refused: checks have recorded members' consent; write a forward update instead/
+    );
+    setMode("staff_final", "Didit checks, staff have the final say.");
+    assert.equal(fingerprint(), before);
   });
 
   await check("the table refuses a check without consent, whoever writes it", () => {
@@ -300,27 +335,17 @@ try {
     assert.deepEqual([old.consent_version, old.consented_at], [null, null]);
   });
 
-  await check(
-    "staff: the queue shows each case's latest check, status and reason codes only",
-    () => {
-      const groups = json(
-        staff(moderator, "select api.get_frontend_staff_verification_queue(100,'{}')->'groups';")
-      );
-      const byCase = new Map(groups.map((g) => [g.case_id, g.identity_check]));
-      assert.deepEqual(byCase.get(caseRead), {
-        status: "with_staff",
-        reasons: ["names_differ", "provider_declined"],
-      });
-      const earlier = checkRow(running.check_id);
-      assert.deepEqual(byCase.get(earlier.case_id), {
-        status: "with_staff",
-        reasons: ["session_moved"],
-      });
-      for (const g of groups)
-        if (g.identity_check !== null)
-          assert.deepEqual(Object.keys(g.identity_check).sort(), ["reasons", "status"]);
-    }
-  );
+  await check("staff: the queue shows each case's latest check, its status only", () => {
+    const groups = json(
+      staff(moderator, "select api.get_frontend_staff_verification_queue(100,'{}')->'groups';")
+    );
+    const byCase = new Map(groups.map((g) => [g.case_id, g.identity_check]));
+    assert.deepEqual(byCase.get(caseRead), { status: "with_staff" });
+    const earlier = checkRow(running.check_id);
+    assert.deepEqual(byCase.get(earlier.case_id), { status: "with_staff" });
+    for (const g of groups)
+      if (g.identity_check !== null) assert.deepEqual(Object.keys(g.identity_check), ["status"]);
+  });
 
   await check("the preflight counts checks with consent after the update", () => {
     const rows = preflight();

@@ -21,9 +21,10 @@
 --    same answers as before, except that it can no longer create a check.
 -- 4. Staff: api.get_identity_check_for_case adds consent_version and
 --    consented_at to the check, and api.get_frontend_staff_verification_queue
---    adds identity_check to each case: the latest check's status and reason
---    codes (null when the case has none), the same check the case read shows.
---    No names, sessions or other personal data.
+--    adds identity_check to each case: the latest check's status only (null
+--    when the case has none), the same check the case read shows. The reason
+--    codes stay in the case read (a held claim, a recent second factor and a
+--    logged access); the queue shows no reasons, names or sessions.
 --
 -- Expand only: the command keeps its name and every caller's call; the new
 -- argument is optional. A later contract step makes it required. Replaces 2
@@ -35,17 +36,25 @@
 -- the deploy gate's anonymous probe leaves optional arguments out, so it
 -- passes on either side of the update. The website that sends
 -- p_consent_version (part 7) deploys only after this update is applied.
+-- Apply only while the automatic ID check setting is Manual, and keep it Manual
+-- until part 7 (pull request #360) is deployed: on Staff final or Automatic a
+-- start without the argument is refused and the photo routes refuse too, so
+-- members could not verify. The update refuses unless the setting is Manual.
 -- Read-only preflight: ../preflight/20261124235920_identity_check_consent.check.sql.
 -- Rollback: ../rollback/20261124235920_identity_check_consent.down.sql.
 begin;
 -- Never wait more than 5 seconds for anything this update needs.
 set local lock_timeout='5s';
 
--- Precondition: every function this update replaces has its reviewed body (or
--- this update's), and the new pieces are all absent or all present.
+-- Precondition: the automatic ID check setting is Manual, every function this
+-- update replaces has its reviewed body (or this update's), and the new pieces
+-- are all absent or all present.
 do $$
 declare present integer; body record;
 begin
+  if (select x.mode from private.identity_check_settings x where x.id) is distinct from 'manual' then
+    raise exception 'identity check consent precondition: the automatic ID check setting must be Manual' using errcode='55000';
+  end if;
   select (to_regprocedure('internal.identity_check_consent_version()') is not null)::integer
     + (to_regprocedure('internal.identity_check_consent_required()') is not null)::integer
     + (to_regprocedure('internal.start_my_identity_check(text)') is not null)::integer
@@ -213,7 +222,7 @@ alter function internal.get_identity_check_for_case(uuid) owner to postgres;
 revoke all on function internal.get_identity_check_for_case(uuid) from public;
 grant execute on function internal.get_identity_check_for_case(uuid) to authenticated;
 
--- The queue shows each case's latest check: its status and reason codes only.
+-- The queue shows each case's latest check: its status only.
 CREATE OR REPLACE FUNCTION internal.get_frontend_staff_verification_queue(p_limit integer DEFAULT 100, p_include_ids uuid[] DEFAULT '{}'::uuid[])
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -234,7 +243,7 @@ begin
   )
   select coalesce((select jsonb_agg(jsonb_build_object('case_id',r.id,'owner_id',r.subject_id,'version',r.version,'display_name',r.display_name,
       'created_at',r.created_at,'steps',internal.frontend_identity_queue_steps(r.id),
-      'identity_check',(select jsonb_build_object('status',k.status,'reasons',to_jsonb(k.reasons)) from private.identity_checks k
+      'identity_check',(select jsonb_build_object('status',k.status) from private.identity_checks k
         where k.case_id=r.id and k.status<>'unavailable' order by k.created_at desc,k.id desc limit 1),
       'review_scope',case when r.claimed_by=actor and r.claim_expires_at>statement_timestamp() then jsonb_build_object(
         'caseId',r.id,'caseVersion',r.version,'submissionId',r.submission_id,'claimGeneration',r.claim_generation::text,'claimNonce',r.claim_nonce) end) order by r.risk_score desc,r.created_at,r.id)

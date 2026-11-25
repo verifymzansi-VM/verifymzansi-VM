@@ -1,17 +1,18 @@
 -- Reviewed rollback for updates/20261124235920_identity_check_consent.sql.
 -- Not part of the replay. Run it only if that update must be undone, after the
--- owner has decided so; prefer a forward fix. First set the automatic ID check
--- setting to Manual and deploy a website that starts checks without
--- p_consent_version: the restored command has no consent argument, so a
--- website sending one would get an error, and checks started after the
--- rollback record no consent.
+-- owner has decided so; prefer a forward fix. It refuses unless the automatic
+-- ID check setting is Manual, and it refuses once any check has recorded a
+-- member's consent: that consent is evidence for a biometric check and must be
+-- kept, so write a forward update instead. Deploy a website that starts checks
+-- without p_consent_version first: the restored command has no consent
+-- argument, so a website sending one would get an error.
 -- The rollback drops the trigger identity_check_consent_required, its
 -- function and internal.identity_check_consent_version(), puts back
 -- internal.start_my_identity_check() and api.start_my_identity_check()
 -- without the argument, and internal.get_identity_check_for_case and
 -- internal.get_frontend_staff_verification_queue, byte for byte, then drops
--- the columns consent_version and consented_at. The consent recorded on checks
--- is deleted with the columns; the checks themselves are not touched.
+-- the columns consent_version and consented_at (empty on every check, as the
+-- refusal above ensures); the checks themselves are not touched.
 begin;
 set local lock_timeout='5s';
 
@@ -37,7 +38,7 @@ begin
         'internal.start_my_identity_check() absent',
         'api.start_my_identity_check() absent',
         'internal.get_identity_check_for_case(uuid) 3a84f2d71e895d74ac204535436964bd',
-        'internal.get_frontend_staff_verification_queue(integer,uuid[]) 9687e9f224306310699b8efef1df2bfd',
+        'internal.get_frontend_staff_verification_queue(integer,uuid[]) 60c7c04bbf0e93242f23105e34a6a04b',
         'internal.identity_check_consent_version() b4006d3e91c149d8b0abcd06ab5d93f4',
         'internal.identity_check_consent_required() 0297ae02575e99da2dd833ac433b35c5',
         'columns consent_version,consented_at',
@@ -46,6 +47,13 @@ begin
         using errcode='55000';
     end if;
   end loop;
+  if (select x.mode from private.identity_check_settings x where x.id) is distinct from 'manual' then
+    raise exception 'rollback refused: the automatic ID check setting must be Manual' using errcode='55000';
+  end if;
+  if exists(select 1 from private.identity_checks k where k.consent_version is not null) then
+    raise exception 'rollback refused: checks have recorded members'' consent; write a forward update instead'
+      using errcode='55000';
+  end if;
 end$$;
 
 drop trigger if exists identity_check_consent_required on private.identity_checks;
