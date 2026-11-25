@@ -20,6 +20,7 @@ const extra = z.object({
 /** The card read itself failed (not a refused reply), so repeating it would
  * only wait on the database again. */
 export class FoundationPostsUnavailableError extends Error {
+  override name = "FoundationPostsUnavailableError";
   constructor() {
     super("Posts could not be loaded");
   }
