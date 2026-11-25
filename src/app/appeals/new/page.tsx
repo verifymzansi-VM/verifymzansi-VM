@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
 import { getMemberDecisions } from "@/lib/services/member-decisions";
 import { formatSaLongDate } from "@/lib/utils/format";
 import { AppealForm } from "./appeal-form";
@@ -10,18 +9,14 @@ export default async function NewAppealPage({
 }: {
   searchParams: Promise<{ decision?: string }>;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
   const { decision } = await searchParams;
-  if (!user || user.is_anonymous) {
+  const decisions = await getMemberDecisions();
+  if (!decisions) {
     redirect(
       `/login?returnUrl=${encodeURIComponent(`/appeals/new?decision=${encodeURIComponent(decision ?? "")}`)}`
     );
   }
 
-  const decisions = await getMemberDecisions(user.id);
   const target = decisions.find((d) => d.decisionId === decision);
   if (!target || !target.appealable) {
     return (
