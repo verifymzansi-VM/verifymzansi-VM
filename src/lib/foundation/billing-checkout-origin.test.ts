@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import type { FoundationServiceApi } from "./service-api";
 import { createOzowHostedPayment, isMockOzowEnabled } from "../payments/ozow";
-import { startFoundationCheckout } from "./billing-runtime";
+import { startFoundationSlotCheckout } from "./billing-runtime";
 
 // The checkout address guard (roadmap M0.8). With production settings only
 // https://verifymzansi.com is accepted, exactly as before. Another address is
@@ -68,7 +68,13 @@ function stubEnv(values: Env) {
   for (const [key, value] of Object.entries(values)) vi.stubEnv(key, value);
 }
 const start = (appUrl: string) =>
-  startFoundationCheckout(api, owner, product, null, appUrl, service);
+  startFoundationSlotCheckout(
+    api,
+    owner,
+    { planId: product, slots: 1, expectedTotalCents: 5000, coolingOffConsent: true },
+    appUrl,
+    service
+  );
 
 beforeEach(() => {
   vi.clearAllMocks();

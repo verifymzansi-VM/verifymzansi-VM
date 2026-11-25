@@ -27,10 +27,13 @@ const plan = z.strictObject({
   slot_capacity: z.number().int().min(1).max(1000),
   max_photos: z.number().int().min(1).max(50),
   max_videos: z.number().int().min(0).max(10),
+  // Paid add-ons were removed from the website (item 37). The add-on fields
+  // are optional so that the database can drop them before or after this code.
   addon_capabilities: z
     .array(addonKind)
     .max(3)
-    .refine((values) => new Set(values).size === values.length),
+    .refine((values) => new Set(values).size === values.length)
+    .optional(),
 });
 const addon = z.strictObject({
   id: z.uuid(),
@@ -40,9 +43,12 @@ const addon = z.strictObject({
   currency: z.literal("ZAR"),
 });
 const catalogue = z
-  .strictObject({ plans: z.array(plan).max(1000), addons: z.array(addon).max(1000) })
+  .strictObject({
+    plans: z.array(plan).max(1000),
+    addons: z.array(addon).max(1000).optional(),
+  })
   .refine((value) => {
-    const ids = [...value.plans, ...value.addons].map((row) => row.id);
+    const ids = [...value.plans, ...(value.addons ?? [])].map((row) => row.id);
     return new Set(ids).size === ids.length;
   }, "Duplicate catalogue identity");
 export type FoundationBillingCatalogue = z.infer<typeof catalogue>;

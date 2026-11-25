@@ -20,11 +20,6 @@ import {
 } from "../payments/confirmation";
 import { createLogger } from "../utils/logger";
 import { recordPaymentProblem, type PaymentProblemSource } from "./payment-problems";
-import {
-  ADDON_SALES_PAUSED_CODE,
-  ADDON_SALES_PAUSED_MESSAGE,
-  areAddonSalesOpen,
-} from "../billing/addon-sales";
 import { PRODUCTION_CHECKOUT_ORIGIN, testCopyCheckout } from "../payments/checkout-origins";
 import type { PaymentRecordShape } from "../payments/types";
 import { hasDatabaseReason } from "./error-reasons";
@@ -42,7 +37,6 @@ type BillingRpcName =
   | "expire_stale_checkouts"
   | "manage_plan_member"
   | "apply_provider_event"
-  | "start_checkout"
   | "start_slot_checkout"
   | "start_slot_renewal_checkout"
   | "get_my_slots_v2"
@@ -131,7 +125,11 @@ const billingSchema = z.strictObject({
         slot_capacity: z.number().int().positive(),
         max_photos: z.number().int().positive(),
         max_videos: z.number().int().nonnegative(),
-        addon_capabilities: z.array(z.enum(["boost", "featured", "urgent"])).max(3),
+        // Optional: paid add-ons were removed (item 37); the database may drop it.
+        addon_capabilities: z
+          .array(z.enum(["boost", "featured", "urgent"]))
+          .max(3)
+          .optional(),
         starts_at: instant,
         ends_at: instant,
         used: z.number().int().nonnegative(),
@@ -331,8 +329,15 @@ function packageAddRefusal(error: { code?: string; details?: string | null }) {
   }
   return PACKAGE_ADD_CHECKOUT_REFUSALS[error.code ?? ""] ?? null;
 }
-const addonSalesPaused = () =>
-  new FoundationBillingError(403, ADDON_SALES_PAUSED_MESSAGE, ADDON_SALES_PAUSED_CODE);
+// Paid add-ons are not sold (removed from the website, item 37). The database
+// can still hold add-on products until its add-on commands are retired, so a
+// payment for one never reaches the provider.
+const addonNotSold = () =>
+  new FoundationBillingError(
+    403,
+    "Paid add-ons are not sold. You have not been charged.",
+    "addon_not_sold"
+  );
 async function command(
   api: FoundationAuthenticatedApi | FoundationServiceApi,
   name: BillingRpcName,
@@ -523,32 +528,6 @@ const claimSchema = foundationPaymentSchema.extend({
   idempotency_key: z.uuid(),
   correlation_id: z.uuid(),
 });
-
-/** SQL owns price, eligibility, owner and reuse. A persistent lease prevents
- * two HTTP callers creating different requests for the same priced payment. */
-export async function startFoundationCheckout(
-  api: FoundationAuthenticatedApi,
-  ownerId: string,
-  productId: string,
-  targetPostId: string | null,
-  appUrl: string,
-  service = createFoundationServiceApi()
-) {
-  const app = checkoutApp(appUrl);
-  // Only add-ons take a target post (internal.start_checkout refuses a plan
-  // with one and an add-on without one), so this refuses every add-on before
-  // its payment row exists while sales are paused (../billing/addon-sales.ts).
-  // Plans are bought with startFoundationSlotCheckout; the database refuses
-  // them here.
-  if (targetPostId !== null && !areAddonSalesOpen()) throw addonSalesPaused();
-  const quote = quoteSchema.parse(
-    await command(api, "start_checkout", {
-      p_product_id: z.uuid().parse(productId),
-      p_target_post: targetPostId === null ? null : z.uuid().parse(targetPostId),
-    })
-  );
-  return openFoundationCheckout(quote, ownerId, app, service);
-}
 
 /** One order of Individual slots: the plan (30, 90 or 180 days), how many
  * slots, the total the member was shown and their cooling-off consent. */
@@ -846,8 +825,8 @@ async function openFoundationCheckout(
   )
     throw new FoundationBillingError(503);
   // Whatever the quote was for, an add-on payment never reaches the provider
-  // (nor gets a stored checkout address back) while sales are paused.
-  if (pay.product_kind === "addon" && !areAddonSalesOpen()) throw addonSalesPaused();
+  // (nor gets a stored checkout address back).
+  if (pay.product_kind === "addon") throw addonNotSold();
   if (pay.checkout_url) {
     const checkoutUrl = checkoutRedirect(pay.checkout_url);
     if (continueOpen) {

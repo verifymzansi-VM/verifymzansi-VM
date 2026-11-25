@@ -64,7 +64,7 @@ const DROPPED = new RegExp(
     "DATABASE_URL$|POSTGRES_URL$|OZOW_|PAYFAST_|SENTRY_|NEXT_PUBLIC_SENTRY_|" +
     "CLOUDFLARE_|KYC_WEBHOOK_SECRET$|INTERNAL_JOBS_SECRET$|OPS_JOBS_SECRET$|" +
     "HEALTH_DIAGNOSTIC_TOKEN$|SITE_MONITOR_API_KEY$|NEXT_PUBLIC_DATA_BACKEND$|" +
-    "VERIFYMZANSI_LAUNCH_CONFIG$|ADDON_SALES_ENABLED$)",
+    "VERIFYMZANSI_LAUNCH_CONFIG$)",
   "i"
 );
 
@@ -115,7 +115,6 @@ const NEXT_MANAGED = new Set(["NODE_ENV"]);
  */
 export const LAUNCH_CONFIG_SETTINGS = {
   VERIFYMZANSI_LAUNCH_CONFIG: "1",
-  ADDON_SALES_ENABLED: "true",
   OZOW_API_REFUNDS_ENABLED: "true",
 };
 
@@ -146,7 +145,6 @@ export function foundationWebsiteEnv(status, { root = process.cwd(), launchConfi
     FOUNDATION_AUTH_CALLBACK_ENABLED: "true",
     FOUNDATION_RECOVERY_ENABLED: "true",
     FOUNDATION_PHONE_VERIFICATION_ENABLED: "true",
-    ADDON_SALES_ENABLED: "false",
     KYC_PROVIDER: "manual",
     // Phone codes and ID numbers: synthetic keys in the shape the website
     // requires (a key that repeats one digit is refused).

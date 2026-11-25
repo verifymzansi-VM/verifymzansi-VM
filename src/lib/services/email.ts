@@ -604,14 +604,8 @@ export async function sendVerificationResubmissionEmail(
 }
 
 export type PaymentReceiptDetails = {
-  /** "subscription" (default) for 30-day plans; "addon" for one-off purchases. */
-  kind?: "subscription" | "addon";
   /** ISO timestamp of subscription expiry — plans end, they do not auto-renew. */
   expiresAt?: string | null;
-  /** Human-readable add-on name (e.g. "Listing Boost") for add-on receipts. */
-  addonName?: string;
-  /** Add-on active duration in days. */
-  durationDays?: number;
 };
 
 function formatReceiptDate(isoDate: string): string | null {
@@ -633,54 +627,28 @@ export async function sendPaymentReceiptEmail(
   invoiceUrl?: string,
   details?: PaymentReceiptDetails
 ): Promise<SendEmailResult> {
-  const isAddon = details?.kind === "addon";
-  const itemName = isAddon ? (details?.addonName ?? planName) : planName;
-  const subject = isAddon ? `Payment Receipt - ${itemName}` : `Payment Receipt - ${planName}`;
+  const subject = `Payment Receipt - ${planName}`;
   const safeInvoiceUrl = isSafeHttpUrl(invoiceUrl) ? invoiceUrl : undefined;
   const invoiceButton = isSafeHttpUrl(invoiceUrl)
     ? { label: "Download invoice", href: invoiceUrl, tone: "info" as const }
     : undefined;
 
-  let bodyHtml: string;
-  let textBody: string;
-
-  if (isAddon) {
-    const durationDays =
-      typeof details?.durationDays === "number" && details.durationDays > 0
-        ? details.durationDays
-        : null;
-    bodyHtml = `
-      ${paragraph(`Hi ${accountName},`)}
-      ${paragraph(`Thank you for your payment. Your ${itemName} is now active.`)}
-      ${detailList([
-        ["Add-on", itemName],
-        ["Amount", `R ${amount.toFixed(2)}`],
-        ["Status", "Active"],
-        ...(durationDays !== null
-          ? ([["Duration", `${durationDays} days`]] as [string, string][])
-          : []),
-      ])}
-      ${paragraph("This add-on is a one-time purchase and does not renew.")}
-    `;
-    textBody = `Hi ${accountName},\n\nThank you for your payment. Your ${itemName} is now active.\n\nAdd-on: ${itemName}\nAmount: R ${amount.toFixed(2)}\nStatus: Active${durationDays !== null ? `\nDuration: ${durationDays} days` : ""}${safeInvoiceUrl ? `\nInvoice: ${safeInvoiceUrl}` : ""}\n\nThis add-on is a one-time purchase and does not renew.\n\nThis receipt was sent because a payment was processed for your VerifyMzansi account.`;
-  } else {
-    const expiryDate = details?.expiresAt ? formatReceiptDate(details.expiresAt) : null;
-    const activeUntilLine = expiryDate
-      ? `Your plan is active until ${expiryDate}.`
-      : "Your plan is active from the payment date for its purchased period.";
-    bodyHtml = `
-      ${paragraph(`Hi ${accountName},`)}
-      ${paragraph(`Thank you for your payment. ${activeUntilLine}`)}
-      ${detailList([
-        ["Plan", planName],
-        ["Amount", `R ${amount.toFixed(2)}`],
-        ["Status", "Active"],
-        ...(expiryDate ? ([["Active until", expiryDate]] as [string, string][]) : []),
-      ])}
-      ${paragraph("Plans do not auto-renew. When your plan ends, its posts are hidden and deleted 3 days later unless you buy a new plan and reactivate them.")}
-    `;
-    textBody = `Hi ${accountName},\n\nThank you for your payment. ${activeUntilLine}\n\nPlan: ${planName}\nAmount: R ${amount.toFixed(2)}\nStatus: Active${expiryDate ? `\nActive until: ${expiryDate}` : ""}${safeInvoiceUrl ? `\nInvoice: ${safeInvoiceUrl}` : ""}\n\nPlans do not auto-renew. When your plan ends, its posts are hidden and deleted 3 days later unless you buy a new plan and reactivate them.\n\nThis receipt was sent because a payment was processed for your VerifyMzansi account.`;
-  }
+  const expiryDate = details?.expiresAt ? formatReceiptDate(details.expiresAt) : null;
+  const activeUntilLine = expiryDate
+    ? `Your plan is active until ${expiryDate}.`
+    : "Your plan is active from the payment date for its purchased period.";
+  const bodyHtml = `
+    ${paragraph(`Hi ${accountName},`)}
+    ${paragraph(`Thank you for your payment. ${activeUntilLine}`)}
+    ${detailList([
+      ["Plan", planName],
+      ["Amount", `R ${amount.toFixed(2)}`],
+      ["Status", "Active"],
+      ...(expiryDate ? ([["Active until", expiryDate]] as [string, string][]) : []),
+    ])}
+    ${paragraph("Plans do not auto-renew. When your plan ends, its posts are hidden and deleted 3 days later unless you buy a new plan and reactivate them.")}
+  `;
+  const textBody = `Hi ${accountName},\n\nThank you for your payment. ${activeUntilLine}\n\nPlan: ${planName}\nAmount: R ${amount.toFixed(2)}\nStatus: Active${expiryDate ? `\nActive until: ${expiryDate}` : ""}${safeInvoiceUrl ? `\nInvoice: ${safeInvoiceUrl}` : ""}\n\nPlans do not auto-renew. When your plan ends, its posts are hidden and deleted 3 days later unless you buy a new plan and reactivate them.\n\nThis receipt was sent because a payment was processed for your VerifyMzansi account.`;
 
   const html = brandedEmail({
     tone: "success",

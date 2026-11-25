@@ -3,7 +3,6 @@ import {
   PLANS,
   LEGACY_PLANS,
   RETAIL_OFFERS,
-  ADDON_PRICES,
   TRIAL_CONFIG,
   FREE_POST_CONFIG,
   PAID_POST_CONFIG,
@@ -67,12 +66,6 @@ describe("pricing constants", () => {
   it("covers exactly the three marketplace areas", () => {
     const areas = Array.from(new Set(PLANS.map((p) => p.area)));
     expect(areas).toHaveLength(3);
-  });
-
-  it("defines addon prices", () => {
-    expect(ADDON_PRICES.boost).toBeGreaterThan(0);
-    expect(ADDON_PRICES.featured).toBeGreaterThan(0);
-    expect(ADDON_PRICES.urgent).toBeGreaterThan(0);
   });
 
   it("defines trial config", () => {

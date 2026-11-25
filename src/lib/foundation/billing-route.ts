@@ -3,7 +3,6 @@ import "server-only";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { foundationArea, restoredAreaSchema } from "./areas";
-import { addonSalesPausedResponse, areAddonSalesOpen } from "../billing/addon-sales";
 import { PLAN_SALES_PAUSED_CODE, PLAN_SALES_PAUSED_MESSAGE } from "../billing/plan-sales";
 import { createFoundationRouteContext } from "./request-route";
 import { readFoundationRuntimeConnection } from "./runtime-connection";
@@ -29,7 +28,6 @@ import {
   paymentCheckFailureReason,
   readFoundationPayment,
   reconcileFoundationPayment,
-  startFoundationCheckout,
   startFoundationPackageAddCheckout,
   startFoundationPackageCheckout,
   startFoundationSlotCheckout,
@@ -51,13 +49,7 @@ const log = createLogger("FoundationBilling");
 
 /** This bridge preserves the current website URLs while selecting the new
  * session and SQL command model before any legacy table factory is created. */
-export async function handleFoundationBillingRoute(
-  request: NextRequest,
-  operation: Operation,
-  addon?: { postId: string; kind: "boost" | "featured" | "urgent"; days: number }
-) {
-  // Second check behind the add-on routes' own (src/lib/billing/addon-sales.ts).
-  if (addon && !areAddonSalesOpen()) return addonSalesPausedResponse("foundation_billing");
+export async function handleFoundationBillingRoute(request: NextRequest, operation: Operation) {
   const mutate = !["payment-status", "overview", "allowance"].includes(operation);
   if (mutate) {
     const blocked = enforceMutationRequest(request, log);
@@ -130,7 +122,6 @@ export async function handleFoundationBillingRoute(
               .sort()
               .at(-1) ?? null,
           sources: [...new Set(entries.map((entry) => entry.source))],
-          boostAllowed: entries.some((entry) => entry.addon_capabilities.includes("boost")),
         })
       );
     }
@@ -163,7 +154,7 @@ export async function handleFoundationBillingRoute(
         NextResponse.json({ status, terminal: status !== "pending", expired: status === "expired" })
       );
     }
-    const input = addon ? null : await parseJsonRequest(request, { maxBytes: 4096 });
+    const input = await parseJsonRequest(request, { maxBytes: 4096 });
     if (operation === "cancel-pending") {
       const value = z.strictObject({ paymentId: z.uuid() }).parse(input);
       return context.respond(
@@ -259,20 +250,6 @@ export async function handleFoundationBillingRoute(
     }
     const catalogue = await readFoundationBillingCatalogue(createFoundationPublicApi(connection));
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://verifymzansi.com";
-    if (addon) {
-      const product = catalogue.addons.find(
-        (entry) => entry.kind === addon.kind && entry.days === addon.days
-      );
-      if (!product) throw new FoundationBillingError(400, "This add-on is not available");
-      const result = await startFoundationCheckout(
-        caller.api,
-        caller.accountId,
-        product.id,
-        z.uuid().parse(addon.postId),
-        appUrl
-      );
-      return context.respond(NextResponse.json({ ...result, account_id: caller.accountId }));
-    }
     // Paid slots are paused while the catalogue lists none (posting-v4).
     if (catalogue.plans.length === 0)
       throw new FoundationBillingError(403, PLAN_SALES_PAUSED_MESSAGE, PLAN_SALES_PAUSED_CODE);
