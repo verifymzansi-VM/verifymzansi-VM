@@ -85,9 +85,6 @@ export function restoredPostingPlans(
           maxVideos: plan.max_videos,
           videoAllowed: plan.max_videos > 0,
           maxPostsPerMonth: plan.activations_per_period ?? base.features.maxPostsPerMonth,
-          boostAllowed: plan.addon_capabilities.includes("boost"),
-          featuredAllowed: plan.addon_capabilities.includes("featured"),
-          urgentAllowed: plan.addon_capabilities.includes("urgent"),
         },
       },
     ];

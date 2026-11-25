@@ -66,9 +66,6 @@ FOUNDATION_REGISTRATION_INVITE_ONLY = "true"
 FOUNDATION_AUTH_CALLBACK_ENABLED = "true"
 FOUNDATION_RECOVERY_ENABLED = "true"
 FOUNDATION_PHONE_VERIFICATION_ENABLED = "true"
-# Paid add-on sales (Urgent, Boost, Featured) stay paused until visitors can
-# see what they deliver. Only "true" opens them (src/lib/billing/addon-sales.ts).
-ADDON_SALES_ENABLED = "false"
 # Staff refunds sent to Ozow through its API stay off until the owner has set
 # the Ozow refund key (OZOW_REFUND_CLIENT_ID/_SECRET, refunds scope) and the
 # refund webhook secret. Only "true" turns them on (src/lib/payments/ozow-refunds.ts).
@@ -294,7 +291,6 @@ FOUNDATION_REGISTRATION_INVITE_ONLY = "true"
 FOUNDATION_AUTH_CALLBACK_ENABLED = "true"
 FOUNDATION_RECOVERY_ENABLED = "true"
 FOUNDATION_PHONE_VERIFICATION_ENABLED = "true"
-ADDON_SALES_ENABLED = "false"
 OZOW_API_REFUNDS_ENABLED = "false"
 NEXT_PUBLIC_TURNSTILE_SITE_KEY = "0x4AAAAAACmVXwJ4jmJSu6fX"
 NEXT_PUBLIC_CF_IMAGE_RESIZING = "true"
@@ -379,7 +375,6 @@ FOUNDATION_RECOVERY_ENABLED = "true"
 FOUNDATION_PHONE_VERIFICATION_ENABLED = "false"
 # Africa's Talking sandbox (simulated SMS only); its sandbox API key is a staging secret.
 AFRICASTALKING_USERNAME = "sandbox"
-ADDON_SALES_ENABLED = "false"
 OZOW_API_REFUNDS_ENABLED = "false"
 # Cloudflare's published Turnstile test site key (always passes); the matching
 # published test secret is set as the staging TURNSTILE_SECRET_KEY.

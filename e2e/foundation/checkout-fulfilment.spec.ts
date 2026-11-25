@@ -11,10 +11,8 @@ import {
   LOCAL_INTERNAL_JOBS_SECRET,
   LOCAL_OPS_JOBS_SECRET,
 } from "../../scripts/lib/foundation-e2e-target.mjs";
-import { characterise, KnownBreak, requireOnlyKnownBreak } from "./support/known-break";
 import { MOCK_PAYMENT_ORIGIN, MockOzow } from "./support/mock-ozow";
 import { endedWithTest } from "./support/route-teardown";
-import { ADDON_SALES_OPEN } from "./support/switches";
 import {
   browserSessionCookies,
   caughtMailFor,
@@ -22,9 +20,7 @@ import {
   queryTestCopy,
   readOutboundAttempts,
   readTestCopy,
-  readServerLogEntries,
   rpc,
-  serverLogMentions,
   serviceRpc,
   signIn,
   type TestCopy,
@@ -47,28 +43,10 @@ import {
 // payment shows the restored Continue and Cancel controls, and Cancel works; a
 // bank attempt cancelled at the provider, whose notice has not arrived, shows
 // as not paid instead of "Payment pending"; a failed first attempt to open the
-// payment page can be retried later (M3.1); the Urgent add-on step says add-ons
-// open soon and takes no payment while paid add-on sales are paused (M1.9),
-// and opens the add-on's payment page once they are open; the receipt email
-// arrives; a paid Urgent add-on shows its label.
+// payment page can be retried later (M3.1); the receipt email arrives. Paid
+// add-ons (Urgent, Boost, Featured) were removed from the website (item 37).
 //
-// The ordinary copy's website runs with paid add-on sales paused, as
-// production does (ADDON_SALES_ENABLED, src/lib/billing/addon-sales.ts); the
-// plan steps above run on that same server, so pausing add-ons leaves plans
-// working. The launch lane (playwright.launch-config.config.ts) opens them
-// (ADDON_SALES_OPEN, support/switches.ts), and the add-on step checks that
-// state instead.
-//
-// One step is broken today and is marked test.fail(), pinned to its exact
-// known symptom (characterise, support/known-break.ts); any other outcome
-// turns the run red:
-// - "a paid Urgent add-on shows its label": BL-05, fixed by M1.10. The
-//   website sells no add-on while sales are paused, so the payment is arranged
-//   as one made before the pause (trusted local steps) and paid at the mock;
-//   it settles and the owner sees "Already urgent", but visitors see no Urgent
-//   label. M1.10 buys it through the button again and removes the mark.
-// The tests share one member and run in order; a failure skips the rest, so
-// the marked step comes after the working flows.
+// The tests share one member and run in order; a failure skips the rest.
 //
 // The provider is the copy's mock (support/mock-ozow.ts): its payment page is
 // served here, paying sends a notice signed with the copy's synthetic secret to
@@ -87,24 +65,15 @@ import {
 const APP_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.appPort}`;
 const API_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.apiPort}`;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const BL05 = "BL-05, fixed by M1.10";
 /** The restored checkout page's notice for a plan with a pending payment. */
 const PENDING_NOTICE =
   "You already have a pending payment for this area. Continue the payment or cancel it before choosing another plan.";
-const URGENT_BUTTON = "Mark this business profile as urgent (R10 for 7 days)";
-/** The server's reply to any add-on checkout while sales are paused. */
-const ADDONS_PAUSED = {
-  error: "Add-ons open soon. You have not been charged.",
-  code: "addon_sales_paused",
-};
-const ADDONS_PAUSED_LOG = "Paid add-on checkout refused while add-on sales are paused";
 
 // A service worker could fetch outside page routing; the allowlist must see every request.
 test.use({ serviceWorkers: "block" });
 test.describe.configure({ mode: "serial" });
 
 type Plan = { id: string; code: string; label: string; price_cents: string };
-type Addon = { id: string; kind: string; days: number; price_cents: string };
 type Reply = { method: string; path: string; status: number; body: unknown };
 type Payment = { id: string; requestId: string; merchantReference: string };
 
@@ -290,7 +259,6 @@ async function deleteByCommand(id: string) {
 let copy: TestCopy;
 let member: VerifiedMember;
 let plans: Record<"business" | "market" | "tourism" | "retry" | "pending" | "cancelled", Plan>;
-let urgent: Addon;
 let planPayment: Payment;
 let business: { name: string; id: string };
 
@@ -315,18 +283,10 @@ test.describe("checkout to fulfilment", () => {
       pending: byCode("individual_90d"),
       cancelled: byCode("individual_180d"),
     };
-    const addon = (catalogue.data.addons as Addon[]).find(
-      (entry) => entry.kind === "urgent" && entry.days === 7
-    );
-    if (!addon) throw new Error("The catalogue has no 7-day Urgent add-on");
-    urgent = addon;
     member = await registerVerifiedMember("payer");
     business = { name: `Paid Studio ${member.lastName.slice(-8)}`, id: "" };
     await ozow.start();
   });
-
-  // A marked step may fail only through its known break (support/known-break.ts).
-  test.afterEach(({}, testInfo) => requireOnlyKnownBreak(testInfo));
 
   test.afterAll(async () => {
     try {
@@ -979,176 +939,6 @@ test.describe("checkout to fulfilment", () => {
     expectNoOutboundSince(mark);
   });
 
-  // One state per lane (ADDON_SALES_OPEN): paused in the ordinary copy, as in
-  // production; open in the launch lane.
-  const urgentStep = ADDON_SALES_OPEN
-    ? "with add-on sales open, the Urgent add-on step opens its payment page and takes nothing until paid"
-    : "the Urgent add-on step says add-ons open soon and takes no payment";
-  test(urgentStep, async ({ context, page }) => {
-    const mark = readOutboundAttempts().length;
-    const { outside, failures, reply } = await guard(context);
-    await signInBrowser(context, member);
-    const payments = () =>
-      queryTestCopy(`select count(*) from private.payments where owner_id = '${member.id}';`);
-    const before = {
-      payments: payments(),
-      made: ozow.made.length,
-      notifications: ozow.notifications.length,
-      lookups: ozow.lookups.length,
-    };
-    const logged = readServerLogEntries(ADDONS_PAUSED_LOG).length;
-
-    // The restored button is unchanged: it is offered on the paid, live post.
-    await page.goto("/dashboard/listings");
-    const item = page
-      .getByRole("listitem")
-      .filter({ hasText: business.name })
-      .filter({ has: page.getByRole("button", { name: URGENT_BUTTON }) });
-    await expect(item).toHaveCount(1);
-    await item.getByRole("button", { name: URGENT_BUTTON }).click();
-    const path = `/api/businesses/${business.id}/urgent`;
-
-    if (ADDON_SALES_OPEN) {
-      // It starts the add-on's checkout and sends the member to the payment page.
-      await page.waitForURL((url) => url.origin === MOCK_PAYMENT_ORIGIN);
-      await expect(page.getByRole("heading", { name: "Mock Ozow test payment" })).toBeVisible();
-      const started = reply(path);
-      expect(started).toEqual([
-        {
-          method: "POST",
-          path,
-          status: 200,
-          body: expect.objectContaining({
-            paymentId: expect.stringMatching(UUID),
-            checkoutUrl: expect.stringContaining(MOCK_PAYMENT_ORIGIN),
-          }),
-        },
-      ]);
-      const addonId = (started[0].body as { paymentId: string }).paymentId;
-      expect(new URL(page.url()).searchParams.get("paymentId")).toBe(addonId);
-      // One pending payment for the 7-day Urgent add-on on this post, at its
-      // catalogue price; nothing is paid or delivered yet.
-      expect(Number(payments())).toBe(Number(before.payments) + 1);
-      expect(paymentRow(addonId)).toEqual({
-        status: "pending",
-        fulfilment: "unfulfilled",
-        kind: "addon",
-        amount: urgent.price_cents,
-        request: `mock-${addonId}`,
-        transaction: "",
-      });
-      expect(
-        queryTestCopy(
-          "select addon_version_id || '|' || target_post_id from private.payments " +
-            `where id = '${addonId}';`
-        )
-      ).toBe(`${urgent.id}|${business.id}`);
-      const windows = () =>
-        queryTestCopy(
-          `select count(*) from private.post_addon_windows where payment_id = '${addonId}';`
-        );
-      expect(windows()).toBe("0");
-      expect(ozow.made).toHaveLength(before.made);
-      expect(ozow.notifications).toHaveLength(before.notifications);
-
-      // Declined at the bank, it closes and delivers nothing, so it holds
-      // nothing for the later steps.
-      await page.getByRole("button", { name: "Decline at the test bank" }).click();
-      await page.waitForURL(`${APP_ORIGIN}/billing/success?payment=${addonId}`);
-      expect(paymentRow(addonId)).toMatchObject({ status: "failed", fulfilment: "unfulfilled" });
-      expect(windows()).toBe("0");
-      expect(ozow.made.slice(before.made)).toEqual([
-        { paymentId: addonId, transactionId: expect.stringMatching(UUID), status: "Error" },
-      ]);
-
-      // A plan checkout still cannot carry an add-on.
-      const smuggledOpen = await page.evaluate(
-        async ({ planId, postId }) => {
-          const token = document.cookie.match(/(?:^|; )vm_csrf=([a-f0-9]{64})/)?.[1] ?? "";
-          const response = await fetch("/api/billing/create-checkout", {
-            method: "POST",
-            credentials: "same-origin",
-            headers: { "Content-Type": "application/json", "x-csrf-token": token },
-            body: JSON.stringify({ planId, post_id: postId, kind: "urgent" }),
-          });
-          return response.status;
-        },
-        { planId: urgent.id, postId: business.id }
-      );
-      expect(smuggledOpen).toBe(400);
-      expect(Number(payments())).toBe(Number(before.payments) + 1);
-
-      // Nothing was refused as paused, and the server log holds none of the
-      // member's address, password or name.
-      expect(readServerLogEntries(ADDONS_PAUSED_LOG)).toHaveLength(logged);
-      expect(serverLogMentions([member.email, member.password, member.lastName])).toEqual([]);
-      expect(failures).toEqual([]);
-      expect(outside).toEqual([]);
-      expectNoOutboundSince(mark);
-      return;
-    }
-
-    // It shows the server's refusal in its usual message, and stays on the page.
-    await expect(page.getByText(ADDONS_PAUSED.error, { exact: true })).toBeVisible();
-    await expect(page.getByText("Urgent failed", { exact: true })).toBeVisible();
-    await expect.poll(() => reply(path).length).toBe(1);
-    expect(reply(path)).toEqual([{ method: "POST", path, status: 403, body: ADDONS_PAUSED }]);
-    expect(new URL(page.url()).pathname).toBe("/dashboard/listings");
-
-    // Every other way to start an add-on for this post gives the same answer.
-    const others = await page.evaluate(async (id) => {
-      const token = document.cookie.match(/(?:^|; )vm_csrf=([a-f0-9]{64})/)?.[1] ?? "";
-      const send = async (url: string, body?: unknown) => {
-        const response = await fetch(url, {
-          method: "POST",
-          credentials: "same-origin",
-          headers: { "Content-Type": "application/json", "x-csrf-token": token },
-          body: body === undefined ? undefined : JSON.stringify(body),
-        });
-        return { url, status: response.status, body: await response.json() };
-      };
-      return [
-        await send(`/api/businesses/${id}/boost`),
-        await send(`/api/businesses/${id}/featured`),
-        await send(`/api/listings/${id}/urgent`),
-        await send(`/api/promotions/${id}/urgent`),
-        await send("/api/foundation/billing/addon", { post_id: id, kind: "urgent", days: 7 }),
-        await send("/api/foundation/billing/addon", { post_id: id, kind: "URGENT", days: 7 }),
-      ];
-    }, business.id);
-    expect(others).toHaveLength(6);
-    for (const answer of others) expect(answer).toMatchObject({ status: 403, body: ADDONS_PAUSED });
-    // A plan checkout cannot carry an add-on either.
-    const smuggled = await page.evaluate(
-      async ({ planId, postId }) => {
-        const token = document.cookie.match(/(?:^|; )vm_csrf=([a-f0-9]{64})/)?.[1] ?? "";
-        const response = await fetch("/api/billing/create-checkout", {
-          method: "POST",
-          credentials: "same-origin",
-          headers: { "Content-Type": "application/json", "x-csrf-token": token },
-          body: JSON.stringify({ planId, post_id: postId, kind: "urgent" }),
-        });
-        return response.status;
-      },
-      { planId: urgent.id, postId: business.id }
-    );
-    expect(smuggled).toBe(400);
-
-    // No payment was created and the payment provider was never asked.
-    expect(payments()).toBe(before.payments);
-    expect(ozow.made).toHaveLength(before.made);
-    expect(ozow.notifications).toHaveLength(before.notifications);
-    expect(ozow.lookups).toHaveLength(before.lookups);
-    // The refusal logs at debug level only, which production's level drops,
-    // so these requests added nothing to the server log; nor does it hold
-    // the member's address, password or name.
-    expect(readServerLogEntries(ADDONS_PAUSED_LOG)).toHaveLength(logged);
-    expect(serverLogMentions([member.email, member.password, member.lastName])).toEqual([]);
-    expect(failures).toEqual([]);
-    expect(outside).toEqual([]);
-    expectNoOutboundSince(mark);
-  });
-
   test("the receipt email arrives with the payment details", async ({ request }) => {
     test.setTimeout(180_000);
     const mark = readOutboundAttempts().length;
@@ -1195,116 +985,6 @@ test.describe("checkout to fulfilment", () => {
     expect(mail.text).not.toContain(member.id);
   });
 
-  test("a paid Urgent add-on shows its label to visitors", async ({ context, page }) => {
-    test.fail(true, BL05);
-    // Generous; characterise gives up 15 s before this limit (a test timeout
-    // would count as the expected failure).
-    test.setTimeout(180_000);
-    await characterise(BL05, async () => {
-      const mark = readOutboundAttempts().length;
-      const { outside, failures } = await guard(context);
-      // Arranged (trusted local steps): the website sells no add-on while
-      // sales are paused, so the payment is set up as one started before the
-      // pause: the member's own quote command, then the server's claim and its
-      // mock checkout request, exactly what the website's checkout stores.
-      const session = await signIn(copy, member);
-      const quote = await call(
-        copy,
-        "start_checkout",
-        { p_product_id: urgent.id, p_target_post: business.id },
-        session.token
-      );
-      const addonId = String(quote.payment_id);
-      const claimed = await serviceRpc("claim_checkout_request", {
-        p_payment_id: addonId,
-        p_owner_id: member.id,
-      });
-      expect(claimed).toMatchObject({
-        status: 200,
-        data: { status: "pending", product_kind: "addon", provider_request_id: null },
-      });
-      const checkout = new URL("/checkout", MOCK_PAYMENT_ORIGIN);
-      checkout.searchParams.set("paymentId", addonId);
-      checkout.searchParams.set("amount", (Number(urgent.price_cents) / 100).toFixed(2));
-      checkout.searchParams.set("returnUrl", `${APP_ORIGIN}/billing/success?payment=${addonId}`);
-      checkout.searchParams.set("cancelUrl", `${APP_ORIGIN}/billing/cancel?payment=${addonId}`);
-      expect(
-        await serviceRpc("complete_checkout_request", {
-          p_payment_id: addonId,
-          p_owner_id: member.id,
-          p_claim_token: claimed.data.claim_token,
-          p_request_id: `mock-${addonId}`,
-          p_checkout_url: checkout.href,
-        })
-      ).toMatchObject({ status: 200, data: true });
-      const addon = paymentOf(addonId);
-      expect(paymentRow(addon.id)).toMatchObject({
-        status: "pending",
-        kind: "addon",
-        amount: "1000",
-        request: `mock-${addon.id}`,
-      });
-
-      // The member pays at the mock; the signed notice settles it through the
-      // website's real notification route, paused sales or not.
-      await signInBrowser(context, member);
-      await page.goto(checkout.href);
-      await expect(page.getByRole("heading", { name: "Mock Ozow test payment" })).toBeVisible();
-      await page.getByRole("button", { name: "Pay with the test bank" }).click();
-      await page.waitForURL(`${APP_ORIGIN}/billing/success?payment=${addon.id}`);
-      await expect(page.getByRole("heading", { name: "Payment confirmed" })).toBeVisible();
-      expect(ozow.notifications.at(-1)).toMatchObject({
-        paymentId: addon.id,
-        status: 200,
-        body: { result: { outcome: "completed", fulfillment_status: "fulfilled" } },
-      });
-      // Seven Urgent days on this post, paid by this payment.
-      expect(
-        queryTestCopy(
-          "select kind, round(extract(epoch from ends_at - starts_at) / 86400), " +
-            "starts_at <= now() and ends_at > now() from private.post_addon_windows " +
-            `where post_id = '${business.id}' and payment_id = '${addon.id}' and revoked_at is null;`
-        )
-      ).toBe("urgent|7|t");
-
-      // The owner sees it on My posts.
-      await page.goto("/dashboard/listings");
-      await expect(
-        page
-          .getByRole("listitem")
-          .filter({ hasText: business.name })
-          .getByRole("button", { name: "Already urgent" })
-      ).toBeVisible();
-
-      // Visitors: the post page.
-      await context.clearCookies();
-      await page.goto(`/mzansi-business/${business.id}`);
-      await expect(page.getByText(business.name).filter({ visible: true }).first()).toBeVisible();
-      const label = page.getByText("Urgent", { exact: true }).filter({ visible: true });
-      if ((await label.count()) === 0) {
-        // BL-05 as recorded: paid and active, shown to the owner, invisible to visitors.
-        expect(failures).toEqual([]);
-        expect(outside).toEqual([]);
-        expectNoOutboundSince(mark);
-        throw new KnownBreak(
-          `${BL05}: the paid Urgent window is active and the owner sees "Already urgent", but the post page shows no Urgent label`
-        );
-      }
-      await expect(label.first()).toBeVisible();
-      // And on its card in search (the only result for its unique name).
-      await page.goto(`/search?q=${encodeURIComponent(business.name)}`);
-      await expect(
-        page.getByRole("link", { name: business.name, exact: true }).first()
-      ).toBeVisible();
-      await expect(
-        page.getByText("Urgent", { exact: true }).filter({ visible: true }).first()
-      ).toBeVisible();
-      expect(failures).toEqual([]);
-      expect(outside).toEqual([]);
-      expectNoOutboundSince(mark);
-    });
-  });
-
   test("the member deletes the post, which frees the plan's slot", async ({ context, page }) => {
     const mark = readOutboundAttempts().length;
     const { outside, failures, reply } = await guard(context);
@@ -1313,7 +993,8 @@ test.describe("checkout to fulfilment", () => {
     const item = page
       .getByRole("listitem")
       .filter({ hasText: business.name })
-      .filter({ has: page.getByRole("group", { name: "Promote this post" }) });
+      // The post card: its Edit link stays while the delete confirmation shows.
+      .filter({ has: page.getByRole("link", { name: "Edit", exact: true }) });
     await expect(item).toHaveCount(1);
     await item.getByRole("button", { name: "Delete", exact: true }).click();
     await item

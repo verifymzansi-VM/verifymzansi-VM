@@ -5,7 +5,7 @@ import foundation from "./playwright.foundation.config";
 // playwright.foundation.config.ts, but built with the launch values
 // (LAUNCH_VALUES in src/lib/launch-config.ts: the pre-launch pop-up off; the
 // src/lib/hidden-features.ts switches and PACKAGES_ON_SALE are on in every
-// build), add-on sales open
+// build) and the runtime switches at their launch values
 // (LAUNCH_CONFIG_SETTINGS in scripts/lib/foundation-e2e-website.mjs). It runs
 // every foundation spec plus launch-config.spec.ts, which visits each page
 // that was behind a switch. Desktop Chromium only.

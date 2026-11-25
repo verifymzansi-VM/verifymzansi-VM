@@ -11,13 +11,12 @@ vi.mock("@/lib/constants/pricing", async (importOriginal) => ({
   PACKAGES_ON_SALE: false,
 }));
 
-// These tests check Advertise with paid add-ons, the sponsor offer and package
-// sales switched off, the branch kept for turning them off again. All three
-// are on in production (owner's decision of 22 November 2026); the
+// These tests check Advertise with the sponsor offer and package sales
+// switched off, the branch kept for turning them off again. Both are on in
+// production (owner's decision of 22 November 2026); the
 // launch-configuration and foundation browser tests check the page as served.
 vi.mock("@/lib/hidden-features", async (importOriginal) => ({
   ...(await importOriginal<typeof HiddenFeatures>()),
-  SHOW_PAID_ADDONS: false,
   SHOW_SPONSOR_OFFER: false,
 }));
 
@@ -132,7 +131,7 @@ describe("AdvertisePage", () => {
     expect(text).not.toMatch(/statutory cooling-off rights apply|is not refunded either/);
   });
 
-  it("offers no paid add-ons while they do not deliver", async () => {
+  it("offers no paid add-ons (removed, item 37)", async () => {
     const { container } = render(await AdvertisePage());
 
     expect(screen.queryByRole("heading", { name: "Get more eyes on a post" })).toBeNull();

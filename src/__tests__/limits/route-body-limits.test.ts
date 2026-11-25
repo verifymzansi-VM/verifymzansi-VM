@@ -32,7 +32,6 @@ import { handleFoundationPasswordChange } from "@/app/api/foundation/auth/_lib/p
 import { handleFoundationRecoveryCompletion } from "@/app/api/foundation/auth/_lib/recovery-complete";
 import { POST as signIn } from "@/app/api/foundation/auth/login/route";
 import { POST as recoveryRequest } from "@/app/api/foundation/auth/recovery/request/route";
-import { POST as addonCheckout } from "@/app/api/foundation/billing/addon/route";
 import { POST as foundationContact } from "@/app/api/foundation/contact/route";
 import { POST as foundationEnquiries } from "@/app/api/foundation/enquiries/route";
 import { POST as invitePreview } from "@/app/api/foundation/organisations/invites/preview/route";
@@ -234,7 +233,6 @@ const ROUTES: Array<[string, number, Route]> = [
   ],
   ["LIM-APP-foundation-auth-attempt-route", 4096, signIn],
   ["LIM-APP-foundation-auth-recovery-request", 4096, recoveryRequest],
-  ["LIM-APP-foundation-billing-addon", 2048, addonCheckout],
   [
     "LIM-APP-foundation-billing-route",
     4096,
@@ -293,7 +291,6 @@ beforeEach(() => {
   vi.stubEnv("FOUNDATION_PASSWORD_AUTH_MODE", "native-captcha");
   vi.stubEnv("FOUNDATION_AUTH_CALLBACK_ENABLED", "true");
   vi.stubEnv("FOUNDATION_RECOVERY_ENABLED", "true");
-  vi.stubEnv("ADDON_SALES_ENABLED", "true");
   vi.stubGlobal(
     "fetch",
     vi.fn(async () => {

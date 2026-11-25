@@ -19,9 +19,6 @@ export interface Entitlements {
   maxVideos: number;
   maxPostsPerMonth: number;
   videoAllowed: boolean;
-  boostAllowed: boolean;
-  featuredAllowed: boolean;
-  urgentAllowed: boolean;
 }
 
 const FREE_ENTITLEMENTS: Entitlements = {
@@ -30,9 +27,6 @@ const FREE_ENTITLEMENTS: Entitlements = {
   maxVideos: FREE_POST_CONFIG.maxVideos,
   maxPostsPerMonth: FREE_POST_CONFIG.maxAllowed,
   videoAllowed: FREE_POST_CONFIG.videoAllowed,
-  boostAllowed: false,
-  featuredAllowed: false,
-  urgentAllowed: false,
 };
 
 const ENTERPRISE_ENTITLEMENTS: Entitlements = {
@@ -41,9 +35,6 @@ const ENTERPRISE_ENTITLEMENTS: Entitlements = {
   maxVideos: 1,
   maxPostsPerMonth: 100,
   videoAllowed: true,
-  boostAllowed: true,
-  featuredAllowed: true,
-  urgentAllowed: true,
 };
 
 /**
@@ -92,9 +83,6 @@ export function getEntitlements(tier: PlanTier, area: MarketplaceArea): Entitlem
     maxVideos: plan.features.maxVideos ?? 0,
     maxPostsPerMonth: plan.features.maxPostsPerMonth,
     videoAllowed: plan.features.videoAllowed,
-    boostAllowed: plan.features.boostAllowed,
-    featuredAllowed: plan.features.featuredAllowed,
-    urgentAllowed: plan.features.urgentAllowed,
   };
 }
 
@@ -124,64 +112,4 @@ function slotLimitReason(capacity: number): string {
   const slots =
     capacity === 1 ? "Your active posting slot is" : `All ${capacity} active posting slots are`;
   return `${slots} in use. Mark a post as sold or deactivate one. Paid slots open soon.`;
-}
-
-/**
- * Check whether an account holder's plan allows boosting listings.
- * @returns `{ allowed: true }` or `{ allowed: false, reason }` with upgrade prompt.
- */
-export function canBoost(
-  tier: PlanTier,
-  area: MarketplaceArea
-): { allowed: boolean; reason?: string } {
-  const ent = getEntitlements(tier, area);
-
-  if (!ent.boostAllowed) {
-    return {
-      allowed: false,
-      reason: "Boost is available on paid plans.",
-    };
-  }
-
-  return { allowed: true };
-}
-
-/**
- * Check whether an account holder's plan allows featuring listings.
- * Available on paid plans (retail and bulk).
- */
-export function canFeatured(
-  tier: PlanTier,
-  area: MarketplaceArea
-): { allowed: boolean; reason?: string } {
-  const ent = getEntitlements(tier, area);
-
-  if (!ent.featuredAllowed) {
-    return {
-      allowed: false,
-      reason: "Featured placement is available on paid plans.",
-    };
-  }
-
-  return { allowed: true };
-}
-
-/**
- * Check whether an account holder's plan allows marking listings as urgent.
- * Available on paid plans (retail and bulk).
- */
-export function canUrgent(
-  tier: PlanTier,
-  area: MarketplaceArea
-): { allowed: boolean; reason?: string } {
-  const ent = getEntitlements(tier, area);
-
-  if (!ent.urgentAllowed) {
-    return {
-      allowed: false,
-      reason: "The urgent badge is available on paid plans.",
-    };
-  }
-
-  return { allowed: true };
 }

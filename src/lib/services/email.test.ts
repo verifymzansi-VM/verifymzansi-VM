@@ -470,7 +470,7 @@ describe("email service", () => {
         199.0,
         "Mzansi Market Pro",
         undefined,
-        { kind: "subscription", expiresAt: "2026-05-24T10:00:00.000Z" }
+        { expiresAt: "2026-05-24T10:00:00.000Z" }
       );
 
       const call = mockSend.mock.calls[0][0];
@@ -485,23 +485,6 @@ describe("email service", () => {
         );
       expect(call.text).toContain("24 May 2026");
       expect(call.text).not.toContain("renew automatically");
-    });
-
-    it("uses an add-on subject and body naming the add-on and its duration", async () => {
-      await sendPaymentReceiptEmail("user@example.com", "Sipho", 99.0, "Mzansi Market", undefined, {
-        kind: "addon",
-        addonName: "Listing Boost",
-        durationDays: 7,
-      });
-
-      const call = mockSend.mock.calls[0][0];
-      expect(call.subject).toBe("Payment Receipt - Listing Boost");
-      expect(call.html).toContain("Listing Boost");
-      expect(call.html).toContain("7 days");
-      expect(call.html).toContain("one-time purchase");
-      expect(call.html).not.toContain("renew automatically");
-      expect(call.text).toContain("Listing Boost");
-      expect(call.text).toContain("7 days");
     });
   });
 

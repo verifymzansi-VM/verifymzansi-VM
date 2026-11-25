@@ -7,7 +7,7 @@ import { readTestCopy, type TestCopy } from "./support/test-copy";
 // What the website's own routes answer a visitor who is not signed in, and
 // the media cache headers, in foundation mode. Moved from the stub suite
 // (PORTING.md): kyc-verification, critical-flows (guardrails), auth-qa-audit
-// (TC08), addon-checkout and media-cache-policy. Every request is anonymous
+// (TC08) and media-cache-policy (the add-on routes were removed, item 37). Every request is anonymous
 // and changes nothing in the test copy. Also the post link-preview image and
 // the retired routes (roadmap M6.4).
 
@@ -65,16 +65,6 @@ test.describe("routes refuse visitors who are not signed in", () => {
     const report = await request.post("/api/reports", { data: {} });
     expect([400, 401, 403]).toContain(report.status());
   });
-
-  // The routes must be in the build: a missing route (404) or method (405)
-  // broke feature-listing checkout once.
-  for (const name of ["featured", "urgent", "boost"]) {
-    test(`the ${name} add-on route exists`, async ({ request }) => {
-      const response = await request.post(`/api/listings/${randomUUID()}/${name}`);
-      expect(response.status()).not.toBe(404);
-      expect(response.status()).not.toBe(405);
-    });
-  }
 });
 
 test.describe("media cache policy", () => {

@@ -5,7 +5,7 @@ name: E2E launch config
 # e2e-foundation.yml, built with VERIFYMZANSI_LAUNCH_CONFIG=1, which sets the
 # pre-launch pop-up to its launch value (LAUNCH_VALUES in
 # src/lib/launch-config.ts; the src/lib/hidden-features.ts switches and
-# PACKAGES_ON_SALE are on in every build, apart from two not yet built), and opens add-on sales in the copy. It runs every
+# PACKAGES_ON_SALE are on in every build, apart from two not yet built). It runs every
 # foundation spec plus e2e/foundation/launch-config.spec.ts in desktop Chromium.
 # Nothing here reaches a hosted project or a real provider, and the job needs
 # no secrets.

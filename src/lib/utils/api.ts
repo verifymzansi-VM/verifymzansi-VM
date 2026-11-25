@@ -149,30 +149,6 @@ export function parseAndValidateSearchParams<TSchema extends ZodTypeAny>(
   return { success: true, data: parsed.data };
 }
 
-export function parseAndValidateRouteParams<TSchema extends ZodTypeAny>(
-  params: unknown,
-  schema: TSchema,
-  options: ParseValidatedJsonOptions = {}
-):
-  | {
-      success: true;
-      data: output<TSchema>;
-    }
-  | {
-      success: false;
-      response: NextResponse;
-    } {
-  const parsed = schema.safeParse(params);
-  if (!parsed.success) {
-    return {
-      success: false,
-      response: buildValidationErrorResponse(parsed.error, options),
-    };
-  }
-
-  return { success: true, data: parsed.data };
-}
-
 export function logApiError(
   log: Pick<Logger, "error">,
   message: string,

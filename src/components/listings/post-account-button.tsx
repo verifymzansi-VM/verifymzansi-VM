@@ -17,7 +17,6 @@ import {
   getPlanCheckoutId,
   getPlanFeatureItems,
   PLANS,
-  type PlanDefinition,
 } from "@/lib/constants/pricing";
 import { AREA_LABELS, type MarketplaceArea } from "@/types/enums";
 
@@ -26,18 +25,6 @@ type PostAccountButtonProps = {
   area: MarketplaceArea;
   postHref: string;
 };
-
-function getBoostSummary(plan: PlanDefinition): string {
-  if (plan.features.featuredAllowed && plan.features.urgentAllowed) {
-    return "Maximum boost: featured placement, urgent badge, and boosted visibility.";
-  }
-
-  if (plan.features.boostAllowed) {
-    return "Boosted visibility is included for this package level.";
-  }
-
-  return "Standard posting package with verified account visibility.";
-}
 
 export function PostAccountButton({ accountTitle, area, postHref }: PostAccountButtonProps) {
   const plans = PLANS.filter((plan) => plan.area === area);
@@ -60,16 +47,15 @@ export function PostAccountButton({ accountTitle, area, postHref }: PostAccountB
         <DialogHeader className="pr-8">
           <DialogTitle>Choose a posting package</DialogTitle>
           <DialogDescription>
-            Select and pay for a {AREA_LABELS[area]} package. Your account gets posting capacity and
-            boost tools based on the package you choose.
+            Select and pay for a {AREA_LABELS[area]} package. Your account gets posting capacity
+            based on the package you choose.
           </DialogDescription>
         </DialogHeader>
 
         <div className="rounded-lg border">
-          <div className="hidden grid-cols-[1.1fr_0.9fr_1.4fr_1fr] gap-4 border-b bg-muted/40 px-4 py-3 text-xs font-semibold uppercase text-muted-foreground md:grid">
+          <div className="hidden grid-cols-[1.1fr_0.9fr_1fr] gap-4 border-b bg-muted/40 px-4 py-3 text-xs font-semibold uppercase text-muted-foreground md:grid">
             <span>Package</span>
             <span>Price</span>
-            <span>Boost level</span>
             <span>Pay</span>
           </div>
 
@@ -77,7 +63,7 @@ export function PostAccountButton({ accountTitle, area, postHref }: PostAccountB
             {plans.map((plan) => (
               <div
                 key={`${plan.area}-${plan.tier}`}
-                className="grid gap-4 px-4 py-4 md:grid-cols-[1.1fr_0.9fr_1.4fr_1fr] md:items-start"
+                className="grid gap-4 px-4 py-4 md:grid-cols-[1.1fr_0.9fr_1fr] md:items-start"
               >
                 <div>
                   <div className="flex items-center gap-2">
@@ -109,13 +95,6 @@ export function PostAccountButton({ accountTitle, area, postHref }: PostAccountB
                     {formatPlanPrice(plan.priceCents)}
                   </p>
                   <p className="text-xs text-muted-foreground">30 days</p>
-                </div>
-
-                <div>
-                  <p className="text-xs font-semibold uppercase text-muted-foreground md:hidden">
-                    Boost level
-                  </p>
-                  <p className="text-sm text-foreground">{getBoostSummary(plan)}</p>
                 </div>
 
                 <SubscribeButton

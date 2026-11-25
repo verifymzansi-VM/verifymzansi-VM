@@ -190,8 +190,6 @@ test("the website runs in foundation mode against the copy only, with the existi
     process.env.PLAYWRIGHT_E2E_AUTH = "1";
     process.env.OZOW_CLIENT_SECRET = "caller-provider-secret";
     process.env.SENTRY_DSN = "https://caller@example.invalid/1";
-    // The caller cannot open paid add-on sales in the copy: production keeps them paused.
-    process.env.ADDON_SALES_ENABLED = "true";
     // An empty folder: no .env files to neutralise in this test.
     const env = foundationWebsiteEnv(status, {
       root: mkdtempSync(path.join(tmpdir(), "vm-noenv-")),
@@ -204,7 +202,6 @@ test("the website runs in foundation mode against the copy only, with the existi
     assert.equal(env.PLAYWRIGHT_E2E_AUTH, undefined);
     assert.equal(env.OZOW_CLIENT_SECRET, undefined);
     assert.equal(env.SENTRY_DSN, undefined);
-    assert.equal(env.ADDON_SALES_ENABLED, "false");
     assert.equal(env.PLAYWRIGHT_SUPABASE_MODE, undefined);
     assert.equal(env.NEXT_PUBLIC_PLAYWRIGHT_SUPABASE_MODE, undefined);
     // The fixed browser-test switches.
@@ -234,11 +231,9 @@ test("the launch configuration is opt-in, explicit and changes the build fingerp
   try {
     // Inherited switches never reach the copy: only the option turns it on.
     process.env.VERIFYMZANSI_LAUNCH_CONFIG = "1";
-    process.env.ADDON_SALES_ENABLED = "true";
     const root = mkdtempSync(path.join(tmpdir(), "vm-noenv-"));
     const ordinary = foundationWebsiteEnv(status, { root });
     assert.equal(ordinary.VERIFYMZANSI_LAUNCH_CONFIG, undefined);
-    assert.equal(ordinary.ADDON_SALES_ENABLED, "false");
     assert.equal(ordinary.FOUNDATION_REGISTRATION_INVITE_ONLY, "true");
     const launch = foundationWebsiteEnv(status, { root, launchConfig: true });
     for (const [key, value] of Object.entries(LAUNCH_CONFIG_SETTINGS))

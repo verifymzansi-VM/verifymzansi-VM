@@ -58,11 +58,11 @@ type Page_ = {
 
 const PAGES: Page_[] = [
   {
-    feature: "SHOW_PAID_ADDONS, SHOW_SPONSOR_OFFER, PACKAGES_ON_SALE",
+    feature: "SHOW_SPONSOR_OFFER, PACKAGES_ON_SALE",
     path: "/advertise",
     viewer: "visitor",
     heading: /.+/,
-    shows: [/Get more eyes on a post/i, /Multi-listing/i, /Business Sponsor/i],
+    shows: [/Multi-listing/i, /Business Sponsor/i],
   },
   {
     feature: "SHOW_SPONSOR_OFFER",
@@ -72,11 +72,11 @@ const PAGES: Page_[] = [
     shows: [/Become a Business Sponsor/],
   },
   {
-    feature: "SHOW_PAID_ADDONS, SHOW_OWNER_METRICS",
+    feature: "SHOW_OWNER_METRICS",
     path: "/help/showroom",
     viewer: "visitor",
     heading: /How the showroom works/i,
-    shows: [/Boost/, /Featured/],
+    shows: [/See your post.s turns/],
   },
   {
     feature: "PACKAGES_ON_SALE",
