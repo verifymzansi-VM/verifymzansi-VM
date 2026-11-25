@@ -33,62 +33,64 @@
       "row_level_security": "ac889803ceb07c4815edd35aa98a6727",
       "triggers": "d0d2ecc79988017a8abd47e54999d2b9"
     },
-    "pendingApplication": []
+    "pendingApplication": [
+      "20261125024039_add_lost_days.sql"
+    ]
   },
   "knownDifferences": [
     "Reference data is not fingerprinted. candidate.sql seeds posting-terms version posting-v2, which production does not hold: production has posting-v1 and posting-v3 (current since 20261109173012_posting_terms_v3.sql), and posting-v4 once 20261112122001_publish_posting_terms_v4.sql is applied (current from 20261112173841_switch_posting_terms_v4.sql).",
     "schema_grants: production has 8 items (d397fed9c8bd9d4fc50ebdd777899d93) and the replay 7 (categories below). The extra production item is `internal supabase_auth_admin:USAGE`, which Supabase grants when the Auth \"Before user created\" hook is switched on; no repository file creates it (see replay/hosted-auth-hook-grants.sql)."
   ],
-  "updateCount": 111,
-  "lastUpdate": "20261123225900_posting_terms_v6.sql",
+  "updateCount": 112,
+  "lastUpdate": "20261125024039_add_lost_days.sql",
   "categories": {
     "column_grants": {
       "items": 10,
       "fingerprint": "5e5623672e80b927048d8553487d5442"
     },
     "columns": {
-      "items": 1509,
-      "fingerprint": "7bf9e54c3ac93c40f6538d70ecf022f6"
+      "items": 1520,
+      "fingerprint": "57d5d5e100ea6c6fc848d1580d7c65c5"
     },
     "constraints": {
-      "items": 1327,
-      "fingerprint": "a0540c35cb062391e927c38bb5d76edf"
+      "items": 1334,
+      "fingerprint": "d0315c2922aef2c2bbbea2ad3edb4a69"
     },
     "event_triggers": {
       "items": 1,
       "fingerprint": "821f7d069c595c075754fad9309136ac"
     },
     "function_bodies": {
-      "items": 1178,
-      "fingerprint": "7d655923c91d7eb593ea78b4e011dd52"
+      "items": 1182,
+      "fingerprint": "ec533ee4aa0da54e7e842d7ca8434fdb"
     },
     "function_grants": {
-      "items": 859,
-      "fingerprint": "a69166624ba9321e54c268be3c9cd8a5"
+      "items": 863,
+      "fingerprint": "de73a7913451c3faaf0a85e8693715ab"
     },
     "function_metadata": {
-      "items": 1178,
-      "fingerprint": "8a98d2d24a32069441240840475cdb88"
+      "items": 1182,
+      "fingerprint": "28dea5552cf45f83c93634c0a3635c5c"
     },
     "indexes": {
-      "items": 605,
-      "fingerprint": "eb2341ffc68654aabde1973bb0662464"
+      "items": 609,
+      "fingerprint": "07f87fe8bfd5a5a74047c130d5d25056"
     },
     "policies": {
       "items": 4,
       "fingerprint": "085a305fbc41d38d34eb40c3748c0793"
     },
     "row_level_security": {
-      "items": 168,
-      "fingerprint": "ac889803ceb07c4815edd35aa98a6727"
+      "items": 169,
+      "fingerprint": "854b423651a53326fa6c01fb27e80ac6"
     },
     "schema_grants": {
       "items": 7,
       "fingerprint": "a68294e7a9bcf7c20492a72f7c724252"
     },
     "triggers": {
-      "items": 148,
-      "fingerprint": "d0d2ecc79988017a8abd47e54999d2b9"
+      "items": 150,
+      "fingerprint": "b75c98066ffdd2cfa6eaf1d1bbd89db6"
     }
   }
 }

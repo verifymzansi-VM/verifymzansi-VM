@@ -773,6 +773,11 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         Returns: Json;
       };
       list_free_credits: { Args: Record<never, never>; Returns: Json };
+      get_lost_days_preview: { Args: { p_email: string }; Returns: Json };
+      add_lost_days: {
+        Args: { p_email: string; p_days: number; p_reason: string; p_request_id: string };
+        Returns: Json;
+      };
     };
   };
 };
