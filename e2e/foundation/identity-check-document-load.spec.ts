@@ -53,8 +53,13 @@ test("Get verified opened from an in-app link is a document load before the chec
   });
 
   await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: "Account menu" }).click();
-  await page.getByRole("menuitem", { name: "Verification" }).click();
+  // Opened again until the page has hydrated and the menu takes the click.
+  const item = page.getByRole("menuitem", { name: "Verification" });
+  await expect(async () => {
+    if (!(await item.isVisible())) await page.getByRole("button", { name: "Account menu" }).click();
+    await expect(item).toBeVisible({ timeout: 1_000 });
+  }).toPass({ timeout: 20_000 });
+  await item.click();
 
   const start = page.getByRole("button", { name: /Start ID check/ });
   await expect(start).toBeVisible({ timeout: 30_000 });
