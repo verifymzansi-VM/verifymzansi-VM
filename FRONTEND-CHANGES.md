@@ -163,7 +163,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 99. Automatic ID checks: member and staff screens (item 61, part 7) (with the group 99 part of 5 rows elsewhere) | approved by owner 2026-11-25 (answers: 'Approve them' for the main screens, 'Approve both' for the loading and staff-setting pictures); plan pictures approved 2026-11-20; consent wording per decision L | Nothing while the staff setting is Manual (today's value, and it stays Manual until the consent record is in the database). On a Didit setting, Get verified's ID step shows the independent check: names, what it asks, a consent tick naming Didit with links to its two notices, Start ID check, the check inside the page, then Checking, Verified, 'A person will check your ID' or a decline with 'Try the ID check again' and 'Ask a person to look again'. Staff: an 'ID checks' card on Verify accounts (three settings, admins change it) and a Didit panel in the case view. |
 | 101. Trust promise matches reality (item 41) (no file rows of its own: the group 101 part of 12 rows elsewhere) | approved by owner 2026-11-25 (answer: 'Approve them') | Privacy Policy: a 'Who we are' section, a 'Cookies and browser storage' section, the keep-for periods the system applies, every provider and country named, and no claims of screen replays or logged number taps. PAIA names the same recipients. Trust & Safety, Advertise and the business verification help no longer say only 'our team' reviews IDs. The posting plan box loses 30-day free-post branches that could never show. Home, the footer and the site description say 'businesses, products, services, tourism and events from ID-reviewed posters' instead of 'verified businesses, products, ...'. Get verified (independent check): the privacy panel's keep-for line follows the applied rules and the consent names Ireland (European Union) and the United States. |
 | 100. Add lost days (item 75) (and the group 100 part of 1 row elsewhere) | approved by owner 2026-11-25 (answer: 'Approve both', for the v2 pictures and the database update) | Admins only, on Payments & refunds: an 'Add lost days' card. Staff enter a member's email, check their running paid slots and package (each with its end date), choose 1 to 30 days and a reason, and see each new end date before and after adding. Every running paid slot and package of the member gets the days; a queued renewal moves with its slot and a package's slots still end together. At most 30 days in all per slot; beyond that, or for an ended slot, staff refund instead. Members see only their later end dates; nobody is emailed. |
-| 103. Showroom video posts show their chosen frame and logo (no file rows: data only, `src/lib/showroom/feed.ts`) | awaiting owner | Home and area showrooms: a video post's card plays its video over the frame the owner chose, and a post with a logo shows it in the card, as in the chosen version; before, a video-only post showed the generic shop artwork with no video and the title's first letter instead of a logo. Posts with neither look as they do today. |
+| 103. Showroom video posts show their chosen frame and logo (no file rows: data only, `src/lib/showroom/feed.ts`) | approved by owner 2026-11-25 (answer: 'Approve them', for the before and after pictures) | Home and area showrooms: a video post's card plays its video over the frame the owner chose, and a post with a logo shows it in the card, as in the chosen version; before, a video-only post showed the generic shop artwork with no video and the title's first letter instead of a logo. Posts with neither look as they do today. |
 
 Questions for the owner:
 
@@ -4217,7 +4217,8 @@ preview picture, which a video-only post does not have, so the carousel showed
 title's first letter where the post's logo belongs. The cards now also carry
 the owner's chosen video frame (used only when there is no preview picture) and
 the post's logo, from the public card presentation read. The carousel itself is
-unchanged.
+unchanged. A page waits at most 1.5 seconds for those reads; a card whose read is
+slower looks as it does today until a later visit.
 
 Rows: none; the change is in `src/lib/showroom/feed.ts` (outside the checked
 scope) and its unit test.
@@ -4226,7 +4227,7 @@ Pictures (live public data, read only, not published):
 `screenshots/showroom-video-cover/` (phone 375 and desktop 1280, home and
 Tourism & Events).
 
-Decision: awaiting owner.
+Decision: approved by owner 2026-11-25 (answer: 'Approve them', for the before and after pictures).
 
 <!-- frontend-ledger:end -->
 

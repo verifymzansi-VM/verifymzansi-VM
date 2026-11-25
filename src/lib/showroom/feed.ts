@@ -5,6 +5,7 @@ import {
   foundationMediaUrl,
   loadFoundationShowroom,
   type FoundationCardPresentation,
+  type FoundationShowroomCard,
   type FoundationShowroomRequest,
 } from "@/lib/foundation/public-cards";
 import {
@@ -29,12 +30,27 @@ const SHOWROOM_LIMITS: Record<ShowroomSurface, number> = {
 };
 
 /** Each server copy remembers a showroom order (or that reading it failed) for
- * a minute per showroom and area, so a visit never waits on more than one
- * fair-order read (and one presentation read per card) a minute. */
+ * a minute per showroom and area, and each card's presentation (or that it has
+ * none) for a minute per post, so the database sees at most one fair-order
+ * read per showroom and area and one presentation read per post a minute. */
 const CACHE_MS = 60_000;
 /** At most this many remembered orders (4 showrooms x areas); the oldest goes first. */
 const CACHE_ENTRIES = 400;
-const cache = new Map<string, { at: number; items: CarouselItem[] | null }>();
+const orders = new Map<string, { at: number; cards: FoundationShowroomCard[] | null }>();
+/** At most this many remembered card presentations; the oldest goes first. */
+const PRESENTATION_ENTRIES = 1_000;
+const presentations = new Map<string, { at: number; presentation?: FoundationCardPresentation }>();
+/** A visit waits at most this long for the card presentations it has to read.
+ * A card still unanswered shows its preview picture alone; its answer, when it
+ * comes, is remembered, and the next visit reads it again if it never comes. */
+const PRESENTATION_DEADLINE_MS = 1_500;
+/** One build per showroom and area at a time: simultaneous visits share it. */
+const builds = new Map<string, { at: number; items: Promise<CarouselItem[] | null> }>();
+/** A visit joins another visit's build for at most this long: the fair-order
+ * read's own 15 s limit plus the presentation deadline, with a margin. On a
+ * Worker a build whose request was cancelled may never finish, so a visit never
+ * joins a build older than this and stops waiting for one at this age. */
+const JOIN_MS = 17_000;
 
 /** "New" in the card's badge spot: gold with dark green text (brand accents). */
 const NEW_TAG = "New";
@@ -119,54 +135,151 @@ function carouselItem(
   };
 }
 
-/** Each fair-order card's presentation (its chosen video frame and logo), read
- * with the order so it is remembered for the same minute. A card whose read
- * fails keeps its preview picture alone. */
-async function cardPresentations(
-  ids: readonly string[]
-): Promise<Map<string, FoundationCardPresentation>> {
-  const api = foundationServerPublicApi();
-  const found = await Promise.all(
-    ids.map((id) =>
-      searchFoundationPresentedCards(api, { post_id: id, offset: 0, limit: 1 }).then(
-        (page) => page.items.find((item) => item.id === id),
-        (error: unknown) => {
-          log.warn("Showroom card presentation unavailable; showing its preview picture alone", {
-            error: error instanceof Error ? error.message : "Unknown error",
-          });
-          return undefined;
-        }
-      )
-    )
-  );
-  return new Map(found.flatMap((item) => (item ? [[item.id, item.presentation] as const] : [])));
+/** Puts a value last in a bounded map, dropping the oldest past the limit. */
+function remember<V>(map: Map<string, V>, key: string, value: V, limit: number) {
+  map.delete(key);
+  map.set(key, value);
+  if (map.size > limit) map.delete(map.keys().next().value!);
 }
 
-/** The fair order for the showroom and area, or null when it cannot be read;
- * either is remembered for a minute. */
-async function fairOrder(surface: ShowroomSurface, area: Area): Promise<CarouselItem[] | null> {
-  const key = `${surface}|${area.province ?? ""}|${area.city ?? ""}`;
+/** The fair order's cards for the showroom and area, or null when they cannot
+ * be read; either is remembered for a minute. */
+async function fairCards(
+  surface: ShowroomSurface,
+  area: Area,
+  key: string
+): Promise<FoundationShowroomCard[] | null> {
   const now = Date.now();
-  const kept = cache.get(key);
-  if (kept && now - kept.at < CACHE_MS) return kept.items;
-  let items: CarouselItem[] | null = null;
+  const kept = orders.get(key);
+  if (kept && now - kept.at < CACHE_MS) return kept.cards;
+  let cards: FoundationShowroomCard[] | null = null;
   try {
-    const cards = await loadFoundationShowroom(foundationServerPublicApi(), {
+    cards = await loadFoundationShowroom(foundationServerPublicApi(), {
       showroom: surface,
       ...area,
     });
-    const presented = await cardPresentations(cards.map((card) => card.id));
-    items = cards.map((card) => carouselItem(card, presented.get(card.id)));
   } catch (error) {
     log.warn("Fair showroom unavailable; showing the newest posts for a minute", {
       surface,
       error: error instanceof Error ? error.message : "Unknown error",
     });
   }
-  cache.delete(key);
-  cache.set(key, { at: now, items });
-  if (cache.size > CACHE_ENTRIES) cache.delete(cache.keys().next().value!);
-  return items;
+  remember(orders, key, { at: now, cards }, CACHE_ENTRIES);
+  return cards;
+}
+
+/** Each card's presentation (its chosen video frame and logo). Cards with none
+ * remembered are read together, waiting at most PRESENTATION_DEADLINE_MS. Every
+ * answer is remembered for a minute (a failed read as no presentation), even one
+ * that comes after the deadline. One warning per visit counts the cards left
+ * with their preview picture alone. */
+async function cardPresentations(
+  surface: ShowroomSurface,
+  ids: readonly string[]
+): Promise<Map<string, FoundationCardPresentation | undefined>> {
+  const fresh = (id: string) => {
+    const kept = presentations.get(id);
+    return kept && Date.now() - kept.at < CACHE_MS ? kept : undefined;
+  };
+  const missing = ids.filter((id) => !fresh(id));
+  if (missing.length > 0) {
+    let failed = 0;
+    let started = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const api = foundationServerPublicApi();
+      const reads = missing.map((id) =>
+        searchFoundationPresentedCards(api, { post_id: id, offset: 0, limit: 1 })
+          .then(
+            // A reply for another post is ignored.
+            (page) => page.items.find((item) => item.id === id)?.presentation,
+            () => {
+              // Counted in the warning below; the card keeps its preview picture.
+              failed += 1;
+              return undefined;
+            }
+          )
+          .then((presentation) =>
+            remember(presentations, id, { at: Date.now(), presentation }, PRESENTATION_ENTRIES)
+          )
+      );
+      started = true;
+      await Promise.race([
+        Promise.all(reads),
+        new Promise((resolve) => {
+          timer = setTimeout(resolve, PRESENTATION_DEADLINE_MS);
+        }),
+      ]);
+    } catch {
+      // The connection could not be set up, so nothing was read: the warning
+      // below counts every missing card, and the next visit reads them again.
+    } finally {
+      clearTimeout(timer);
+    }
+    const unanswered = missing.filter((id) => !fresh(id)).length;
+    if (failed + unanswered > 0)
+      log.warn(
+        "Showroom card presentations unavailable; those cards show their preview picture alone",
+        {
+          surface,
+          cards: missing.length,
+          failed: started ? failed : missing.length,
+          late: started ? unanswered : 0,
+        }
+      );
+  }
+  return new Map(ids.map((id) => [id, fresh(id)?.presentation]));
+}
+
+/** The fair order's cards with their presentations, or null when the order
+ * cannot be read. */
+async function buildFairOrder(
+  surface: ShowroomSurface,
+  area: Area,
+  key: string
+): Promise<CarouselItem[] | null> {
+  const cards = await fairCards(surface, area, key);
+  if (!cards) return null;
+  const presented = await cardPresentations(
+    surface,
+    cards.map((card) => card.id)
+  );
+  return cards.map((card) => carouselItem(card, presented.get(card.id)));
+}
+
+/** The fair order for the showroom and area, or null when it cannot be read.
+ * Simultaneous visits share one build (see JOIN_MS). */
+async function fairOrder(surface: ShowroomSurface, area: Area): Promise<CarouselItem[] | null> {
+  const key = `${surface}|${area.province ?? ""}|${area.city ?? ""}`;
+  const now = Date.now();
+  const running = builds.get(key);
+  if (running && now - running.at < JOIN_MS) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        running.items,
+        new Promise<null>((resolve) => {
+          timer = setTimeout(() => resolve(null), JOIN_MS - (now - running.at));
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  const build = { at: now, items: buildFairOrder(surface, area, key) };
+  builds.set(key, build);
+  try {
+    return await build.items;
+  } finally {
+    if (builds.get(key) === build) builds.delete(key);
+  }
+}
+
+/** Forgets every remembered order, presentation and build (unit tests only). */
+export function resetShowroomCachesForTests() {
+  orders.clear();
+  presentations.clear();
+  builds.clear();
 }
 
 /** The newest posts, as before the fair order (used only when it fails). */

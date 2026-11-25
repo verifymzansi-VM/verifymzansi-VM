@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { searchFoundationPresentedCards, loadFoundationShowroom, resolveIpGeolocation } = vi.hoisted(
-  () => ({
+const { searchFoundationPresentedCards, loadFoundationShowroom, resolveIpGeolocation, warn } =
+  vi.hoisted(() => ({
     searchFoundationPresentedCards: vi.fn(),
     loadFoundationShowroom: vi.fn(),
     resolveIpGeolocation: vi.fn(),
-  })
-);
+    warn: vi.fn(),
+  }));
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/foundation/server-public", () => ({ foundationServerPublicApi: () => ({}) }));
@@ -16,9 +16,9 @@ vi.mock("@/lib/foundation/public-cards", () => ({
   foundationMediaUrl: (key: string | null) => (key ? `/media/${key}` : null),
 }));
 vi.mock("@/lib/services/ip-geolocation", () => ({ resolveIpGeolocation }));
-vi.mock("@/lib/utils/logger", () => ({ createLogger: () => ({ warn: vi.fn(), error: vi.fn() }) }));
+vi.mock("@/lib/utils/logger", () => ({ createLogger: () => ({ warn, error: vi.fn() }) }));
 
-import { loadShowroomItems, showroomVisitorArea } from "./feed";
+import { loadShowroomItems, resetShowroomCachesForTests, showroomVisitorArea } from "./feed";
 
 const card = (id: string, extra: Record<string, unknown> = {}) => ({
   id,
@@ -116,6 +116,7 @@ describe("showroomVisitorArea", () => {
 describe("loadShowroomItems", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetShowroomCachesForTests();
     resolveIpGeolocation.mockImplementation(area);
     searchFoundationPresentedCards.mockResolvedValue({ items: [] });
   });
@@ -235,8 +236,9 @@ describe("loadShowroomItems", () => {
       vi.advanceTimersByTime(60_000);
       await loadShowroomItems("business", first);
       expect(loadFoundationShowroom).toHaveBeenCalledTimes(3);
-      // The card presentations are remembered with the order: one read per card per minute.
-      expect(searchFoundationPresentedCards).toHaveBeenCalledTimes(3);
+      // A card's presentation is remembered for a minute per post, across
+      // showrooms: read for business, reused for home, read again after a minute.
+      expect(searchFoundationPresentedCards).toHaveBeenCalledTimes(2);
     } finally {
       vi.useRealTimers();
     }
@@ -327,5 +329,90 @@ describe("loadShowroomItems", () => {
     expect(items.map((item) => item.posterUrl)).toEqual([undefined, undefined, "/media/img.jpg"]);
     for (const item of items) expect(item).not.toHaveProperty("logoUrl");
     expect(newestReads()).toHaveLength(0);
+    // One summary warning for the visit, not one per card.
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("presentations unavailable"),
+      expect.objectContaining({ surface: "home", cards: 3, failed: 1, late: 0 })
+    );
+  });
+
+  it("stops waiting for a slow presentation read after 1.5 s and remembers its late answer", async () => {
+    vi.useFakeTimers();
+    try {
+      resolveIpGeolocation.mockReturnValue(onlyIn("Limpopo"));
+      const videoOnly = { image_key: null, video_key: KEY(1) };
+      loadFoundationShowroom.mockResolvedValue([
+        card(ID(1), { preview: videoOnly }),
+        card(ID(2), { preview: videoOnly }),
+      ]);
+      const frame = (id: string, key: string) => ({
+        items: [presented(id, [{ purpose: "poster", key }])],
+      });
+      searchFoundationPresentedCards.mockImplementation(
+        (_api: unknown, input: { post_id: string }) =>
+          input.post_id === ID(1)
+            ? new Promise((resolve) => setTimeout(() => resolve(frame(ID(1), KEY(3))), 10_000))
+            : Promise.resolve(frame(ID(2), KEY(4)))
+      );
+      let done = false;
+      const visit = loadShowroomItems("tourism", first).then((items) => {
+        done = true;
+        return items;
+      });
+      await vi.advanceTimersByTimeAsync(1_499);
+      expect(done).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      const items = await visit;
+      // The slow card looks as it does today; the other has its chosen frame.
+      expect(items.map((item) => item.posterUrl)).toEqual([undefined, `/media/${KEY(4)}`]);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining("presentations unavailable"),
+        expect.objectContaining({ cards: 2, failed: 0, late: 1 })
+      );
+      // The late answer is remembered: the next visit shows it without reading again.
+      await vi.advanceTimersByTimeAsync(10_000);
+      const next = await loadShowroomItems("tourism", first);
+      expect(next.map((item) => item.posterUrl)).toEqual([`/media/${KEY(3)}`, `/media/${KEY(4)}`]);
+      expect(searchFoundationPresentedCards).toHaveBeenCalledTimes(2);
+      expect(loadFoundationShowroom).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("shares one set of reads between simultaneous visits", async () => {
+    resolveIpGeolocation.mockReturnValue(onlyIn("Limpopo"));
+    let release: (cards: unknown[]) => void = () => {};
+    loadFoundationShowroom.mockReturnValue(new Promise((resolve) => (release = resolve)));
+    searchFoundationPresentedCards.mockImplementation(
+      async (_api: unknown, input: { post_id: string }) => ({
+        items: [presented(input.post_id, [{ purpose: "logo", key: KEY(5) }])],
+      })
+    );
+    const visits = [loadShowroomItems("business", first), loadShowroomItems("business", first)];
+    release([card(ID(1)), card(ID(2))]);
+    const [one, two] = await Promise.all(visits);
+    expect(one).toEqual(two);
+    expect(one.map((item) => item.logoUrl)).toEqual([`/media/${KEY(5)}`, `/media/${KEY(5)}`]);
+    expect(loadFoundationShowroom).toHaveBeenCalledTimes(1);
+    expect(searchFoundationPresentedCards).toHaveBeenCalledTimes(2);
+  });
+
+  it("ignores a presentation reply for another post", async () => {
+    const videoOnly = { image_key: null, video_key: KEY(1) };
+    loadFoundationShowroom.mockResolvedValue([card(ID(1), { preview: videoOnly })]);
+    searchFoundationPresentedCards.mockResolvedValue({
+      items: [
+        presented(ID(9), [
+          { purpose: "poster", key: KEY(2) },
+          { purpose: "logo", key: KEY(3) },
+        ]),
+      ],
+    });
+    const [item] = await loadShowroomItems("market", first);
+    expect(item!.posterUrl).toBeUndefined();
+    expect(item).not.toHaveProperty("logoUrl");
   });
 });
