@@ -80,6 +80,36 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Removing an admin needs another admin's approval, 25 November 2026
+
+`20261125150338_admin_removal_needs_approval.sql` is pending (see the applied
+register). Launch checklist item 20.
+
+- `internal.propose_frontend_staff_role` (full body) still applies a lowering at
+  once when the person is a moderator or a governor. Lowering an admin (to
+  governor, moderator or member) is now a proposal that waits up to 7 days for a
+  different admin to approve or reject it on the Staff roles page
+  (`api.review_frontend_staff_role`): never the proposer, never the admin it is
+  about, and only while the proposer is still an admin. The proposer may
+  withdraw it. No command, argument, result or grant changes.
+- **Emergency path.** With only two admins, a removal waits for an approver who
+  does not exist. If an admin account must lose its role at once (for example it
+  was taken over), the owner does it in a reviewed SQL editor session, as for
+  the first administrator: set `revoked_at` and `revoked_by` on that person's
+  current `private.staff_roles` row, insert a matching
+  `private.frontend_staff_role_changes` row (status `applied`, `direct_removal`
+  true, the reason) so the Staff roles history shows it, and record the session
+  in the implementation log. The last active admin can never be removed.
+
+Replaced body only. ORDER: apply first, then merge (the live roles route already
+accepts "proposed"). Read-only preflight:
+`../preflight/20261125150338_admin_removal_needs_approval.check.sql` (expect
+"update not applied", the number of active admins and the role changes waiting);
+rollback: `../rollback/20261125150338_admin_removal_needs_approval.down.sql`
+(puts the earlier body back; proposals made meanwhile stay and can still be
+decided). Behaviour test:
+`scripts/test-foundation-admin-removal-needs-approval.mjs`.
+
 ## Lost-email alert and staff deadline emails, 25 November 2026
 
 `20261125131322_lost_email_alert_staff_deadlines.sql` is pending (see the
@@ -8051,5 +8081,7 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   full replay (except the known schema grant difference)
 
 - `20261125131322_lost_email_alert_staff_deadlines.sql`: pending
+
+- `20261125150338_admin_removal_needs_approval.sql`: pending
 
 <!-- applied-register:end -->

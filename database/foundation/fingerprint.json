@@ -34,15 +34,16 @@
       "triggers": "c4bf73bad1fc8ea3f8c8e671d74ba56b"
     },
     "pendingApplication": [
-      "20261125131322_lost_email_alert_staff_deadlines.sql"
+      "20261125131322_lost_email_alert_staff_deadlines.sql",
+      "20261125150338_admin_removal_needs_approval.sql"
     ]
   },
   "knownDifferences": [
     "Reference data is not fingerprinted. candidate.sql seeds posting-terms version posting-v2, which production does not hold: production has posting-v1 and posting-v3 (current since 20261109173012_posting_terms_v3.sql), and posting-v4 once 20261112122001_publish_posting_terms_v4.sql is applied (current from 20261112173841_switch_posting_terms_v4.sql).",
     "schema_grants: production has 8 items (d397fed9c8bd9d4fc50ebdd777899d93) and the replay 7 (categories below). The extra production item is `internal supabase_auth_admin:USAGE`, which Supabase grants when the Auth \"Before user created\" hook is switched on; no repository file creates it (see replay/hosted-auth-hook-grants.sql)."
   ],
-  "updateCount": 115,
-  "lastUpdate": "20261125131322_lost_email_alert_staff_deadlines.sql",
+  "updateCount": 116,
+  "lastUpdate": "20261125150338_admin_removal_needs_approval.sql",
   "categories": {
     "column_grants": {
       "items": 10,
@@ -62,7 +63,7 @@
     },
     "function_bodies": {
       "items": 1192,
-      "fingerprint": "6c883815e1183c8dbdbddc1ae12e01b3"
+      "fingerprint": "c3da937668feab5387ee73ac5572c758"
     },
     "function_grants": {
       "items": 867,
