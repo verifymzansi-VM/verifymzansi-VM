@@ -102,7 +102,7 @@ const AREAS = [
 const CHECKS = {
   yes: [
     "Phone number verified",
-    "SA ID or SA passport and a selfie reviewed by our team or our partner Didit",
+    "SA ID or SA passport and a selfie reviewed by our team or our verification partner",
     "Every post reviewed before it goes live",
     "Stickers show what we reviewed and when: ID reviewed, CIPC registered, Seen by VerifyMzansi",
   ],

@@ -62,7 +62,7 @@ describe("public trust pages", () => {
     }
     // True on every ID check setting (staff or Didit).
     expect(
-      screen.getByText("Checked by our team or our partner Didit, then encrypted.")
+      screen.getByText("Checked by our team or our verification partner, then encrypted.")
     ).toBeInTheDocument();
     for (const label of ["Pending review", "Incomplete", "Unregistered", "ID reviewed"]) {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0);

@@ -9,7 +9,10 @@ import {
 
 const root = join(__dirname, "..");
 /** Staff screens and server code may name the partner; member pages, help
- * and shared components may not (Didit plan, appendix D). */
+ * and shared components may not (Didit plan, appendix D), except the two legal
+ * pages that must name every provider: the Privacy Policy and the PAIA manual
+ * (POPIA section 18 and settled legal answers D3 and D4). */
+const LEGAL_PAGES = [join("app", "privacy", "page.tsx"), join("app", "paia", "page.tsx")];
 const memberSources = [join(root, "app"), join(root, "components")];
 const staffOrServer = [
   join(root, "app", "admin"),
@@ -27,13 +30,13 @@ function files(dir: string): string[] {
 }
 
 describe("automatic ID checks, member side", () => {
-  it("never names the provider in member pages, help or shared components", () => {
+  it("names the provider only on the legal pages of member pages, help and shared components", () => {
     const sources = memberSources.flatMap(files);
     expect(sources.some((path) => path.includes(`${sep}help${sep}verification`))).toBe(true);
     const naming = sources
       .filter((path) => /didit/i.test(readFileSync(path, "utf8")))
       .map((path) => relative(root, path));
-    expect(naming).toEqual([]);
+    expect(naming.sort()).toEqual([...LEGAL_PAGES].sort());
   });
 
   it("accepts frame messages only from the check's own origin", () => {
