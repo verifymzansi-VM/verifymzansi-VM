@@ -31,7 +31,11 @@ begin
     then raise exception 'owner-approved administrator invitation required' using errcode='42501';end if;
   if actor_role<>'admin' and not(actor_role='governor' and before_role='moderator' and p_role='member')
     then raise exception 'staff role change not authorized' using errcode='42501';end if;
-  direct_removal:=actor_role='admin' and internal.frontend_staff_rank(p_role)<internal.frontend_staff_rank(before_role);
+  -- An admin lowers a moderator or a governor at once. Lowering another admin
+  -- waits for a different admin's approval (review_frontend_staff_role), so
+  -- one admin cannot lock out another.
+  direct_removal:=actor_role='admin' and before_role<>'admin'
+    and internal.frontend_staff_rank(p_role)<internal.frontend_staff_rank(before_role);
   update private.frontend_staff_role_changes set status='withdrawn',decided_at=now_at,note='Expired before another proposal'
     where target_id=target and status='proposed' and expires_at<=now_at;
   if direct_removal then

@@ -143,7 +143,7 @@ export default async function GovernanceRolesPage({
     <div className="space-y-6">
       <PageHeader
         title="Staff roles"
-        description="Promotions need an independent approver. Removals by an admin take effect immediately."
+        description="Promotions need an independent approver. Removing an admin needs another admin's approval."
         breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Staff roles" }]}
       />
 

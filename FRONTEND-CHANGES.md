@@ -165,6 +165,9 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 100. Add lost days (item 75) (and the group 100 part of 1 row elsewhere) | approved by owner 2026-11-25 (answer: 'Approve both', for the v2 pictures and the database update) | Admins only, on Payments & refunds: an 'Add lost days' card. Staff enter a member's email, check their running paid slots and package (each with its end date), choose 1 to 30 days and a reason, and see each new end date before and after adding. Every running paid slot and package of the member gets the days; a queued renewal moves with its slot and a package's slots still end together. At most 30 days in all per slot; beyond that, or for an ended slot, staff refund instead. Members see only their later end dates; nobody is emailed. |
 | 102. Lost-email alert and staff deadline emails (item 28) (no file rows: email only) | approved by owner 2026-11-25 (answer: 'Approve with the fix', for the three email pictures, with '1 more is not listed' fixed) | Nothing for members or visitors. Staff with the role that handles them get one email about each new privacy request, appeal and report (up to 30 a day for all staff, never to the person a report is about): its type, a reference, when it came in and its deadline, with a button to the staff page. The support address gets one email listing queued emails that failed their last attempt, at most one every 15 minutes. |
 | 104. Staff refunds: first purchase and part refunds (item 77) (and the group 104 part of 5 rows elsewhere) | approved by owner 2026-11-25 (answer: 'Approve them') | Admins only, in the refund forms on Payments & refunds: an amount to refund (part of what is left) and, for an account's first purchase, the reason 'First purchase cancelled (within 5 business days)' with the date the customer asked. The form says whether the slot ends now or keeps running. Whole refunds and chargebacks look and work as before. |
+| 103. Showroom video posts show their chosen frame and logo (no file rows: data only, `src/lib/showroom/feed.ts`) | approved by owner 2026-11-25 (answer: 'Approve them', for the before and after pictures) | Home and area showrooms: a video post's card plays its video over the frame the owner chose, and a post with a logo shows it in the card, as in the chosen version; before, a video-only post showed the generic shop artwork with no video and the title's first letter instead of a logo. Posts with neither look as they do today. |
+| 105. Small lifecycle rules (item 40) (and the group 105 part of 1 row elsewhere) | approved by owner 2026-11-25 (answer: 'Approve with the rewording', the pictures with the sticker email reworded) | Owners of a post with an open report see that it can be hidden now and deleted once staff have looked at the report. Business owners get one email 30 days before a CIPC registered or Seen sticker ends, linking to the business's verification page, and the Seen step there offers the booking form from 60 days before the sticker ends. Free events cannot start more than 12 months ahead (the form already said so). |
+| 106. Removing an admin needs approval; appeal pages off the old backend (item 20, part 1) (and the group 106 part of 1 row elsewhere) | approved by owner 2026-11-25 (answer: 'Approve them') | Nothing for members or visitors. Admins: removing another admin now waits for a different admin's approval on Staff roles, and its header line says so. |
 | 107. Change a verified phone number or place (item 20, part 2) (no file rows of its own: the group 107 part of 4 rows elsewhere) | approved by owner 2026-11-25 (answer: 'Approve them') | Members: 'Change number' on My profile opens the phone step to verify a new number by SMS code (at most every 15 days, after the ID review); province and city can be changed on My profile at most every 15 days. |
 
 Questions for the owner:
@@ -889,7 +892,7 @@ None left: the three filter files were put back to `0b562f42` (see "Put back").
 | `src/app/admin/governance/escalations/[id]/decision-action-buttons.tsx`       | rewiring          | Foundation scope; double-submit guard.                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Nothing (same look and steps)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | keep     | awaiting owner                                                                                                                                                                                                                                                                                                              | 2026-11-08 | 2797b6010773 |
 | `src/app/admin/governance/escalations/[id]/page.tsx`                          | rewiring          | Reads through `readGovernanceRecord`.                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Nothing (same look and steps)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | keep     | awaiting owner                                                                                                                                                                                                                                                                                                              | 2026-11-08 | 441577b0d959 |
 | `src/app/admin/governance/oversight/page.tsx`                                 | rewiring          | Reads through `readGovernanceMetrics`.                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Nothing (same look and steps)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | keep     | awaiting owner                                                                                                                                                                                                                                                                                                              | 2026-11-08 | 027a302abcb8 |
-| `src/app/admin/governance/roles/page.tsx`                                     | rewiring          | Native roster; "Former staff member" fallback. Retired-backend branch removed.                                                                                                                                                                                                                                                                                                                                                                                                              | Nothing (same look and steps)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | keep     | awaiting owner                                                                                                                                                                                                                                                                                                              | 2026-11-08 | b29f1bc8202f |
+| `src/app/admin/governance/roles/page.tsx`                                     | rewiring          | Native roster; "Former staff member" fallback. Retired-backend branch removed. Group 106: the header line now says removing an admin needs another admin's approval.                                                                                                                                                                                                                                                                                                                                                                                                              | Group 106: the header line reads 'Promotions need an independent approver. Removing an admin needs another admin's approval.' (was '... Removals by an admin take effect immediately.'). Otherwise the same look and steps.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | keep     | awaiting owner; group 106 part approved by owner 2026-11-25 (answer: 'Approve them') | 2026-11-08 | fcc9b37a34a5 |
 | `src/app/admin/layout.tsx` | rewiring | Navigation filtered by assigned capabilities; flag context. Group 72: mounts the staff two-step return (a staff action refused for an expired authenticator check goes to the two-step page and back). | Nothing (same look and steps) | keep | awaiting owner; group 72 part approved by owner 2026-11-21 | 2026-11-20 | 10cd80ed01cd |
 | `src/app/admin/moderation/page.tsx`                                           | rewiring          | Native moderation queue; 403 goes to two-step. Retired-backend branch removed.                                                                                                                                                                                                                                                                                                                                                                                                              | Nothing (same look and steps)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | keep     | awaiting owner                                                                                                                                                                                                                                                                                                              | 2026-11-08 | 34d98b08b2f6 |
 | `src/app/admin/organisations/page.tsx`                                        | rewiring          | Native directory. Retired-backend branch removed.                                                                                                                                                                                                                                                                                                                                                                                                                                           | Nothing (same look and steps)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | keep     | awaiting owner                                                                                                                                                                                                                                                                                                              | 2026-11-08 | 3b2dd161adcf |
@@ -3141,7 +3144,7 @@ and one byte over, so the limits register can mark it proven: the profile photo
 
 | File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `src/components/business-verification/owner-verification-panel.test.tsx` | test | Group 76: a test that a 5 MB CIPC PDF is read and one byte more is refused before anything is uploaded. | Nothing (not part of a page) | keep | awaiting owner | 2026-11-21 | 3fe9ae84efaf |
+| `src/components/business-verification/owner-verification-panel.test.tsx` | test | Group 76: a test that a 5 MB CIPC PDF is read and one byte more is refused before anything is uploaded. Group 105: tests that the Seen booking form shows from 60 days before the sticker ends, and not earlier. | Nothing (not part of a page) | keep | awaiting owner; group 105 part approved by owner 2026-11-25 (answer: 'Approve with the rewording', the pictures with the sticker email reworded) | 2026-11-21 | 33edae55401c |
 
 Decision: awaiting owner.
 
@@ -4297,6 +4300,107 @@ Decision: approved by owner 2026-11-25 (answer: 'Approve them').
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `src/components/admin/commercial/refund-amount.tsx` | visual | Group 104: the amount, first-purchase date and slot-effect fields shared by the refund forms. | Staff with the refund permission: everything described in group 104. | keep | approved by owner 2026-11-25 (answer: 'Approve them') | 2026-11-25 | d9783a6f664a |
 | `src/components/admin/commercial/refund-amount.test.tsx` | test | Group 104: reading rands, what the request carries, the slot effect, the unused-days suggestion and the fields. | Nothing (not part of a page) | keep | approved by owner 2026-11-25 (answer: 'Approve them') | 2026-11-25 | a4fecbf98c99 |
+
+### 103. Showroom video posts show their chosen frame and logo
+
+Returns the 27 October behaviour (`0b562f42`, `carousel-item-transforms.ts`)
+to the big showroom carousel on the home page and the Mzansi Market, Mzansi
+Business and Tourism & Events pages. The showroom read gave each card only its
+preview picture, which a video-only post does not have, so the carousel showed
+`/images/fallbacks/hero-shop.svg`, never started the video, and showed the
+title's first letter where the post's logo belongs. The cards now also carry
+the owner's chosen video frame (used only when there is no preview picture) and
+the post's logo, from the public card presentation read. The carousel itself is
+unchanged. A page waits at most 1.5 seconds for those reads; a card whose read is
+slower looks as it does today until a later visit.
+
+Rows: none; the change is in `src/lib/showroom/feed.ts` (outside the checked
+scope) and its unit test.
+
+Pictures (live public data, read only, not published):
+`screenshots/showroom-video-cover/` (phone 375 and desktop 1280, home and
+Tourism & Events).
+
+Decision: approved by owner 2026-11-25 (answer: 'Approve them', for the before and after pictures).
+
+### 105. Small lifecycle rules (item 40)
+
+Launch checklist item 40. Database update
+`20261125150215_small_lifecycle_rules.sql` (pending, apply first). Three
+rules; the words are new (owner rule 4). Text outside the checked scope:
+`src/lib/services/email.ts` (`sticker_renewal_reminder`,
+`STICKER_RENEWAL_BODY`) and `src/lib/foundation/restored-post-actions.ts`
+(`REPORTED_POST_MESSAGE`).
+
+- Free events at most 12 months ahead: the form already refuses a later start;
+  the database now refuses it too. Nothing changes on screen.
+- A reported post: on My posts, 'Delete' then 'Yes, delete' on a post with an
+  open report shows, under the buttons: 'Someone reported this post. You can
+  hide it now, and delete it once our team has looked at the report.' The post
+  stays. Hiding it still works, and once staff have closed the report it can be
+  deleted as before.
+- Sticker renewal: one email 30 days before a CIPC registered or Seen by
+  VerifyMzansi sticker ends (not for a profile linked to another company, which
+  renews with it; not while a renewal is already waiting for review). Subject:
+  'Your VerifyMzansi sticker needs renewing soon'.
+
+  > The CIPC registered sticker on one of your businesses ends on 20 December
+  > 2026 at 12:00 (South African time).
+  >
+  > Renew it now from the business's verification page so the sticker does not
+  > lapse. Our team checks your company against CIPC's records again. A renewed
+  > sticker lasts 365 days from the day it is approved.
+
+  Button 'Renew my sticker'. For Seen: 'The Seen by VerifyMzansi sticker ...',
+  'Book a new Seen check now from the business's verification page so the
+  sticker does not lapse. A renewed sticker lasts 365 days from the day it is
+  approved.' and the button 'Book a Seen check'. Both link to that business's verification page.
+- Business verification page, Seen by VerifyMzansi: from 60 days before the
+  sticker ends (as CIPC's 'Renew now'), the line under the sticker adds
+  '· renew by 20 Dec 2026' and the existing booking form ('How should we see
+  your business?', three times, consent, 'Book my check') shows under it, so
+  the next check can be booked before the sticker ends. Before that, nothing
+  changes.
+
+Pictures (synthetic data, local preview, not published):
+`screenshots/item40-lifecycle/` (desktop 1280 and phone 375): the delete
+refusal on My posts, the Seen step with the booking form, and the two
+emails.
+
+Decision: approved by owner 2026-11-25 (answer: 'Approve with the rewording', the pictures with the sticker email reworded).
+
+| File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `src/components/business-verification/owner-verification-panel.tsx` | visual | Group 105: the Seen step shows 'renew by' and the existing booking form from 60 days before the Seen sticker ends, as CIPC's renewal does. | Business owners with a Seen sticker ending within 60 days: everything described in group 105. | keep | approved by owner 2026-11-25 (answer: 'Approve with the rewording', the pictures with the sticker email reworded) | 2026-11-25 | d1607e0977cc |
+
+### 106. Removing an admin needs approval; appeal pages off the old backend (item 20, part 1)
+
+Launch checklist item 20. Database update
+`20261125150338_admin_removal_needs_approval.sql` (pending, apply first):
+`internal.propose_frontend_staff_role` now applies a lowering at once only for a
+moderator or governor; lowering an admin waits for a different admin to approve
+it on the Staff roles page (never the proposer, never the admin it is about).
+The member appeal pages read the signed-in member through the live backend
+instead of the old one; they look and behave the same.
+
+- Staff roles (admins): the header line reads 'Promotions need an independent
+  approver. Removing an admin needs another admin's approval.' (was 'Removals
+  by an admin take effect immediately.'). Removing an admin now shows under
+  'Waiting for approval' with the existing Approve and Reject buttons (the
+  proposer sees 'Waiting for someone else to approve your proposal.', the admin
+  it is about sees 'This change is about you, so someone else must review it.').
+- Decisions and appeals (`/appeals`, `/appeals/new`): no visible change.
+  Signed-out visitors are still sent to sign in and back.
+
+Pictures (synthetic data, local preview, not published):
+`screenshots/item20-appeals/` (desktop 1280 and phone 375).
+
+Decision: approved by owner 2026-11-25 (answer: 'Approve them').
+
+| File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `src/app/appeals/page.tsx` | rewiring | Group 106: reads the signed-in member through the live backend (the old backend's client is no longer imported). | Nothing (same look and steps) | keep | approved by owner 2026-11-25 (answer: 'Approve them') | 2026-11-25 | e8b823e91d95 |
+| `src/app/appeals/new/page.tsx` | rewiring | Group 106: reads the signed-in member through the live backend (the old backend's client is no longer imported). | Nothing (same look and steps) | keep | approved by owner 2026-11-25 (answer: 'Approve them') | 2026-11-25 | dd72d0883f19 |
 
 ### 107. Change a verified phone number or place (item 20, part 2)
 

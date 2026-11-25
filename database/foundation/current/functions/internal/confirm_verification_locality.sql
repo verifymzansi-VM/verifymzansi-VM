@@ -29,7 +29,7 @@ begin
       values(actor,prior.province_id,prior.city_id,p_province,p_city);
     update private.verification_localities set province_id=p_province,city_id=p_city,confirmed_at=clock_timestamp()
       where owner_id=actor;
-    return jsonb_build_object('status','approved','assurance','self_declared','province_id',p_province,'city_id',p_city,'changed',true);
+    return jsonb_build_object('status','approved','assurance','self_declared','province_id',p_province,'city_id',p_city,'reused',false);
   end if;
   insert into private.verification_localities(owner_id,province_id,city_id) values(actor,p_province,p_city)
   on conflict(owner_id) do update set province_id=excluded.province_id,city_id=excluded.city_id,confirmed_at=clock_timestamp();

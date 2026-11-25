@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
 import { getMemberDecisions, type MemberDecision } from "@/lib/services/member-decisions";
 import { formatSaLongDate } from "@/lib/utils/format";
 import { createLogger } from "@/lib/utils/logger";
@@ -28,16 +27,10 @@ export default async function AppealsPage({
 }: {
   searchParams: Promise<{ submitted?: string }>;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user || user.is_anonymous) redirect("/login?returnUrl=%2Fappeals");
-
   const { submitted } = await searchParams;
-  let decisions: MemberDecision[];
+  let decisions: MemberDecision[] | null;
   try {
-    decisions = await getMemberDecisions(user.id);
+    decisions = await getMemberDecisions();
   } catch (err) {
     createLogger("AppealsPage").error("Could not load member decisions", {
       error: err instanceof Error ? err.message : "unknown",
@@ -48,6 +41,7 @@ export default async function AppealsPage({
       </p>
     );
   }
+  if (!decisions) redirect("/login?returnUrl=%2Fappeals");
 
   return (
     <>

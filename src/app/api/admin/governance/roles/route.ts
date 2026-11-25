@@ -38,9 +38,11 @@ const roleChangeSchema = z.discriminatedUnion("action", [
  * POST /api/admin/governance/roles
  *
  * Propose, approve or reject a staff role change. Policy is enforced in the
- * database (see 20260927110100_staff_role_changes.sql): promotions need an
- * independent approver, admin demotions apply immediately, a governor may
- * propose removing a moderator, and nobody changes their own role.
+ * database (internal.propose_frontend_staff_role and
+ * internal.review_frontend_staff_role): promotions and removing an admin need
+ * an independent admin's approval, an admin lowers a moderator or governor at
+ * once, a governor may propose removing a moderator, and nobody changes their
+ * own role.
  *
  * Every action needs a second factor verified in the last 15 minutes.
  */
