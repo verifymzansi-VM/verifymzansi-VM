@@ -707,6 +707,14 @@ describe("last attempt and the lost-email alert", () => {
     expect(JSON.stringify(lostEmailAlert.mock.calls)).not.toContain("synthetic@example.invalid");
   });
 
+  it("passes on the database's count of all lost payment emails", async () => {
+    offer({ ...alert, total: 60, payments: 52 });
+    expect(await run()).toMatchObject({ failed: [] });
+    expect(lostEmailAlert).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ total: 60, payments: 52 })
+    );
+  });
+
   it("counts an alert refused as a repeat of its own request as sent", async () => {
     offer(alert);
     lostEmailAlert.mockResolvedValue({ success: false, outcomeUnknown: true });

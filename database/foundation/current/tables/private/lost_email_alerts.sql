@@ -8,7 +8,9 @@ create table private.lost_email_alerts (
   items jsonb not null,
   total integer not null,
   sent_at timestamp with time zone,
+  payments integer,
   constraint lost_email_alerts_items_check CHECK (jsonb_typeof(items) = 'array'::text),
+  constraint lost_email_alerts_payments_check CHECK (payments >= 0 AND payments <= total),
   constraint lost_email_alerts_pkey PRIMARY KEY (id),
   constraint lost_email_alerts_total_check CHECK (total > 0)
 );
