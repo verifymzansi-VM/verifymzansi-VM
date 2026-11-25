@@ -25,7 +25,7 @@ begin
           where l.payment_id = request.payment_id and l.status = 'reversed'))
         or (request.payment_line_id is not null and not exists(select 1 from private.payment_lines l
           where l.id = request.payment_line_id and l.status = 'open'))
-        or internal.refund_renewal_waiting(request.payment_id, request.payment_line_id)
+        or (request.ends_paid_days and internal.refund_renewal_waiting(request.payment_id, request.payment_line_id))
         or (request.reason_code = 'renewal_cancelled_before_start'
           and not internal.refund_renewal_not_started(request.payment_id, request.payment_line_id)) then
       update private.payment_refund_requests set status = 'failed', failed_at = statement_timestamp(),
