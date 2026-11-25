@@ -80,6 +80,62 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## The member's consent to the automatic ID check, 25 November 2026
+
+`20261124235920_identity_check_consent.sql` is pending (see the applied
+register). Launch checklist item 61, part 7a (Didit plan sections 3 and 6): the
+member's consent to the independent verification partner is recorded on each
+automatic ID check before the setting may leave Manual, and staff see each
+case's check status in the queue (picture 11).
+
+- **The consent.** `private.identity_checks` gains `consent_version` and
+  `consented_at`. The trigger `identity_check_consent_required` (before insert)
+  refuses a new check unless `consent_version` is the current version and
+  `consented_at` is set (PT409, detail `identity_check_consent_required`).
+  Checks made before the update keep empty values and carry on unchanged.
+- **One place for the version.** `internal.identity_check_consent_version()`
+  returns `identity-check-consent-v1`, the website's
+  `IDENTITY_CHECK_CONSENT_VERSION` (the consent words of part 7). Change both
+  together when the words change.
+- **The start.** `api.start_my_identity_check` gains the optional argument
+  `p_consent_version` (internal twin `internal.start_my_identity_check(text)`;
+  the no-argument versions are dropped, so a call without the argument reaches
+  the new one). It stores the version and the start time on the new check.
+  Everything else is the live body: an unfinished check is returned whatever the
+  argument (it carries its own recorded consent), and every earlier refusal (a
+  person checking, verified phone, legal name, accepted case, limit, pause,
+  setting) comes first. A call without the argument therefore gets the same
+  answers as before, except that it can no longer create a check.
+- **Staff reads.** `api.get_identity_check_for_case` adds `consent_version` and
+  `consented_at` to the check. `api.get_frontend_staff_verification_queue` adds
+  `identity_check` to each case: `{status}` of the case's latest check other
+  than `unavailable` (the check the case read shows), or null. The reason codes
+  stay only in the case read (held claim, recent second factor, logged access),
+  as the staff data-minimisation rule asks; the queue shows no reasons, names or
+  sessions. The website's queue reader accepts the field with or without this
+  update.
+
+Expand only: the command keeps its name, every existing call still works and the
+new argument is optional; a later contract step (`require-argument`) makes it
+required once the website sends it. ORDER: **website-first** (merge and deploy,
+then apply): the live queue reader is strict and would refuse the new
+`identity_check` field until this pull request's reader is deployed, and the
+Deploy gate's anonymous probe (`probeFoundationRuntimeApi`) leaves optional
+arguments out, so it passes on either side of the update. The website that sends
+`p_consent_version` (part 7) must deploy only after this update is applied.
+
+**Apply only while the setting is Manual; keep it Manual until part 7 (#360) is
+deployed.** On Staff final or Automatic a start without the argument is refused
+and the photo routes refuse while the route is automatic, so members could not
+verify. The update refuses unless the setting is Manual, and the preflight lists
+any other setting as a problem.
+
+Read-only preflight:
+`../preflight/20261124235920_identity_check_consent.check.sql`; rollback:
+`../rollback/20261124235920_identity_check_consent.down.sql`. The rollback
+refuses unless the setting is Manual, and once any check has recorded a member's
+consent (that evidence is kept: write a forward update instead).
+
 ## Posting terms posting-v6: the package rules, 22 November 2026
 
 `20261123225900_posting_terms_v6.sql` (launch checklist item 27) publishes
@@ -7820,10 +7876,19 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   difference)
 
 - `20261123225900_posting_terms_v6.sql`: applied 2026-11-25 01:22 UTC;
-  owner-approved, website-first (after the website release of pull request
-  #356, merged as aeb6c641); update sha256 starting febe65c5; preflight after:
-  current posting-v6 (update already applied), posting-v6 published, 0
-  acceptances; production fingerprint after it (fingerprint.sql) matched the
-  full replay (except the known schema grant difference)
+  owner-approved, website-first (after the website release of pull request #356,
+  merged as aeb6c641); update sha256 starting febe65c5; preflight after: current
+  posting-v6 (update already applied), posting-v6 published, 0 acceptances;
+  production fingerprint after it (fingerprint.sql) matched the full replay
+  (except the known schema grant difference)
+
+- `20261124235920_identity_check_consent.sql`: applied 2026-11-25 08:02 UTC;
+  owner-approved, website-first (after the website release of pull request #361,
+  merged as 5fb18f09); Supabase SQL editor (browser), file from raw GitHub at
+  5fb18f09, update sha256 starting 99e9c7120814ffa0; preflight before "update
+  not applied; mode: manual; checks: 0; started: 0" with no problem rows, after
+  "already applied; mode: manual; checks: 0; started: 0; with consent: 0";
+  production fingerprint after it (fingerprint.sql) matched the full replay
+  (except the known schema grant difference)
 
 <!-- applied-register:end -->

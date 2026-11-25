@@ -105,6 +105,7 @@ export const FOUNDATION_ERROR_REASONS = {
   house_slots_same_person: ["42501"],
   house_slots_self_approval: ["42501"],
   house_slots_term_invalid: ["22023"],
+  identity_check_consent_required: ["PT409"],
   identity_check_limit: ["PT409"],
   identity_check_mode: ["PT409"],
   identity_check_paused: ["PT409"],

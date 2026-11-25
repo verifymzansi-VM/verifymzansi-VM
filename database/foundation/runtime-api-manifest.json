@@ -3153,7 +3153,8 @@
       "name": "get_frontend_staff_verification_queue",
       "updates": [
         "updates/20261104162910_preserved_identity_review_workflow.sql",
-        "updates/20261118072601_staff_data_minimisation.sql"
+        "updates/20261118072601_staff_data_minimisation.sql",
+        "updates/20261124235920_identity_check_consent.sql"
       ],
       "arguments": [
         {
@@ -3174,7 +3175,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current evidence reviewer and independent subjects; bounded waiting summaries/counts. Exact current claim tuple only for its holder; no document bytes, number or storage keys. Members are named by their public short name."
+      "authority": "Current evidence reviewer and independent subjects; bounded waiting summaries/counts. Exact current claim tuple only for its holder; no document bytes, number or storage keys. Members are named by their public short name. Each case carries the status of its latest automatic ID check only; reason codes stay in the logged case read."
     },
     {
       "name": "get_my_frontend_identity_state",
@@ -5824,8 +5825,17 @@
     },
     {
       "name": "start_my_identity_check",
-      "updates": ["updates/20261121094003_automatic_identity_checks.sql"],
-      "arguments": [],
+      "updates": [
+        "updates/20261121094003_automatic_identity_checks.sql",
+        "updates/20261124235920_identity_check_consent.sql"
+      ],
+      "arguments": [
+        {
+          "name": "p_consent_version",
+          "sqlType": "text",
+          "optional": true
+        }
+      ],
       "returns": "jsonb",
       "volatility": "v",
       "execute": {
@@ -5833,7 +5843,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Signed-in active member with a live session: returns their unfinished check whatever the setting now says; otherwise, with no request to a person still waiting, a verified phone, typed legal names, an identity case that is not accepted or under independent review and the automatic route open (setting not manual, not paused, within the spending guard; one start at a time site-wide), starts one, recording the typed legal names it starts with."
+      "authority": "Signed-in active member with a live session: returns their unfinished check whatever the setting now says; otherwise, with no request to a person still waiting, a verified phone, typed legal names, an identity case that is not accepted or under independent review and the automatic route open (setting not manual, not paused, within the spending guard; one start at a time site-wide), starts one, recording the typed legal names it starts with and the member's consent: p_consent_version must name the current consent words (internal.identity_check_consent_version()), or no check is created (PT409, detail identity_check_consent_required)."
     },
     {
       "name": "ask_person_identity_check",
@@ -5898,7 +5908,10 @@
     },
     {
       "name": "get_identity_check_for_case",
-      "updates": ["updates/20261121094003_automatic_identity_checks.sql"],
+      "updates": [
+        "updates/20261121094003_automatic_identity_checks.sql",
+        "updates/20261124235920_identity_check_consent.sql"
+      ],
       "arguments": [
         {
           "name": "p_case",
@@ -5913,7 +5926,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Staff with evidence:view holding a current claim on that open identity case (never their own), logged as a routine_review evidence access: the latest automatic check of the case, its status, the reason codes it did not pass and the member's ask-a-person request."
+      "authority": "Staff with evidence:view holding a current claim on that open identity case (never their own), logged as a routine_review evidence access: the latest automatic check of the case, its status, the reason codes it did not pass, the member's ask-a-person request and the consent version and time the check recorded."
     },
     {
       "name": "attach_identity_check_session",
