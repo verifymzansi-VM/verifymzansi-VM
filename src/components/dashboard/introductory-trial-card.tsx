@@ -13,8 +13,6 @@ type Claim = {
   released_at: string | null;
   converted_at: string | null;
 };
-/** Trial lengths in days. */
-const lengths = { short: 7, long: 30 };
 /** The dashboard page passes the member's free week as `foundationClaim`
  * (null when there is none to show); the card reads nothing itself. */
 export function IntroductoryTrialCard({ foundationClaim }: { foundationClaim: Claim | null }) {
@@ -34,12 +32,7 @@ export function IntroductoryTrialCard({ foundationClaim }: { foundationClaim: Cl
         </span>
         <div className="min-w-0 flex-1 space-y-1">
           <h2 className="font-display text-base font-semibold text-foreground">
-            Your{" "}
-            {claim.admin_granted
-              ? claim.duration_days
-              : claim.duration_days === 7
-                ? lengths.short
-                : lengths.long}
+            Your {claim.duration_days}
             -day {claim.admin_granted ? "free post" : "introductory trial"}
           </h2>
           <p className="text-sm leading-6 text-muted-foreground">

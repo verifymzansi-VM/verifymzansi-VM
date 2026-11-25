@@ -5,7 +5,6 @@ import {
   restoredPostingPlanInfo,
   restoredPostingPlans,
 } from "./posting-allowance";
-import { trialAvailabilityMessage } from "../billing/free-posts";
 const id = "11111111-1111-4111-8111-111111111111";
 const facts = () =>
   postingAllowanceSchema.parse({
@@ -38,9 +37,6 @@ it("offers a new trial without inventing scarcity or bypass authority", () => {
     maxAllowed: 1,
     postingLimitBypassEnabled: false,
   });
-  expect(trialAvailabilityMessage(view.offer)).toBe(
-    "30-day trial available once per verified identity."
-  );
 });
 it("uses an existing shared or trial allowance without offering another grant", () => {
   const view = restoredPostingPlanInfo({

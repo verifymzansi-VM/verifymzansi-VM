@@ -43,7 +43,7 @@ const journeySteps = [
   {
     icon: Fingerprint,
     title: "ID & selfie reviewed",
-    body: "Reviewed by our team, then encrypted.",
+    body: "Checked by our team or our verification partner, then encrypted.",
   },
   { icon: MapPin, title: "Area shared", body: "Province and city, as given by the poster." },
   { icon: BrandShield, title: "Badge shown", body: "On their profile and posts." },

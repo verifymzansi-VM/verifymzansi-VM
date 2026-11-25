@@ -255,7 +255,7 @@ export const TRIAL_CONFIG = {
 /* ── Free Post Config ────────────────────────────────────── */
 /**
  * One introductory post across all marketplace areas.
- * Each verified identity chooses seven days or a limited 30-day launch trial.
+ * Seven days, once per ID-reviewed identity (the 30-day launch option has ended).
  * Free posts expire after the configured duration.
  */
 export const FREE_POST_CONFIG = {
