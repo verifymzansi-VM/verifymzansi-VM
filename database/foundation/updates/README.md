@@ -112,12 +112,12 @@ decided). Behaviour test:
 
 ## Staff refunds: the first purchase and part refunds, 25 November 2026
 
-`20261125133916_staff_part_refunds.sql` is pending (see the applied register).
-Launch checklist item 77. The posting terms (posting-v6) promise a first
-purchase cancelled within 5 business days, refunded in full, and refunds of part
-of a payment (unused whole days less the R50 cancellation fee, or a reasonable
-part for days we failed to provide). Until this update every refund was a whole
-payment or a whole slot.
+`20261125133916_staff_part_refunds.sql` was applied on 25 November 2026 at 16:28
+UTC (see the applied register). Launch checklist item 77. The posting terms
+(posting-v6) promise a first purchase cancelled within 5 business days, refunded
+in full, and refunds of part of a payment (unused whole days less the R50
+cancellation fee, or a reasonable part for days we failed to provide). Until
+this update every refund was a whole payment or a whole slot.
 
 - **One refund command.**
   `api.record_staff_refund(p_payment_id, p_line_id, p_channel, p_amount_cents, p_reason_code, p_reason, p_reference, p_ozow_fact, p_asked_on, p_request_id)`
@@ -8169,7 +8169,14 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   production fingerprint after it (fingerprint.sql) matched the full replay
   (except the known schema grant difference)
 
-- `20261125133916_staff_part_refunds.sql`: pending; apply-first
+- `20261125133916_staff_part_refunds.sql`: applied 2026-11-25 16:28 UTC;
+  apply-first, owner-approved, before pull request #369 was merged; Supabase SQL
+  editor (browser), file from raw GitHub at d1d6661c, update sha256 starting
+  505c3dfdc564d844; preflight before "update not applied; waiting for approval:
+  0; through Ozow not sent: 0; part refunds: 0" with no problem rows, after
+  "already applied" with the same counts; production fingerprint after it
+  (fingerprint.sql) matched the full replay (except the known schema grant
+  difference)
 
 - `20261125150338_admin_removal_needs_approval.sql`: pending
 
