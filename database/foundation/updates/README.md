@@ -110,8 +110,8 @@ member changed their place). Behaviour test:
 
 ## Removing an admin needs another admin's approval, 25 November 2026
 
-`20261125150338_admin_removal_needs_approval.sql` is pending (see the applied
-register). Launch checklist item 20.
+`20261125150338_admin_removal_needs_approval.sql` was applied on 25 November
+2026 at 19:45 UTC (see the applied register). Launch checklist item 20.
 
 - `internal.propose_frontend_staff_role` (full body) still applies a lowering at
   once when the person is a moderator or a governor. Lowering an admin (to
@@ -8246,7 +8246,14 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   with the same counts; production fingerprint after it (fingerprint.sql)
   matched the full replay (except the known schema grant difference)
 
-- `20261125150338_admin_removal_needs_approval.sql`: pending; apply-first
+- `20261125150338_admin_removal_needs_approval.sql`: applied 2026-11-25 19:45
+  UTC; apply-first, owner-approved, before pull request #373 was merged;
+  Supabase SQL editor (browser), file from raw GitHub at 2545b23c, update sha256
+  starting f31ca126e7d354fa; preflight before "update not applied; active
+  admins: 3; role changes waiting: 0 (admin removals: 0)" with no problem rows,
+  after "already applied" with the same counts; production fingerprint after it
+  (fingerprint.sql) matched the full replay (except the known schema grant
+  difference)
 
 - `20261125161326_change_verified_place.sql`: pending
 
