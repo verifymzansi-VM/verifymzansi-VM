@@ -80,6 +80,43 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Lifecycle rule follow-ups, 25 November 2026
+
+`20261125225855_lifecycle_rule_follow_ups.sql` is pending (see the applied
+register). Launch checklist item 56, batch D: the Low findings of the reviews of
+`20261125150215_small_lifecycle_rules.sql` (item 40). Full definitions of two
+internal functions; no API command, argument, result or grant changes.
+
+- **A report holds deletion only as long as the clean-up waits.**
+  `internal.delete_post` refuses (PT409, detail `post_report_open`) only while
+  an open report from the public exists and `internal.post_report_deferred`
+  holds, the scheduled clean-up's own rule: it stops waiting 7 days after the
+  post would otherwise be deleted (60 days after its last change when it has no
+  deletion date). Before, any open report refused with no end, so a report
+  nobody looked at could keep a paid slot or a free event place taken. A staff
+  duplicate-event flag no longer stops the owner's deletion (it names a pair of
+  posts, and the website says someone reported the post). The scheduled clean-up
+  is unchanged: it still waits for any open report, staff flags included.
+- **The sticker reminder needs a reviewed ID.**
+  `internal.sticker_renewal_reminder_key` also requires
+  `internal.frontend_business_identity_reviewed(owner)`, which renewing needs.
+  The email job compares the queued key with the current one, so a reminder
+  queued before the review lapsed is finished as skipped without a send. Its 30
+  days stay the period `internal.queue_sticker_renewal_reminders` uses to pick
+  candidates; the behaviour test checks both read the same interval.
+
+ORDER: apply first, then merge (either order is safe: the website part only adds
+the "Events can start at most 12 months ahead." message and shows the business
+verification dates in South African time). Read-only preflight:
+`../preflight/20261125225855_lifecycle_rule_follow_ups.check.sql` (expect
+"update not applied"; it counts posts with an open report, those whose owner may
+delete them after the update, and unsent sticker reminders whose owner's ID is
+not reviewed); rollback:
+`../rollback/20261125225855_lifecycle_rule_follow_ups.down.sql` (puts item 40's
+two bodies back; nothing is deleted, and a reminder skipped meanwhile for a
+missing ID review is not sent again for the same sticker end). Behaviour test:
+`scripts/test-foundation-lifecycle-rule-follow-ups.mjs`.
+
 ## Removing an admin needs another admin's approval, 25 November 2026
 
 `20261125150338_admin_removal_needs_approval.sql` was applied on 25 November
@@ -122,7 +159,8 @@ decided). Behaviour test:
 - **Sticker renewal reminder.** New outbox kind `sticker_renewal_reminder`: one
   email 30 days before an approved CIPC or Seen check ends, while it is still
   its business's latest decision of that kind, no check of that kind waits for
-  review, the business is live or paused and its owner can sign in
+  review, the business is in any state except archived or sold (draft, under
+  review, rejected, live or paused) and its owner can sign in
   (`internal.sticker_renewal_reminder_key`, queued by
   `internal.queue_sticker_renewal_reminders` from `api.run_slot_renewals`). The
   key names the end, so a renewed sticker gets its own reminder. Linked CIPC
@@ -140,6 +178,28 @@ Read-only preflight:
 not applied" and "events starting over 365 days ahead: 0"); rollback:
 `../rollback/20261125150215_small_lifecycle_rules.down.sql` (deletes the sticker
 reminders, which are notifications only).
+
+`20261125225855_lifecycle_rule_follow_ups.sql` (below) later limits the deletion
+rule to public reports within the clean-up's waiting time and asks the reminder
+for a reviewed ID. Notes on the applied `20261125150215` files, which cannot be
+edited:
+
+- **During the apply.** Its check for events starting more than 365 days ahead
+  runs before the trigger exists and takes no lock on `private.event_details`,
+  so an event saved in that moment with a start that far ahead can slip in. The
+  website form refuses such a start, so only a direct call could do it; the
+  preflight run after the update shows the count (expect 0).
+- **Rolling back and re-applying.** Its rollback deletes the sticker reminders,
+  sent or not. Applying the update again queues a fresh reminder for every
+  sticker then ending within 30 days, so owners already reminded get a second
+  email. And while it is rolled back nothing stops an event starting more than
+  365 days ahead; one saved meanwhile makes the re-apply refuse (55000, "events
+  start more than 365 days ahead") until that event is moved or removed.
+- **Rollback header.** It says the `internal.delete_post` body it puts back is
+  from `20261104101932_restored_owner_post_actions.sql`; that body was last set
+  by `20261109104020_post_expiry_rules.sql`. The bytes it restores are the right
+  ones (its precondition and the behaviour test check them); only the name in
+  the comment is wrong.
 
 ## Staff refunds: the first purchase and part refunds, 25 November 2026
 
@@ -8226,5 +8286,7 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   after "already applied" with the same counts; production fingerprint after it
   (fingerprint.sql) matched the full replay (except the known schema grant
   difference)
+
+- `20261125225855_lifecycle_rule_follow_ups.sql`: pending; apply-first
 
 <!-- applied-register:end -->

@@ -429,7 +429,9 @@ await runTwoAdminUpdateCheck(
       await check("later updates keep the three rules", () => {
         const owner = verified("life-later");
         fails(createEventSql(owner, window(400)), "22023", /event_too_far_ahead/);
-        const { owner: holder, business } = businessOwner("life-later-sticker");
+        // A full ID review: 20261125225855 asks the reminder for one.
+        const holder = world.reviewedId("life-later-sticker", admin);
+        const business = world.post(holder, "business", "business");
         sticker(holder, business, "cipc", 10);
         assert.equal(sweep().sticker_renewal_reminders, 1);
         const post = world.post(owner, "listing", "market");
