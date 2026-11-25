@@ -28,6 +28,17 @@ const snapshot = z
           display_name: z.string().nullable(),
           created_at: foundationInstant,
           steps: z.array(row).max(2),
+          // The status of the case's latest automatic ID check, from
+          // 20261124235920_identity_check_consent.sql. Optional, and an extra
+          // reasons field is still accepted, so this reader works before and
+          // after that update. Reasons are read only in the logged case view.
+          identity_check: z
+            .strictObject({
+              status: z.enum(["started", "not_finished", "approved", "with_staff", "declined"]),
+              reasons: z.array(z.string().max(40)).max(20).optional(),
+            })
+            .nullable()
+            .optional(),
           review_scope: nativeIdentityScopeSchema.nullable(),
         })
       )
