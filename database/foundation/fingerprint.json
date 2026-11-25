@@ -19,19 +19,19 @@
     ],
     "notYetCompared": [],
     "howToCompare": "In the Supabase SQL editor (read-only), run `set search_path to \"$user\", public;` first, so pg_get_indexdef prints `extensions.gin_trgm_ops` as the replay does, then run database/foundation/fingerprint.sql unchanged and compare each row with categories below.",
-    "matchedThroughUpdate": "20261125113433_add_lost_days.sql",
+    "matchedThroughUpdate": "20261125131322_lost_email_alert_staff_deadlines.sql",
     "matchedFingerprints": {
       "column_grants": "5e5623672e80b927048d8553487d5442",
-      "columns": "150735db63b77209a669fca799e80eba",
-      "constraints": "d0315c2922aef2c2bbbea2ad3edb4a69",
+      "columns": "3a1848bc21f3655ab5608b55b651e02e",
+      "constraints": "557d6e1a8ca93853e4304f69de7f3e9b",
       "event_triggers": "821f7d069c595c075754fad9309136ac",
-      "function_bodies": "e1ff366b04ebe6a1d9a3a27b732b720c",
-      "function_grants": "8e7f2891c8535f95afd41e61c4959d30",
-      "function_metadata": "de40009bf6227fb5dde281541a0983e1",
-      "indexes": "07f87fe8bfd5a5a74047c130d5d25056",
+      "function_bodies": "6c883815e1183c8dbdbddc1ae12e01b3",
+      "function_grants": "3474dddf55994ee3ce219d5017edf920",
+      "function_metadata": "be959ff8188791d4e2657fe7f9f97020",
+      "indexes": "64856317be3a211b7b9c4b9fcb162124",
       "policies": "085a305fbc41d38d34eb40c3748c0793",
-      "row_level_security": "854b423651a53326fa6c01fb27e80ac6",
-      "triggers": "c4bf73bad1fc8ea3f8c8e671d74ba56b"
+      "row_level_security": "b91cce098ef64beefe87624fa045d3d7",
+      "triggers": "0c00a7119ece5d4fe1ffa605e87fc40a"
     },
     "pendingApplication": [
       "20261125133916_staff_part_refunds.sql"
@@ -41,7 +41,7 @@
     "Reference data is not fingerprinted. candidate.sql seeds posting-terms version posting-v2, which production does not hold: production has posting-v1 and posting-v3 (current since 20261109173012_posting_terms_v3.sql), and posting-v4 once 20261112122001_publish_posting_terms_v4.sql is applied (current from 20261112173841_switch_posting_terms_v4.sql).",
     "schema_grants: production has 8 items (d397fed9c8bd9d4fc50ebdd777899d93) and the replay 7 (categories below). The extra production item is `internal supabase_auth_admin:USAGE`, which Supabase grants when the Auth \"Before user created\" hook is switched on; no repository file creates it (see replay/hosted-auth-hook-grants.sql)."
   ],
-  "updateCount": 115,
+  "updateCount": 116,
   "lastUpdate": "20261125133916_staff_part_refunds.sql",
   "categories": {
     "column_grants": {
@@ -49,48 +49,48 @@
       "fingerprint": "5e5623672e80b927048d8553487d5442"
     },
     "columns": {
-      "items": 1525,
-      "fingerprint": "135eec63795b9774d27a6d6891005504"
+      "items": 1533,
+      "fingerprint": "4bede8b52fd24933e7038b1c028d7429"
     },
     "constraints": {
-      "items": 1336,
-      "fingerprint": "f8b99c182a097549da5b4057452283cd"
+      "items": 1339,
+      "fingerprint": "64633103fbf3d005c761a2766570343b"
     },
     "event_triggers": {
       "items": 1,
       "fingerprint": "821f7d069c595c075754fad9309136ac"
     },
     "function_bodies": {
-      "items": 1196,
-      "fingerprint": "1f353f006795a0fcc881ad3e777535b6"
+      "items": 1204,
+      "fingerprint": "4b05e980953fb509e053533f7af7151b"
     },
     "function_grants": {
-      "items": 867,
-      "fingerprint": "64d58f48c31471bebfca47da72cc115b"
+      "items": 871,
+      "fingerprint": "6a97ff89a2ae657a6bfe88f5cb8c3166"
     },
     "function_metadata": {
-      "items": 1196,
-      "fingerprint": "a73e4d0454c23045d8ff29387cc190db"
+      "items": 1204,
+      "fingerprint": "919f55e04727f23bb024f645c0cc4631"
     },
     "indexes": {
-      "items": 610,
-      "fingerprint": "c076faf6eab01b551137ae7c9810cf86"
+      "items": 615,
+      "fingerprint": "25fde6a831c0903c32f85e5a1b12ec1b"
     },
     "policies": {
       "items": 4,
       "fingerprint": "085a305fbc41d38d34eb40c3748c0793"
     },
     "row_level_security": {
-      "items": 169,
-      "fingerprint": "854b423651a53326fa6c01fb27e80ac6"
+      "items": 170,
+      "fingerprint": "b91cce098ef64beefe87624fa045d3d7"
     },
     "schema_grants": {
       "items": 7,
       "fingerprint": "a68294e7a9bcf7c20492a72f7c724252"
     },
     "triggers": {
-      "items": 151,
-      "fingerprint": "c4bf73bad1fc8ea3f8c8e671d74ba56b"
+      "items": 154,
+      "fingerprint": "0c00a7119ece5d4fe1ffa605e87fc40a"
     }
   }
 }

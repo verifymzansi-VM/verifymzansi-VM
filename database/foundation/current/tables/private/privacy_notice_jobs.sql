@@ -11,6 +11,7 @@ create table private.privacy_notice_jobs (
   next_attempt_at timestamp with time zone default clock_timestamp() not null,
   claim_token uuid,
   locked_until timestamp with time zone,
+  lost_alert_id uuid,
   constraint privacy_notice_jobs_attempts_check CHECK (attempts >= 0 AND attempts <= 10),
   constraint privacy_notice_jobs_check CHECK ((claim_token IS NULL) = (locked_until IS NULL)),
   constraint privacy_notice_jobs_kind_check CHECK (kind = ANY (ARRAY['submitted'::text, 'extended'::text, 'rejected'::text, 'completed'::text, 'approved'::text, 'exported'::text])),
@@ -20,5 +21,6 @@ create table private.privacy_notice_jobs (
 );
 alter table private.privacy_notice_jobs owner to postgres;
 alter table private.privacy_notice_jobs enable row level security;
+CREATE INDEX privacy_notices_lost_unreported_idx ON private.privacy_notice_jobs USING btree (created_at, id) WHERE ((delivered_at IS NULL) AND (attempts >= 8) AND (lost_alert_id IS NULL));
 CREATE INDEX privacy_notices_waiting_idx ON private.privacy_notice_jobs USING btree (next_attempt_at, id) WHERE (delivered_at IS NULL);
 revoke all on private.privacy_notice_jobs from public;

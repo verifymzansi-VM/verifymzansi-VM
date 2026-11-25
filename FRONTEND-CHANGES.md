@@ -163,6 +163,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 99. Automatic ID checks: member and staff screens (item 61, part 7) (with the group 99 part of 5 rows elsewhere) | approved by owner 2026-11-25 (answers: 'Approve them' for the main screens, 'Approve both' for the loading and staff-setting pictures); plan pictures approved 2026-11-20; consent wording per decision L | Nothing while the staff setting is Manual (today's value, and it stays Manual until the consent record is in the database). On a Didit setting, Get verified's ID step shows the independent check: names, what it asks, a consent tick naming Didit with links to its two notices, Start ID check, the check inside the page, then Checking, Verified, 'A person will check your ID' or a decline with 'Try the ID check again' and 'Ask a person to look again'. Staff: an 'ID checks' card on Verify accounts (three settings, admins change it) and a Didit panel in the case view. |
 | 101. Trust promise matches reality (item 41) (no file rows of its own: the group 101 part of 12 rows elsewhere) | approved by owner 2026-11-25 (answer: 'Approve them') | Privacy Policy: a 'Who we are' section, a 'Cookies and browser storage' section, the keep-for periods the system applies, every provider and country named, and no claims of screen replays or logged number taps. PAIA names the same recipients. Trust & Safety, Advertise and the business verification help no longer say only 'our team' reviews IDs. The posting plan box loses 30-day free-post branches that could never show. Home, the footer and the site description say 'businesses, products, services, tourism and events from ID-reviewed posters' instead of 'verified businesses, products, ...'. Get verified (independent check): the privacy panel's keep-for line follows the applied rules and the consent names Ireland (European Union) and the United States. |
 | 100. Add lost days (item 75) (and the group 100 part of 1 row elsewhere) | approved by owner 2026-11-25 (answer: 'Approve both', for the v2 pictures and the database update) | Admins only, on Payments & refunds: an 'Add lost days' card. Staff enter a member's email, check their running paid slots and package (each with its end date), choose 1 to 30 days and a reason, and see each new end date before and after adding. Every running paid slot and package of the member gets the days; a queued renewal moves with its slot and a package's slots still end together. At most 30 days in all per slot; beyond that, or for an ended slot, staff refund instead. Members see only their later end dates; nobody is emailed. |
+| 102. Lost-email alert and staff deadline emails (item 28) (no file rows: email only) | approved by owner 2026-11-25 (answer: 'Approve with the fix', for the three email pictures, with '1 more is not listed' fixed) | Nothing for members or visitors. Staff with the role that handles them get one email about each new privacy request, appeal and report (up to 30 a day for all staff, never to the person a report is about): its type, a reference, when it came in and its deadline, with a button to the staff page. The support address gets one email listing queued emails that failed their last attempt, at most one every 15 minutes. |
 | 104. Staff refunds: first purchase and part refunds (item 77) (and the group 104 part of 5 rows elsewhere) | approved by owner 2026-11-25 (answer: 'Approve them') | Admins only, in the refund forms on Payments & refunds: an amount to refund (part of what is left) and, for an account's first purchase, the reason 'First purchase cancelled (within 5 business days)' with the date the customer asked. The form says whether the slot ends now or keeps running. Whole refunds and chargebacks look and work as before. |
 
 Questions for the owner:
@@ -4206,6 +4207,49 @@ Decision: approved by owner 2026-11-25 (after seeing the `lost-days-v2-*` pictur
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `src/components/admin/commercial/lost-days-panel.tsx` | visual | Group 100: the new 'Add lost days' card: check a member's running paid slots, then add 1 to 30 days with a reason through the commercial route. | Staff with the refund permission: everything described in group 100. | keep | approved by owner 2026-11-25 (answer: 'Approve both') | 2026-11-25 | a4f6a6898ac3 |
 | `src/components/admin/commercial/lost-days-panel.test.tsx` | test | Group 100: checks the closed card, checking and adding with the new ends, the same request id on retry, nothing running, the day and reason checks, the re-verify redirect and clearing on a new email. | Nothing (not part of a page) | keep | approved by owner 2026-11-25 (answer: 'Approve both') | 2026-11-25 | b87112843d60 |
+
+### 102. Lost-email alert and staff deadline emails (item 28)
+
+Email only: no file in the checked scope changes, so this group has no file
+rows. Launch checklist item 28. Database update
+`20261125131322_lost_email_alert_staff_deadlines.sql` (pending, apply first).
+The words are new (owner rule 4). Text outside the checked scope:
+`src/lib/services/email.ts` (`sendStaffDeadlineEmail`,
+`sendLostEmailAlert`).
+
+Staff deadline email, to each staff member whose role handles it, except whoever
+submitted it and the person a report is about; at most 30 a day across all
+staff. Subject, for example: 'VerifyMzansi staff: new report (fake
+listing, high priority), due 01 Dec 2026, 15:00'.
+
+> A new report is waiting. Deal with it by 01 Dec 2026, 15:00.
+>
+> Reason: fake listing, high priority
+> Reference: VM-…
+> Received: 27 Nov 2026, 15:00
+> Deadline: 01 Dec 2026, 15:00
+>
+> Sign in to the staff pages to read and handle it. The deadline counts
+> business days, skipping weekends but not public holidays.
+
+Button 'Open the report' (privacy requests: 'Open the privacy request' to the
+privacy requests page; appeals: 'Open the appeal' to that appeal). Deadlines: a
+privacy request's due date; an appeal 3 business days and a report 2 business
+days after it came in (the appeal target matches the contact page's published
+"2–3 business days"). No name, address or text the member wrote.
+
+Lost-email alert, to the support address: unchanged title 'Queued emails not
+confirmed delivered'; each row now also says when the email was queued, a line
+says how many more are not listed ('1 more is not listed here.', '2 more are
+not listed here.'), and a button 'Open operations' links to the staff operations
+page instead of the Worker logs.
+
+Pictures (synthetic data, not sent, not published): `screenshots/item28-emails/`
+(375 and 1280 wide): the staff report deadline email, the staff privacy request
+email and the lost-email alert.
+
+Decision: approved by owner 2026-11-25 (answer: 'Approve with the fix', for the
+three email pictures, with '1 more is not listed' fixed).
 
 ### 104. Staff refunds: first purchase and part refunds (item 77)
 

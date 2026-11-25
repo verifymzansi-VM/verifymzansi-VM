@@ -1032,6 +1032,8 @@ export type FoundationRuntimeServiceDatabase = {
         Returns: Json;
       };
       purge_post_engagement: { Args: Record<never, never>; Returns: Json };
+      claim_lost_email_alert: { Args: { p_limit: number }; Returns: Json };
+      complete_lost_email_alert: { Args: { p_claim: string; p_sent: boolean }; Returns: boolean };
     };
   };
 };

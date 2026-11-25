@@ -160,6 +160,52 @@ website reads nothing new. Read-only preflight:
 `../rollback/20261125133916_staff_part_refunds.down.sql`, which refuses once a
 first-purchase or part refund was recorded (fix forward).
 
+## Lost-email alert and staff deadline emails, 25 November 2026
+
+`20261125131322_lost_email_alert_staff_deadlines.sql` was applied on 25 November
+2026 at 14:30 UTC (see the applied register). Launch checklist item 28.
+
+- **Lost-email alert, kept in the database.** A queued email (outbox) or a
+  privacy request notice still unsent after its 8th attempt, once its lease has
+  ended, is lost. New table `private.lost_email_alerts` (one row per alert
+  email, holding the list it sends) and a new column `lost_alert_id` on
+  `private.outbox_events` and `private.privacy_notice_jobs` (the alert that
+  reported the row). New service-only commands
+  `api.claim_lost_email_alert(p_limit)` and
+  `api.complete_lost_email_alert(p_claim, p_sent)`: an alert whose send failed
+  is offered again unchanged (same id and list, so the email key is the same);
+  otherwise, unless an alert is being sent or one was sent in the last 15
+  minutes, every lost row not yet reported goes into one new alert that lists
+  the oldest 1 to 50 and counts them all. Lists hold queue ids, kinds, attempts,
+  times and error codes, never an address or the content. Sent alerts are
+  deleted after 400 days.
+- **Staff deadline emails.** New outbox kinds `staff_privacy_request`,
+  `staff_appeal` and `staff_report`. A trigger on each new privacy request,
+  appeal and public report queues one email per staff member whose role holds
+  `dsar:manage`, `appeal:decide` or `report:resolve` and who has a confirmed
+  address, except whoever submitted it and the person a report is about. At most
+  30 staff deadline emails are queued in any 24 hours, all staff and kinds
+  together, so the email provider's 100 a day keep room for members' emails (an
+  advisory lock makes overlapping submissions queue one at a time); items past
+  the cap are still in the staff queues.
+  `internal.claim_supported_notification_outbox` (full body) accepts 26 kinds
+  and hands a staff email out only while the staff member can sign in, still
+  holds the capability and the item is still open, and never for a report about
+  or by that staff member (otherwise it is finished as skipped). It adds the
+  type, the report's severity, the received time and the deadline: the privacy
+  request's effective due date, an appeal 3 and a report 2 business days after
+  receipt (weekends are skipped, public holidays are not, so the date is never
+  later than the real one).
+
+New API commands; no command, argument or grant is removed. ORDER: apply first,
+then merge (the deploy gate needs the two new commands). Read-only preflight:
+`../preflight/20261125131322_lost_email_alert_staff_deadlines.check.sql` (expect
+"update not applied" and "staff emails queued: 0"; it also counts the lost
+emails the first alert will list); rollback:
+`../rollback/20261125131322_lost_email_alert_staff_deadlines.down.sql` (deletes
+the staff deadline emails, which are notifications only, and the sent alerts;
+refused while an alert is not sent yet).
+
 ## Add lost days to paid slots and packages, 25 November 2026
 
 `20261125113433_add_lost_days.sql` was applied on 25 November 2026 at 13:05 UTC
@@ -8083,6 +8129,15 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   0" with no problem rows, after "already applied; running paid grants: 0;
   additions: 0"; production fingerprint after it (fingerprint.sql) matched the
   full replay (except the known schema grant difference)
+
+- `20261125131322_lost_email_alert_staff_deadlines.sql`: applied 2026-11-25
+  14:30 UTC; apply-first, owner-approved, before pull request #368 was merged;
+  Supabase SQL editor (browser), file from raw GitHub at da285b2b, update sha256
+  starting f7c6c764eb0b7705; preflight before "update not applied; lost emails:
+  0; open privacy requests: 0; open appeals: 0; open reports: 0; staff emails
+  queued: 0" with no problem rows, after "already applied" with the same counts;
+  production fingerprint after it (fingerprint.sql) matched the full replay
+  (except the known schema grant difference)
 
 - `20261125133916_staff_part_refunds.sql`: pending; apply-first
 

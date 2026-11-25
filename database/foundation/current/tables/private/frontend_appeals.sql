@@ -35,4 +35,5 @@ CREATE INDEX frontend_appeals_appellant_idx ON private.frontend_appeals USING bt
 CREATE INDEX frontend_appeals_pending_idx ON private.frontend_appeals USING btree (created_at, id) WHERE (status = 'submitted'::text);
 CREATE INDEX frontend_appeals_reviewer_idx ON private.frontend_appeals USING btree (reviewer_id);
 CREATE TRIGGER publish_frontend_appeal_notice AFTER UPDATE OF status ON private.frontend_appeals FOR EACH ROW WHEN (old.status = 'submitted'::text AND new.status <> 'submitted'::text) EXECUTE FUNCTION internal.publish_frontend_moderation_notice();
+CREATE TRIGGER queue_staff_deadline_email AFTER INSERT ON private.frontend_appeals FOR EACH ROW EXECUTE FUNCTION internal.queue_staff_deadline_emails('staff_appeal');
 revoke all on private.frontend_appeals from public;
