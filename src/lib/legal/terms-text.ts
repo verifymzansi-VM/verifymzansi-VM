@@ -1,9 +1,9 @@
-import current from "./terms-documents/posting-v5.json";
+import current from "./terms-documents/posting-v6.json";
 
 /**
  * The Terms page's text when the published posting terms cannot be read (no
  * foundation connection, for example in local previews): the sections of the
- * current version, posting-v5, word for word, plus the configured merchant
+ * current version, posting-v6, word for word, plus the configured merchant
  * name under "Paying, VAT & invoices" (the Terms text itself states the VAT
  * status).
  */

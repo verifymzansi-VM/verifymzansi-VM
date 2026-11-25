@@ -90,20 +90,6 @@ export default async function TermsPage() {
       ),
     },
     {
-      id: "reporting",
-      navLabel: "Reporting a post",
-      title: "Reporting a post",
-      content: (
-        <LegalBlocks
-          paragraphs={[
-            "To report a post that is unlawful, infringes your rights or breaks these Terms, use Report on the post, or email abuse@verifymzansi.com with the post's link, what is wrong and how to contact you.",
-            "We act on a report within 2 business days. We may remove a post on a credible complaint and restrict the account that posted it.",
-            "We keep a record of every report and notice we receive and what we did about it.",
-          ]}
-        />
-      ),
-    },
-    {
       id: "privacy-contact",
       navLabel: "Privacy & contact",
       title: "Privacy & contact",
