@@ -63,7 +63,7 @@ export const metadata: Metadata = {
   title: "Advertise",
   description: SHOW_SPONSOR_OFFER
     ? "Why advertise on VerifyMzansi, and which package fits: individual posts and Business Sponsor packages that support local businesses."
-    : "Why advertise on VerifyMzansi: individual posts in any section, from people whose ID our team has reviewed.",
+    : "Why advertise on VerifyMzansi: individual posts in any section, from people whose ID we have reviewed.",
   alternates: { canonical: "https://verifymzansi.com/advertise" },
 };
 
@@ -102,7 +102,7 @@ const AREAS = [
 const CHECKS = {
   yes: [
     "Phone number verified",
-    "SA ID or SA passport and a selfie reviewed by our team",
+    "SA ID or SA passport and a selfie reviewed by our team or our partner Didit",
     "Every post reviewed before it goes live",
     "Stickers show what we reviewed and when: ID reviewed, CIPC registered, Seen by VerifyMzansi",
   ],

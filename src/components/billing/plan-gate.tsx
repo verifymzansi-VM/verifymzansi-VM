@@ -26,7 +26,7 @@ import {
 } from "@/lib/constants/pricing";
 import { PLAN_SALES_PAUSED_NOTE } from "@/lib/billing/plan-sales";
 import { PLAN_TIER_LABELS, type MarketplaceArea, type PlanTier } from "@/types/enums";
-import { trialAvailabilityMessage, type IntroTrialOffer } from "@/lib/billing/free-posts";
+import type { IntroTrialOffer } from "@/lib/billing/free-posts";
 
 const FREE_POST_COUNT = Number(FREE_POST_CONFIG.maxAllowed);
 
@@ -65,9 +65,9 @@ function FreeEventOption({ onChoose }: { onChoose: () => void }) {
   );
 }
 
-/** Configured length for a trial choice (7 = short, 30 = launch). */
-function trialLength(offer: IntroTrialOffer | undefined, choice: 7 | 30): number {
-  return choice === 7 ? (offer?.shortDays ?? 7) : (offer?.longDays ?? 30);
+/** Configured length of the one free post (7 days; the 30-day launch option has ended). */
+function trialLength(offer: IntroTrialOffer | undefined): number {
+  return offer?.shortDays ?? 7;
 }
 
 interface PlanInfo {
@@ -605,10 +605,8 @@ function PlanPickerWithTrial({
   children: ReactNode;
 }) {
   const [showForm, setShowForm] = useState(false);
-  const [trialDays, setTrialDays] = useState<7 | 30>(7);
-  const selectTrial = (days: 7 | 30) => {
-    setTrialDays(days);
-    onTrialSelected?.(days);
+  const selectTrial = () => {
+    onTrialSelected?.(7);
     setShowForm(true);
   };
   const usageText =
@@ -631,7 +629,7 @@ function PlanPickerWithTrial({
             <span className="font-medium text-brand-gold-800 dark:text-brand-gold-200">
               {planInfo.postingLimitBypassEnabled
                 ? `Staff / testing access — Unlimited posts • ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video`
-                : `${(planInfo.offer?.adminFreePostsRemaining ?? 0) > 0 ? "Account free post" : "Introductory trial"} — ${(planInfo.offer?.adminFreePostsRemaining ?? 0) > 0 ? 30 : trialLength(planInfo.offer, trialDays)} days • ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video`}
+                : `Introductory trial — ${trialLength(planInfo.offer)} days • ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video`}
             </span>
           </div>
 
@@ -670,38 +668,23 @@ function PlanPickerWithTrial({
               <p className="text-sm font-medium text-foreground/85">
                 {planInfo.postingLimitBypassEnabled
                   ? `Posting limits bypassed: ${FREE_POST_CONFIG.maxPhotos} photos and ${FREE_POST_CONFIG.maxVideos} video`
-                  : (planInfo.offer?.adminFreePostsRemaining ?? 0) > 0
-                    ? `${planInfo.offer?.adminFreePostsRemaining} extra free posts remaining across all categories`
-                    : "One introductory post across all three areas"}
+                  : "One introductory post across all three areas"}
               </p>
               <p className="text-xs leading-5 text-muted-foreground">
                 {planInfo.postingLimitBypassEnabled
                   ? `Each post still uses free-tier media limits: ${FREE_POST_CONFIG.maxPhotos} photos and ${FREE_POST_CONFIG.maxVideos} video.`
-                  : (planInfo.offer?.adminFreePostsRemaining ?? 0) > 0
-                    ? "Each lasts 30 days from approval."
-                    : planInfo.offer?.thirtyDayAvailable
-                      ? `Choose ${trialLength(planInfo.offer, 7)} or ${trialLength(planInfo.offer, 30)} days, once. Starts on approval; standard placement.`
-                      : `${trialLength(planInfo.offer, 7)} days, once. Starts on approval; standard placement.`}
+                  : `${trialLength(planInfo.offer)} days, once. Starts on approval; standard placement.`}
               </p>
             </div>
             <Button
               variant="trust-verified"
               className="h-11 w-full whitespace-nowrap rounded-full px-6 sm:w-auto"
-              disabled={
-                !planInfo.postingLimitBypassEnabled &&
-                !((planInfo.offer?.adminFreePostsRemaining ?? 0) > 0
-                  ? planInfo.offer?.thirtyDayAvailable
-                  : planInfo.offer?.sevenDayAvailable)
-              }
-              onClick={() =>
-                selectTrial((planInfo.offer?.adminFreePostsRemaining ?? 0) > 0 ? 30 : 7)
-              }
+              disabled={!planInfo.postingLimitBypassEnabled && !planInfo.offer?.sevenDayAvailable}
+              onClick={selectTrial}
             >
               {planInfo.postingLimitBypassEnabled
                 ? "Start posting"
-                : (planInfo.offer?.adminFreePostsRemaining ?? 0) > 0
-                  ? "Use 30-day free post"
-                  : `Choose ${trialLength(planInfo.offer, 7)} days free`}
+                : `Choose ${trialLength(planInfo.offer)} days free`}
             </Button>
           </div>
         </div>
@@ -720,32 +703,6 @@ function PlanPickerWithTrial({
         </div>
       )}
 
-      {planInfo.offer &&
-        planInfo.offer.thirtyDayAvailable &&
-        planInfo.isTrial &&
-        !planInfo.postingLimitBypassEnabled &&
-        !(planInfo.offer.adminFreePostsRemaining ?? 0) && (
-          <div className="space-y-2 rounded-2xl border border-border/70 bg-card p-4">
-            <p className="font-semibold text-foreground">
-              {trialLength(planInfo.offer, 30)}-day free launch trial
-            </p>
-            <p className="text-sm text-muted-foreground">
-              {trialAvailabilityMessage(planInfo.offer)}
-            </p>
-            <Button
-              variant="outline"
-              className="h-11 rounded-full px-5"
-              disabled={!planInfo.offer.thirtyDayAvailable}
-              onClick={() => selectTrial(30)}
-            >
-              Choose {trialLength(planInfo.offer, 30)} days free
-            </Button>
-            <p className="text-xs text-muted-foreground">
-              If spaces fill before approval, you can choose {trialLength(planInfo.offer, 7)} days
-              instead.
-            </p>
-          </div>
-        )}
       {onChooseFreeEvent ? <FreeEventOption onChoose={onChooseFreeEvent} /> : null}
 
       {/* Paid plans */}

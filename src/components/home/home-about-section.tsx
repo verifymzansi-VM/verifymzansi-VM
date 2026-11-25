@@ -44,8 +44,8 @@ export function HomeAboutSection() {
               Know who you&rsquo;re dealing with.
             </h2>
             <p className="mt-3 text-[15px] leading-7 text-muted-foreground sm:text-base">
-              VerifyMzansi connects people with verified businesses, products, services, tourism and
-              events. Discover, connect and do business with confidence.
+              VerifyMzansi connects people with businesses, products, services, tourism and events
+              from ID-reviewed posters. Discover, connect and do business with confidence.
             </p>
           </div>
           {/* Outlined: the footer band's gold "Post for free" is Home's one main button. */}
