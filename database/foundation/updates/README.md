@@ -80,6 +80,52 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## The member's consent to the automatic ID check, 25 November 2026
+
+`20261124235920_identity_check_consent.sql` is pending (see the applied
+register). Launch checklist item 61, part 7a (Didit plan sections 3 and 6): the
+member's consent to the independent verification partner is recorded on each
+automatic ID check before the setting may leave Manual, and staff see each
+case's check status in the queue (picture 11).
+
+- **The consent.** `private.identity_checks` gains `consent_version` and
+  `consented_at`. The trigger `identity_check_consent_required` (before insert)
+  refuses a new check unless `consent_version` is the current version and
+  `consented_at` is set (PT409, detail `identity_check_consent_required`).
+  Checks made before the update keep empty values and carry on unchanged.
+- **One place for the version.** `internal.identity_check_consent_version()`
+  returns `identity-check-consent-v1`, the website's
+  `IDENTITY_CHECK_CONSENT_VERSION` (the consent words of part 7). Change both
+  together when the words change.
+- **The start.** `api.start_my_identity_check` gains the optional argument
+  `p_consent_version` (internal twin `internal.start_my_identity_check(text)`;
+  the no-argument versions are dropped, so a call without the argument reaches
+  the new one). It stores the version and the start time on the new check.
+  Everything else is the live body: an unfinished check is returned whatever the
+  argument (it carries its own recorded consent), and every earlier refusal (a
+  person checking, verified phone, legal name, accepted case, limit, pause,
+  setting) comes first. A call without the argument therefore gets the same
+  answers as before, except that it can no longer create a check.
+- **Staff reads.** `api.get_identity_check_for_case` adds `consent_version` and
+  `consented_at` to the check. `api.get_frontend_staff_verification_queue` adds
+  `identity_check` to each case: `{status, reasons}` of the case's latest check
+  other than `unavailable` (the check the case read shows), or null. No names,
+  sessions or other personal data. The website's queue reader accepts the field
+  with or without this update.
+
+Expand only: the command keeps its name, every existing call still works and the
+new argument is optional; a later contract step (`require-argument`) makes it
+required once the website sends it. ORDER: **website-first** (merge and deploy,
+then apply): the live queue reader is strict and would refuse the new
+`identity_check` field until this pull request's reader is deployed, and the
+Deploy gate's anonymous probe (`probeFoundationRuntimeApi`) leaves optional
+arguments out, so it passes on either side of the update. The website that sends
+`p_consent_version` (part 7) must deploy only after this update is applied.
+Read-only preflight:
+`../preflight/20261124235920_identity_check_consent.check.sql`; rollback:
+`../rollback/20261124235920_identity_check_consent.down.sql` (set Manual first;
+the recorded consent is dropped with the columns).
+
 ## A reminder 3 days before a free credit ends, 22 November 2026
 
 `20261122182304_free_credit_reminder.sql` is pending (see the applied register).
@@ -7743,5 +7789,7 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   preflight after: already applied; production fingerprint after it
   (fingerprint.sql) matched the full replay (except the known schema grant
   difference)
+
+- `20261124235920_identity_check_consent.sql`: pending; website-first
 
 <!-- applied-register:end -->

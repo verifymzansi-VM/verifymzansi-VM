@@ -28,6 +28,16 @@ const snapshot = z
           display_name: z.string().nullable(),
           created_at: foundationInstant,
           steps: z.array(row).max(2),
+          // The case's latest automatic ID check (status and reason codes
+          // only), from 20261124235920_identity_check_consent.sql. Optional
+          // so this reader accepts the queue before and after that update.
+          identity_check: z
+            .strictObject({
+              status: z.enum(["started", "not_finished", "approved", "with_staff", "declined"]),
+              reasons: z.array(z.string().max(40)).max(20),
+            })
+            .nullable()
+            .optional(),
           review_scope: nativeIdentityScopeSchema.nullable(),
         })
       )

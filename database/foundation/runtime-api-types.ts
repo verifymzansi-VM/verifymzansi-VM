@@ -746,7 +746,7 @@ export type FoundationRuntimeAuthenticatedDatabase = {
       get_staff_sales_summary: { Args: Record<never, never>; Returns: Json };
       get_vat_registration: { Args: Record<never, never>; Returns: Json };
       get_identity_check_availability: { Args: Record<never, never>; Returns: Json };
-      start_my_identity_check: { Args: Record<never, never>; Returns: Json };
+      start_my_identity_check: { Args: { p_consent_version?: string }; Returns: Json };
       ask_person_identity_check: {
         Args: { p_check: string; p_reason: string };
         Returns: Json;

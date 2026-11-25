@@ -271,3 +271,29 @@ it("projects the identity queue for the represented staff account only", async (
     status: 503,
   });
 });
+
+it("accepts the queue with and without each case's latest automatic ID check", async () => {
+  const { api, rpc } = fixture(queue);
+  await expect(readFrontendStaffVerificationQueue(api, caller)).resolves.toMatchObject({
+    total: 1,
+  });
+  for (const identity_check of [
+    null,
+    { status: "with_staff", reasons: ["names_differ", "session_moved"] },
+  ]) {
+    rpc.mockResolvedValueOnce(ok({ ...queue, groups: [{ ...group, identity_check }] }));
+    await expect(readFrontendStaffVerificationQueue(api, caller)).resolves.toMatchObject({
+      total: 1,
+    });
+  }
+  // Only the status and reason codes: anything more is refused.
+  rpc.mockResolvedValueOnce(
+    ok({
+      ...queue,
+      groups: [{ ...group, identity_check: { status: "declined", reasons: [], session_id: id } }],
+    })
+  );
+  await expect(readFrontendStaffVerificationQueue(api, caller)).rejects.toMatchObject({
+    status: 503,
+  });
+});
