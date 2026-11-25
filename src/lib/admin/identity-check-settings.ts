@@ -75,6 +75,15 @@ export const IDENTITY_CHECK_PAUSE_TEXT: Record<
   },
 };
 
+/**
+ * The Didit settings wait until the database records each member's consent
+ * before a check starts (item 61, part 7a; TODO(61 part 7a): remove then).
+ * The card shows them, disabled, and the route refuses them.
+ */
+export const IDENTITY_CHECK_DIDIT_MODES_READY = false;
+export const IDENTITY_CHECK_DIDIT_MODES_WAITING =
+  "The two Didit settings switch on once consent recording is live.";
+
 /** The bounds the database enforces (internal.set_identity_check_mode). */
 export const IDENTITY_CHECK_REASON = { min: 5, max: 500 } as const;
 

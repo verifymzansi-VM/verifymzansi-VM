@@ -149,6 +149,15 @@ export async function setIdentityCheckMode(
   api: FoundationAuthenticatedApi,
   input: z.infer<typeof identityCheckModeRequest>
 ) {
+  // TODO(61 part 7a): allow the Didit settings once the database records each
+  // member's consent before a check starts. Until then the setting stays
+  // Manual, whatever the database would accept.
+  if (input.mode !== "manual")
+    throw new IdentityCheckSettingRefused(
+      409,
+      "identity_check_consent_pending",
+      "The Didit settings switch on once consent recording is live. The setting stays Manual."
+    );
   const { data, error } = await api.rpc(
     "set_identity_check_mode",
     { p_mode: input.mode, p_reason: input.reason },

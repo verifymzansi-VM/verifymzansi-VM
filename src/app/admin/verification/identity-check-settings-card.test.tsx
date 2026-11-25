@@ -35,20 +35,33 @@ describe("the ID checks card", () => {
     expect(screen.queryByLabelText(/Reason for the change/i)).not.toBeInTheDocument();
   });
 
-  it("saves a new setting with its reason", async () => {
+  it("shows the Didit settings disabled until consent recording is live", () => {
     render(<IdentityCheckSettingsCard settings={settings()} canChange />);
-    fireEvent.click(screen.getByRole("radio", { name: /Didit, staff have the final say/ }));
+    expect(screen.getByRole("radio", { name: /^Manual/ })).toBeEnabled();
+    for (const name of [/Didit, staff have the final say/, /Didit fully automatic/]) {
+      const radio = screen.getByRole("radio", { name });
+      expect(radio).toBeDisabled();
+      expect(radio).not.toBeChecked();
+    }
+    expect(
+      screen.getByText("The two Didit settings switch on once consent recording is live.")
+    ).toBeTruthy();
+  });
+
+  it("saves a new setting with its reason", async () => {
+    render(<IdentityCheckSettingsCard settings={settings({ mode: "staff_final" })} canChange />);
+    fireEvent.click(screen.getByRole("radio", { name: /^Manual/ }));
     fireEvent.click(screen.getByRole("button", { name: /Save setting/i }));
     expect(await screen.findByRole("alert")).toHaveTextContent(/reason of 5 to 500/);
     expect(postStaffCommand).not.toHaveBeenCalled();
     fireEvent.change(screen.getByLabelText(/Reason for the change/i), {
-      target: { value: "Launch: Didit on, staff decide unclear cases" },
+      target: { value: "Back to staff review for now" },
     });
     fireEvent.click(screen.getByRole("button", { name: /Save setting/i }));
     await waitFor(() =>
       expect(postStaffCommand).toHaveBeenCalledWith(
         "/api/admin/identity-check-settings",
-        { mode: "staff_final", reason: "Launch: Didit on, staff decide unclear cases" },
+        { mode: "manual", reason: "Back to staff review for now" },
         expect.any(String)
       )
     );
@@ -63,10 +76,10 @@ describe("the ID checks card", () => {
       message: "Verify your authenticator again, then try again.",
       verifyUrl: "/staff/two-step",
     });
-    render(<IdentityCheckSettingsCard settings={settings()} canChange />);
-    fireEvent.click(screen.getByRole("radio", { name: /Didit fully automatic/ }));
+    render(<IdentityCheckSettingsCard settings={settings({ mode: "automatic" })} canChange />);
+    fireEvent.click(screen.getByRole("radio", { name: /^Manual/ }));
     fireEvent.change(screen.getByLabelText(/Reason for the change/i), {
-      target: { value: "Fully automatic from today" },
+      target: { value: "Back to staff review" },
     });
     fireEvent.click(screen.getByRole("button", { name: /Save setting/i }));
     await waitFor(() =>

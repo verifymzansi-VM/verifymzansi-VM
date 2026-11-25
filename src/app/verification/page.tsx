@@ -61,8 +61,10 @@ import {
   IndependentCheckChecking,
   IndependentCheckDeclined,
   IndependentCheckFrame,
+  IndependentCheckLoading,
   IndependentCheckStart,
   IndependentCheckWithStaff,
+  useCheckDocument,
   useIdentityCheck,
   useIdentityCheckPolling,
 } from "./independent-check";
@@ -640,12 +642,23 @@ export default function VerificationPage() {
     full: string;
     public: string | null;
   } | null>(null);
-  const checkView = identityCheckView(identityCheck.availability, {
+  const idStepStatus = serverStepMap.get("id_doc")?.status;
+  const checkView = identityCheckView(identityCheck.availability ?? null, {
     finished: checkFinished,
     tryAgain: checkTryAgain,
-    idStepPending: serverStepMap.get("id_doc")?.status === "pending",
+    idStepReturned: idStepStatus === "rejected" || idStepStatus === "needs_resubmission",
   });
   useIdentityCheckPolling(step === "id_doc" ? checkView : null, identityCheck.refresh);
+  // The check's frame needs this page loaded as a document (useCheckDocument).
+  const checkDocument = useCheckDocument(
+    step === "id_doc" && (checkView.kind === "start" || checkView.kind === "frame")
+  );
+  // What the ID step shows: a short loading line until the route is known (or
+  // while the page loads itself again for the frame), then the view.
+  const idView =
+    identityCheck.availability === undefined || checkDocument !== "ready"
+      ? { kind: "loading" as const, blocked: checkDocument === "blocked" }
+      : checkView;
   const persistedPhoneVerified = ["approved", "pending"].includes(
     serverStepMap.get("phone")?.status ?? ""
   );
@@ -835,16 +848,19 @@ export default function VerificationPage() {
     };
   }, [syncVerificationStatus]);
 
-  // A result arrived: refresh the steps, and show the verified name.
-  const checkResult = ["approved", "with_staff", "declined"].includes(checkView.kind)
-    ? checkView.kind
-    : null;
+  // A result arrived (the latest check's own status, whatever the view): read
+  // the steps again, and show the verified name.
+  const latestCheck = identityCheck.availability?.check;
+  const checkResult =
+    latestCheck && ["approved", "with_staff", "declined"].includes(latestCheck.status)
+      ? `${latestCheck.id}:${latestCheck.status}`
+      : null;
   useEffect(() => {
     if (!checkResult) return;
     let cancelled = false;
     async function showResult() {
       await syncVerificationStatus();
-      if (cancelled || checkResult !== "approved") return;
+      if (cancelled || !checkResult?.endsWith(":approved")) return;
       await readVerifiedNames();
     }
     async function readVerifiedNames() {
@@ -1891,13 +1907,16 @@ export default function VerificationPage() {
                     icon={IdCard}
                     why={STEP_WHY.id_doc}
                   >
-                    {(checkView.kind === "manual" || checkView.kind === "start") &&
+                    {(idView.kind === "manual" ||
+                      idView.kind === "start" ||
+                      idView.kind === "loading") &&
                       renderStepStatusNotice(true)}
-                    {checkView.kind === "manual" && checkView.fallback && (
-                      <AutomaticCheckFallbackNote />
+                    {idView.kind === "loading" && (
+                      <IndependentCheckLoading blocked={idView.blocked} />
                     )}
+                    {idView.kind === "manual" && idView.fallback && <AutomaticCheckFallbackNote />}
 
-                    {(checkView.kind === "manual" || checkView.kind === "start") && (
+                    {(idView.kind === "manual" || idView.kind === "start") && (
                       <>
                         <div className="grid gap-4 sm:grid-cols-2">
                           <div className="space-y-2">
@@ -1968,7 +1987,7 @@ export default function VerificationPage() {
                       </>
                     )}
 
-                    {checkView.kind === "start" && (
+                    {idView.kind === "start" && (
                       <IndependentCheckStart
                         namesReady={!firstNameError && !lastNameError}
                         firstName={normalizedFirstName}
@@ -1978,23 +1997,23 @@ export default function VerificationPage() {
                         onBack={() => setStep("phone")}
                       />
                     )}
-                    {checkView.kind === "frame" && (
-                      <IndependentCheckFrame url={checkView.url} onFinished={handleCheckFinished} />
+                    {idView.kind === "frame" && (
+                      <IndependentCheckFrame url={idView.url} onFinished={handleCheckFinished} />
                     )}
-                    {checkView.kind === "checking" && <IndependentCheckChecking />}
-                    {checkView.kind === "approved" && (
+                    {idView.kind === "checking" && <IndependentCheckChecking />}
+                    {idView.kind === "approved" && (
                       <IndependentCheckApproved
                         fullName={verifiedNames?.full ?? null}
                         publicName={verifiedNames?.public ?? null}
                         onContinue={() => setStep("location")}
                       />
                     )}
-                    {checkView.kind === "with_staff" && (
+                    {idView.kind === "with_staff" && (
                       <IndependentCheckWithStaff onContinue={() => setStep("location")} />
                     )}
-                    {checkView.kind === "declined" && (
+                    {idView.kind === "declined" && (
                       <IndependentCheckDeclined
-                        view={checkView}
+                        view={idView}
                         onTryAgain={() => setCheckTryAgain(true)}
                         onAsked={async () => {
                           await refreshIdentityCheck();
@@ -2003,7 +2022,7 @@ export default function VerificationPage() {
                       />
                     )}
 
-                    {checkView.kind === "manual" && (
+                    {idView.kind === "manual" && (
                       <>
                         <div className="space-y-2">
                           <Label htmlFor="idNumber">13-digit SA ID number</Label>

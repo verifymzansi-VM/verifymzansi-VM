@@ -202,6 +202,20 @@ for (const [label, viewport] of [
   test.describe(`owner pictures: ID checks at ${label} px`, () => {
     test.use(viewport);
 
+    test(`didit-02a-loading-${label}`, async ({ context, page }) => {
+      await signIn(context);
+      await answerDiditReads(page, DIDIT_STATES["02-start"]);
+      // The route's answer is held back, so the step shows its loading line.
+      await page.route("**/api/verification/identity-check", () => new Promise<void>(() => {}));
+      await open(page, "/verification");
+      await expect(page.getByText("Loading the ID step…")).toBeVisible();
+      await page.waitForTimeout(1_500);
+      await page.screenshot({
+        path: test.info().outputPath(`owner-pictures-didit-02a-loading-${label}.png`),
+        fullPage: true,
+      });
+    });
+
     for (const [state, answer] of Object.entries(DIDIT_STATES)) {
       test(`didit-${state}-${label}`, async ({ context, page }) => {
         await signIn(context);
@@ -226,7 +240,8 @@ for (const [label, viewport] of [
     }
 
     for (const [state, sql] of [
-      ["09-staff-setting-manual", null],
+      // Manual, with the two Didit settings shown disabled until part 7a.
+      ["09c-staff-setting-didit-disabled", null],
       [
         "09-staff-setting-didit",
         "update private.identity_check_settings set mode = 'staff_final' where id;",

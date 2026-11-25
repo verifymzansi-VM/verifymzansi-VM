@@ -62,9 +62,11 @@ describe("the ID step's view of the independent check", () => {
 
   it("shows 'a person will check' while the ID step waits for staff, or after asking (05)", () => {
     const withStaff = route("automatic", null, { id, status: "with_staff" });
-    expect(identityCheckView(withStaff, { idStepPending: true })).toEqual({ kind: "with_staff" });
+    // Shown as soon as the result arrives, before the page has read the steps
+    // again (no step status yet, or still the earlier one).
+    expect(identityCheckView(withStaff)).toEqual({ kind: "with_staff" });
     // Staff already decided (sent back): the member can start again.
-    expect(identityCheckView(withStaff, { idStepPending: false })).toEqual({ kind: "start" });
+    expect(identityCheckView(withStaff, { idStepReturned: true })).toEqual({ kind: "start" });
     expect(
       identityCheckView(
         route("automatic", null, {

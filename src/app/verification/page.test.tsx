@@ -1114,8 +1114,15 @@ describe("VerificationPage", () => {
       const base = global.fetch as unknown as (input: string | URL, init?: RequestInit) => unknown;
       global.fetch = vi.fn((input: string | URL, init?: RequestInit) => {
         const url = String(input);
-        if (url === "/api/verification/identity-check" && (init?.method ?? "GET") === "GET")
-          return Promise.resolve(jsonResponse(queue.length > 1 ? queue.shift() : queue[0], 200));
+        if (url === "/api/verification/identity-check" && (init?.method ?? "GET") === "GET") {
+          const answer = queue.length > 1 ? queue.shift() : queue[0];
+          if (answer instanceof Promise) return answer;
+          return Promise.resolve(
+            answer === 429
+              ? jsonResponse({ error: "Too many requests; try again shortly" }, 429)
+              : jsonResponse(answer, 200)
+          );
+        }
         if (url === "/api/verification/identity-check")
           return Promise.resolve(jsonResponse({ checkId: "c", url: "https://verify.didit.me/s" }));
         return base(input, init);
@@ -1217,6 +1224,110 @@ describe("VerificationPage", () => {
       );
       expect(await screen.findByText(/Your ID is verified/i)).toBeTruthy();
       expect(screen.getByRole("button", { name: /Continue to location/i })).toBeTruthy();
+    });
+
+    it("shows a short loading line, not the camera form, until the route is known", async () => {
+      statusResponse = phoneDone();
+      const first = deferred<ReturnType<typeof jsonResponse>>();
+      withAvailability(first.promise);
+      render(<VerificationPage />);
+      expect(await screen.findByText(/Loading the ID step/i)).toBeTruthy();
+      expect(screen.queryByLabelText(/13-digit SA ID number/i)).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /Take test photo/i })).not.toBeInTheDocument();
+      first.resolve(jsonResponse({ route: "manual", reason: "mode", check: null }, 200));
+      expect(await screen.findByLabelText(/13-digit SA ID number/i)).toBeInTheDocument();
+      expect(screen.queryByText(/Loading the ID step/i)).not.toBeInTheDocument();
+    });
+
+    it("shows 'a person will check' when the finished check goes to staff, and reads the steps again", async () => {
+      statusResponse = phoneDone();
+      withAvailability(
+        {
+          route: "automatic",
+          reason: null,
+          check: { id: "c", status: "started", session_url: "https://verify.didit.me/s" },
+        },
+        { route: "automatic", reason: null, check: { id: "c", status: "with_staff" } }
+      );
+      render(<VerificationPage />);
+      await screen.findByTitle(/Independent ID check/i);
+      const statusReads = () =>
+        fetchCalls().filter(([input]) => String(input).includes("/api/verification/status")).length;
+      const before = statusReads();
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          origin: "https://verify.didit.me",
+          data: { type: "didit:completed" },
+        })
+      );
+      expect(await screen.findByText(/A person will check your ID/i)).toBeTruthy();
+      expect(screen.getByRole("button", { name: /Meanwhile, add your location/i })).toBeTruthy();
+      await waitFor(() => expect(statusReads()).toBeGreaterThan(before));
+      expect(screen.queryByRole("button", { name: /Start ID check/i })).not.toBeInTheDocument();
+    });
+
+    it("keeps the last good answer when a later read is refused (429)", async () => {
+      statusResponse = phoneDone();
+      withAvailability(
+        {
+          route: "automatic",
+          reason: null,
+          check: { id: "c", status: "started", session_url: "https://verify.didit.me/s" },
+        },
+        429
+      );
+      render(<VerificationPage />);
+      await screen.findByTitle(/Independent ID check/i);
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          origin: "https://verify.didit.me",
+          data: { type: "didit:completed" },
+        })
+      );
+      expect(await screen.findByText(/Checking your ID/i)).toBeTruthy();
+      await waitFor(() =>
+        expect(
+          fetchCalls().filter(([input]) => String(input) === "/api/verification/identity-check")
+            .length
+        ).toBeGreaterThanOrEqual(2)
+      );
+      expect(screen.getByText(/Checking your ID/i)).toBeTruthy();
+      expect(screen.queryByLabelText(/13-digit SA ID number/i)).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /Take test photo/i })).not.toBeInTheDocument();
+    });
+
+    it("loads the page once more, before anything starts, after an in-app link", async () => {
+      statusResponse = phoneDone();
+      withAvailability({ route: "automatic", reason: null, check: null });
+      const entries = vi
+        .spyOn(performance, "getEntriesByType")
+        .mockReturnValue([{ name: "http://localhost:3000/dashboard" } as PerformanceEntry]);
+      const replace = vi.fn();
+      const realLocation = window.location;
+      Object.defineProperty(window, "location", {
+        configurable: true,
+        value: { href: "http://localhost:3000/verification?returnUrl=%2Fdashboard", replace },
+      });
+      try {
+        render(<VerificationPage />);
+        await waitFor(() =>
+          expect(replace).toHaveBeenCalledWith(
+            "http://localhost:3000/verification?returnUrl=%2Fdashboard&check-reload=1"
+          )
+        );
+        expect(screen.getByText(/Loading the ID step/i)).toBeTruthy();
+        expect(screen.queryByRole("button", { name: /Start ID check/i })).not.toBeInTheDocument();
+        expect(
+          fetchCalls().some(
+            ([input, init]) =>
+              String(input) === "/api/verification/identity-check" &&
+              (init as RequestInit | undefined)?.method === "POST"
+          )
+        ).toBe(false);
+      } finally {
+        Object.defineProperty(window, "location", { configurable: true, value: realLocation });
+        entries.mockRestore();
+      }
     });
 
     it("offers 'try again' and 'ask a person' after a fully automatic decline", async () => {

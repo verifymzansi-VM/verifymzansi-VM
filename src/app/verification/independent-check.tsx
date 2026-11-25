@@ -47,27 +47,35 @@ const LINK =
 /**
  * The member's route and latest check, read when the ID step opens and every
  * 15 seconds while a check waits for its result (only while the page is
- * visible). Anything unreadable counts as the camera route.
+ * visible). `undefined` until the first answer; a failed read keeps the last
+ * good answer, and with none the step is the camera route (null).
  */
 export function useIdentityCheck(active: boolean) {
-  const [availability, setAvailability] = useState<IdentityCheckAvailability | null>(null);
+  const [availability, setAvailability] = useState<IdentityCheckAvailability | null | undefined>(
+    undefined
+  );
+  const keep = useCallback(
+    (next: IdentityCheckAvailability | null) =>
+      setAvailability((previous) => next ?? previous ?? null),
+    []
+  );
   const refresh = useCallback(async () => {
     const next = await readIdentityCheck();
-    setAvailability(next);
+    keep(next);
     return next;
-  }, []);
+  }, [keep]);
   useEffect(() => {
     if (!active) return;
     let cancelled = false;
     async function load() {
       const next = await readIdentityCheck();
-      if (!cancelled) setAvailability(next);
+      if (!cancelled) keep(next);
     }
     void load();
     return () => {
       cancelled = true;
     };
-  }, [active]);
+  }, [active, keep]);
   return { availability, refresh };
 }
 
@@ -79,6 +87,59 @@ async function readIdentityCheck(): Promise<IdentityCheckAvailability | null> {
   } catch {
     return null;
   }
+}
+
+/** The query marker of the one reload below. */
+const RELOAD_MARK = "check-reload";
+
+/** Whether this document was loaded at /verification; null when the browser
+ * cannot tell. */
+function loadedAtVerification(): boolean | null {
+  try {
+    const entry = performance.getEntriesByType("navigation")[0];
+    return entry ? new URL(entry.name).pathname === "/verification" : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The check's frame and camera rules come only with a document load of
+ * /verification (src/lib/middleware/security-headers.ts), and a page's rules
+ * stay those of the document it was loaded as. After an in-app link to Get
+ * verified the frame would be refused, so before anything starts (and before
+ * an unfinished check is shown) the page loads itself once more, with a query
+ * marker so it never loops. "blocked" (still not a document load after that
+ * reload) keeps the check closed.
+ */
+export function useCheckDocument(active: boolean): "ready" | "reloading" | "blocked" {
+  const [loaded] = useState(() => (typeof window === "undefined" ? null : loadedAtVerification()));
+  const [marked] = useState(
+    () =>
+      typeof window !== "undefined" && new URL(window.location.href).searchParams.has(RELOAD_MARK)
+  );
+  useEffect(() => {
+    if (!active || loaded !== false || marked) return;
+    const url = new URL(window.location.href);
+    url.searchParams.set(RELOAD_MARK, "1");
+    window.location.replace(url.toString());
+  }, [active, loaded, marked]);
+  if (!active || loaded !== false) return "ready";
+  return marked ? "blocked" : "reloading";
+}
+
+/** While the step's route is read, or the page loads itself again. */
+export function IndependentCheckLoading({ blocked = false }: { blocked?: boolean }) {
+  return blocked ? (
+    <StatusCallout tone="attention" role="alert">
+      <p>The ID check couldn&apos;t open on this page. Reload the page, then try again.</p>
+    </StatusCallout>
+  ) : (
+    <p role="status" className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
+      <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+      Loading the ID step…
+    </p>
+  );
 }
 
 /** Asks for the result every 15 seconds while `waiting`, only while visible. */

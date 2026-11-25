@@ -11,6 +11,8 @@ import { postStaffCommand } from "@/lib/admin/post-staff-command";
 import { staffVerifyHref } from "@/lib/auth/staff-mfa-links";
 import { cn } from "@/lib/utils";
 import {
+  IDENTITY_CHECK_DIDIT_MODES_READY,
+  IDENTITY_CHECK_DIDIT_MODES_WAITING,
   IDENTITY_CHECK_MODES,
   IDENTITY_CHECK_MODE_NAMES,
   IDENTITY_CHECK_PAUSE_TEXT,
@@ -133,11 +135,13 @@ export function IdentityCheckSettingsCard({
         <legend className="sr-only">Where ID checks go</legend>
         {IDENTITY_CHECK_MODES.map((option) => {
           const selected = chosen === option.mode;
+          const waiting = option.mode !== "manual" && !IDENTITY_CHECK_DIDIT_MODES_READY;
           return (
             <label
               key={option.mode}
               className={cn(
-                "flex cursor-pointer gap-3 rounded-xl border p-4 text-sm",
+                "flex gap-3 rounded-xl border p-4 text-sm",
+                waiting ? "cursor-not-allowed opacity-60" : "cursor-pointer",
                 selected
                   ? "border-brand-green-600 bg-brand-green-50/60 ring-1 ring-brand-green-600 dark:bg-brand-green-500/10"
                   : "border-border"
@@ -148,6 +152,7 @@ export function IdentityCheckSettingsCard({
                 name="identity-check-mode"
                 value={option.mode}
                 checked={selected}
+                disabled={waiting}
                 onChange={() => setChosen(option.mode)}
                 className="mt-0.5 h-5 w-5 shrink-0 accent-brand-green-600"
               />
@@ -163,6 +168,9 @@ export function IdentityCheckSettingsCard({
           );
         })}
       </fieldset>
+      {!IDENTITY_CHECK_DIDIT_MODES_READY && (
+        <p className="text-sm text-muted-foreground">{IDENTITY_CHECK_DIDIT_MODES_WAITING}</p>
+      )}
 
       {canChange && (
         <div className="space-y-2">
