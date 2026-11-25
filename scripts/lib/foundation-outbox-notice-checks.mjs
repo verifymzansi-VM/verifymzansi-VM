@@ -21,13 +21,14 @@ const SERVICE_ONLY = { anon: false, authenticated: false, service_role: true };
  * Before the update: the reviewed bodies, a read-only preflight whose only row
  * is a summary matching `notApplied`, then `before()`. Drift: a premature
  * rollback, a drifted claim or minute-job body and a drifted kind check are
- * refused. Then the update is applied, rolled back and applied again (the
+ * refused (`drift`: the replaced bodies, the claim and the minute job by
+ * default). Then the update is applied, rolled back and applied again (the
  * preflight summary matches `applied`), and the bodies are the update's.
  * Returns the execute grants of the replaced commands from before the update.
  */
 export async function checkNoticeUpdate(
   { kit, database, check },
-  { label, reviewed, updated, notApplied, applied, before }
+  { label, reviewed, updated, notApplied, applied, before, drift = [CLAIM, RUN] }
 ) {
   const { q, json, fails, preflight } = kit;
   const bodies = (expected) => {
@@ -47,7 +48,7 @@ export async function checkNoticeUpdate(
     before();
   });
   await check("drift and a premature rollback are refused", () => {
-    assertDriftRefused(kit, { label, signatures: [CLAIM, RUN], rows: 2 });
+    assertDriftRefused(kit, { label, signatures: drift, rows: 2 });
     const live = q(
       "select pg_get_constraintdef(oid) from pg_constraint where conname='outbox_events_kind_check';"
     );

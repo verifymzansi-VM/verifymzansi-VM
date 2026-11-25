@@ -6474,6 +6474,49 @@
         "service_role": false
       },
       "authority": "Current payments:refund capability (admin role; authenticator code from the last 15 minutes) and the staff rule of money actions: adds 1 to 30 days, with a reason of 5 to 500 characters, to every running paid grant (retail_paid, active, complete payment, end in the future) of the active account with this email: a running grant ends later, a queued renewal starts and ends later, every grant of a package ends later. Refuses an account with no running paid term, and a change that would take any grant above 30 added days in all; one change per member at a time; a repeated request id with the same input returns the first answer; recorded per grant in the append-only lost days record."
+    },
+    {
+      "name": "claim_lost_email_alert",
+      "updates": ["updates/20261125131322_lost_email_alert_staff_deadlines.sql"],
+      "arguments": [
+        {
+          "name": "p_limit",
+          "sqlType": "integer",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only five-minute lease, for the email job, on one alert email about queued emails and privacy request notices still unsent after their last attempt; an alert whose send failed is offered again unchanged first, otherwise a new one (at most one every 15 minutes) lists the oldest of every lost row not yet reported, bounded (1-50), with their total; returns queue ids, kinds, attempts, times and the last error code, never an address or the content."
+    },
+    {
+      "name": "complete_lost_email_alert",
+      "updates": ["updates/20261125131322_lost_email_alert_staff_deadlines.sql"],
+      "arguments": [
+        {
+          "name": "p_claim",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_sent",
+          "sqlType": "boolean",
+          "optional": false
+        }
+      ],
+      "returns": "boolean",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only record that one lost-email alert was sent, or its return for the next run; only an alert not yet recorded as sent."
     }
   ]
 }
