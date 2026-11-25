@@ -581,9 +581,11 @@ export async function runFoundationOperationJobs(
   };
 
   // One alert email about lost messages, from the database: an alert whose
-  // send failed is offered again unchanged, under the same key. A failed send
-  // is given back and fails the run (`lost_email_alert`); the next run tries
-  // again.
+  // send failed is given back and offered again unchanged, under the same key,
+  // by the next run. A refused send is logged but does not fail the run: the
+  // alert is retried every run until it goes out, so failing it would fail
+  // every run (the routine emails included) for as long as its address refuses
+  // it. Only a database error fails the run (`lost_email_alert`).
   const lostAlert = async () => {
     if (!timeToClaim() || !timeToSend()) return;
     const claimed = await call(
@@ -604,10 +606,8 @@ export async function runFoundationOperationJobs(
       sent = false;
     }
     const done = await call("complete_lost_email_alert", { p_claim: token, p_sent: sent });
-    if (!sent || done.error) {
-      log.error("Lost email alert not sent", { alert: token, total });
-      fail("lost_email_alert");
-    }
+    if (!sent) log.error("Lost email alert not sent", { alert: token, total });
+    if (done.error) fail("lost_email_alert");
   };
 
   const outbox = async (step: string, kinds: () => Kind[], limit: number) => {

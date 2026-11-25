@@ -1224,8 +1224,10 @@ until the owner does those steps.
   `20261125105322_lost_email_alert_staff_deadlines.sql`). At most one alert a
   run and none within 15 minutes of the last one sent: losses in between go into
   the next alert. Each message is reported once. An alert that cannot be sent is
-  given back and sent again by a later run under the same key (never twice), and
-  each such run fails (`lost_email_alert`).
+  given back and sent again by a later run under the same key (never twice);
+  each such run logs `Lost email alert not sent` but still passes, so a refused
+  alert never fails the routine emails. Only a database error with the alert
+  fails the run (`lost_email_alert`).
 - **Where lost emails stay.** The database never hands such an email out again
   and never purges it (only delivered emails are deleted, 30 days after
   delivery), so it stays in `private.outbox_events`. The owner can list them

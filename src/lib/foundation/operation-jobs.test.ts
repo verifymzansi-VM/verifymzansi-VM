@@ -720,16 +720,33 @@ describe("last attempt and the lost-email alert", () => {
   it.each([
     ["refused", () => lostEmailAlert.mockResolvedValue({ success: false })],
     ["thrown", () => lostEmailAlert.mockRejectedValue(new Error("provider down"))],
-  ])("gives the alert back and fails the run when its send is %s", async (_label, fail) => {
-    offer(alert);
-    fail();
-    const error = await run().catch((e) => e);
-    expect(error).toBeInstanceOf(OperationJobsIncompleteError);
-    expect(error.failed).toEqual(["lost_email_alert"]);
-    expect(lostCalls("complete_lost_email_alert")).toEqual([
-      ["complete_lost_email_alert", { p_claim: alertId, p_sent: false }],
-    ]);
-  });
+  ])(
+    "gives the alert back without failing the run or the routine emails when its send is %s",
+    async (_label, refuse) => {
+      // The alert's address refuses it (as the test copy's mail relay refuses
+      // any address outside .test): every run offers it again and fails to
+      // send it, while the member's queued email still goes out and the run
+      // reports success.
+      offer(alert);
+      refuse();
+      for (let i = 0; i < 2; i++) {
+        queue(job());
+        expect(await run()).toEqual({
+          claimed: 1,
+          succeeded: 1,
+          retrying: 0,
+          lost: 0,
+          failed: [],
+        });
+      }
+      expect(deliver).toHaveBeenCalledTimes(2);
+      expect(lostEmailAlert).toHaveBeenCalledTimes(2);
+      expect(lostCalls("complete_lost_email_alert")).toEqual([
+        ["complete_lost_email_alert", { p_claim: alertId, p_sent: false }],
+        ["complete_lost_email_alert", { p_claim: alertId, p_sent: false }],
+      ]);
+    }
+  );
 
   it("fails the run when the alert's send cannot be recorded", async () => {
     lostRpc.mockImplementation(async (name: string) =>

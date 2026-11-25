@@ -161,8 +161,8 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 97. Test fix: no delayed redirect after My profile unmounts (item 76) (no file rows: the group 97 part of 2 rows elsewhere) | awaiting owner | Nothing; tests only. The page and its redirect after closing an account look and behave the same. |
 | 98. Remove paid add-ons (item 37) (and the group 98 part of 10 rows elsewhere) | approved by owner 2026-11-25 (answer: 'Approve them') | Advertise, plan cards, billing FAQ, showroom help and My posts no longer mention or offer Urgent, Boost or Featured; the add-on buttons on My posts and the 'Boost level' column in the business 'Post' dialog are gone. |
 | 99. Automatic ID checks: member and staff screens (item 61, part 7) (with the group 99 part of 5 rows elsewhere) | approved by owner 2026-11-25 (answers: 'Approve them' for the main screens, 'Approve both' for the loading and staff-setting pictures); plan pictures approved 2026-11-20; consent wording per decision L | Nothing while the staff setting is Manual (today's value, and it stays Manual until the consent record is in the database). On a Didit setting, Get verified's ID step shows the independent check: names, what it asks, a consent tick naming Didit with links to its two notices, Start ID check, the check inside the page, then Checking, Verified, 'A person will check your ID' or a decline with 'Try the ID check again' and 'Ask a person to look again'. Staff: an 'ID checks' card on Verify accounts (three settings, admins change it) and a Didit panel in the case view. |
-| 100. Lost-email alert and staff deadline emails (item 28) (no file rows: email only) | awaiting owner | Nothing for members or visitors. Staff with the role that handles them get one email about each new privacy request, appeal and report: its type, a reference, when it came in and its deadline, with a button to the staff page. The support address gets one email listing queued emails that failed their last attempt, at most one every 15 minutes. |
 | 101. Trust promise matches reality (item 41) (no file rows of its own: the group 101 part of 12 rows elsewhere) | approved by owner 2026-11-25 (answer: 'Approve them') | Privacy Policy: a 'Who we are' section, a 'Cookies and browser storage' section, the keep-for periods the system applies, every provider and country named, and no claims of screen replays or logged number taps. PAIA names the same recipients. Trust & Safety, Advertise and the business verification help no longer say only 'our team' reviews IDs. The posting plan box loses 30-day free-post branches that could never show. Home, the footer and the site description say 'businesses, products, services, tourism and events from ID-reviewed posters' instead of 'verified businesses, products, ...'. Get verified (independent check): the privacy panel's keep-for line follows the applied rules and the consent names Ireland (European Union) and the United States. |
+| 102. Lost-email alert and staff deadline emails (item 28) (no file rows: email only) | awaiting owner | Nothing for members or visitors. Staff with the role that handles them get one email about each new privacy request, appeal and report: its type, a reference, when it came in and its deadline, with a button to the staff page. The support address gets one email listing queued emails that failed their last attempt, at most one every 15 minutes. |
 
 Questions for the owner:
 
@@ -4107,39 +4107,6 @@ Decision: approved by owner 2026-11-25 (answers: 'Approve them' for the main scr
 | `src/components/admin/identity-check-panel.tsx` | visual | Group 99: the case's latest Didit check in the case view. | Staff only: the 'Didit check' panel in View documents. | keep | approved by owner 2026-11-25 (answers: 'Approve them' for the main screens, 'Approve both' for the loading and staff-setting pictures) | 2026-11-25 | 89b5d6f24fac |
 | `src/components/admin/identity-check-panel.test.tsx` | test | Group 99: the panel's result, reasons, names and request. | Nothing | keep | approved by owner 2026-11-25 (answers: 'Approve them' for the main screens, 'Approve both' for the loading and staff-setting pictures) | 2026-11-25 | 1ae33c9837a5 |
 
-### 100. Lost-email alert and staff deadline emails (item 28)
-
-Email only: no file in the checked scope changes, so this group has no file
-rows. Launch checklist item 28. Database update
-`20261125105322_lost_email_alert_staff_deadlines.sql` (pending, apply first).
-The words are new (owner rule 4). Text outside the checked scope:
-`src/lib/services/email.ts` (`sendStaffDeadlineEmail`,
-`sendLostEmailAlert`).
-
-Staff deadline email, to each staff member whose role handles it, except whoever
-submitted it. Subject, for example: 'VerifyMzansi staff: new report (fake
-listing, high priority), due 01 Dec 2026, 15:00'.
-
-> A new report is waiting. Deal with it by 01 Dec 2026, 15:00.
->
-> Reason: fake listing, high priority
-> Reference: VM-…
-> Received: 27 Nov 2026, 15:00
-> Deadline: 01 Dec 2026, 15:00
->
-> Sign in to the staff pages to read and handle it. The deadline counts
-> business days, skipping weekends but not public holidays.
-
-Button 'Open the report' (privacy requests: 'Open the privacy request' to the
-privacy requests page; appeals: 'Open the appeal' to that appeal). Deadlines: a
-privacy request's due date; an appeal 3 business days and a report 2 business
-days after it came in (the appeal target matches the contact page's published
-"2–3 business days"). No name, address or text the member wrote.
-
-Lost-email alert, to the support address: unchanged title 'Queued emails not
-confirmed delivered'; each row now also says when the email was queued, a line
-says how many more are not listed, and a button 'Open operations' links to the
-staff operations page instead of the Worker logs.
 ### 101. Trust promise matches reality (item 41)
 
 Launch checklist item 41, with the settled legal answers D3 (every country
@@ -4188,6 +4155,39 @@ Pictures (synthetic data, not published): `screenshots/item41-trust-promise/`
 
 Decision: approved by owner 2026-11-25 (answer: 'Approve them').
 
+### 102. Lost-email alert and staff deadline emails (item 28)
+
+Email only: no file in the checked scope changes, so this group has no file
+rows. Launch checklist item 28. Database update
+`20261125105322_lost_email_alert_staff_deadlines.sql` (pending, apply first).
+The words are new (owner rule 4). Text outside the checked scope:
+`src/lib/services/email.ts` (`sendStaffDeadlineEmail`,
+`sendLostEmailAlert`).
+
+Staff deadline email, to each staff member whose role handles it, except whoever
+submitted it. Subject, for example: 'VerifyMzansi staff: new report (fake
+listing, high priority), due 01 Dec 2026, 15:00'.
+
+> A new report is waiting. Deal with it by 01 Dec 2026, 15:00.
+>
+> Reason: fake listing, high priority
+> Reference: VM-…
+> Received: 27 Nov 2026, 15:00
+> Deadline: 01 Dec 2026, 15:00
+>
+> Sign in to the staff pages to read and handle it. The deadline counts
+> business days, skipping weekends but not public holidays.
+
+Button 'Open the report' (privacy requests: 'Open the privacy request' to the
+privacy requests page; appeals: 'Open the appeal' to that appeal). Deadlines: a
+privacy request's due date; an appeal 3 business days and a report 2 business
+days after it came in (the appeal target matches the contact page's published
+"2–3 business days"). No name, address or text the member wrote.
+
+Lost-email alert, to the support address: unchanged title 'Queued emails not
+confirmed delivered'; each row now also says when the email was queued, a line
+says how many more are not listed, and a button 'Open operations' links to the
+staff operations page instead of the Worker logs.
 <!-- frontend-ledger:end -->
 
 ## Put back
