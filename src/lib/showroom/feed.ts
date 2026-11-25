@@ -44,10 +44,6 @@ const presentations = new Map<string, { at: number; presentation?: FoundationCar
  * A card still unanswered shows its preview picture alone; its answer, when it
  * comes, is remembered, and the next visit reads it again if it never comes. */
 const PRESENTATION_DEADLINE_MS = 1_500;
-/** One fair-order read per showroom and area at a time: simultaneous visits
- * share it. Each visit reads its card presentations itself, so its 1.5 s wait
- * never depends on another request. */
-const orderReads = new Map<string, Promise<FoundationShowroomCard[] | null>>();
 
 /** "New" in the card's badge spot: gold with dark green text (brand accents). */
 const NEW_TAG = "New";
@@ -140,32 +136,17 @@ function remember<V>(map: Map<string, V>, key: string, value: V, limit: number) 
 }
 
 /** The fair order's cards for the showroom and area, or null when they cannot
- * be read; either is remembered for a minute. Simultaneous visits share one
- * read (see orderReads). */
+ * be read; either is remembered for a minute. Each visit that misses reads the
+ * order itself, and reads its card presentations itself, so its wait never
+ * depends on another request. */
 async function fairCards(
   surface: ShowroomSurface,
   area: Area,
   key: string
 ): Promise<FoundationShowroomCard[] | null> {
-  const kept = orders.get(key);
-  if (kept && Date.now() - kept.at < CACHE_MS) return kept.cards;
-  const running = orderReads.get(key);
-  if (running) return running;
-  const read = readFairCards(surface, area, key);
-  orderReads.set(key, read);
-  try {
-    return await read;
-  } finally {
-    if (orderReads.get(key) === read) orderReads.delete(key);
-  }
-}
-
-async function readFairCards(
-  surface: ShowroomSurface,
-  area: Area,
-  key: string
-): Promise<FoundationShowroomCard[] | null> {
   const now = Date.now();
+  const kept = orders.get(key);
+  if (kept && now - kept.at < CACHE_MS) return kept.cards;
   let cards: FoundationShowroomCard[] | null = null;
   try {
     cards = await loadFoundationShowroom(foundationServerPublicApi(), {
@@ -258,11 +239,10 @@ async function fairOrder(surface: ShowroomSurface, area: Area): Promise<Carousel
   return cards.map((card) => carouselItem(card, presented.get(card.id)));
 }
 
-/** Forgets every remembered order, presentation and read (unit tests only). */
+/** Forgets every remembered order and presentation (unit tests only). */
 export function resetShowroomCachesForTests() {
   orders.clear();
   presentations.clear();
-  orderReads.clear();
 }
 
 /** The newest posts, as before the fair order (used only when it fails). */

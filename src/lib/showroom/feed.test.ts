@@ -382,7 +382,7 @@ describe("loadShowroomItems", () => {
     }
   });
 
-  it("shares one order read between simultaneous visits", async () => {
+  it("gives simultaneous misses each their own order read", async () => {
     resolveIpGeolocation.mockReturnValue(onlyIn("Limpopo"));
     let release: (cards: unknown[]) => void = () => {};
     loadFoundationShowroom.mockReturnValue(new Promise((resolve) => (release = resolve)));
@@ -396,7 +396,9 @@ describe("loadShowroomItems", () => {
     const [one, two] = await Promise.all(visits);
     expect(one).toEqual(two);
     expect(one.map((item) => item.logoUrl)).toEqual([`/media/${KEY(5)}`, `/media/${KEY(5)}`]);
-    expect(loadFoundationShowroom).toHaveBeenCalledTimes(1);
+    // Nothing is shared between visits, so no visit can wait on another
+    // request's read; the minute's cache keeps such misses rare.
+    expect(loadFoundationShowroom).toHaveBeenCalledTimes(2);
     // Each visit reads its card presentations itself; duplicates are allowed.
     expect(searchFoundationPresentedCards.mock.calls.length).toBeLessThanOrEqual(4);
   });
