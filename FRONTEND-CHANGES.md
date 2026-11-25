@@ -165,6 +165,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 100. Add lost days (item 75) (and the group 100 part of 1 row elsewhere) | approved by owner 2026-11-25 (answer: 'Approve both', for the v2 pictures and the database update) | Admins only, on Payments & refunds: an 'Add lost days' card. Staff enter a member's email, check their running paid slots and package (each with its end date), choose 1 to 30 days and a reason, and see each new end date before and after adding. Every running paid slot and package of the member gets the days; a queued renewal moves with its slot and a package's slots still end together. At most 30 days in all per slot; beyond that, or for an ended slot, staff refund instead. Members see only their later end dates; nobody is emailed. |
 | 102. Lost-email alert and staff deadline emails (item 28) (no file rows: email only) | approved by owner 2026-11-25 (answer: 'Approve with the fix', for the three email pictures, with '1 more is not listed' fixed) | Nothing for members or visitors. Staff with the role that handles them get one email about each new privacy request, appeal and report (up to 30 a day for all staff, never to the person a report is about): its type, a reference, when it came in and its deadline, with a button to the staff page. The support address gets one email listing queued emails that failed their last attempt, at most one every 15 minutes. |
 | 104. Staff refunds: first purchase and part refunds (item 77) (and the group 104 part of 5 rows elsewhere) | approved by owner 2026-11-25 (answer: 'Approve them') | Admins only, in the refund forms on Payments & refunds: an amount to refund (part of what is left) and, for an account's first purchase, the reason 'First purchase cancelled (within 5 business days)' with the date the customer asked. The form says whether the slot ends now or keeps running. Whole refunds and chargebacks look and work as before. |
+| 103. Showroom video posts show their chosen frame and logo (no file rows: data only, `src/lib/showroom/feed.ts`) | approved by owner 2026-11-25 (answer: 'Approve them', for the before and after pictures) | Home and area showrooms: a video post's card plays its video over the frame the owner chose, and a post with a logo shows it in the card, as in the chosen version; before, a video-only post showed the generic shop artwork with no video and the title's first letter instead of a logo. Posts with neither look as they do today. |
 | 105. Small lifecycle rules (item 40) (and the group 105 part of 1 row elsewhere) | approved by owner 2026-11-25 (answer: 'Approve with the rewording', the pictures with the sticker email reworded) | Owners of a post with an open report see that it can be hidden now and deleted once staff have looked at the report. Business owners get one email 30 days before a CIPC registered or Seen sticker ends, linking to the business's verification page, and the Seen step there offers the booking form from 60 days before the sticker ends. Free events cannot start more than 12 months ahead (the form already said so). |
 
 Questions for the owner:
@@ -4298,6 +4299,28 @@ Decision: approved by owner 2026-11-25 (answer: 'Approve them').
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `src/components/admin/commercial/refund-amount.tsx` | visual | Group 104: the amount, first-purchase date and slot-effect fields shared by the refund forms. | Staff with the refund permission: everything described in group 104. | keep | approved by owner 2026-11-25 (answer: 'Approve them') | 2026-11-25 | d9783a6f664a |
 | `src/components/admin/commercial/refund-amount.test.tsx` | test | Group 104: reading rands, what the request carries, the slot effect, the unused-days suggestion and the fields. | Nothing (not part of a page) | keep | approved by owner 2026-11-25 (answer: 'Approve them') | 2026-11-25 | a4fecbf98c99 |
+
+### 103. Showroom video posts show their chosen frame and logo
+
+Returns the 27 October behaviour (`0b562f42`, `carousel-item-transforms.ts`)
+to the big showroom carousel on the home page and the Mzansi Market, Mzansi
+Business and Tourism & Events pages. The showroom read gave each card only its
+preview picture, which a video-only post does not have, so the carousel showed
+`/images/fallbacks/hero-shop.svg`, never started the video, and showed the
+title's first letter where the post's logo belongs. The cards now also carry
+the owner's chosen video frame (used only when there is no preview picture) and
+the post's logo, from the public card presentation read. The carousel itself is
+unchanged. A page waits at most 1.5 seconds for those reads; a card whose read is
+slower looks as it does today until a later visit.
+
+Rows: none; the change is in `src/lib/showroom/feed.ts` (outside the checked
+scope) and its unit test.
+
+Pictures (live public data, read only, not published):
+`screenshots/showroom-video-cover/` (phone 375 and desktop 1280, home and
+Tourism & Events).
+
+Decision: approved by owner 2026-11-25 (answer: 'Approve them', for the before and after pictures).
 
 ### 105. Small lifecycle rules (item 40)
 
