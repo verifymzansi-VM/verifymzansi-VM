@@ -41,10 +41,10 @@ const PROPOSE = "internal.propose_frontend_staff_role(text,text,text)";
 const REVIEWED = "d40ad40b7afce00a05ebf599a2953d25";
 const UPDATED = "e6d446d2702768234f979cdcaa20f281";
 const LABEL = "admin removal needs approval";
-const SUMMARY = (state) =>
-  new RegExp(
-    `^${LABEL}: ${state}; active admins: \\d+; role changes waiting: \\d+ \\(admin removals: \\d+\\)$`
-  );
+const NOT_APPLIED =
+  /^admin removal needs approval: update not applied; active admins: \d+; role changes waiting: \d+ \(admin removals: \d+\)$/;
+const APPLIED =
+  /^admin removal needs approval: already applied; active admins: \d+; role changes waiting: \d+ \(admin removals: \d+\)$/;
 const INDEPENDENT = /independent staff role reviewer required/;
 
 const SETUP = { update: UPDATE, label: "lockout", title: "Admin removal needs approval" };
@@ -86,7 +86,7 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
       rows.map((r) => r[0]),
       ["summary"]
     );
-    assert.match(rows[0][1], SUMMARY("update not applied"));
+    assert.match(rows[0][1], NOT_APPLIED);
     assertReadOnlyPreflight(database, kit.preflightSql);
   });
   await check("a premature rollback and a drifted body are refused", () => {
@@ -96,8 +96,8 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
   // ------------------------------------------------------------- apply
   await applyAndProveRollback(kit, database, check, {
     label: LABEL,
-    applied: SUMMARY("already applied"),
-    notApplied: SUMMARY("update not applied"),
+    applied: APPLIED,
+    notApplied: NOT_APPLIED,
   });
 
   // ------------------------------------------------------------- after
