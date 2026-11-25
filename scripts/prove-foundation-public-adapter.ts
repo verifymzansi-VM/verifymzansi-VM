@@ -94,13 +94,14 @@ async function run() {
     assert.equal(requests, 5);
     assert.deepEqual(catalogue, parseFoundationBillingCatalogue(input.expectedCatalogue));
     assert.equal(catalogue.plans.length, 17);
-    assert.equal(catalogue.addons.length, 3);
+    // The baseline database still seeds three add-ons until its contract step.
+    assert.equal(catalogue.addons?.length, 3);
     process.stdout.write(
       JSON.stringify({
         status: "PASS actual SDK billing/search/reference/detail adapters and strict DTOs",
         requests,
         plans: catalogue.plans.length,
-        addons: catalogue.addons.length,
+        addons: catalogue.addons?.length ?? 0,
         emptySearch: "PASS exact empty catalogue search DTO",
         reference: "PASS strict seeded catalogue and parent references",
         missingDetail: "PASS normal null result distinct from transport failure",

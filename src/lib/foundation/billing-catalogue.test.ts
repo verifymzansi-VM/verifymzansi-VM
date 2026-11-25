@@ -99,6 +99,14 @@ it("rejects unknown/private response fields and invalid monetary/capability repr
   });
 });
 
+// Paid add-ons were removed (item 37); the database may drop its add-on fields.
+it("accepts a catalogue without the add-on list or add-on capabilities", () => {
+  const { addon_capabilities: _dropped, ...withoutAddons } = plan;
+  expect(parseFoundationBillingCatalogue({ plans: [withoutAddons] })).toEqual({
+    plans: [withoutAddons],
+  });
+});
+
 it("returns a fixed safe error without leaking database error details and makes one request", async () => {
   const fetcher = vi.fn<typeof fetch>(
     async () =>

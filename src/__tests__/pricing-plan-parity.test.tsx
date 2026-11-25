@@ -150,9 +150,6 @@ describe("Active-area pricing parity", () => {
       expect(entitlements.maxVideos).toBe(plan.features.maxVideos ?? 0);
       expect(entitlements.maxPostsPerMonth).toBe(plan.features.maxPostsPerMonth);
       expect(entitlements.videoAllowed).toBe(plan.features.videoAllowed);
-      expect(entitlements.boostAllowed).toBe(plan.features.boostAllowed);
-      expect(entitlements.featuredAllowed).toBe(plan.features.featuredAllowed);
-      expect(entitlements.urgentAllowed).toBe(plan.features.urgentAllowed);
     }
 
     if (dbPlans.length === 0) {

@@ -2,8 +2,6 @@ import "server-only";
 import { z } from "zod";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import { listRestoredOwnerPosts, restoredOwnerPostRow } from "./restored-owner-posts";
-import { readFoundationOwnerDashboard } from "./owner-dashboard";
-import type { MarketplaceArea, PlanTier } from "@/types/enums";
 import { restoredAreaSchema } from "./areas";
 const count = z.number().int().nonnegative(),
   instant = z.iso.datetime({ offset: true });
@@ -41,6 +39,9 @@ const manager = z.strictObject({
     )
     .max(1000),
   sponsored_post_ids: z.array(z.uuid()).max(10000),
+  // Paid add-ons were removed from the website; the database may still return
+  // these dates until its add-on commands are retired. Optional, read and
+  // ignored.
   addons: z
     .array(
       z.strictObject({
@@ -50,34 +51,21 @@ const manager = z.strictObject({
         urgent_until: instant.nullable(),
       })
     )
-    .max(10000),
+    .max(10000)
+    .optional(),
 });
 export async function readRestoredPostManager(api: FoundationAuthenticatedApi, accountId: string) {
-  const [result, listings, businesses, events, dashboard] = await Promise.all([
+  const [result, listings, businesses, events] = await Promise.all([
     api.rpc("get_my_frontend_post_manager", {}, { get: false }),
     listRestoredOwnerPosts(api, "listing"),
     listRestoredOwnerPosts(api, "business"),
     listRestoredOwnerPosts(api, "event"),
-    readFoundationOwnerDashboard(api, accountId),
   ]);
   if (result.error) throw new Error("Post management is temporarily unavailable");
   const facts = manager.parse(result.data);
   if (facts.account_id !== accountId) throw new Error("Account changed");
-  const addons = new Map(facts.addons.map((row) => [row.post_id, row]));
   const rows = (posts: typeof listings) =>
-    posts.map((post) => ({ ...restoredOwnerPostRow(post, accountId), ...addons.get(post.id) }));
-  const tiers: Record<MarketplaceArea, PlanTier> = {
-    MZANSI_MARKET: "starter",
-    MZANSI_BUSINESS: "starter",
-    PROMOTIONS_EVENTS: "starter",
-  };
-  const priority = ["month", "quarter", "half_year", "year", "enterprise"];
-  for (const plan of dashboard.paid_plans) {
-    if (!plan.tier) continue;
-    // An Individual slot (no section) works in every section.
-    for (const area of plan.area ? [plan.area] : (Object.keys(tiers) as MarketplaceArea[]))
-      if (priority.indexOf(plan.tier) > priority.indexOf(tiers[area])) tiers[area] = plan.tier;
-  }
+    posts.map((post) => restoredOwnerPostRow(post, accountId));
   return {
     responses: [
       { data: rows(listings), error: null },
@@ -87,6 +75,5 @@ export async function readRestoredPostManager(api: FoundationAuthenticatedApi, a
     sponsoredIds: new Set(facts.sponsored_post_ids),
     slotUsage: facts.slot_usage,
     planAdmins: facts.plan_admins,
-    tiers,
   };
 }

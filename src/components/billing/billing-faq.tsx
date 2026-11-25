@@ -100,9 +100,8 @@ export function BillingFaq({
             days start when we approve the post, not when you submit it.
           </p>
           <p>
-            Free posts have standard placement: no boosts, featured placement or urgent badge. There
-            is no automatic charge and no free renewal. When its {shortDays} days end your post is
-            hidden; buy a slot within 3 days to reactivate it, or it is deleted.
+            There is no automatic charge and no free renewal. When its {shortDays} days end your
+            post is hidden; buy a slot within 3 days to reactivate it, or it is deleted.
           </p>
           <p>
             The free post is available once per ID-reviewed person. Once its {shortDays} days have

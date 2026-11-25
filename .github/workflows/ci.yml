@@ -489,13 +489,9 @@ jobs:
         run: pnpm check:worker-size
       - name: Verify critical payment routes in build
         run: |
-          echo "Checking critical addon/payment routes exist in build output..."
+          echo "Checking critical payment routes exist in build output..."
           MISSING=0
           for route in \
-            "api/listings/\\[id\\]/featured" \
-            "api/listings/\\[id\\]/urgent" \
-            "api/listings/\\[id\\]/boost" \
-            "api/businesses/\\[id\\]/boost" \
             "api/billing/create-checkout"; do
             if ! find .next/server/app -path "*${route}*" -print -quit 2>/dev/null | grep -q .; then
               echo "::error::MISSING ROUTE: ${route} not found in production build"

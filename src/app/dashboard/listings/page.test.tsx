@@ -67,24 +67,6 @@ vi.mock("@/components/layout/page-header", () => ({
   ),
 }));
 
-vi.mock("@/lib/services/entitlements", () => ({
-  canBoost: vi.fn().mockReturnValue({ allowed: true }),
-  canFeatured: vi.fn().mockReturnValue({ allowed: true }),
-  canUrgent: vi.fn().mockReturnValue({ allowed: true }),
-}));
-
-vi.mock("@/components/listings/boost-button", () => ({
-  BoostButton: () => <button type="button">Boost</button>,
-}));
-
-vi.mock("@/components/listings/featured-button", () => ({
-  FeaturedButton: () => <button type="button">Featured</button>,
-}));
-
-vi.mock("@/components/listings/urgent-button", () => ({
-  UrgentButton: () => <button type="button">Urgent</button>,
-}));
-
 vi.mock("@/components/listings/resubmit-button", () => ({
   ResubmitButton: () => <button type="button">Resubmit</button>,
 }));
