@@ -14,11 +14,11 @@ import {
 const recorded = JSON.parse(readFileSync(FINGERPRINT_FILE, "utf8"));
 
 test("the recorded fingerprint keeps the production-matched values", () => {
-  // Captured read-only from production on 24 November 2026, through the update
+  // Captured read-only from production on 25 November 2026, through the update
   // below. Reviewed updates after it are listed as pending until the owner has
   // applied them and production is captured again.
   const check = recorded.productionCheck;
-  assert.equal(check.matchedThroughUpdate, "20261122191646_post_templates.sql");
+  assert.equal(check.matchedThroughUpdate, "20261123225900_posting_terms_v6.sql");
   assert.deepEqual(check.matchedFingerprints, {
     column_grants: "5e5623672e80b927048d8553487d5442",
     columns: "7bf9e54c3ac93c40f6538d70ecf022f6",
