@@ -125,16 +125,15 @@ await runTwoAdminUpdateCheck(
       json(staff(admin, `select api.get_lost_days_preview(${sqlValue(email)});`)).items;
 
     // ---------------------------------------------------------- before
-    await check("before the update: the reviewed bodies", () => {
-      for (const [signature, md5] of Object.entries(REVIEWED))
-        assert.equal(bodyMd5(signature), md5, signature);
-    });
-    await check("preflight: read only; one summary row reading 'not applied'", () => {
+    await check("before the update: the reviewed bodies; the read-only preflight", () => {
+      assert.deepEqual(Object.keys(REVIEWED).map(bodyMd5), Object.values(REVIEWED));
       assertReadOnlyPreflight(database, kit.preflightSql);
-      const [summary, ...problems] = preflight();
-      assert.deepEqual(problems, []);
-      assert.equal(summary[0], "summary");
-      assert.match(summary[1], NOT_APPLIED);
+      const rows = preflight();
+      assert.deepEqual(
+        rows.map((row) => row[0]),
+        ["summary"]
+      );
+      assert.match(rows[0][1], NOT_APPLIED);
     });
     await check("drift and a premature rollback are refused", () => {
       assertDriftRefused(kit, {
@@ -168,8 +167,7 @@ await runTwoAdminUpdateCheck(
       notApplied: NOT_APPLIED,
     });
     await check("the update's bodies", () => {
-      for (const [signature, md5] of Object.entries(UPDATED))
-        assert.equal(bodyMd5(signature), md5, signature);
+      assert.deepEqual(Object.keys(UPDATED).map(bodyMd5), Object.values(UPDATED));
     });
 
     // (136) A slot reversed after a keep-running part refund counts again.
@@ -284,7 +282,8 @@ await runTwoAdminUpdateCheck(
       assert.deepEqual([whole.status, whole.ends_paid_days], ["applied", true]);
     });
 
-    // (142, 139, 143) The staff read.
+    // (142, 139, 143) The staff read. LIM-SQL-s14-notice-business-days: 20
+    // South African business days of notice from today.
     await check(
       "the staff read: 0 left once a slot is reversed; notice end; term; lost days",
       () => {
