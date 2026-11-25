@@ -126,8 +126,8 @@ the three earlier bodies back).
 
 ## Small lifecycle rules, 25 November 2026
 
-`20261125150215_small_lifecycle_rules.sql` is pending (see the applied
-register). Launch checklist item 40.
+`20261125150215_small_lifecycle_rules.sql` was applied on 25 November 2026 at
+18:21 UTC (see the applied register). Launch checklist item 40.
 
 - **Free events at most 12 months ahead.** A new trigger on
   `private.event_details` refuses an inserted or changed start more than 365
@@ -8223,7 +8223,14 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   (fingerprint.sql) matched the full replay (except the known schema grant
   difference)
 
-- `20261125150215_small_lifecycle_rules.sql`: pending
+- `20261125150215_small_lifecycle_rules.sql`: applied 2026-11-25 18:21 UTC;
+  apply-first, owner-approved, before pull request #374 was merged; Supabase SQL
+  editor (browser), file from raw GitHub at d84c80ed, update sha256 starting
+  bb5c43b2d640764d; preflight before "update not applied; events starting over
+  365 days ahead: 0; stickers ending within 30 days: 0; posts with an open
+  report: 0; reminders queued: 0" with no problem rows, after "already applied"
+  with the same counts; production fingerprint after it (fingerprint.sql)
+  matched the full replay (except the known schema grant difference)
 
 - `20261125174942_end_admin_role_before_restriction.sql`: pending
 
