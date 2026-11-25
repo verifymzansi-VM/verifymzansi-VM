@@ -226,6 +226,18 @@ describe("ProfilePage", () => {
     expect(tooLarge).toHaveLength(1);
   });
 
+  it("changes the verified phone only through a new code and keeps the place editable", async () => {
+    render(<ProfilePage />);
+
+    const change = await screen.findByRole("link", { name: "Change number" });
+    expect(change).toHaveAttribute(
+      "href",
+      "/dashboard/complete-profile?change=1&returnUrl=%2Fdashboard%2Fprofile"
+    );
+    expect(screen.getByLabelText("Phone")).toHaveAttribute("readonly");
+    expect(screen.getByLabelText("Province")).toBeEnabled();
+  });
+
   it("shows locked legal first name and surname fields when present", async () => {
     render(<ProfilePage />);
 
