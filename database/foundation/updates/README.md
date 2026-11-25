@@ -82,8 +82,8 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Lost-email alert and staff deadline emails, 25 November 2026
 
-`20261125131322_lost_email_alert_staff_deadlines.sql` is pending (see the
-applied register). Launch checklist item 28.
+`20261125131322_lost_email_alert_staff_deadlines.sql` was applied on 25 November
+2026 at 14:30 UTC (see the applied register). Launch checklist item 28.
 
 - **Lost-email alert, kept in the database.** A queued email (outbox) or a
   privacy request notice still unsent after its 8th attempt, once its lease has
@@ -8050,6 +8050,13 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   additions: 0"; production fingerprint after it (fingerprint.sql) matched the
   full replay (except the known schema grant difference)
 
-- `20261125131322_lost_email_alert_staff_deadlines.sql`: pending
+- `20261125131322_lost_email_alert_staff_deadlines.sql`: applied 2026-11-25
+  14:30 UTC; apply-first, owner-approved, before pull request #368 was merged;
+  Supabase SQL editor (browser), file from raw GitHub at da285b2b, update sha256
+  starting f7c6c764eb0b7705; preflight before "update not applied; lost emails:
+  0; open privacy requests: 0; open appeals: 0; open reports: 0; staff emails
+  queued: 0" with no problem rows, after "already applied" with the same counts;
+  production fingerprint after it (fingerprint.sql) matched the full replay
+  (except the known schema grant difference)
 
 <!-- applied-register:end -->
