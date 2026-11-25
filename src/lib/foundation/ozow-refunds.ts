@@ -11,6 +11,7 @@ import {
 import { staffReason } from "./organisations";
 import { FoundationStaffCommandError, settleStaffCommand } from "./staff-command";
 import {
+  STAFF_PART_REFUND_REFUSALS,
   STAFF_REFUND_FOLLOW_UP_REFUSALS,
   refundReasonCode,
   type RefundReasonCode,
@@ -146,6 +147,8 @@ const REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = new Map([
   ["staff_same_identity", [403, "Another staff member must handle a payment of your own."]],
   // Refund follow-ups (<ts>_refund_follow_ups.sql, not applied yet).
   ...STAFF_REFUND_FOLLOW_UP_REFUSALS,
+  // First-purchase and part refunds (20261125133916_staff_part_refunds.sql).
+  ...STAFF_PART_REFUND_REFUSALS,
 ]);
 
 async function settle<T>(
@@ -166,7 +169,8 @@ async function settle<T>(
   return settleStaffCommand(Promise.resolve(settled), schema);
 }
 
-const factForDatabase = (fact: OzowRefundFact) => ({
+/** An Ozow refund as the database reads it (api.record_staff_refund and the dashboard record). */
+export const factForDatabase = (fact: OzowRefundFact) => ({
   refund_id: fact.refundId,
   transaction_id: fact.transactionId,
   amount_cents: fact.amountCents,

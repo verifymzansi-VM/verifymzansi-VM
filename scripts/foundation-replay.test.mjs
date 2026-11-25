@@ -18,16 +18,16 @@ test("the recorded fingerprint keeps the production-matched values", () => {
   // below. Reviewed updates after it are listed as pending until the owner has
   // applied them and production is captured again.
   const check = recorded.productionCheck;
-  assert.equal(check.matchedThroughUpdate, "20261125131322_lost_email_alert_staff_deadlines.sql");
+  assert.equal(check.matchedThroughUpdate, "20261125133916_staff_part_refunds.sql");
   assert.deepEqual(check.matchedFingerprints, {
     column_grants: "5e5623672e80b927048d8553487d5442",
-    columns: "3a1848bc21f3655ab5608b55b651e02e",
-    constraints: "557d6e1a8ca93853e4304f69de7f3e9b",
+    columns: "4bede8b52fd24933e7038b1c028d7429",
+    constraints: "64633103fbf3d005c761a2766570343b",
     event_triggers: "821f7d069c595c075754fad9309136ac",
-    function_bodies: "6c883815e1183c8dbdbddc1ae12e01b3",
-    function_grants: "3474dddf55994ee3ce219d5017edf920",
-    function_metadata: "be959ff8188791d4e2657fe7f9f97020",
-    indexes: "64856317be3a211b7b9c4b9fcb162124",
+    function_bodies: "4b05e980953fb509e053533f7af7151b",
+    function_grants: "6a97ff89a2ae657a6bfe88f5cb8c3166",
+    function_metadata: "919f55e04727f23bb024f645c0cc4631",
+    indexes: "25fde6a831c0903c32f85e5a1b12ec1b",
     policies: "085a305fbc41d38d34eb40c3748c0793",
     row_level_security: "b91cce098ef64beefe87624fa045d3d7",
     triggers: "0c00a7119ece5d4fe1ffa605e87fc40a",

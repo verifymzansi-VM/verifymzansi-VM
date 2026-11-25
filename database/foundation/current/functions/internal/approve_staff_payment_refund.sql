@@ -7,7 +7,7 @@ CREATE OR REPLACE FUNCTION internal.approve_staff_payment_refund(p_request_id uu
  SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$
-declare actor uuid; request private.payment_refund_requests; pay private.payments; result jsonb;
+declare actor uuid; request private.payment_refund_requests; pay private.payments;
 begin
   actor := internal.staff_actor('payments:refund');
   if p_request_id is null then raise exception 'refund request required' using errcode='22023'; end if;
@@ -55,8 +55,10 @@ begin
     raise exception 'the renewal has started; decline this refund and record it with another reason' using errcode='PT409', detail='renewal_already_started';
   end if;
   -- A renewal of the slot bought while the refund waited: refund the renewal
-  -- first (decline this one and record it again afterwards).
-  if request.kind = 'refunded' and internal.refund_renewal_waiting(pay.id, request.payment_line_id) then
+  -- first (decline this one and record it again afterwards). Only a refund
+  -- that ends the paid days (20261125133916_staff_part_refunds.sql).
+  if request.kind = 'refunded' and request.ends_paid_days
+      and internal.refund_renewal_waiting(pay.id, request.payment_line_id) then
     raise exception 'a renewal of this slot is waiting; refund the renewal first, then this period' using errcode='PT409', detail='renewal_queued';
   end if;
   if request.channel = 'api' and not internal.ozow_refund_window_open(pay.id) then
@@ -84,17 +86,10 @@ begin
   -- a failed reversal puts the record back to waiting.
   update private.payment_refund_requests set status = 'applied', approved_by = actor, applied_at = statement_timestamp()
     where id = request.id;
-  if request.payment_line_id is null then
-    result := internal.reverse_payment(pay.id, request.kind, request.reason);
-    insert into private.frontend_payment_reversals(payment_id, actor_id, kind, reason, released_activations)
-      values (pay.id, actor, request.kind, request.reason, (result->>'released_activations')::integer);
-  else
-    result := internal.record_staff_slot_reversal(request.payment_line_id, request.kind, request.reason);
-  end if;
+  perform internal.apply_staff_refund(request.id, actor);
   perform internal.staff_actor('payments:refund');
   perform internal.assert_staff_payment_actor(actor, request.account_id);
-  update private.payment_refund_requests set released_activations = (result->>'released_activations')::integer
-    where id = request.id returning * into request;
+  select * into request from private.payment_refund_requests r where r.id = p_request_id;
   return jsonb_build_object('request_id', request.id, 'status', request.status, 'kind', request.kind,
     'released_activations', request.released_activations,
     'payment_status', (select p.status from private.payments p where p.id = pay.id), 'repeated', false);

@@ -519,3 +519,114 @@ it("refuses lost days outside 1 to 30 before any database call, and words a refu
   expect(nothing.status).toBe(409);
   expect((await nothing.json()).error).toMatch(/refund instead/);
 });
+
+const partReply = {
+  request_id: line,
+  status: "applied",
+  channel: "manual",
+  kind: "refunded",
+  line_id: line,
+  amount_cents: 12_000,
+  needs_approval: false,
+  ends_paid_days: false,
+  released_activations: 0,
+  payment_status: "complete",
+  repeated: false,
+};
+
+it("records a part refund of one slot and a first purchase with the refund command", async () => {
+  rpc.mockResolvedValue({ data: partReply, error: null });
+  const part = await POST(
+    request({
+      action: "payment.refund",
+      requestId: "55555555-5555-4555-8555-555555555555",
+      paymentId: payment.toUpperCase(),
+      lineId: line,
+      amountCents: 12_000,
+      reasonCode: "our_failure_after_fix_offered",
+      ozowReference: "FNB  PART 0001",
+      reason: "Lost days refunded after the fix",
+    })
+  );
+  expect(part.status).toBe(200);
+  expect(rpc).toHaveBeenLastCalledWith(
+    "record_staff_refund",
+    {
+      p_payment_id: payment,
+      p_line_id: line,
+      p_channel: "reference",
+      p_amount_cents: 12_000,
+      p_reason_code: "our_failure_after_fix_offered",
+      p_reason: "Lost days refunded after the fix",
+      p_reference: "FNB PART 0001",
+      p_ozow_fact: null,
+      p_asked_on: null,
+      p_request_id: "55555555-5555-4555-8555-555555555555",
+    },
+    { get: false }
+  );
+  rpc.mockResolvedValue({
+    data: { ...partReply, line_id: null, amount_cents: 41_400, ends_paid_days: true },
+    error: null,
+  });
+  const first = await POST(
+    request({
+      action: "payment.refund",
+      requestId: "55555555-5555-4555-8555-555555555555",
+      paymentId: payment,
+      askedOn: "2026-11-20",
+      reasonCode: "first_purchase_cancelled",
+      ozowReference: "OZ-FIRST-1",
+      reason: "First purchase cancelled by email",
+    })
+  );
+  expect(first.status).toBe(200);
+  expect(rpc).toHaveBeenLastCalledWith(
+    "record_staff_refund",
+    expect.objectContaining({
+      p_line_id: null,
+      p_amount_cents: null,
+      p_reason_code: "first_purchase_cancelled",
+      p_asked_on: "2026-11-20",
+    }),
+    { get: false }
+  );
+});
+
+it("refuses a part refund with a bad amount or date before any call, and words the database's refusals", async () => {
+  for (const extra of [{ amountCents: 0 }, { amountCents: 12.5 }, { askedOn: "20/11/2026" }]) {
+    const response = await POST(
+      request({
+        action: "payment.refund",
+        requestId: "55555555-5555-4555-8555-555555555555",
+        paymentId: payment,
+        reasonCode: "s14_cancellation",
+        ozowReference: "OZ-PART-1",
+        reason: "Cancelled with notice",
+        ...extra,
+      })
+    );
+    expect(response.status).toBe(422);
+  }
+  expect(rpc).not.toHaveBeenCalled();
+  rpc.mockResolvedValue({
+    data: null,
+    error: { code: "PT409", message: "x", details: "first_purchase_too_late" },
+  });
+  const late = await POST(
+    request({
+      action: "payment.refund",
+      requestId: "55555555-5555-4555-8555-555555555555",
+      paymentId: payment,
+      askedOn: "2026-11-20",
+      reasonCode: "first_purchase_cancelled",
+      ozowReference: "OZ-FIRST-2",
+      reason: "First purchase cancelled by email",
+    })
+  );
+  expect(late.status).toBe(409);
+  expect(await late.json()).toMatchObject({
+    error:
+      "The customer asked after the 5 business days for cancelling a first purchase. Choose another reason if one applies.",
+  });
+});
