@@ -16,7 +16,9 @@ begin
   select k.term_days into v_term from private.slot_packages k where k.id = v_package and k.owner_id = p_owner;
   if v_term is null then return; end if;
   select x.* into v_plan from internal.slot_package_term_plan(v_term) x;
-  v_days := floor(extract(epoch from (v_ends - statement_timestamp())) / 86400)::integer;
+  -- At most term_days - 1 whole days (a package whose end moved later with
+  -- lost days): an added slot never costs more than a full term.
+  v_days := least(floor(extract(epoch from (v_ends - statement_timestamp())) / 86400)::integer, v_term - 1);
   return query select v_package, v_term, v_plan.id, v_places, v_ends, v_days,
     case when v_plan.id is null then null::bigint
       else round(v_plan.price_cents::numeric * v_days / v_plan.duration_days)::bigint end;

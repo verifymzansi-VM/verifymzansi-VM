@@ -43,7 +43,9 @@
 --    lost_days_days_invalid); a reason of 5 to 500 characters on one line
 --    (22023 lost_days_reason_required); a request id (22023
 --    lost_days_request_invalid); at least one running paid term (PT409
---    lost_days_nothing_running). One change at a time per member: the command
+--    lost_days_nothing_running); at most 30 days in all per grant, counting
+--    every earlier addition (PT409 lost_days_limit: beyond that, staff
+--    refund instead). One change at a time per member: the command
 --    takes the advisory lock package deliveries take ('slot-package:'||member),
 --    then locks the grants in id order (as renewal delivery does), checks the
 --    staff member again after the wait and reads the grants again: when a
@@ -57,14 +59,21 @@
 --    dates before and after, reason, time), never the staff member. The staff
 --    export reader accepts more datasets than its minimum, so the live website
 --    reads the export unchanged.
+-- 5. internal.slot_package_add_quote (full body) counts at most term_days - 1
+--    whole days left (179 for a 180-day package). A package whose end moved
+--    later keeps every existing bound: the added-slots invoice request
+--    (days_left at most 179), the website's add offer and the staff queue
+--    readers, and an added slot never costs more than a full term. The member
+--    keeps the extra days free.
 --
--- Expand only: a table, four new functions and one replaced body; no command,
--- argument or grant is removed or changed. ORDER: apply first, then merge: the
--- Deploy gate probes every command of runtime-api-manifest.json, and the live
--- website reads nothing new.
--- It refuses with 55000 unless internal.frontend_privacy_export_data has its
--- reviewed body (or this update's), each new function is absent (or this
--- update's) and the table is absent or has this update's shape.
+-- Expand only: a table, four new functions and two replaced bodies; no
+-- command, argument or grant is removed or changed. ORDER: apply first, then
+-- merge: the Deploy gate probes every command of runtime-api-manifest.json, and
+-- the live website reads nothing new.
+-- It refuses with 55000 unless internal.frontend_privacy_export_data and
+-- internal.slot_package_add_quote have their reviewed bodies (or this
+-- update's), each new function is absent (or this update's) and the table is
+-- absent or has this update's shape.
 -- Read-only preflight: ../preflight/20261125024039_add_lost_days.check.sql.
 -- Rollback: ../rollback/20261125024039_add_lost_days.down.sql.
 begin;
@@ -77,6 +86,7 @@ begin
   for shape in
     select v.sig||' '||coalesce((select md5(replace(p.prosrc,E'\r\n',E'\n')) from pg_proc p where p.oid=to_regprocedure(v.sig)),'absent')
     from (values ('internal.frontend_privacy_export_data(uuid)'),
+      ('internal.slot_package_add_quote(uuid)'),
       ('internal.get_lost_days_preview(text)'),
       ('api.get_lost_days_preview(text)'),
       ('internal.add_lost_days(text,integer,text,uuid)'),
@@ -85,12 +95,14 @@ begin
     if shape not in (
         'internal.frontend_privacy_export_data(uuid) fb567a31cf8ca166f117d5b02f744235',
         'internal.frontend_privacy_export_data(uuid) b0d8e2600a63b8e5b298ee180f488c05',
+        'internal.slot_package_add_quote(uuid) 233e14908c1d2b21b17a9205da371a77',
+        'internal.slot_package_add_quote(uuid) 206dc215863ec39a5fe03bd5dea6fb48',
         'internal.get_lost_days_preview(text) absent',
         'internal.get_lost_days_preview(text) 8174b52a62082b35692a7a7237e2d807',
         'api.get_lost_days_preview(text) absent',
         'api.get_lost_days_preview(text) 9aa7df1fa582cd2ef8d13de8d3eb3536',
         'internal.add_lost_days(text,integer,text,uuid) absent',
-        'internal.add_lost_days(text,integer,text,uuid) 62dea7369c8a91b2844e2af0dca77ad0',
+        'internal.add_lost_days(text,integer,text,uuid) 29dd6271b9e19bdaf5c9c7ccc6d42877',
         'api.add_lost_days(text,integer,text,uuid) absent',
         'api.add_lost_days(text,integer,text,uuid) 0e5793d459a7acf45a436a4f3133bfb8') then
       raise exception 'lost days precondition: % is not a reviewed body', shape using errcode='55000';
@@ -249,6 +261,12 @@ begin
     if v_locked is null then
       raise exception 'lost days: this member has no running paid slot or package' using errcode='PT409',
         detail='lost_days_nothing_running';
+    end if;
+    -- At most 30 days in all per grant; beyond that, staff refund instead.
+    if exists(select 1 from private.lost_day_additions r where r.entitlement_id=any(v_locked)
+        group by r.entitlement_id having sum(r.days)+p_days>30) then
+      raise exception 'lost days: at most 30 days in all can be added to a slot; refund instead' using errcode='PT409',
+        detail='lost_days_limit';
     end if;
     insert into private.lost_day_additions(request_id, entitlement_id, actor_id, days, starts_before, starts_after,
         ends_before, ends_after, reason)
@@ -410,5 +428,33 @@ begin
 end$function$;
 alter function internal.frontend_privacy_export_data(uuid) owner to postgres;
 revoke all on function internal.frontend_privacy_export_data(uuid) from public;
+
+
+-- 5. Adding slots to a package counts at most term_days - 1 days left.
+CREATE OR REPLACE FUNCTION internal.slot_package_add_quote(p_owner uuid)
+ RETURNS TABLE(package_id uuid, term_days integer, plan_id uuid, places integer, ends_at timestamp with time zone, days_left integer, unit_price_cents bigint)
+ LANGUAGE plpgsql
+ STABLE
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare v_package uuid; v_places integer; v_ends timestamptz; v_term integer; v_days integer;
+  v_plan private.plan_versions;
+begin
+  select n.package_id, n.places, n.ends_at into v_package, v_places, v_ends
+    from internal.slot_package_now(p_owner) n;
+  if v_package is null then return; end if;
+  select k.term_days into v_term from private.slot_packages k where k.id = v_package and k.owner_id = p_owner;
+  if v_term is null then return; end if;
+  select x.* into v_plan from internal.slot_package_term_plan(v_term) x;
+  -- At most term_days - 1 whole days (a package whose end moved later with
+  -- lost days): an added slot never costs more than a full term.
+  v_days := least(floor(extract(epoch from (v_ends - statement_timestamp())) / 86400)::integer, v_term - 1);
+  return query select v_package, v_term, v_plan.id, v_places, v_ends, v_days,
+    case when v_plan.id is null then null::bigint
+      else round(v_plan.price_cents::numeric * v_days / v_plan.duration_days)::bigint end;
+end;
+$function$;
+alter function internal.slot_package_add_quote(uuid) owner to postgres;
+revoke all on function internal.slot_package_add_quote(uuid) from public;
 
 commit;

@@ -34,6 +34,13 @@ const REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = new Map([
       "This member has no running paid slot or package, so there is nothing to add days to. An ended slot gets a refund instead.",
     ],
   ],
+  [
+    "lost_days_limit",
+    [
+      409,
+      "A slot can get at most 30 lost days in all, and this would go over. Refund the member instead.",
+    ],
+  ],
   ["lost_days_busy", [409, "The member's slots changed just now. Check them again, then retry."]],
   [
     "lost_days_request_reused",

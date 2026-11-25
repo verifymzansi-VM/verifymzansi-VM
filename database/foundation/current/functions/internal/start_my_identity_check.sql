@@ -1,7 +1,7 @@
 -- Generated from the replay of database/foundation by `pnpm db:foundation:snapshot`.
 -- Do not edit; change the schema with a reviewed file in database/foundation/updates/.
 
-CREATE OR REPLACE FUNCTION internal.start_my_identity_check()
+CREATE OR REPLACE FUNCTION internal.start_my_identity_check(p_consent_version text)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -39,12 +39,16 @@ begin
   elsif route->>'route'<>'automatic' then
     raise exception 'automatic identity checks are off' using errcode='PT409',detail='identity_check_mode'; end if;
   now_at:=clock_timestamp();
-  insert into private.identity_checks(owner_id,case_id,created_at,expires_at,start_first_name,start_last_name)
-    select actor,(opened->>'case_id')::uuid,now_at,now_at+interval '24 hours',p.legal_first_name,p.legal_last_name
+  -- The trigger identity_check_consent_required refuses a missing or old
+  -- consent version (PT409, detail identity_check_consent_required).
+  insert into private.identity_checks(owner_id,case_id,created_at,expires_at,start_first_name,start_last_name,
+      consent_version,consented_at)
+    select actor,(opened->>'case_id')::uuid,now_at,now_at+interval '24 hours',p.legal_first_name,p.legal_last_name,
+      p_consent_version,now_at
       from private.profiles p where p.account_id=actor returning * into strict k;
   perform internal.price_draft_actor();
   return jsonb_build_object('check_id',k.id,'session_id',null,'session_url',null,'created',true);
 end$function$;
-alter function internal.start_my_identity_check() owner to postgres;
-revoke all on function internal.start_my_identity_check() from public;
-grant execute on function internal.start_my_identity_check() to authenticated;
+alter function internal.start_my_identity_check(text) owner to postgres;
+revoke all on function internal.start_my_identity_check(text) from public;
+grant execute on function internal.start_my_identity_check(text) to authenticated;

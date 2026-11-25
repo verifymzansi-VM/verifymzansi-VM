@@ -147,6 +147,7 @@ describe("addLostDays", () => {
   it("words the database's refusals", async () => {
     const cases: Array<[string, string, number, RegExp]> = [
       ["PT409", "lost_days_nothing_running", 409, /refund instead/],
+      ["PT409", "lost_days_limit", 409, /at most 30 lost days in all/],
       ["PT409", "lost_days_busy", 409, /changed just now/],
       ["PT409", "lost_days_request_reused", 409, /already sent/],
       ["22023", "lost_days_days_invalid", 422, /1 to 30 days/],

@@ -64,6 +64,12 @@ begin
       raise exception 'lost days: this member has no running paid slot or package' using errcode='PT409',
         detail='lost_days_nothing_running';
     end if;
+    -- At most 30 days in all per grant; beyond that, staff refund instead.
+    if exists(select 1 from private.lost_day_additions r where r.entitlement_id=any(v_locked)
+        group by r.entitlement_id having sum(r.days)+p_days>30) then
+      raise exception 'lost days: at most 30 days in all can be added to a slot; refund instead' using errcode='PT409',
+        detail='lost_days_limit';
+    end if;
     insert into private.lost_day_additions(request_id, entitlement_id, actor_id, days, starts_before, starts_after,
         ends_before, ends_after, reason)
       select p_request_id, e.id, actor, p_days, e.starts_at,

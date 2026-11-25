@@ -122,7 +122,7 @@ export function LostDaysPanel() {
   return (
     <AdminCard
       title="Add lost days"
-      description="When a member lost paid days (a wrongly rejected post, a slot that didn't work, the site down more than 24 hours, or an overturned suspension). Days go on every running paid slot and package. An ended slot gets a refund instead. We don't email the member."
+      description="When a member lost paid days (a wrongly rejected post, a slot that didn't work, the site down more than 24 hours, or an overturned suspension). Days go on every running paid slot and package, at most 30 days in all per slot. Beyond that, or for an ended slot, refund instead. We don't email the member."
     >
       <ActionMessage message={message} />
       {moved ? (

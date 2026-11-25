@@ -6,8 +6,8 @@
 -- "summary" row, then one row per problem. Apply the update only when the
 -- summary is the only row and reads "update not applied".
 --
--- The summary says whether internal.frontend_privacy_export_data is the
--- reviewed body and the new table and four new functions are absent (update
+-- The summary says whether internal.frontend_privacy_export_data and
+-- internal.slot_package_add_quote have the reviewed bodies and the new table and four new functions are absent (update
 -- not applied), or everything is the update's (already applied), and counts:
 -- - "running paid grants": paid grants (source retail_paid, active, complete
 --   payment) whose end is still in the future, the grants the command moves;
@@ -23,10 +23,11 @@ with bodies as (
     end as body
   from (values
     ('internal.frontend_privacy_export_data(uuid)', 'fb567a31cf8ca166f117d5b02f744235', 'b0d8e2600a63b8e5b298ee180f488c05'),
+    ('internal.slot_package_add_quote(uuid)', '233e14908c1d2b21b17a9205da371a77', '206dc215863ec39a5fe03bd5dea6fb48'),
     ('private.lost_day_additions', null, 'table'),
     ('internal.get_lost_days_preview(text)', null, '8174b52a62082b35692a7a7237e2d807'),
     ('api.get_lost_days_preview(text)', null, '9aa7df1fa582cd2ef8d13de8d3eb3536'),
-    ('internal.add_lost_days(text,integer,text,uuid)', null, '62dea7369c8a91b2844e2af0dca77ad0'),
+    ('internal.add_lost_days(text,integer,text,uuid)', null, '29dd6271b9e19bdaf5c9c7ccc6d42877'),
     ('api.add_lost_days(text,integer,text,uuid)', null, '0e5793d459a7acf45a436a4f3133bfb8')
   ) v(sig, reviewed, updated)
 ),

@@ -46,6 +46,9 @@ const INTERNAL = [
   "internal.add_lost_days(text,integer,text,uuid)",
 ];
 const EXPORT = "internal.frontend_privacy_export_data(uuid)";
+const QUOTE = "internal.slot_package_add_quote(uuid)";
+/** The 180-day Multi-listing package term (20261114154823_slot_packages.sql). */
+const K180 = { id: "e1d7b6a4-0c95-4f8e-b3a2-6d4c8f2e1b55", cents: 60000 };
 const NOT_APPLIED = /^lost days: update not applied; running paid grants: \d+$/;
 const APPLIED = /^lost days: already applied; running paid grants: \d+; additions: \d+$/;
 const REASON = "Platform down for 3 days in December";
@@ -148,8 +151,8 @@ await runTwoAdminUpdateCheck(SETUP, async ({ database, check, kit, world, admin,
     assert.equal(summary[0], "summary");
     assert.match(summary[1], NOT_APPLIED);
     assertReadOnlyPreflight(database, kit.preflightSql);
-    // A drifted export body, and a rollback before the update, are refused.
-    assertDriftRefused(kit, { label: "lost days", signatures: [EXPORT], rows: 2 });
+    // A drifted export or package quote body, and a rollback before the update, are refused.
+    assertDriftRefused(kit, { label: "lost days", signatures: [EXPORT, QUOTE], rows: 2 });
   });
 
   // ------------------------------------------------------------- apply
@@ -345,9 +348,75 @@ await runTwoAdminUpdateCheck(SETUP, async ({ database, check, kit, world, admin,
       q(`select count(*) from private.slot_packages where owner_id='${nomsa.id}';`),
       "1"
     );
+  });
+
+  // LIM-SQL-package-add-days-left: a 180-day package prices at most 179 days.
+  await check("a 180-day package with added days: adding slots counts at most 179 days", () => {
+    // Before the update the quote counted every whole day left: 209 here,
+    // above the request's bound (179) and the website's offer and queue readers,
+    // at more than a full term's price.
+    const lindi = world.verified("ld-lindi", admin2);
+    // Fixture: R3 000 is above the online payment limit (packages that large
+    // are invoiced), so the limit is raised for this one checkout and put back
+    // byte for byte.
+    const limitSql = q(
+      "select pg_get_functiondef('internal.online_payment_max_cents()'::regprocedure);"
+    );
+    q(`create or replace function internal.online_payment_max_cents() returns bigint
+      language sql stable set search_path to 'pg_catalog' as $$ select 1000000::bigint; $$;`);
+    const quoted = json(
+      member(lindi, `select api.start_package_checkout('${K180.id}',5,${K180.cents * 5},true);`)
+    );
+    assert.equal(ozowSettle(kit, lindi, quoted.payment_id).fulfillment_status, "fulfilled");
+    q(`${limitSql};`);
+    assert.equal(q("select internal.online_payment_max_cents();"), "130000");
+    const packageId = q(`select id from private.slot_packages where owner_id='${lindi.id}';`);
+    add(lindi.email, 30);
+    const read = json(member(lindi, "select api.get_my_package_add_offer();")).package;
+    assert.equal(read.id, packageId);
+    assert.equal(read.days_left, 179);
+    assert.ok(Number(read.unit_price_cents) <= K180.cents, read.unit_price_cents);
+    assert.equal(Number(read.unit_price_cents), Math.round((K180.cents * 179) / 180));
+    const asked = json(
+      member(
+        lindi,
+        `select api.request_package_add_invoice('${packageId}',2,${2 * Number(read.unit_price_cents)},true,'${randomUUID()}');`
+      )
+    );
+    assert.equal(asked.days_left, 179);
+    assert.equal(asked.status, "requested");
+    const listed = json(
+      staff(admin, "select api.get_staff_package_invoice_requests();")
+    ).items.find((item) => item.request_id === asked.request_id);
+    assert.ok(listed, "the staff queue reads the request");
+    assert.ok(listed.days_left_now <= 179, String(listed.days_left_now));
+    // The quote itself says the same.
+    const quote = (owner) =>
+      json(`select to_jsonb(x) from internal.slot_package_add_quote('${owner.id}') x;`);
+    assert.equal(quote(lindi).days_left, 179);
     q(
       `update private.slot_package_sales set on_sale=false,changed_at=now(),reason='Fixture: switched back after the checks';`
     );
+  });
+
+  // LIM-SQL-lost-days-total: 30 days in all pass, one more is refused.
+  await check("at most 30 days in all per slot: two changes of 15 pass, a third is refused", () => {
+    const vusi = world.verified("ld-vusi", admin2);
+    ozowPurchase(kit, vusi, P30, 1);
+    const [slot] = grantsOf(vusi);
+    add(vusi.email, 15);
+    add(vusi.email, 15);
+    const before = grantsOf(vusi);
+    assert.equal(gap(slot.ends, before[0].ends), 30 * DAY);
+    const refusal = fails(addSql(admin, vusi.email, 1), "PT409", /lost_days_limit/);
+    assert.match(refusal, /at most 30 days in all/);
+    assert.deepEqual(grantsOf(vusi), before);
+    assert.equal(count(`private.lost_day_additions where entitlement_id='${slot.id}'`), 2);
+    // Any grant over the limit refuses the whole change: nothing moves.
+    ozowPurchase(kit, vusi, P30, 1);
+    const both = grantsOf(vusi);
+    fails(addSql(admin, vusi.email, 5), "PT409", /lost_days_limit/);
+    assert.deepEqual(grantsOf(vusi), both);
   });
 
   await check("ended, revoked, pending and unpaid grants never move", () => {

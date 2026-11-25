@@ -21,6 +21,8 @@ begin
   )
   select coalesce((select jsonb_agg(jsonb_build_object('case_id',r.id,'owner_id',r.subject_id,'version',r.version,'display_name',r.display_name,
       'created_at',r.created_at,'steps',internal.frontend_identity_queue_steps(r.id),
+      'identity_check',(select jsonb_build_object('status',k.status) from private.identity_checks k
+        where k.case_id=r.id and k.status<>'unavailable' order by k.created_at desc,k.id desc limit 1),
       'review_scope',case when r.claimed_by=actor and r.claim_expires_at>statement_timestamp() then jsonb_build_object(
         'caseId',r.id,'caseVersion',r.version,'submissionId',r.submission_id,'claimGeneration',r.claim_generation::text,'claimNonce',r.claim_nonce) end) order by r.risk_score desc,r.created_at,r.id)
       from (select * from ready where n<=p_limit or id=any(p_include_ids) or claimed_by=actor and claim_expires_at>statement_timestamp() order by n limit 1401) r),'[]'::jsonb),

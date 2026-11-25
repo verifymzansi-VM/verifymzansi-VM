@@ -160,7 +160,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 96. Legal must-haves before sales open (item 68) (and the group 96 part of 9 rows elsewhere) | approved by owner 2026-11-23 (answer: 'Approve with tidy-ups'), with the owner's name shown once and legal notices to legal@ | Terms: company details (status, director and Information Officer in one row, phone, email, website, dispute code), a 'Reporting a post' section and how to keep a copy. Contact: a 'Complaints' card. PAIA manual: contact details, abbreviations and updates sections. Checkouts: 'Terms · Refunds'. Invoice: 'Total before VAT' and 'VAT None'. No page prints a street address (the 'Registered address' row is removed from Terms, PAIA and Trust & Safety). |
 | 97. Test fix: no delayed redirect after My profile unmounts (item 76) (no file rows: the group 97 part of 2 rows elsewhere) | awaiting owner | Nothing; tests only. The page and its redirect after closing an account look and behave the same. |
 | 98. Remove paid add-ons (item 37) (and the group 98 part of 10 rows elsewhere) | approved by owner 2026-11-25 (answer: 'Approve them') | Advertise, plan cards, billing FAQ, showroom help and My posts no longer mention or offer Urgent, Boost or Featured; the add-on buttons on My posts and the 'Boost level' column in the business 'Post' dialog are gone. |
-| 100. Add lost days (item 75) (and the group 100 part of 1 row elsewhere) | awaiting owner | Admins only, on Payments & refunds: an 'Add lost days' card. Staff enter a member's email, check their running paid slots and package (each with its end date), choose 1 to 30 days and a reason, and see each new end date before and after adding. Every running paid slot and package of the member gets the days; a queued renewal moves with its slot and a package's slots still end together. An ended slot gets a refund instead. Members see only their later end dates; nobody is emailed. |
+| 100. Add lost days (item 75) (and the group 100 part of 1 row elsewhere) | awaiting owner | Admins only, on Payments & refunds: an 'Add lost days' card. Staff enter a member's email, check their running paid slots and package (each with its end date), choose 1 to 30 days and a reason, and see each new end date before and after adding. Every running paid slot and package of the member gets the days; a queued renewal moves with its slot and a package's slots still end together. At most 30 days in all per slot; beyond that, or for an ended slot, staff refund instead. Members see only their later end dates; nobody is emailed. |
 
 Questions for the owner:
 
@@ -4025,8 +4025,9 @@ instead; no all-accounts version; no automatic member email.
 - Payments & refunds, below 'Needs attention' (staff with the refund permission
   only): an 'Add lost days' card. 'When a member lost paid days (a wrongly
   rejected post, a slot that didn't work, the site down more than 24 hours, or
-  an overturned suspension). Days go on every running paid slot and package. An
-  ended slot gets a refund instead. We don't email the member.' and a button
+  an overturned suspension). Days go on every running paid slot and package, at
+  most 30 days in all per slot. Beyond that, or for an ended slot, refund
+  instead. We don't email the member.' and a button
   'Add lost days'.
 - The button opens 'Member's account email' with 'Check slots' and 'Cancel'.
   Checking lists the member's running paid terms: 'Individual slot', 'Individual
@@ -4040,7 +4041,9 @@ instead; no all-accounts version; no automatic member email.
   the button reads 'Add 7 days'. After adding: 'Added 7 days to
   thandi@example.co.za.' and the list of what moved with the end before and
   after; the form closes. Refusals in plain words (no active account, nothing
-  running, the slots changed just now, the admin's own account, no accepted ID
+  running, more than 30 days in all for a slot ('A slot can get at most 30 lost
+  days in all, and this would go over. Refund the member instead.'), the slots
+  changed just now, the admin's own account, no accepted ID
   review of their own, not an admin, a bad number or reason). A stale
   authenticator code sends the admin to verify again and back. Retrying the
   same change never adds the days twice.
@@ -4049,14 +4052,15 @@ instead; no all-accounts version; no automatic member email.
 
 Pictures (synthetic data, local preview, not published):
 `screenshots/item75-lost-days/` (desktop 1280 and phone 375): the closed card,
-the checked slots with the new ends, and the result.
+the checked slots with the new ends, and the result. Retaken after the 30-day help
+line as `lost-days-v2-*` (the first set, `lost-days-*`, shows the older line).
 
 Decision: awaiting owner.
 
 | File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `src/components/admin/commercial/lost-days-panel.tsx` | visual | Group 100: the new 'Add lost days' card: check a member's running paid slots, then add 1 to 30 days with a reason through the commercial route. | Staff with the refund permission: everything described in group 100. | keep | awaiting owner | 2026-11-25 | 383df04309ac |
-| `src/components/admin/commercial/lost-days-panel.test.tsx` | test | Group 100: checks the closed card, checking and adding with the new ends, the same request id on retry, nothing running, the day and reason checks, the re-verify redirect and clearing on a new email. | Nothing (not part of a page) | keep | awaiting owner | 2026-11-25 | 78ec28e0fb40 |
+| `src/components/admin/commercial/lost-days-panel.tsx` | visual | Group 100: the new 'Add lost days' card: check a member's running paid slots, then add 1 to 30 days with a reason through the commercial route. | Staff with the refund permission: everything described in group 100. | keep | awaiting owner | 2026-11-25 | 7ed550cc2815 |
+| `src/components/admin/commercial/lost-days-panel.test.tsx` | test | Group 100: checks the closed card, checking and adding with the new ends, the same request id on retry, nothing running, the day and reason checks, the re-verify redirect and clearing on a new email. | Nothing (not part of a page) | keep | awaiting owner | 2026-11-25 | b87112843d60 |
 
 <!-- frontend-ledger:end -->
 

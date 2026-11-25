@@ -5,7 +5,8 @@
 -- It refuses (55000) unless every piece of the update has the update's body,
 -- and once any days were added (a row of private.lost_day_additions exists):
 -- the added days are the member's and the record of them stays. Otherwise it
--- puts back internal.frontend_privacy_export_data byte for byte and drops the
+-- puts back internal.frontend_privacy_export_data and
+-- internal.slot_package_add_quote byte for byte and drops the
 -- four new functions and private.lost_day_additions.
 begin;
 set local lock_timeout='5s';
@@ -17,16 +18,18 @@ begin
     select v.sig||' '||coalesce(case when v.sig = 'private.lost_day_additions'
         then case when to_regclass('private.lost_day_additions') is not null then 'table' end
         else (select md5(replace(p.prosrc,E'\r\n',E'\n')) from pg_proc p where p.oid=to_regprocedure(v.sig)) end,'absent')
-    from (values ('internal.frontend_privacy_export_data(uuid)'), ('private.lost_day_additions'),
+    from (values ('internal.frontend_privacy_export_data(uuid)'), ('internal.slot_package_add_quote(uuid)'),
+      ('private.lost_day_additions'),
       ('internal.get_lost_days_preview(text)'), ('api.get_lost_days_preview(text)'),
       ('internal.add_lost_days(text,integer,text,uuid)'), ('api.add_lost_days(text,integer,text,uuid)')) v(sig)
   loop
     if shape not in (
         'internal.frontend_privacy_export_data(uuid) b0d8e2600a63b8e5b298ee180f488c05',
+        'internal.slot_package_add_quote(uuid) 206dc215863ec39a5fe03bd5dea6fb48',
         'private.lost_day_additions table',
         'internal.get_lost_days_preview(text) 8174b52a62082b35692a7a7237e2d807',
         'api.get_lost_days_preview(text) 9aa7df1fa582cd2ef8d13de8d3eb3536',
-        'internal.add_lost_days(text,integer,text,uuid) 62dea7369c8a91b2844e2af0dca77ad0',
+        'internal.add_lost_days(text,integer,text,uuid) 29dd6271b9e19bdaf5c9c7ccc6d42877',
         'api.add_lost_days(text,integer,text,uuid) 0e5793d459a7acf45a436a4f3133bfb8') then
       raise exception 'rollback precondition: the lost days update is not applied as reviewed (%)', shape
         using errcode='55000';
@@ -148,6 +151,31 @@ begin
 end$function$;
 alter function internal.frontend_privacy_export_data(uuid) owner to postgres;
 revoke all on function internal.frontend_privacy_export_data(uuid) from public;
+
+-- The package add quote as it was before the update.
+CREATE OR REPLACE FUNCTION internal.slot_package_add_quote(p_owner uuid)
+ RETURNS TABLE(package_id uuid, term_days integer, plan_id uuid, places integer, ends_at timestamp with time zone, days_left integer, unit_price_cents bigint)
+ LANGUAGE plpgsql
+ STABLE
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare v_package uuid; v_places integer; v_ends timestamptz; v_term integer; v_days integer;
+  v_plan private.plan_versions;
+begin
+  select n.package_id, n.places, n.ends_at into v_package, v_places, v_ends
+    from internal.slot_package_now(p_owner) n;
+  if v_package is null then return; end if;
+  select k.term_days into v_term from private.slot_packages k where k.id = v_package and k.owner_id = p_owner;
+  if v_term is null then return; end if;
+  select x.* into v_plan from internal.slot_package_term_plan(v_term) x;
+  v_days := floor(extract(epoch from (v_ends - statement_timestamp())) / 86400)::integer;
+  return query select v_package, v_term, v_plan.id, v_places, v_ends, v_days,
+    case when v_plan.id is null then null::bigint
+      else round(v_plan.price_cents::numeric * v_days / v_plan.duration_days)::bigint end;
+end;
+$function$;
+alter function internal.slot_package_add_quote(uuid) owner to postgres;
+revoke all on function internal.slot_package_add_quote(uuid) from public;
 
 drop function api.add_lost_days(text,integer,text,uuid);
 drop function internal.add_lost_days(text,integer,text,uuid);

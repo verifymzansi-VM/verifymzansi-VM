@@ -67,7 +67,7 @@ describe("Add lost days", () => {
   it("starts closed, with what it is for", () => {
     render(<LostDaysPanel />);
     expect(screen.getByRole("heading", { name: "Add lost days" })).toBeInTheDocument();
-    expect(screen.getByText(/An ended slot gets a refund instead/)).toBeInTheDocument();
+    expect(screen.getByText(/at most 30 days in all per slot/)).toBeInTheDocument();
     expect(screen.queryByRole("form")).toBeNull();
   });
 
