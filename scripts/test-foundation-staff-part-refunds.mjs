@@ -85,11 +85,11 @@ const { check, current, passed: checks } = createChecks();
 const database = await startLintDatabase({ log: (line) => console.log(line) });
 try {
   const kit = updateCheckKit(database, UPDATE, current);
+  const { fails, fingerprint, json, member, preflight, q, service, staff } = kit;
   const world = createPaymentWorld(kit);
   const { admin, admin2 } = twoAdmins(world, "part");
-  const { q, json, fails, member, staff, service, preflight, fingerprint } = kit;
-  const verified = (label) => world.verified(label, admin);
   const bodyMd5 = (signature) => functionBodyMd5(kit, signature);
+  const verified = (label) => world.verified(label, admin);
   const replica = (sql) =>
     q(`set session_replication_role=replica;\n${sql}\nset session_replication_role=origin;`);
 
@@ -186,15 +186,12 @@ try {
       /record_staff_refund/
     );
   });
-  await check("preflight: read only; reads 'not applied'", () => {
-    const rows = preflight();
-    assert.deepEqual(
-      rows.map((r) => r[0]),
-      ["summary"],
-      JSON.stringify(rows)
-    );
-    assert.match(rows[0][1], NOT_APPLIED);
+  await check("preflight: read only; one summary row reading 'not applied'", () => {
     assertReadOnlyPreflight(database, kit.preflightSql);
+    const [summary, ...problems] = preflight();
+    assert.deepEqual(problems, []);
+    assert.equal(summary[0], "summary");
+    assert.match(summary[1], NOT_APPLIED);
   });
   await check("drift and a premature rollback are refused", () => {
     assertDriftRefused(kit, {

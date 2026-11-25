@@ -9,12 +9,7 @@ import { staffVerifyHref } from "@/lib/auth/staff-mfa-links";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { ActionMessage, AdminCard, ReasonField, SubmitButton, readForm } from "./commercial-action";
 import { REFUND_REASON_LABELS, refundReasonOptions } from "./payment-actions";
-import {
-  RefundAmountFields,
-  refundEndsPaidDays,
-  refundExtras,
-  type RefundRoom,
-} from "./refund-amount";
+import { RefundAmountFields, readRefund, type RefundRoom } from "./refund-amount";
 
 /**
  * Refunds through Ozow (shown only while OZOW_API_REFUNDS_ENABLED is on):
@@ -250,16 +245,12 @@ export function OzowRefundForm({
       onSubmit={async (event) => {
         event.preventDefault();
         const values = readForm(event.currentTarget);
-        const part = refundExtras(values, room, target.amountCents);
-        if ("error" in part) {
-          setProblem(part.error);
-          return;
-        }
-        setProblem(null);
-        const cents = part.extras.amountCents ?? room?.leftCents ?? target.amountCents;
-        const waits = priorCents + cents > APPROVAL_ABOVE_CENTS;
-        const amount = formatPlanPrice(cents);
-        const keeps = room && !refundEndsPaidDays(values.reasonCode ?? "", cents, room.leftCents);
+        const read = readRefund(values, room, target.amountCents);
+        setProblem("error" in read ? read.error : null);
+        if ("error" in read) return;
+        const amount = formatPlanPrice(read.cents);
+        const waits = priorCents + read.cents > APPROVAL_ABOVE_CENTS;
+        const keeps = read.keeps;
         if (
           !window.confirm(
             dashboard
@@ -280,7 +271,7 @@ export function OzowRefundForm({
             reasonCode: values.reasonCode,
             reason: values.reason,
             ...(dashboard ? { ozowRefundId: values.ozowRefundId ?? "" } : {}),
-            ...part.extras,
+            ...read.extras,
           },
           dashboard
             ? (status) =>

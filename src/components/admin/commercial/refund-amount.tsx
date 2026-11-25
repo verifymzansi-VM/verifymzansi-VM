@@ -116,6 +116,23 @@ export function refundExtras(
     : { extras: { amountCents } };
 }
 
+/**
+ * A refund form's submitted values read for the request: the extra fields
+ * (refundExtras), the amount it returns and whether the slot keeps running;
+ * or the message to show.
+ */
+export function readRefund(
+  values: Record<string, string>,
+  room: RefundRoom | undefined,
+  fullCents: number
+) {
+  const part = refundExtras(values, room, fullCents);
+  if ("error" in part) return part;
+  const cents = part.extras.amountCents ?? room?.leftCents ?? fullCents;
+  const keeps = room ? !refundEndsPaidDays(values.reasonCode ?? "", cents, room.leftCents) : false;
+  return { extras: part.extras, cents, keeps };
+}
+
 /** The amount, the first-purchase date and what the refund does to the slot. */
 export function RefundAmountFields({
   room,

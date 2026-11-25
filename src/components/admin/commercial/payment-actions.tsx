@@ -5,12 +5,7 @@ import { Button } from "@/components/ui/button";
 import { formatPlanPrice } from "@/lib/constants/pricing";
 import type { RefundReasonCode } from "@/lib/foundation/staff-payments";
 import { ReasonField, SubmitButton, readForm, type CommercialPayload } from "./commercial-action";
-import {
-  RefundAmountFields,
-  refundEndsPaidDays,
-  refundExtras,
-  type RefundRoom,
-} from "./refund-amount";
+import { RefundAmountFields, readRefund, type RefundRoom } from "./refund-amount";
 
 /** Why money is returned (the owner's closed list), in staff words. */
 export const REFUND_REASON_LABELS = {
@@ -103,22 +98,17 @@ export function RefundForm({
       onSubmit={async (event) => {
         event.preventDefault();
         const values = readForm(event.currentTarget);
-        const part = refundExtras(values, room, target.amountCents);
-        if ("error" in part) {
-          setProblem(part.error);
-          return;
-        }
-        setProblem(null);
-        const cents = part.extras.amountCents ?? room?.leftCents ?? target.amountCents;
+        const part = readRefund(values, room, target.amountCents);
+        setProblem("error" in part ? part.error : null);
+        if ("error" in part) return;
+        const { cents, keeps } = part;
         const needsApproval = priorCents + cents > APPROVAL_ABOVE_CENTS;
         if (
           !window.confirm(
             needsApproval
               ? `Record this ${what} of ${formatPlanPrice(cents)}? It takes effect when another staff member approves it.`
               : `Record this ${what} of ${formatPlanPrice(cents)}? ${
-                  room && !refundEndsPaidDays(values.reasonCode ?? "", cents, room.leftCents)
-                    ? "The slot keeps running."
-                    : "Paid visibility will be withdrawn."
+                  keeps ? "The slot keeps running." : "Paid visibility will be withdrawn."
                 }`
           )
         )
