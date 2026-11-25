@@ -4161,7 +4161,7 @@ Launch checklist item 77. The posting terms (posting-v6) promise a first
 purchase cancelled within 5 business days, refunded in full, and refunds of
 part of a payment (unused whole days less the R50 fee, or a reasonable part
 for days we failed to provide). Database update
-`20261125110216_staff_part_refunds.sql` (pending, apply first): commands
+`20261125133916_staff_part_refunds.sql` (pending, apply first): commands
 `api.record_staff_refund` (payments:refund, an authenticator code from the
 last 15 minutes) and `api.get_staff_refunds_left` (payments:view).
 

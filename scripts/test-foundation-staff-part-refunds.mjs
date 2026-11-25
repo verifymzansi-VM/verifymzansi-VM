@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Behaviour checks for 20261125110216_staff_part_refunds.sql (launch checklist
+// Behaviour checks for 20261125133916_staff_part_refunds.sql (launch checklist
 // item 77): the first-purchase refund within 5 business days, and part
 // refunds through Ozow, from the Ozow dashboard or by bank transfer.
 //
@@ -50,7 +50,7 @@ import {
   updateCheckKit,
 } from "./lib/foundation-staff-payment-world.mjs";
 
-const UPDATE = "20261125110216_staff_part_refunds.sql";
+const UPDATE = "20261125133916_staff_part_refunds.sql";
 const REVIEWED = {
   "internal.payment_refund_request_guard()": "11b86b7a627aad245c84433118601705",
   "internal.payment_net_cents(private.payments)": "28d85be00f5d30c0f2121b120ea55dc9",
@@ -70,9 +70,9 @@ const ADDED = [
   "internal.apply_staff_refund(uuid,uuid)",
 ];
 const COMMANDS = [
-  "api.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text)",
+  "api.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text,uuid)",
   "api.get_staff_refunds_left(uuid[])",
-  "internal.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text)",
+  "internal.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text,uuid)",
   "internal.get_staff_refunds_left(uuid[])",
 ];
 const NONE = { anon: false, authenticated: false, service_role: false };

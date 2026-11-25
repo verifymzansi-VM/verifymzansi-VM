@@ -1,4 +1,4 @@
--- Read-only preflight for updates/20261125110216_staff_part_refunds.sql.
+-- Read-only preflight for updates/20261125133916_staff_part_refunds.sql.
 --
 -- Run this file unchanged in the Supabase SQL editor before applying the
 -- update, and again after it. It changes nothing: the first statement makes
@@ -23,13 +23,13 @@ with bodies as (
     coalesce((select md5(replace(p.prosrc, E'\r\n', E'\n')) from pg_proc p where p.oid = to_regprocedure(v.sig)), 'absent') as body
   from (values
     ('internal.payment_refund_request_guard()',
-      '11b86b7a627aad245c84433118601705', '9e8a87d429606cdd7c092cee4ba695ba'),
+      '11b86b7a627aad245c84433118601705', '88275008dfa41413af55cefbc6341e9d'),
     ('internal.payment_net_cents(private.payments)',
       '28d85be00f5d30c0f2121b120ea55dc9', '237b3d0054e49f02f2da9cd227d5c789'),
     ('internal.approve_staff_payment_refund(uuid)',
-      '189b3f24e9b847bf75760eeaae9b2686', '5b0bbcf818b46f09b70a4f507a66a4af'),
+      '189b3f24e9b847bf75760eeaae9b2686', '5c49b676ca097005f4cfc0522b1548ee'),
     ('internal.apply_ozow_refund_state(uuid,text,timestamp with time zone,timestamp with time zone,text)',
-      '431e2541a83cf8e892efd61aa5cacd4d', '0ea76f550ca87fa76fe8431f390ceb4c'),
+      '431e2541a83cf8e892efd61aa5cacd4d', '30efff760c445d2ba03ecbb98515044b'),
     ('internal.claim_ozow_refund_send(uuid)',
       'c16477b6080ff5e7075f63936cd5383b', '3b5affd02d571f3aa264dfd17ad938cb'),
     ('internal.za_public_holiday(date)', 'absent', 'da84c3f6ecadd2c77d9460af069ec241'),
@@ -41,12 +41,12 @@ with bodies as (
     ('internal.refund_left_cents(uuid,uuid)', 'absent', 'fceaee2d494b94bd4d1f38e1e4a0692e'),
     ('internal.staff_refund_result(private.payment_refund_requests,boolean)',
       'absent', 'cfe27e3019d6875bdd690f86a5f8fdbb'),
-    ('internal.apply_staff_refund(uuid,uuid)', 'absent', 'cb274221e355aaa375113f2a6fe204e1'),
-    ('internal.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text)',
-      'absent', 'd076961cccdb12863765b3336cf7a6db'),
+    ('internal.apply_staff_refund(uuid,uuid)', 'absent', '65293b9f671ce94e8fe76a0fb4ba0e6a'),
+    ('internal.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text,uuid)',
+      'absent', 'ec6a4f471dc46d6c6c31338f10de07bf'),
     ('internal.get_staff_refunds_left(uuid[])', 'absent', '5df1c510531ea6e328ca33cba01e0b9f'),
-    ('api.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text)',
-      'absent', 'bf894de8138626297c957328cb812fd6'),
+    ('api.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text,uuid)',
+      'absent', '621da7145ee2beea53cb54b0547dbaa8'),
     ('api.get_staff_refunds_left(uuid[])', 'absent', 'd721ae75b29975a22c613227abf39aa4')
   ) v(sig, reviewed, updated)
 ),

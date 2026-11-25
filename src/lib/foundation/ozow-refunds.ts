@@ -147,7 +147,7 @@ const REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = new Map([
   ["staff_same_identity", [403, "Another staff member must handle a payment of your own."]],
   // Refund follow-ups (<ts>_refund_follow_ups.sql, not applied yet).
   ...STAFF_REFUND_FOLLOW_UP_REFUSALS,
-  // First-purchase and part refunds (20261125110216_staff_part_refunds.sql).
+  // First-purchase and part refunds (20261125133916_staff_part_refunds.sql).
   ...STAFF_PART_REFUND_REFUSALS,
 ]);
 

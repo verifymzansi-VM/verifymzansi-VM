@@ -13,14 +13,17 @@
 --
 -- 1. Adds api.record_staff_refund(p_payment_id, p_line_id, p_channel,
 --    p_amount_cents, p_reason_code, p_reason, p_reference, p_ozow_fact,
---    p_asked_on) (capability payments:refund, an authenticator code from the
+--    p_asked_on, p_request_id) (capability payments:refund, an authenticator code from the
 --    last 15 minutes, and the staff rule of money actions). One command for
 --    every refund, in three ways: 'ozow' (the server sends it to Ozow, only in
 --    Ozow's 13-day window), 'dashboard' (already refunded by hand in the Ozow
 --    dashboard; p_reference is Ozow's refund id) and 'reference' (a bank
 --    transfer back, or a refund recorded with Ozow's reference, under the
 --    existing rules of internal.staff_refund_reference). Refunds only;
---    chargebacks stay whole, on the existing commands.
+--    chargebacks stay whole, on the existing commands. p_request_id (new
+--    column request_id, unique) names one request: sent again with the same
+--    input it returns the first record (repeated), whatever its state, and
+--    with other input it is refused (PT409 refund_request_reused).
 -- 2. The amount: p_amount_cents, or null for everything still left. It is
 --    more than 0 and at most what is left on the slot and on the payment
 --    (internal.refund_left_cents: paid, less refunds applied, waiting or on
@@ -35,7 +38,9 @@
 --    reversed as before: grant revoked, posts hidden, commission reversed)
 --    unless the refund is a part of what is left for 'Our failure, after a
 --    fix was offered' or 'Billing error': then the slot keeps running (or has
---    already ended) and only the money goes back. Either way the member gets
+--    already ended) and only the money goes back; it also reverses the
+--    partner commission of that slot (or of the payment), as a slot reversal
+--    does. Either way the member gets
 --    the neutral 'Payment update' email. Approving a waiting refund
 --    (internal.approve_staff_payment_refund), Ozow confirming a refund it was
 --    sent (internal.apply_ozow_refund_state) and recording one apply it
@@ -74,8 +79,8 @@
 -- neither new value. It refuses with 55000 unless the five functions it
 -- replaces have their reviewed bodies (or this update's) and the ones it adds
 -- are absent (or this update's). Run again, it changes nothing.
--- Read-only preflight: ../preflight/20261125110216_staff_part_refunds.check.sql.
--- Rollback: ../rollback/20261125110216_staff_part_refunds.down.sql.
+-- Read-only preflight: ../preflight/20261125133916_staff_part_refunds.check.sql.
+-- Rollback: ../rollback/20261125133916_staff_part_refunds.down.sql.
 begin;
 -- Never wait more than 5 seconds for anything this update needs.
 set local lock_timeout='5s';
@@ -100,20 +105,20 @@ begin
       ('internal.refund_left_cents(uuid,uuid)'),
       ('internal.staff_refund_result(private.payment_refund_requests,boolean)'),
       ('internal.apply_staff_refund(uuid,uuid)'),
-      ('internal.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text)'),
+      ('internal.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text,uuid)'),
       ('internal.get_staff_refunds_left(uuid[])'),
-      ('api.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text)'),
+      ('api.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text,uuid)'),
       ('api.get_staff_refunds_left(uuid[])')) v(sig)
   loop
     if shape not in (
         'internal.payment_refund_request_guard() 11b86b7a627aad245c84433118601705',
-        'internal.payment_refund_request_guard() 9e8a87d429606cdd7c092cee4ba695ba',
+        'internal.payment_refund_request_guard() 88275008dfa41413af55cefbc6341e9d',
         'internal.payment_net_cents(private.payments) 28d85be00f5d30c0f2121b120ea55dc9',
         'internal.payment_net_cents(private.payments) 237b3d0054e49f02f2da9cd227d5c789',
         'internal.approve_staff_payment_refund(uuid) 189b3f24e9b847bf75760eeaae9b2686',
-        'internal.approve_staff_payment_refund(uuid) 5b0bbcf818b46f09b70a4f507a66a4af',
+        'internal.approve_staff_payment_refund(uuid) 5c49b676ca097005f4cfc0522b1548ee',
         'internal.apply_ozow_refund_state(uuid,text,timestamp with time zone,timestamp with time zone,text) 431e2541a83cf8e892efd61aa5cacd4d',
-        'internal.apply_ozow_refund_state(uuid,text,timestamp with time zone,timestamp with time zone,text) 0ea76f550ca87fa76fe8431f390ceb4c',
+        'internal.apply_ozow_refund_state(uuid,text,timestamp with time zone,timestamp with time zone,text) 30efff760c445d2ba03ecbb98515044b',
         'internal.claim_ozow_refund_send(uuid) c16477b6080ff5e7075f63936cd5383b',
         'internal.claim_ozow_refund_send(uuid) 3b5affd02d571f3aa264dfd17ad938cb',
         'internal.za_public_holiday(date) absent',
@@ -131,13 +136,13 @@ begin
         'internal.staff_refund_result(private.payment_refund_requests,boolean) absent',
         'internal.staff_refund_result(private.payment_refund_requests,boolean) cfe27e3019d6875bdd690f86a5f8fdbb',
         'internal.apply_staff_refund(uuid,uuid) absent',
-        'internal.apply_staff_refund(uuid,uuid) cb274221e355aaa375113f2a6fe204e1',
-        'internal.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text) absent',
-        'internal.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text) d076961cccdb12863765b3336cf7a6db',
+        'internal.apply_staff_refund(uuid,uuid) 65293b9f671ce94e8fe76a0fb4ba0e6a',
+        'internal.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text,uuid) absent',
+        'internal.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text,uuid) ec6a4f471dc46d6c6c31338f10de07bf',
         'internal.get_staff_refunds_left(uuid[]) absent',
         'internal.get_staff_refunds_left(uuid[]) 5df1c510531ea6e328ca33cba01e0b9f',
-        'api.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text) absent',
-        'api.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text) bf894de8138626297c957328cb812fd6',
+        'api.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text,uuid) absent',
+        'api.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text,uuid) 621da7145ee2beea53cb54b0547dbaa8',
         'api.get_staff_refunds_left(uuid[]) absent',
         'api.get_staff_refunds_left(uuid[]) d721ae75b29975a22c613227abf39aa4') then
       raise exception 'staff part refunds precondition: % is neither the reviewed body nor this update''s', shape
@@ -150,7 +155,10 @@ end$$;
 -- (as every refund did) and name no ask date.
 alter table private.payment_refund_requests
   add column if not exists ends_paid_days boolean not null default true,
-  add column if not exists customer_asked_on date;
+  add column if not exists customer_asked_on date,
+  add column if not exists request_id uuid;
+create unique index if not exists payment_refund_requests_request_idx
+  on private.payment_refund_requests (request_id) where request_id is not null;
 alter table private.payment_refund_requests drop constraint if exists payment_refund_requests_reason_code_check,
   add constraint payment_refund_requests_reason_code_check check (reason_code = any (array['billing_error'::text,
     'duplicate'::text, 'our_failure_after_fix_offered'::text, 's14_cancellation'::text, 'breach_credit'::text,
@@ -326,7 +334,7 @@ CREATE OR REPLACE FUNCTION internal.apply_staff_refund(p_request_id uuid, p_acto
  LANGUAGE plpgsql
  SET search_path TO 'pg_catalog'
 AS $function$
-declare request private.payment_refund_requests; result jsonb;
+declare request private.payment_refund_requests; result jsonb; c record;
 begin
   select * into request from private.payment_refund_requests r where r.id = p_request_id;
   if not found or request.status <> 'applied' or request.released_activations is not null then
@@ -338,6 +346,16 @@ begin
       insert into private.outbox_events (kind, subject_id, owner_id, dedupe_key)
       values ('payment_reversed', request.payment_id, request.account_id, 'payment_part_refund:' || request.id);
     end if;
+    -- The partner commission of this slot (or of the payment) is reversed, as
+    -- a slot reversal does (internal.reverse_payment_line).
+    for c in select x.id, p.account_id from private.partner_commissions x join private.partners p on p.id = x.partner_id
+        where x.payment_id = request.payment_id
+          and (request.payment_line_id is null or x.payment_line_id = request.payment_line_id)
+          and x.status <> 'reversed' order by x.id for update of x loop
+      update private.partner_commissions set status = 'reversed', reversed_at = statement_timestamp(),
+        reversal_reason = 'Payment partly refunded' where id = c.id;
+      perform internal.notify_account(c.account_id, 'partner_commission_reversed', c.id, null, null);
+    end loop;
     result := jsonb_build_object('status', request.kind, 'released_activations', 0);
   elsif request.payment_line_id is null then
     result := internal.reverse_payment(request.payment_id, request.kind, request.reason);
@@ -354,7 +372,7 @@ $function$;
 revoke all on function internal.apply_staff_refund(uuid,uuid) from public;
 
 -- 1. The refund command.
-CREATE OR REPLACE FUNCTION internal.record_staff_refund(p_payment_id uuid, p_line_id uuid, p_channel text, p_amount_cents bigint, p_reason_code text, p_reason text, p_reference text, p_ozow_fact jsonb, p_asked_on text)
+CREATE OR REPLACE FUNCTION internal.record_staff_refund(p_payment_id uuid, p_line_id uuid, p_channel text, p_amount_cents bigint, p_reason_code text, p_reason text, p_reference text, p_ozow_fact jsonb, p_asked_on text, p_request_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -393,6 +411,9 @@ begin
         detail='refund_asked_on_unexpected';
     end if;
   end if;
+  if p_request_id is null then
+    raise exception 'refund request id required' using errcode='22023', detail='refund_request_id_required';
+  end if;
   if p_amount_cents is not null and p_amount_cents < 1 then
     raise exception 'a refund is at least 1 cent' using errcode='22023', detail='refund_amount_invalid';
   end if;
@@ -430,6 +451,20 @@ begin
   perform 1 from private.entitlements e where e.payment_id = pay.id order by e.id for update;
   perform internal.staff_actor('payments:refund'); -- authority after any lock wait
   perform internal.assert_staff_payment_actor(actor, buyer);
+  -- The same request id again: the first record, whatever its state, when the
+  -- input is the same; otherwise refused.
+  select * into prior from private.payment_refund_requests r where r.request_id = p_request_id;
+  if found then
+    if prior.channel = channel and prior.payment_id = pay.id and prior.payment_line_id is not distinct from line.id
+        and prior.reason_code = p_reason_code and prior.reason = btrim(p_reason) and prior.requested_by = actor
+        and (p_amount_cents is null or prior.amount_cents = p_amount_cents)
+        and prior.customer_asked_on is not distinct from asked then
+      return internal.staff_refund_result(prior, true);
+    end if;
+    raise exception 'this refund request id was already used for another refund' using errcode='PT409',
+      detail='refund_request_reused';
+  end if;
+  prior := null;
   -- A repeat of the same request by the same staff member returns its state.
   if channel = 'dashboard' then
     -- A declined record took no effect, so its refund id may be recorded again.
@@ -539,7 +574,7 @@ begin
   begin
     insert into private.payment_refund_requests (id, payment_id, payment_line_id, account_id, kind, reason_code, reason,
         ozow_reference, amount_cents, recorded_before_cents, needs_approval, status, requested_by, applied_at,
-        channel, approved_at, ozow_transaction_id, ozow_refund_id, ends_paid_days, customer_asked_on)
+        channel, approved_at, ozow_transaction_id, ozow_refund_id, ends_paid_days, customer_asked_on, request_id)
       values (new_id, pay.id, line.id, pay.owner_id, 'refunded', p_reason_code, btrim(p_reason),
         case channel when 'api' then 'vm-refund-' || new_id::text when 'dashboard' then refund_id::text || ':' || new_id::text
           else reference end,
@@ -547,10 +582,14 @@ begin
         case when approval then 'awaiting_approval' when channel = 'api' then 'approved' else 'applied' end, actor,
         case when not approval and channel <> 'api' then statement_timestamp() end,
         channel, case when channel = 'api' and not approval then statement_timestamp() end,
-        transaction, refund_id, ends, asked)
+        transaction, refund_id, ends, asked, p_request_id)
       returning * into request;
   exception when unique_violation then
     get stacked diagnostics violated = constraint_name;
+    if violated = 'payment_refund_requests_request_idx' then
+      raise exception 'this refund request id was already used for another refund' using errcode='PT409',
+        detail='refund_request_reused';
+    end if;
     if violated in ('payment_refund_requests_reference_idx', 'payment_refund_requests_ozow_key_idx',
         'payment_refund_requests_ozow_refund_idx') then
       if channel = 'dashboard' then
@@ -573,19 +612,19 @@ begin
   return internal.staff_refund_result(request, false);
 end;
 $function$;
-revoke all on function internal.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text) from public;
-grant execute on function internal.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text) to authenticated;
+revoke all on function internal.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text,uuid) from public;
+grant execute on function internal.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text,uuid) to authenticated;
 
-CREATE OR REPLACE FUNCTION api.record_staff_refund(p_payment_id uuid, p_line_id uuid, p_channel text, p_amount_cents bigint, p_reason_code text, p_reason text, p_reference text, p_ozow_fact jsonb, p_asked_on text)
+CREATE OR REPLACE FUNCTION api.record_staff_refund(p_payment_id uuid, p_line_id uuid, p_channel text, p_amount_cents bigint, p_reason_code text, p_reason text, p_reference text, p_ozow_fact jsonb, p_asked_on text, p_request_id uuid)
  RETURNS jsonb
  LANGUAGE sql
  SET search_path TO 'pg_catalog'
 AS $function$
   select internal.record_staff_refund(p_payment_id, p_line_id, p_channel, p_amount_cents, p_reason_code, p_reason,
-    p_reference, p_ozow_fact, p_asked_on);
+    p_reference, p_ozow_fact, p_asked_on, p_request_id);
 $function$;
-revoke all on function api.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text) from public;
-grant execute on function api.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text) to authenticated;
+revoke all on function api.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text,uuid) from public;
+grant execute on function api.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text,uuid) to authenticated;
 
 -- 5. What is left to refund, for the staff payments list.
 CREATE OR REPLACE FUNCTION internal.get_staff_refunds_left(p_payment_ids uuid[])
@@ -662,7 +701,7 @@ begin
       raise exception 'a refund is the paid amount, for the account that paid' using errcode='23514';
     end if;
     -- A chargeback is the paid amount of the payment or slot; a refund is at
-    -- most what is left of it (20261125110216_staff_part_refunds.sql).
+    -- most what is left of it (20261125133916_staff_part_refunds.sql).
     if new.kind = 'chargeback' and new.amount_cents is distinct from coalesce(
         (select l.amount_cents from private.payment_lines l where l.id = new.payment_line_id),
         case when new.payment_line_id is null then (select p.amount_cents from private.payments p where p.id = new.payment_id) end) then
@@ -834,7 +873,7 @@ begin
   end if;
   -- A renewal of the slot bought while the refund waited: refund the renewal
   -- first (decline this one and record it again afterwards). Only a refund
-  -- that ends the paid days (20261125110216_staff_part_refunds.sql).
+  -- that ends the paid days (20261125133916_staff_part_refunds.sql).
   if request.kind = 'refunded' and request.ends_paid_days
       and internal.refund_renewal_waiting(pay.id, request.payment_line_id) then
     raise exception 'a renewal of this slot is waiting; refund the renewal first, then this period' using errcode='PT409', detail='renewal_queued';
@@ -912,7 +951,7 @@ begin
       -- The record is applied first, so the reversal is no longer held back by
       -- internal.payment_reversal_waiting_guard; one transaction. A part
       -- refund that keeps the slot running only returns money
-      -- (20261125110216_staff_part_refunds.sql).
+      -- (20261125133916_staff_part_refunds.sql).
       update private.payment_refund_requests set status = 'applied', applied_at = statement_timestamp(),
         send_outcome = 'accepted' where id = request.id;
       perform internal.apply_staff_refund(request.id, actor);

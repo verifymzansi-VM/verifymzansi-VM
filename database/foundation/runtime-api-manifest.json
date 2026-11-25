@@ -6424,7 +6424,7 @@
     },
     {
       "name": "record_staff_refund",
-      "updates": ["updates/20261125110216_staff_part_refunds.sql"],
+      "updates": ["updates/20261125133916_staff_part_refunds.sql"],
       "arguments": [
         {
           "name": "p_payment_id",
@@ -6483,7 +6483,7 @@
     },
     {
       "name": "get_staff_refunds_left",
-      "updates": ["updates/20261125110216_staff_part_refunds.sql"],
+      "updates": ["updates/20261125133916_staff_part_refunds.sql"],
       "arguments": [
         {
           "name": "p_payment_ids",

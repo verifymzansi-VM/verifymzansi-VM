@@ -312,7 +312,7 @@ export function PaymentsPanel({
   ozow?: OzowRefundsView;
   /** What is left to refund per payment and slot, when the page could read
    * it: refunds can then be part of it, and a first purchase can be
-   * cancelled (20261125110216_staff_part_refunds.sql). */
+   * cancelled (20261125133916_staff_part_refunds.sql). */
   refundsLeft?: StaffRefundsLeft[];
 }) {
   const { run, busy, message } = useCommercialAction();

@@ -1,4 +1,4 @@
--- Reviewed rollback for updates/20261125110216_staff_part_refunds.sql.
+-- Reviewed rollback for updates/20261125133916_staff_part_refunds.sql.
 -- Not part of the replay. Run it only if that update must be undone, after the
 -- owner has decided so; prefer a forward fix. Merge the website's revert first:
 -- the website of that update calls api.record_staff_refund and
@@ -33,16 +33,16 @@ begin
       ('internal.refund_left_cents(uuid,uuid)'),
       ('internal.staff_refund_result(private.payment_refund_requests,boolean)'),
       ('internal.apply_staff_refund(uuid,uuid)'),
-      ('internal.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text)'),
+      ('internal.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text,uuid)'),
       ('internal.get_staff_refunds_left(uuid[])'),
-      ('api.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text)'),
+      ('api.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text,uuid)'),
       ('api.get_staff_refunds_left(uuid[])')) v(sig)
   loop
     if shape not in (
-        'internal.payment_refund_request_guard() 9e8a87d429606cdd7c092cee4ba695ba',
+        'internal.payment_refund_request_guard() 88275008dfa41413af55cefbc6341e9d',
         'internal.payment_net_cents(private.payments) 237b3d0054e49f02f2da9cd227d5c789',
-        'internal.approve_staff_payment_refund(uuid) 5b0bbcf818b46f09b70a4f507a66a4af',
-        'internal.apply_ozow_refund_state(uuid,text,timestamp with time zone,timestamp with time zone,text) 0ea76f550ca87fa76fe8431f390ceb4c',
+        'internal.approve_staff_payment_refund(uuid) 5c49b676ca097005f4cfc0522b1548ee',
+        'internal.apply_ozow_refund_state(uuid,text,timestamp with time zone,timestamp with time zone,text) 30efff760c445d2ba03ecbb98515044b',
         'internal.claim_ozow_refund_send(uuid) 3b5affd02d571f3aa264dfd17ad938cb',
         'internal.za_public_holiday(date) da84c3f6ecadd2c77d9460af069ec241',
         'internal.za_business_day(date) 75386489557e85499d60cba6160b094a',
@@ -51,10 +51,10 @@ begin
         'internal.assert_first_purchase_refund(uuid,date) 2d9dff6d73922a859999ad1f349bd614',
         'internal.refund_left_cents(uuid,uuid) fceaee2d494b94bd4d1f38e1e4a0692e',
         'internal.staff_refund_result(private.payment_refund_requests,boolean) cfe27e3019d6875bdd690f86a5f8fdbb',
-        'internal.apply_staff_refund(uuid,uuid) cb274221e355aaa375113f2a6fe204e1',
-        'internal.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text) d076961cccdb12863765b3336cf7a6db',
+        'internal.apply_staff_refund(uuid,uuid) 65293b9f671ce94e8fe76a0fb4ba0e6a',
+        'internal.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text,uuid) ec6a4f471dc46d6c6c31338f10de07bf',
         'internal.get_staff_refunds_left(uuid[]) 5df1c510531ea6e328ca33cba01e0b9f',
-        'api.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text) bf894de8138626297c957328cb812fd6',
+        'api.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text,uuid) 621da7145ee2beea53cb54b0547dbaa8',
         'api.get_staff_refunds_left(uuid[]) d721ae75b29975a22c613227abf39aa4') then
       raise exception 'rollback precondition: % is not this update''s body', shape using errcode='55000';
     end if;
@@ -69,9 +69,9 @@ begin
   end if;
 end$$;
 
-drop function if exists api.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text);
+drop function if exists api.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text,uuid);
 drop function if exists api.get_staff_refunds_left(uuid[]);
-drop function if exists internal.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text);
+drop function if exists internal.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text,uuid);
 drop function if exists internal.get_staff_refunds_left(uuid[]);
 
 
@@ -450,7 +450,9 @@ alter table private.payment_refund_requests drop constraint if exists payment_re
   add constraint payment_refund_requests_reason_code_check check (reason_code = any (array['billing_error'::text,
     'duplicate'::text, 'our_failure_after_fix_offered'::text, 's14_cancellation'::text, 'breach_credit'::text,
     'renewal_cancelled_before_start'::text]));
-alter table private.payment_refund_requests drop column if exists customer_asked_on,
+drop index if exists private.payment_refund_requests_request_idx;
+alter table private.payment_refund_requests drop column if exists request_id,
+  drop column if exists customer_asked_on,
   drop column if exists ends_paid_days;
 
 commit;

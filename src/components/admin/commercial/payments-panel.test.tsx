@@ -300,7 +300,7 @@ describe("staff payments panel", () => {
   });
 });
 
-describe("part refunds and the first purchase (20261125110216_staff_part_refunds.sql)", () => {
+describe("part refunds and the first purchase (20261125133916_staff_part_refunds.sql)", () => {
   const left = (overrides = {}) => ({
     payment_id: base.id,
     refunded_cents: 0,

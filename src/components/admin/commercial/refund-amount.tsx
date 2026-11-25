@@ -4,7 +4,7 @@ import { formatPlanPrice } from "@/lib/constants/pricing";
 
 /**
  * The amount and first-purchase fields of the refund forms
- * (20261125110216_staff_part_refunds.sql). Shown only when the page could
+ * (20261125133916_staff_part_refunds.sql). Shown only when the page could
  * read what is left to refund (api.get_staff_refunds_left); without it the
  * forms record whole refunds, as before. The database decides; these fields
  * only word the form and fill the request.

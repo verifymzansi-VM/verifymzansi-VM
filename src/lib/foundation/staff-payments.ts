@@ -38,7 +38,7 @@ export const REFUND_REASON_CODES = [
   // applied; staff are not offered it until the update is live (the current
   // database refuses it with refund_reason_code_invalid).
   "renewal_cancelled_before_start",
-  // From 20261125110216_staff_part_refunds.sql: a first purchase cancelled
+  // From 20261125133916_staff_part_refunds.sql: a first purchase cancelled
   // within 5 business days, refunded in full (api.record_staff_refund only).
   "first_purchase_cancelled",
 ] as const;
@@ -149,7 +149,7 @@ export const STAFF_REFUND_FOLLOW_UP_REFUSALS: ReadonlyArray<
 
 /**
  * Refusals of the first-purchase and part refunds
- * (20261125110216_staff_part_refunds.sql, api.record_staff_refund), shared by
+ * (20261125133916_staff_part_refunds.sql, api.record_staff_refund), shared by
  * the refunds through Ozow (./ozow-refunds.ts) and the refunds recorded with
  * a reference.
  */
@@ -408,7 +408,7 @@ const PAYMENT_REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = n
   ],
   // Refund follow-ups (<ts>_refund_follow_ups.sql, not applied yet).
   ...STAFF_REFUND_FOLLOW_UP_REFUSALS,
-  // First-purchase and part refunds (20261125110216_staff_part_refunds.sql).
+  // First-purchase and part refunds (20261125133916_staff_part_refunds.sql).
   ...STAFF_PART_REFUND_REFUSALS,
 ]);
 
@@ -594,7 +594,7 @@ const isoDay = z.iso.date();
 /**
  * A refund of a payment or slot through Ozow, from the Ozow dashboard or with
  * a reference, for everything left or a part of it, and the first-purchase
- * refund (api.record_staff_refund, 20261125110216_staff_part_refunds.sql). The
+ * refund (api.record_staff_refund, 20261125133916_staff_part_refunds.sql). The
  * database decides what is left, whether the slot keeps running, the
  * first-purchase rules and the second approver above R1 000.
  */

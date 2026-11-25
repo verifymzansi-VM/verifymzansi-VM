@@ -30,7 +30,7 @@ const uuid = z.uuid().transform((value) => value.toLowerCase());
 const reason = z.string().trim().min(5).max(500);
 // Part of what is left, in cents (null: the whole payment or slot), and the
 // day the customer asked (a first purchase cancelled): either one sends the
-// refund through api.record_staff_refund (20261125110216_staff_part_refunds.sql).
+// refund through api.record_staff_refund (20261125133916_staff_part_refunds.sql).
 const amountCents = z
   .number()
   .int()

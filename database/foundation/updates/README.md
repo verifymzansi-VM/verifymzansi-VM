@@ -82,7 +82,7 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Staff refunds: the first purchase and part refunds, 25 November 2026
 
-`20261125110216_staff_part_refunds.sql` is pending (see the applied register).
+`20261125133916_staff_part_refunds.sql` is pending (see the applied register).
 Launch checklist item 77. The posting terms (posting-v6) promise a first
 purchase cancelled within 5 business days, refunded in full, and refunds of part
 of a payment (unused whole days less the R50 cancellation fee, or a reasonable
@@ -152,8 +152,8 @@ R0.
 Expand only. ORDER: **apply-first** (apply in production, then merge): the
 Deploy gate probes every command of `../runtime-api-manifest.json`, and the live
 website reads nothing new. Read-only preflight:
-`../preflight/20261125110216_staff_part_refunds.check.sql`; rollback:
-`../rollback/20261125110216_staff_part_refunds.down.sql`, which refuses once a
+`../preflight/20261125133916_staff_part_refunds.check.sql`; rollback:
+`../rollback/20261125133916_staff_part_refunds.down.sql`, which refuses once a
 first-purchase or part refund was recorded (fix forward).
 
 ## Paid add-ons retired, 25 November 2026
@@ -8013,6 +8013,6 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   fingerprint after it (fingerprint.sql) matched the full replay (except the
   known schema grant difference)
 
-- `20261125110216_staff_part_refunds.sql`: pending; apply-first
+- `20261125133916_staff_part_refunds.sql`: pending; apply-first
 
 <!-- applied-register:end -->

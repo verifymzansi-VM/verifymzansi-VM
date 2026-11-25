@@ -143,7 +143,7 @@ export default async function PaymentsAdminPage({
         return null;
       }),
       // What is left to refund, the slots' dates and first purchases
-      // (20261125110216_staff_part_refunds.sql): without them the refund forms
+      // (20261125133916_staff_part_refunds.sql): without them the refund forms
       // offer whole refunds only, as before.
       readStaffRefundsLeft(
         api,
