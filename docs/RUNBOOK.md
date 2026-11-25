@@ -1192,34 +1192,40 @@ until the owner does those steps.
   the emails. When any step failed, the run is reported as failed after every
   other step has finished, and the app Worker log line
   `Operation job run failed` names the failed steps (for example
-  `sweep:sweep_sponsorships`, `claim:payment`, `privacy_notice`, `staff_alert`).
-- **Queued emails** go out up to 25 a run: payment messages first, then
-  privacy-request notices (up to five), then every other kind. Every claim uses
-  up one of a message's eight attempts, so messages are claimed one at a time,
-  only while a worst-case send still fits, and each is sent straight away; the
-  next claim runs while the previous outcome is recorded, except near the end of
-  the send window, where a slow record could otherwise push it past the window.
-  Sends are paced to the email provider's rate. The worker gives the request 50
-  seconds from its own start (including dispatch and start-up), so the run aims
-  to end within 44 seconds: database calls are cut off then, and no claim or
-  send (including the staff alert) starts after 13 seconds. Even a send that
-  uses all its provider retries, and the record of its outcome, then end in
+  `sweep:sweep_sponsorships`, `claim:payment`, `privacy_notice`,
+  `lost_email_alert`).
+- **Queued emails** go out up to 25 a run: payment messages first, then the
+  staff payment alerts and the lost-email alert, then privacy-request notices
+  (up to five), then every other kind (staff deadline emails included). Every
+  claim uses up one of a message's eight attempts, so messages are claimed one
+  at a time, only while a worst-case send still fits, and each is sent straight
+  away; the next claim runs while the previous outcome is recorded, except near
+  the end of the send window, where a slow record could otherwise push it past
+  the window. Sends are paced to the email provider's rate. The worker gives the
+  request 50 seconds from its own start (including dispatch and start-up), so
+  the run aims to end within 44 seconds: database calls are cut off then, and no
+  claim or send (including the staff alert) starts after 13 seconds. Even a send
+  that uses all its provider retries, and the record of its outcome, then end in
   time.
 - **Unknown outcome.** When the provider refuses a repeat of an earlier request
   with the same key (still in progress, or sent with different content), the
   earlier request may have been delivered. The message is recorded with the
   error `outcome_unknown` and retried later; on its last attempt it is logged
-  (`Queued email outcome unknown at its last attempt`) and listed in the staff
-  alert marked "may have been delivered".
-- **Last attempt.** A queued email is tried at most eight times. When one fails
-  on its eighth attempt, the run logs `Queued email reached its last attempt`
-  (kind and queue id only) straight away and, before any further send, emails
-  the support address. Later losses in the same run are collected into one more
-  alert at the end of the email batch (or when the send window is nearly over):
-  at most two alerts a run. A lost email that no alert covers, or an alert that
-  cannot be sent, fails the run (`staff_alert`). The alert is not retried, and
-  with a one-minute job and a five-minute heartbeat grace, one failed run does
-  not page anyone.
+  (`Queued email outcome unknown at its last attempt`) and listed in the
+  lost-email alert marked "may have been delivered".
+- **Last attempt.** A queued email or privacy-request notice is tried at most
+  eight times. When one fails on its eighth attempt, the run logs
+  `Queued email reached its last attempt` (kind and queue id only) straight
+  away. The database finds every lost message (unsent after its eighth attempt,
+  its lease over), including one whose last claim was cut off, and the email job
+  sends one alert to the support address listing up to 50 of them (kind, queue
+  id, attempts, when queued) with their total and a link to the operations page
+  (`api.claim_lost_email_alert`, update
+  `20261125105322_lost_email_alert_staff_deadlines.sql`). At most one alert a
+  run and none within 15 minutes of the last one sent: losses in between go into
+  the next alert. Each message is reported once. An alert that cannot be sent is
+  given back and sent again by a later run under the same key (never twice), and
+  each such run fails (`lost_email_alert`).
 - **Where lost emails stay.** The database never hands such an email out again
   and never purges it (only delivered emails are deleted, 30 days after
   delivery), so it stays in `private.outbox_events`. The owner can list them
@@ -1234,10 +1240,19 @@ until the owner does those steps.
 
   `delivery_error` is `delivery_failed`, `deferred` or `outcome_unknown`. There
   is no retry button yet; tell the account owner directly if the email mattered.
-  Run this query too whenever a run fails with a `claim:payment` or
-  `claim:other` step: a claim that was cut off or lost on the way back can use
-  up an email's last attempt without the app seeing the email, so no alert names
-  it.
+  `lost_alert_id` names the alert that reported it (`private.lost_email_alerts`
+  keeps each alert's list for 400 days after it was sent).
+
+- **Staff deadline emails.** Each new privacy request, appeal and public report
+  queues one email to every staff member whose role handles it (`dsar:manage`,
+  `appeal:decide`, `report:resolve`) and whose address is confirmed, except
+  whoever submitted it; at most 20 report emails a staff member an hour (the
+  rest are in the report queue). The email holds only the type, a reference,
+  when it was received and the deadline, with a link to the staff page: a
+  privacy request's due date (30 days, or its extension), an appeal 3 and a
+  report 2 business days after receipt (weekends skipped, public holidays not,
+  so the date shown is never later than the real one). It is not sent once the
+  item is closed or the staff member no longer holds the role.
 
 - Known gap: an email that fails an earlier attempt is retried later and does
   not fail the run, and a storage object that could not be deleted yet does not
@@ -1388,10 +1403,9 @@ update `20261112080000_payment_problem_alerts.sql`; see
   `Invalid job configuration`). Then check the app Worker's logs for the
   matching route. For the backup, open the failed Database Backup run in GitHub
   Actions.
-- **Last-attempt email alert:** check the email provider's status page and
-  sending limits, then the app Worker logs for
-  `Queued email reached its last attempt`, and list every such email with the
-  read-only query under "Where lost emails stay". Those emails are not retried
+- **Lost-email alert:** check the email provider's status page and sending
+  limits, then the stuck emails on the staff operations page (or the read-only
+  query under "Where lost emails stay"). Those emails are not retried
   automatically; tell the affected account owners if the message mattered
   (payment messages first).
 - **Payment alert:** look the payment up in Ozow's merchant portal by the Ozow

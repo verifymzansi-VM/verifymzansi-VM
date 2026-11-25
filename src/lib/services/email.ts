@@ -1182,41 +1182,138 @@ export async function sendSupportRequestNotification(
   });
 }
 
-/** One staff alert per job run listing the queued emails that failed on
- * their last attempt. Names only the notice kind and the queue entry id,
- * never the recipient or the content. */
+/** The line break between the plain-text parts of a staff email. */
 const EOL = String.fromCharCode(10);
 
-export async function sendOutboxFinalFailureAlert(
-  items: ReadonlyArray<{ id: string; kind: string; maybeDelivered?: boolean }>
-): Promise<SendEmailResult> {
-  // One order for the key and the content: the same set always gives the same email.
-  const lost = [...items].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-  const ids = lost.map((item) => item.id);
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(ids.join(",")));
-  const key = Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
-  const payments = lost.filter((item) => item.kind.startsWith("payment_")).length;
-  const count = `${lost.length} queued email${lost.length === 1 ? "" : "s"}`;
+/** One lost-email alert as api.claim_lost_email_alert hands it out. */
+export interface LostEmailAlert {
+  /** The alert's id: the same for every retry, so it is the email's key. */
+  claim: string;
+  /** Every lost row the alert reports; `items` lists the oldest of them. */
+  total: number;
+  items: ReadonlyArray<{
+    source: "outbox" | "privacy_notice";
+    id: string;
+    kind: string;
+    attempts: number;
+    queued_at: string;
+    last_error: string | null;
+  }>;
+}
+
+/**
+ * The staff alert about queued emails and privacy request notices still
+ * unsent after their last attempt (api.claim_lost_email_alert), to the support
+ * address. Names only the kind, the queue id, the attempts and when it was
+ * queued, never the recipient or the content. Keyed by the alert's id, so a
+ * retry of the same alert is never delivered twice.
+ */
+export async function sendLostEmailAlert(alert: LostEmailAlert): Promise<SendEmailResult> {
+  const appUrl = sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
+  const payments = alert.items.filter((item) => item.kind.startsWith("payment_")).length;
+  const count = `${alert.total} queued email${alert.total === 1 ? "" : "s"}`;
   const subject = `VerifyMzansi: ${count} not confirmed delivered after the last attempt${payments ? ` (${payments} payment)` : ""}`;
-  const rows = lost.map((item): [string, string] => [
-    `${item.kind.replace(/_/g, " ")}${item.maybeDelivered ? " (may have been delivered)" : ""}`,
-    item.id,
+  const rows = alert.items.map((item): [string, string] => [
+    `${item.kind.replace(/_/g, " ")}${item.last_error === "outcome_unknown" ? " (may have been delivered)" : ""}`,
+    `${item.id}, queued ${formatSast(item.queued_at)}`,
   ]);
+  const more =
+    alert.total > alert.items.length
+      ? `${alert.total - alert.items.length} more are not listed here. `
+      : "";
   const intro = `${count} could not be confirmed as delivered on the last attempt.`;
-  const next =
-    "These emails will not be retried automatically. Check the email provider's status and the app Worker logs for 'Queued email reached its last attempt', then contact the account owners if needed. Emails marked 'may have been delivered' were refused as a repeat of an earlier request that may have gone out.";
+  const next = `${more}These emails will not be retried automatically. Check the email provider's status and the stuck emails on the staff operations page, then contact the account owners if needed. Emails marked 'may have been delivered' were refused as a repeat of an earlier request that may have gone out.`;
+  const href = `${appUrl}/admin/operations`;
   return sendEmail({
-    idempotencyKey: `outbox-final-failure/${key}`,
+    idempotencyKey: `lost-email-alert/${alert.claim}`,
     to: SUPPORT_CONTACT_EMAIL,
     subject,
     html: brandedEmail({
       title: "Queued emails not confirmed delivered",
       intro,
       bodyHtml: `${detailList(rows)}${paragraph(next)}`,
-      reason: "The VerifyMzansi job runner sends this alert to the support address.",
+      cta: { label: "Open operations", href },
+      reason: "The VerifyMzansi email job sends this alert to the support address.",
       tone: "warning",
     }),
-    text: [intro, rows.map(([kind, id]) => `${kind}: ${id}`).join(EOL), next].join(EOL + EOL),
+    text: [intro, rows.map(([kind, what]) => `${kind}: ${what}`).join(EOL), next, href].join(
+      EOL + EOL
+    ),
+  });
+}
+
+/** The staff deadline email kinds (update 20261125105322). */
+export type StaffDeadlineKind = "staff_privacy_request" | "staff_appeal" | "staff_report";
+
+/** What the email job's claim hands out with a staff deadline email. */
+export interface StaffDeadlineDetails {
+  /** The privacy request, appeal or report. */
+  itemId: string;
+  /** The request type, appeal kind or report reason (a code). */
+  itemType: string;
+  /** Reports only: "high" or "standard". */
+  severity?: "high" | "standard" | null;
+  receivedAt: string;
+  dueAt: string;
+}
+
+const STAFF_DEADLINE_COPY = {
+  staff_privacy_request: { noun: "privacy request", label: "Request type", path: "/admin/dsar" },
+  staff_appeal: { noun: "appeal", label: "Appeal about", path: "/admin/governance/appeals" },
+  staff_report: { noun: "report", label: "Reason", path: "/admin/reports" },
+} as const;
+
+/**
+ * Tells a staff member about a new privacy request, appeal or report and its
+ * deadline. It holds only the type, a reference, when it was received and the
+ * deadline, never the member's name, address or what they wrote; the staff
+ * page shows the rest after sign-in.
+ */
+export async function sendStaffDeadlineEmail(
+  to: string,
+  kind: StaffDeadlineKind,
+  idempotencyKey: string,
+  details: StaffDeadlineDetails
+): Promise<SendEmailResult> {
+  const copy = STAFF_DEADLINE_COPY[kind];
+  if (
+    !copy ||
+    !/^[0-9a-f-]{36}$/i.test(details.itemId) ||
+    !/^[a-z_]{1,40}$/.test(details.itemType) ||
+    !Number.isFinite(Date.parse(details.receivedAt)) ||
+    !Number.isFinite(Date.parse(details.dueAt))
+  )
+    throw new Error("Staff deadline details unavailable");
+  const appUrl = sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
+  const type = `${details.itemType.replace(/_/g, " ")}${details.severity === "high" ? ", high priority" : ""}`;
+  const due = formatSast(details.dueAt);
+  const href =
+    kind === "staff_appeal" ? `${appUrl}${copy.path}/${details.itemId}` : `${appUrl}${copy.path}`;
+  const rows: Array<[string, string]> = [
+    [copy.label, type],
+    ["Reference", supportReference(details.itemId)],
+    ["Received", formatSast(details.receivedAt)],
+    ["Deadline", due],
+  ];
+  const intro = `A new ${copy.noun} is waiting. Deal with it by ${due}.`;
+  const note =
+    kind === "staff_privacy_request"
+      ? "Sign in to the staff pages to read and handle it."
+      : "Sign in to the staff pages to read and handle it. The deadline counts business days, skipping weekends but not public holidays.";
+  return sendEmail({
+    idempotencyKey,
+    to,
+    subject: `VerifyMzansi staff: new ${copy.noun} (${type}), due ${due}`,
+    html: brandedEmail({
+      title: `New ${copy.noun}`,
+      intro,
+      bodyHtml: `${detailList(rows)}${paragraph(note)}`,
+      cta: { label: `Open the ${copy.noun}`, href },
+      reason: "Your VerifyMzansi staff role handles these.",
+    }),
+    text: [intro, rows.map(([label, value]) => `${label}: ${value}`).join(EOL), note, href].join(
+      EOL + EOL
+    ),
   });
 }
 

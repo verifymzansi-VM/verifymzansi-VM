@@ -14,7 +14,8 @@ import { runFoundationPrivacyNotice, type PrivacyNoticeRun } from "./privacy-not
 vi.mock("server-only", () => ({}));
 vi.mock("../services/email", () => ({
   sendPlatformNotice: vi.fn(),
-  sendOutboxFinalFailureAlert: vi.fn(),
+  sendLostEmailAlert: vi.fn(),
+  sendStaffDeadlineEmail: vi.fn(),
   sendStaffOperationsEmail: vi.fn(),
 }));
 vi.mock("./privacy-notice-job", () => ({ runFoundationPrivacyNotice: vi.fn(async () => "empty") }));
@@ -22,12 +23,20 @@ const privacy = vi.mocked(runFoundationPrivacyNotice);
 const id = "00000000-0000-4000-8000-000000000001";
 const claim = "00000000-0000-4000-8000-000000000002";
 const rpc = vi.fn(),
+  // The lost-email alert's two commands (claim and complete), kept apart from
+  // `rpc` so the other tests see only their own calls.
+  lostRpc = vi.fn(),
   deliver = vi.fn(),
-  alertStaff = vi.fn(),
+  deliverStaff = vi.fn(),
+  lostEmailAlert = vi.fn(),
   // The payment alert step has its own tests (payment-alerts.test.ts); here
   // it is a stand-in unless a test says otherwise.
   paymentAlerts = vi.fn();
-const service = { rpc } as unknown as FoundationServiceApi;
+const service = {
+  rpc: (name: string, args: unknown) =>
+    name.endsWith("_lost_email_alert") ? lostRpc(name, args) : rpc(name, args),
+} as unknown as FoundationServiceApi;
+const noLostAlert = { claim: null, total: 0, items: [] };
 const SWEEPS = [
   "run_slot_renewals",
   "run_post_lifecycle",
@@ -68,7 +77,8 @@ function queue(...items: Array<Record<string, unknown>>) {
 }
 const run = (options = {}) =>
   runFoundationOperationJobs(service, deliver, {
-    alertStaff,
+    lostEmailAlert,
+    deliverStaff,
     paymentAlerts,
     sleep: async () => {},
     ...options,
@@ -78,7 +88,12 @@ beforeEach(() => {
   vi.clearAllMocks();
   privacy.mockResolvedValue("empty");
   deliver.mockResolvedValue({ success: true });
-  alertStaff.mockResolvedValue({ success: true });
+  deliverStaff.mockResolvedValue({ success: true });
+  lostEmailAlert.mockResolvedValue({ success: true });
+  lostRpc.mockImplementation(async (name: string) => ({
+    data: name === "claim_lost_email_alert" ? noLostAlert : true,
+    error: null,
+  }));
   paymentAlerts.mockResolvedValue([]);
   queue(job());
 });
@@ -97,7 +112,7 @@ it("runs every sweep and acknowledges only the claimed event", async () => {
     p_error: undefined,
   });
   expect(rpc.mock.calls.map(([name]) => name).filter((n) => SWEEPS.includes(n))).toEqual(SWEEPS);
-  expect(alertStaff).not.toHaveBeenCalled();
+  expect(lostEmailAlert).not.toHaveBeenCalled();
 });
 
 describe("independent steps", () => {
@@ -605,7 +620,7 @@ describe("batch size, order and time limit", () => {
     queue(job({ attempts: 3 }));
     deliver.mockResolvedValue({ success: false, outcomeUnknown: true });
     expect(await run()).toMatchObject({ retrying: 1, lost: 0, failed: [] });
-    expect(alertStaff).not.toHaveBeenCalled();
+    expect(lostEmailAlert).not.toHaveBeenCalled();
     expect(rpc).toHaveBeenCalledWith("complete_notification_outbox", {
       p_id: id,
       p_claim: claim,
@@ -614,13 +629,10 @@ describe("batch size, order and time limit", () => {
     });
   });
 
-  it("reports a last-attempt unknown outcome as possibly delivered", async () => {
+  it("counts a last-attempt unknown outcome as lost (the database reports it)", async () => {
     queue(job({ attempts: OUTBOX_FINAL_ATTEMPT }));
     deliver.mockResolvedValue({ success: false, outcomeUnknown: true });
-    expect(await run()).toMatchObject({ retrying: 1, failed: [] });
-    expect(alertStaff).toHaveBeenCalledExactlyOnceWith([
-      { id, kind: "payment_completed", maybeDelivered: true },
-    ]);
+    expect(await run()).toMatchObject({ retrying: 1, lost: 1, failed: [] });
   });
 
   it("claims the next message early only while a slow record cannot push it past the window", async () => {
@@ -640,83 +652,114 @@ describe("batch size, order and time limit", () => {
     expect(await run(timed(clock, 11_500))).toMatchObject({ succeeded: 1, lost: 0, failed: [] });
     expect(rows.map((r) => r.attempts)).toEqual([8, 7, 7]);
     expect(deferred(rows)).toEqual([]);
-    expect(alertStaff).not.toHaveBeenCalled();
+    expect(lostEmailAlert).not.toHaveBeenCalled();
   });
 });
 
-describe("last attempt", () => {
+describe("last attempt and the lost-email alert", () => {
   const last = { attempts: OUTBOX_FINAL_ATTEMPT };
+  const alertId = "00000000-0000-4000-8000-0000000000a1";
+  const alert = {
+    claim: alertId,
+    total: 3,
+    items: [
+      {
+        source: "outbox",
+        id,
+        kind: "payment_completed",
+        attempts: 8,
+        queued_at: "2026-11-25T08:00:00+00:00",
+        last_error: "delivery_failed",
+      },
+      {
+        source: "privacy_notice",
+        id: claim,
+        kind: "privacy_notice_submitted",
+        attempts: 8,
+        queued_at: "2026-11-25T08:05:00+00:00",
+        last_error: null,
+      },
+    ],
+  };
+  const offer = (data: unknown, error: unknown = null) =>
+    lostRpc.mockImplementation(async (name: string) =>
+      name === "claim_lost_email_alert" ? { data, error } : { data: true, error: null }
+    );
+  const lostCalls = (name: string) => lostRpc.mock.calls.filter(([n]) => n === name);
 
-  it("alerts staff once, without the recipient, when a message fails its last attempt", async () => {
+  it("counts and logs a message that fails its last attempt, and alerts only from the database", async () => {
     queue(job(last));
     deliver.mockResolvedValue({ success: false });
     expect(await run()).toMatchObject({ retrying: 1, lost: 1, failed: [] });
-    expect(alertStaff).toHaveBeenCalledExactlyOnceWith([{ id, kind: "payment_completed" }]);
-    expect(JSON.stringify(alertStaff.mock.calls)).not.toContain("synthetic@example.invalid");
+    expect(lostCalls("claim_lost_email_alert")).toEqual([
+      ["claim_lost_email_alert", { p_limit: 50 }],
+    ]);
+    expect(lostEmailAlert).not.toHaveBeenCalled();
   });
 
-  it("reports the first loss at once and collects later ones into one more alert", async () => {
-    const clock = start();
-    const lostIds = uuids(4, 100);
-    world(
-      clock,
-      lostIds.map((id) => ({ id, kind: "payment_completed", attempts: 7 }))
-    );
-    expect(await run(timed(clock, 0, false))).toMatchObject({ lost: 4, failed: [] });
-    expect(alertStaff).toHaveBeenCalledTimes(2);
-    expect(alertStaff.mock.calls[0][0]).toEqual([{ id: lostIds[0], kind: "payment_completed" }]);
-    expect(alertStaff.mock.calls[1][0].map((l: { id: string }) => l.id)).toEqual(lostIds.slice(1));
+  it("sends the database's alert once and records it as sent", async () => {
+    offer(alert);
+    expect(await run()).toMatchObject({ failed: [] });
+    expect(lostEmailAlert).toHaveBeenCalledExactlyOnceWith(alert);
+    expect(lostCalls("complete_lost_email_alert")).toEqual([
+      ["complete_lost_email_alert", { p_claim: alertId, p_sent: true }],
+    ]);
+    expect(JSON.stringify(lostEmailAlert.mock.calls)).not.toContain("synthetic@example.invalid");
   });
 
-  it("sends at most two alerts a run and reports the rest as a failed alert", async () => {
-    const clock = start();
-    world(
-      clock,
-      uuids(10, 100).map((id) => ({ id, kind: "payment_completed", attempts: 7 }))
-    );
-    // Each failed send takes 2.2 s. Alert 1 goes out at 2.2 s; alert 2 once
-    // under 2 s of the send window is left (11.5 s); the message sent after
-    // it (from 12 s) is not covered by any alert.
-    const error = await run(timed(clock, 2_200, false)).catch((e) => e);
-    expect(alertStaff.mock.calls.map(([batch]) => batch.length)).toEqual([1, 4]);
-    expect(error.failed).toEqual(["staff_alert"]);
-    expect(error.summary.lost).toBe(6);
-  });
-
-  it("alerts before sending any further message", async () => {
-    const other = "00000000-0000-4000-8000-000000000003";
-    queue(job(last), job({ id: other, attempts: 2 }));
-    let clock = 1_000_000;
-    const order: string[] = [];
-    deliver.mockImplementation(async (_to, _kind, key) => {
-      order.push(key);
-      if (key.endsWith(other)) clock += 27_000;
-      return { success: !key.endsWith(id) };
+  it("counts an alert refused as a repeat of its own request as sent", async () => {
+    offer(alert);
+    lostEmailAlert.mockResolvedValue({ success: false, outcomeUnknown: true });
+    expect(await run()).toMatchObject({ failed: [] });
+    expect(lostCalls("complete_lost_email_alert")[0][1]).toEqual({
+      p_claim: alertId,
+      p_sent: true,
     });
-    alertStaff.mockImplementation(async () => {
-      order.push("alert");
-      return { success: true };
-    });
-    expect(await run({ now: () => clock })).toMatchObject({ lost: 1, failed: [] });
-    expect(order).toEqual([`foundation-outbox/${id}`, "alert", `foundation-outbox/${other}`]);
   });
 
-  it("reports a loss on the last payment slot before the privacy notices", async () => {
-    const clock = start();
-    const all = uuids(OUTBOX_RUN_LIMIT, 100);
-    world(
-      clock,
-      all.map((id, i) => ({
-        id,
-        kind: "payment_completed",
-        attempts: i === OUTBOX_RUN_LIMIT - 1 ? 7 : 0,
-      }))
+  it.each([
+    ["refused", () => lostEmailAlert.mockResolvedValue({ success: false })],
+    ["thrown", () => lostEmailAlert.mockRejectedValue(new Error("provider down"))],
+  ])("gives the alert back and fails the run when its send is %s", async (_label, fail) => {
+    offer(alert);
+    fail();
+    const error = await run().catch((e) => e);
+    expect(error).toBeInstanceOf(OperationJobsIncompleteError);
+    expect(error.failed).toEqual(["lost_email_alert"]);
+    expect(lostCalls("complete_lost_email_alert")).toEqual([
+      ["complete_lost_email_alert", { p_claim: alertId, p_sent: false }],
+    ]);
+  });
+
+  it("fails the run when the alert's send cannot be recorded", async () => {
+    lostRpc.mockImplementation(async (name: string) =>
+      name === "claim_lost_email_alert"
+        ? { data: alert, error: null }
+        : { data: null, error: { message: "request failed" } }
     );
-    deliver.mockImplementation(async (_to, _kind, key) => ({
-      success: !key.endsWith(all[OUTBOX_RUN_LIMIT - 1]),
-    }));
+    const error = await run().catch((e) => e);
+    expect(error.failed).toEqual(["lost_email_alert"]);
+  });
+
+  it.each([
+    ["an error", null, { code: "XX000" }],
+    ["an unreadable reply", { claim: alertId, total: 1, items: [{ id: "x" }] }, null],
+  ])("fails the run and sends nothing when the claim returns %s", async (_l, data, err) => {
+    offer(data, err);
+    const error = await run().catch((e) => e);
+    expect(error.failed).toEqual(["lost_email_alert"]);
+    expect(lostEmailAlert).not.toHaveBeenCalled();
+    expect(lostCalls("complete_lost_email_alert")).toEqual([]);
+  });
+
+  it("claims the alert after the payment step and before the privacy notices", async () => {
+    offer(alert);
     const order: string[] = [];
-    alertStaff.mockImplementation(async () => {
+    paymentAlerts.mockImplementation(async () => {
+      order.push("payments");
+      return [];
+    });
+    lostEmailAlert.mockImplementation(async () => {
       order.push("alert");
       return { success: true };
     });
@@ -724,91 +767,51 @@ describe("last attempt", () => {
       order.push("privacy");
       return "empty";
     });
-    await run({ now: () => clock.t });
-    expect(order).toEqual(["alert", "privacy"]);
+    await run();
+    expect(order).toEqual(["payments", "alert", "privacy"]);
   });
 
-  it("counts an alert refused as a repeat of its own request as sent", async () => {
-    queue(job(last));
-    deliver.mockResolvedValue({ success: false });
-    alertStaff.mockResolvedValue({ success: false, outcomeUnknown: true });
-    expect(await run()).toMatchObject({ lost: 1, failed: [] });
-  });
-
-  it("does not start an alert that a worst-case send no longer fits", async () => {
-    queue(job(last));
+  it("does not claim an alert that a worst-case send no longer fits", async () => {
+    offer(alert);
+    queue(job());
     let clock = 1_000_000;
     deliver.mockImplementation(async () => {
       clock += 20_000;
-      return { success: false };
+      return { success: true };
     });
-    const error = await run({ now: () => clock }).catch((e) => e);
-    expect(alertStaff).not.toHaveBeenCalled();
-    expect(error.failed).toEqual(["staff_alert"]);
-    expect(error.summary.lost).toBe(1);
-  });
-
-  it("alerts when a last-attempt message cannot be sent in time", async () => {
-    queue(job({ ...last, locked_until: new Date(Date.now() + 5_000).toISOString() }));
-    await run();
-    expect(deliver).not.toHaveBeenCalled();
-    expect(alertStaff).toHaveBeenCalledOnce();
-  });
-
-  it("alerts for an unreadable message at its last attempt", async () => {
-    queue({ ...job(last), kind: "account_warning" });
-    const error = await run().catch((e) => e);
-    expect(error.failed).toEqual(["outbox:invalid_message"]);
-    expect(alertStaff).toHaveBeenCalledExactlyOnceWith([{ id, kind: "account_warning" }]);
-  });
-
-  it("does not alert for an earlier failed attempt or a delivered last attempt", async () => {
-    queue(job({ attempts: OUTBOX_FINAL_ATTEMPT - 1 }));
-    deliver.mockResolvedValue({ success: false });
-    await run();
-    queue(job(last));
-    deliver.mockResolvedValue({ success: true });
-    await run();
-    expect(alertStaff).not.toHaveBeenCalled();
+    await run({ now: () => clock });
+    expect(lostCalls("claim_lost_email_alert")).toEqual([]);
+    expect(lostEmailAlert).not.toHaveBeenCalled();
   });
 
   it("uses the support-address alert email by default", async () => {
-    const { sendOutboxFinalFailureAlert } = await import("../services/email");
-    vi.mocked(sendOutboxFinalFailureAlert).mockResolvedValue({ success: true });
-    queue(job(last));
-    deliver.mockResolvedValue({ success: false });
+    const { sendLostEmailAlert } = await import("../services/email");
+    vi.mocked(sendLostEmailAlert).mockResolvedValue({ success: true });
+    offer(alert);
     await runFoundationOperationJobs(service, deliver, { paymentAlerts, sleep: async () => {} });
-    expect(sendOutboxFinalFailureAlert).toHaveBeenCalledExactlyOnceWith([
-      { id, kind: "payment_completed" },
-    ]);
+    expect(sendLostEmailAlert).toHaveBeenCalledExactlyOnceWith(alert);
   });
 
-  it("sends the alert without waiting for a slow sweep", async () => {
-    queue(job(last));
-    deliver.mockResolvedValue({ success: false });
-    const base = rpc.getMockImplementation()!;
-    let releaseSweep!: () => void;
-    rpc.mockImplementation(async (name, args) => {
-      if (name === "run_post_lifecycle") {
-        await new Promise<void>((r) => (releaseSweep = r));
-        return { data: {}, error: null };
-      }
-      return base(name, args);
-    });
-    const pending = run();
-    await vi.waitFor(() => expect(alertStaff).toHaveBeenCalledOnce());
-    releaseSweep();
-    await expect(pending).resolves.toMatchObject({ lost: 1 });
-  });
-
-  it("fails the run when the staff alert itself cannot be sent", async () => {
-    queue(job(last));
-    deliver.mockResolvedValue({ success: false });
-    alertStaff.mockRejectedValue(new Error("provider down"));
-    const error = await run().catch((e) => e);
-    expect(error).toBeInstanceOf(OperationJobsIncompleteError);
-    expect(error.failed).toEqual(["staff_alert"]);
-    expect(error.summary.lost).toBe(1);
+  it("matches what the database's lost-email alert returns", () => {
+    const sql = readFileSync(
+      join(
+        process.cwd(),
+        "database/foundation/current/functions/internal/claim_lost_email_alert.sql"
+      ),
+      "utf8"
+    );
+    expect(sql).toContain("o.delivery_attempts>=" + OUTBOX_FINAL_ATTEMPT);
+    expect(sql).toContain("j.attempts>=" + OUTBOX_FINAL_ATTEMPT);
+    expect(sql).toContain("p_limit not between 1 and 50");
+    for (const field of [
+      "'claim'",
+      "'total'",
+      "'items'",
+      "'source'",
+      "'queued_at'",
+      "'last_error'",
+    ])
+      expect(sql).toContain(field);
   });
 
   it("matches the database's attempt limit and lease", () => {
@@ -878,9 +881,9 @@ it("declares and delivers the sold-post notice within the database's kind limit"
   expect(await run()).toMatchObject({ succeeded: 1 });
   const lists = calls("claim_supported_notification_outbox").map(([, a]) => a.p_supported_kinds);
   expect(lists.flat()).toEqual(expect.arrayContaining(["post_sold", "post_kept"]));
-  // 23 kinds since the free credit reminder (20261122182304), each claim within it.
-  expect(new Set(lists.flat()).size).toBe(23);
-  for (const list of lists) expect(list.length).toBeLessThanOrEqual(23);
+  // 26 kinds since the staff deadline emails (20261125105322), each claim within it.
+  expect(new Set(lists.flat()).size).toBe(26);
+  for (const list of lists) expect(list.length).toBeLessThanOrEqual(26);
   expect(deliver).toHaveBeenCalledExactlyOnceWith(
     "synthetic@example.invalid",
     "post_sold",
@@ -1050,27 +1053,45 @@ describe("a database without the newer kinds", () => {
     refuse("unsupported mail kind");
     expect(await run()).toMatchObject({ succeeded: 1 });
     const lists = calls("claim_supported_notification_outbox").map(([, a]) => a.p_supported_kinds);
-    // The newest kinds are dropped first (the free credit reminder, the
-    // term-ending notice, the renewal reminder, then the ID-returned notice),
-    // then the sold and kept notices.
-    expect(lists.map((l) => l.length)).toEqual([3, 20, 19, 18, 17, 16, 14, 14]);
-    expect(lists[2]).not.toContain("free_credit_reminder");
-    expect(lists[2]).toContain("term_ending_notice");
-    expect(lists[3]).not.toContain("term_ending_notice");
-    expect(lists[3]).toContain("slot_renewal_reminder");
-    expect(lists[4]).not.toContain("slot_renewal_reminder");
-    expect(lists[4]).toContain("verification_returned");
-    expect(lists[5]).not.toContain("verification_returned");
-    expect(lists[5]).toContain("post_sold");
-    expect(lists[6]).not.toContain("post_sold");
-    expect(lists[6]).not.toContain("post_kept");
+    // The newest kinds are dropped first (the staff deadline emails, the free
+    // credit reminder, the term-ending notice, the renewal reminder, then the
+    // ID-returned notice), then the sold and kept notices.
+    expect(lists.map((l) => l.length)).toEqual([3, 23, 20, 19, 18, 17, 16, 14, 14]);
+    expect(lists[2]).not.toContain("staff_report");
+    expect(lists[2]).toContain("free_credit_reminder");
+    expect(lists[3]).not.toContain("free_credit_reminder");
+    expect(lists[3]).toContain("term_ending_notice");
+    expect(lists[5]).not.toContain("term_ending_notice");
+    expect(lists[4]).toContain("slot_renewal_reminder");
+    expect(lists[5]).not.toContain("slot_renewal_reminder");
+    expect(lists[5]).toContain("verification_returned");
+    expect(lists[6]).not.toContain("verification_returned");
+    expect(lists[6]).toContain("post_sold");
+    expect(lists[7]).not.toContain("post_sold");
+    expect(lists[7]).not.toContain("post_kept");
   });
   it("claims the earlier kinds after a list-length refusal, and keeps using them", async () => {
     refuse("supported mail kinds required");
     expect(await run()).toMatchObject({ succeeded: 1 });
     const lists = calls("claim_supported_notification_outbox").map(([, a]) => a.p_supported_kinds);
     // The follow-up claim keeps the earlier list instead of asking again.
-    expect(lists.map((l) => l.length)).toEqual([3, 20, 19, 18, 17, 16, 14, 14]);
+    expect(lists.map((l) => l.length)).toEqual([3, 23, 20, 19, 18, 17, 16, 14, 14]);
+  });
+  it("drops only the staff deadline emails for a database without that update", async () => {
+    queue(job({ kind: "free_credit_reminder", credit_ends_at: "2026-12-01T10:00:00+00:00" }));
+    const base = rpc.getMockImplementation()!;
+    rpc.mockImplementation(async (name, args) =>
+      name === "claim_supported_notification_outbox" &&
+      args.p_supported_kinds.includes("staff_report")
+        ? { data: null, error: { code: "22023", message: "supported mail kinds required" } }
+        : base(name, args)
+    );
+    expect(await run()).toMatchObject({ succeeded: 1 });
+    const lists = calls("claim_supported_notification_outbox").map(([, a]) => a.p_supported_kinds);
+    expect(lists.map((l) => l.length)).toEqual([3, 23, 20, 20]);
+    expect(lists[3]).toContain("free_credit_reminder");
+    for (const kind of ["staff_privacy_request", "staff_appeal", "staff_report"])
+      expect(lists[3]).not.toContain(kind);
   });
   it("drops only the free credit reminder for a database without that update", async () => {
     queue(job({ kind: "slot_renewal_reminder", subject_id: id }));
@@ -1083,9 +1104,9 @@ describe("a database without the newer kinds", () => {
     );
     expect(await run()).toMatchObject({ succeeded: 1 });
     const lists = calls("claim_supported_notification_outbox").map(([, a]) => a.p_supported_kinds);
-    expect(lists.map((l) => l.length)).toEqual([3, 20, 19, 19]);
-    expect(lists[3]).toContain("term_ending_notice");
-    expect(lists[3]).not.toContain("free_credit_reminder");
+    expect(lists.map((l) => l.length)).toEqual([3, 23, 20, 19, 19]);
+    expect(lists[4]).toContain("term_ending_notice");
+    expect(lists[4]).not.toContain("free_credit_reminder");
   });
   it("drops only the term-ending notice for a database without that update", async () => {
     queue(job({ kind: "slot_renewal_reminder", subject_id: id }));
@@ -1098,8 +1119,8 @@ describe("a database without the newer kinds", () => {
     );
     expect(await run()).toMatchObject({ succeeded: 1 });
     const lists = calls("claim_supported_notification_outbox").map(([, a]) => a.p_supported_kinds);
-    expect(lists.map((l) => l.length)).toEqual([3, 20, 19, 18, 18]);
-    expect(lists[4]).toContain("slot_renewal_reminder");
+    expect(lists.map((l) => l.length)).toEqual([3, 23, 20, 19, 18, 18]);
+    expect(lists[5]).toContain("slot_renewal_reminder");
     expect(lists[4]).not.toContain("term_ending_notice");
   });
   it("drops only the renewal reminder for a database without that update", async () => {
@@ -1113,7 +1134,7 @@ describe("a database without the newer kinds", () => {
     );
     expect(await run()).toMatchObject({ succeeded: 1 });
     const lists = calls("claim_supported_notification_outbox").map(([, a]) => a.p_supported_kinds);
-    expect(lists.map((l) => l.length)).toEqual([3, 20, 19, 18, 17, 17]);
+    expect(lists.map((l) => l.length)).toEqual([3, 23, 20, 19, 18, 17, 17]);
     expect(lists[5]).toContain("verification_returned");
     expect(lists[5]).not.toContain("slot_renewal_reminder");
   });
@@ -1128,7 +1149,7 @@ describe("a database without the newer kinds", () => {
     );
     expect(await run()).toMatchObject({ succeeded: 1 });
     const lists = calls("claim_supported_notification_outbox").map(([, a]) => a.p_supported_kinds);
-    expect(lists.map((l) => l.length)).toEqual([3, 20, 19, 18, 17, 16, 16]);
+    expect(lists.map((l) => l.length)).toEqual([3, 23, 20, 19, 18, 17, 16, 16]);
     expect(lists[6]).toContain("post_kept");
     expect(lists[6]).not.toContain("verification_returned");
   });
@@ -1238,7 +1259,7 @@ describe("payment alerts", () => {
           : base(name, args)
     );
     expect(
-      await runFoundationOperationJobs(service, deliver, { alertStaff, sleep: async () => {} })
+      await runFoundationOperationJobs(service, deliver, { lostEmailAlert, sleep: async () => {} })
     ).toMatchObject({ claimed: 1, succeeded: 1, failed: [] });
     expect(calls("claim_payment_alerts")).toEqual([["claim_payment_alerts", { p_limit: 20 }]]);
     expect(calls("claim_payment_digest")).toEqual([
@@ -1428,5 +1449,91 @@ describe("payment receipts (M3.7)", () => {
     expect(read("api/get_payment_receipt.sql")).toContain(
       "grant execute on function api.get_payment_receipt(uuid) to service_role;"
     );
+  });
+});
+
+describe("staff deadline emails", () => {
+  const item = "00000000-0000-4000-8000-0000000000b1";
+  const staffJob = (extra: Record<string, unknown> = {}) =>
+    job({
+      kind: "staff_report",
+      subject_id: item,
+      recipient: "staff@example.invalid",
+      staff_item_type: "scam",
+      staff_severity: "high",
+      staff_received_at: "2026-11-27T13:00:00+00:00",
+      staff_due_at: "2026-12-01T13:00:00+00:00",
+      ...extra,
+    });
+
+  it.each(["staff_privacy_request", "staff_appeal", "staff_report"])(
+    "sends %s to its staff member with its details, under the message's own key",
+    async (kind) => {
+      queue(staffJob({ kind, staff_severity: kind === "staff_report" ? "high" : null }));
+      expect(await run()).toMatchObject({ succeeded: 1, failed: [] });
+      expect(deliver).not.toHaveBeenCalled();
+      expect(deliverStaff).toHaveBeenCalledExactlyOnceWith(
+        "staff@example.invalid",
+        kind,
+        `foundation-outbox/${id}`,
+        {
+          itemId: item,
+          itemType: "scam",
+          severity: kind === "staff_report" ? "high" : null,
+          receivedAt: "2026-11-27T13:00:00+00:00",
+          dueAt: "2026-12-01T13:00:00+00:00",
+        }
+      );
+      expect(rpc).toHaveBeenCalledWith("complete_notification_outbox", {
+        p_id: id,
+        p_claim: claim,
+        p_ok: true,
+        p_error: undefined,
+      });
+    }
+  );
+
+  it("finishes a staff email the database no longer addresses as skipped, sending nothing", async () => {
+    queue(staffJob({ recipient: null, staff_item_type: null, staff_due_at: null }));
+    expect(await run()).toMatchObject({ succeeded: 1 });
+    expect(deliverStaff).not.toHaveBeenCalled();
+    expect(calls("complete_notification_outbox")).toEqual([
+      [
+        "complete_notification_outbox",
+        { p_id: id, p_claim: claim, p_ok: true, p_error: "skipped" },
+      ],
+    ]);
+  });
+
+  it("gives a staff email back for a retry when its send fails", async () => {
+    queue(staffJob());
+    deliverStaff.mockRejectedValue(new Error("Staff deadline details unavailable"));
+    expect(await run()).toMatchObject({ succeeded: 0, retrying: 1 });
+    expect(rpc).toHaveBeenCalledWith("complete_notification_outbox", {
+      p_id: id,
+      p_claim: claim,
+      p_ok: false,
+      p_error: "delivery_failed",
+    });
+  });
+
+  it("refuses a staff email with an unexpected type before sending it", async () => {
+    queue(staffJob({ staff_item_type: "Scam <b>" }));
+    const error = await run().catch((e) => e);
+    expect(error.failed).toEqual(["outbox:invalid_message"]);
+    expect(deliverStaff).not.toHaveBeenCalled();
+  });
+
+  it("matches what the database's claim returns for staff emails", () => {
+    const sql = readFileSync(
+      join(
+        process.cwd(),
+        "database/foundation/current/functions/internal/claim_supported_notification_outbox.sql"
+      ),
+      "utf8"
+    );
+    for (const field of ["staff_item_type", "staff_severity", "staff_received_at", "staff_due_at"])
+      expect(sql).toContain(`'${field}'`);
+    expect(sql).toContain("cardinality(p_supported_kinds) not between 1 and 26");
   });
 });

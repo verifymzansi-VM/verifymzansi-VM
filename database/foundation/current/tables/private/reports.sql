@@ -60,5 +60,6 @@ CREATE INDEX reports_reporter_id_idx ON private.reports USING btree (reporter_id
 CREATE INDEX reports_resolved_by_idx ON private.reports USING btree (resolved_by) WHERE (resolved_by IS NOT NULL);
 CREATE INDEX reports_subject_idx ON private.reports USING btree (subject_account_id, status);
 CREATE TRIGGER frontend_report_record_guard BEFORE INSERT OR UPDATE ON private.reports FOR EACH ROW EXECUTE FUNCTION internal.frontend_report_record_guard();
+CREATE TRIGGER queue_staff_deadline_email AFTER INSERT ON private.reports FOR EACH ROW EXECUTE FUNCTION internal.queue_staff_deadline_emails('staff_report');
 CREATE TRIGGER reports_identity BEFORE UPDATE ON private.reports FOR EACH ROW EXECUTE FUNCTION internal.report_identity_guard();
 revoke all on private.reports from public;

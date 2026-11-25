@@ -417,6 +417,11 @@ const NOT_DIGESTED = new Map([
     "posting-form field catalogue; its jsonb holds validation rules, no member data",
   ],
   ["posting_terms_versions", "published posting terms; the hash is the document's, no member data"],
+  [
+    "lost_email_alerts",
+    "staff alerts about lost emails (20261125105322); the jsonb lists queue ids, kinds, " +
+      "attempts, times and error codes, never an account, address or content",
+  ],
   ["reference_catalog_versions", "taxonomy catalogue versions; the hash is the catalogue's"],
 ]);
 // What makes a private table hold account data, for the coverage check.

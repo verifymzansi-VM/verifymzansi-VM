@@ -81,6 +81,9 @@ const MAIL_KINDS = [
   "slot_renewal_reminder",
   "term_ending_notice",
   "free_credit_reminder",
+  "staff_privacy_request",
+  "staff_appeal",
+  "staff_report",
 ];
 const batch = (id, command, max, error) => ({
   id,
@@ -102,6 +105,12 @@ const ROWS = [
   // Service-role sweeps and claims: the batch size.
   batch("LIM-F-approve_due_commissions", "approve_due_commissions", 1000, /limit 1 to 1000/),
   batch("LIM-F-claim_evidence_cleanup", "claim_evidence_cleanup", 100, /limit 1 to 100/),
+  batch(
+    "LIM-F-claim_lost_email_alert",
+    "claim_lost_email_alert",
+    50,
+    /invalid lost email alert limit/
+  ),
   batch("LIM-F-claim_media_cleanup", "claim_media_cleanup", 500, /limit 1 to 500/),
   batch("LIM-F-claim_notification_outbox", "claim_notification_outbox", 50, /invalid limit/),
   batch(

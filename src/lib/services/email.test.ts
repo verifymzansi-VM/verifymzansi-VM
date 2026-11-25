@@ -27,7 +27,8 @@ import {
   sendModerationNoticeEmail,
   sendDsarExtensionEmail,
   sendPlatformNotice,
-  sendOutboxFinalFailureAlert,
+  sendLostEmailAlert,
+  sendStaffDeadlineEmail,
   sendStaffOperationsEmail,
 } from "./email";
 
@@ -644,38 +645,112 @@ describe("email service", () => {
       }
     );
 
+    const lostAlert = {
+      claim: "00000000-0000-4000-8000-0000000000a1",
+      total: 3,
+      items: [
+        {
+          source: "outbox" as const,
+          id: "00000000-0000-4000-8000-00000000000b",
+          kind: "payment_completed",
+          attempts: 8,
+          queued_at: "2026-11-25T08:00:00+00:00",
+          last_error: "delivery_failed",
+        },
+        {
+          source: "outbox" as const,
+          id: "00000000-0000-4000-8000-00000000000c",
+          kind: "post_kept",
+          attempts: 8,
+          queued_at: "2026-11-25T08:30:00+00:00",
+          last_error: "outcome_unknown",
+        },
+      ],
+    };
+
+    it("alerts the support address about lost emails, keyed by the alert, without recipients", async () => {
+      await sendLostEmailAlert(lostAlert);
+      await sendLostEmailAlert(lostAlert);
+      const [payload, options] = mockSend.mock.calls[0];
+      expect(payload).toMatchObject({
+        to: "support@verifymzansi.com",
+        subject: expect.stringContaining("3 queued emails"),
+        text: expect.stringContaining(
+          "payment completed: 00000000-0000-4000-8000-00000000000b, queued 25 Nov 2026"
+        ),
+      });
+      expect(payload.subject).toContain("(1 payment)");
+      expect(payload.text).toContain("1 more are not listed here.");
+      expect(payload.text).toContain("/admin/operations");
+      expect(options.idempotencyKey).toBe("lost-email-alert/00000000-0000-4000-8000-0000000000a1");
+      // The same alert gives the same email.
+      expect(mockSend.mock.calls[1][1].idempotencyKey).toBe(options.idempotencyKey);
+      expect(mockSend.mock.calls[1][0].text).toBe(payload.text);
+    });
+
     it("marks lost emails that may have been delivered in the alert", async () => {
-      await sendOutboxFinalFailureAlert([
-        { id: "00000000-0000-4000-8000-00000000000c", kind: "post_kept", maybeDelivered: true },
-      ]);
+      await sendLostEmailAlert(lostAlert);
       expect(mockSend.mock.calls[0][0].text).toContain(
         "post kept (may have been delivered): 00000000-0000-4000-8000-00000000000c"
       );
       expect(mockSend.mock.calls[0][0].html).toContain("may have been delivered");
     });
 
-    it("alerts the support address about lost queued emails without recipient details", async () => {
-      const a = "00000000-0000-4000-8000-00000000000a";
-      const b = "00000000-0000-4000-8000-00000000000b";
-      await sendOutboxFinalFailureAlert([
-        { id: b, kind: "payment_completed" },
-        { id: a, kind: "post_expired" },
-      ]);
-      await sendOutboxFinalFailureAlert([
-        { id: a, kind: "post_expired" },
-        { id: b, kind: "payment_completed" },
-      ]);
+    const deadline = {
+      itemId: "00000000-0000-4000-8000-0000000000d1",
+      itemType: "fake_listing",
+      severity: "high" as const,
+      receivedAt: "2026-11-27T13:00:00+00:00",
+      dueAt: "2026-12-01T13:00:00+00:00",
+    };
+
+    it("tells a staff member about a new report and its deadline, with only its type and reference", async () => {
+      await sendStaffDeadlineEmail(
+        "staff@example.invalid",
+        "staff_report",
+        "foundation-outbox/synthetic",
+        deadline
+      );
       const [payload, options] = mockSend.mock.calls[0];
-      expect(payload).toMatchObject({
-        to: "support@verifymzansi.com",
-        subject: expect.stringContaining("2 queued emails"),
-        text: expect.stringContaining(`payment completed: ${b}`),
+      expect(options).toEqual({ idempotencyKey: "foundation-outbox/synthetic" });
+      expect(payload.to).toBe("staff@example.invalid");
+      expect(payload.subject).toBe(
+        "VerifyMzansi staff: new report (fake listing, high priority), due 01 Dec 2026, 15:00"
+      );
+      expect(payload.text).toContain("Reference: VM-00000000-0000-4000-8000-0000000000D1");
+      expect(payload.text).toContain("Received: 27 Nov 2026, 15:00");
+      expect(payload.text).toContain("Deadline: 01 Dec 2026, 15:00");
+      expect(payload.text).toContain("skipping weekends but not public holidays");
+      expect(payload.text).toContain("/admin/reports");
+    });
+
+    it.each([
+      ["staff_privacy_request", "privacy request", "/admin/dsar"],
+      ["staff_appeal", "appeal", "/admin/governance/appeals/00000000-0000-4000-8000-0000000000d1"],
+    ] as const)("links %s to its staff page", async (kind, noun, path) => {
+      await sendStaffDeadlineEmail("staff@example.invalid", kind, "foundation-outbox/synthetic", {
+        ...deadline,
+        itemType: "access",
+        severity: null,
       });
-      expect(payload.subject).toContain("(1 payment)");
-      expect(payload.html).toContain(a);
-      expect(options.idempotencyKey).toMatch(/^outbox-final-failure\/[0-9a-f]{64}$/);
-      expect(mockSend.mock.calls[1][1].idempotencyKey).toBe(options.idempotencyKey);
-      expect(mockSend.mock.calls[1][0].text).toBe(payload.text);
+      const [payload] = mockSend.mock.calls[0];
+      expect(payload.subject).toContain(`new ${noun} (access), due`);
+      expect(payload.text).toContain(path);
+      expect(payload.html).toContain(path);
+    });
+
+    it.each([
+      ["an unknown type", { itemType: "Scam <b>" }],
+      ["a missing deadline", { dueAt: "" }],
+      ["a missing item", { itemId: "" }],
+    ])("refuses a staff email with %s, sending nothing", async (_label, change) => {
+      await expect(
+        sendStaffDeadlineEmail("staff@example.invalid", "staff_report", "foundation-outbox/x", {
+          ...deadline,
+          ...change,
+        })
+      ).rejects.toThrow("Staff deadline details unavailable");
+      expect(mockSend).not.toHaveBeenCalled();
     });
 
     it("sends a staff operations email to every staff address with escaped content", async () => {

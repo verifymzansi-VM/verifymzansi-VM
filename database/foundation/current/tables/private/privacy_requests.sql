@@ -59,4 +59,5 @@ CREATE INDEX privacy_requests_processor_idx ON private.privacy_requests USING bt
 CREATE INDEX privacy_requests_subject_idx ON private.privacy_requests USING btree (subject_user_id, created_at DESC);
 CREATE INDEX privacy_requests_type_idx ON private.privacy_requests USING btree (type);
 CREATE INDEX privacy_requests_verifier_idx ON private.privacy_requests USING btree (verified_by);
+CREATE TRIGGER queue_staff_deadline_email AFTER INSERT ON private.privacy_requests FOR EACH ROW EXECUTE FUNCTION internal.queue_staff_deadline_emails('staff_privacy_request');
 revoke all on private.privacy_requests from public;
