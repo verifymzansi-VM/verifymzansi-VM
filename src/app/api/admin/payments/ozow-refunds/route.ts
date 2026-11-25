@@ -5,6 +5,7 @@ import {
   approveStaffRefund,
   assertStaffRefundApprovable,
   closeStaffOzowRefund,
+  factForDatabase,
   readStaffRefundPayment,
   recordStaffDashboardRefund,
   requestStaffOzowRefund,
@@ -12,7 +13,7 @@ import {
 } from "@/lib/foundation/ozow-refunds";
 import { createFoundationServiceApi } from "@/lib/foundation/service-api";
 import { FoundationStaffCommandError, staffCommandRefusal } from "@/lib/foundation/staff-command";
-import { refundReasonCode } from "@/lib/foundation/staff-payments";
+import { recordStaffRefund, refundReasonCode } from "@/lib/foundation/staff-payments";
 import {
   createOzowRefundClient,
   OzowRefundNotFoundError,
@@ -27,6 +28,25 @@ const log = createLogger("AdminOzowRefunds");
 
 const uuid = z.uuid().transform((value) => value.toLowerCase());
 const reason = z.string().trim().min(5).max(500);
+// Part of what is left, in cents (null: the whole payment or slot), and the
+// day the customer asked (a first purchase cancelled): either one sends the
+// refund through api.record_staff_refund (20261125133916_staff_part_refunds.sql).
+const amountCents = z
+  .number()
+  .int()
+  .positive()
+  .max(Number.MAX_SAFE_INTEGER)
+  .nullable()
+  .default(null);
+const askedOn = z.iso.date().nullable().default(null);
+// One id per refund form opening, sent again on a retry (record_staff_refund).
+const requestId = uuid.nullable().default(null);
+/** The request id a refund through record_staff_refund needs. */
+function partRequestId(value: string | null) {
+  if (!value)
+    throw new FoundationStaffCommandError(422, "Reload the page and record the refund again.");
+  return value;
+}
 const schema = z.discriminatedUnion("action", [
   // A refund the server sends to Ozow: no reference is typed.
   z.object({
@@ -35,6 +55,9 @@ const schema = z.discriminatedUnion("action", [
     lineId: uuid.nullable().default(null),
     reasonCode: refundReasonCode,
     reason,
+    amountCents,
+    askedOn,
+    requestId,
   }),
   // A refund an admin already made by hand in the Ozow dashboard.
   z.object({
@@ -44,6 +67,9 @@ const schema = z.discriminatedUnion("action", [
     reasonCode: refundReasonCode,
     reason,
     ozowRefundId: z.string().max(100),
+    amountCents,
+    askedOn,
+    requestId,
   }),
   z.object({ action: z.literal("refund.approve"), requestId: uuid }),
   // Another staff member closes a refund through Ozow that never reached Ozow.
@@ -64,7 +90,8 @@ const refundId = z
  */
 async function readDashboardRefund(
   value: string,
-  payment: { ozow_transaction_id: string | null; amount_cents: number }
+  payment: { ozow_transaction_id: string | null; amount_cents: number },
+  amountCents: number | null
 ): Promise<OzowRefundFact | null> {
   const id = refundId.safeParse(value);
   if (!id.success) return null; // the adapter refuses it in plain words
@@ -92,9 +119,11 @@ async function readDashboardRefund(
       409,
       `Ozow reports this refund as '${fact.status.toLowerCase()}': no money went back. Do not record it.`
     );
+  // A part refund (amountCents) is for the amount typed; otherwise for the
+  // whole payment or slot. The database checks both again.
   if (
     fact.transactionId !== payment.ozow_transaction_id ||
-    fact.amountCents !== payment.amount_cents
+    fact.amountCents !== (amountCents ?? payment.amount_cents)
   )
     throw new FoundationStaffCommandError(
       409,
@@ -131,7 +160,23 @@ export async function POST(request: NextRequest) {
         // the server asks Ozow anything with the refund key.
         const payment = await readStaffRefundPayment(api, body.paymentId, body.lineId);
         if (!payment) throw new FoundationStaffCommandError(404, "This payment was not found.");
-        const ozowFact = await readDashboardRefund(body.ozowRefundId, payment);
+        const ozowFact = await readDashboardRefund(body.ozowRefundId, payment, body.amountCents);
+        if (body.amountCents !== null || body.askedOn !== null)
+          return {
+            success: true,
+            data: await recordStaffRefund(api, {
+              paymentId: body.paymentId,
+              lineId: body.lineId,
+              channel: "dashboard",
+              amountCents: body.amountCents,
+              reasonCode: body.reasonCode,
+              reason: body.reason,
+              reference: body.ozowRefundId.trim().toLowerCase(),
+              ozowFact: ozowFact ? factForDatabase(ozowFact) : null,
+              askedOn: body.askedOn,
+              requestId: partRequestId(body.requestId),
+            }),
+          };
         return {
           success: true,
           data: await recordStaffDashboardRefund(api, { ...body, ozowFact }),
@@ -150,7 +195,20 @@ export async function POST(request: NextRequest) {
       if (body.action === "refund.approve") await assertStaffRefundApprovable(api, body.requestId);
       const recorded =
         body.action === "refund.request"
-          ? await requestStaffOzowRefund(api, body)
+          ? body.amountCents !== null || body.askedOn !== null
+            ? await recordStaffRefund(api, {
+                paymentId: body.paymentId,
+                lineId: body.lineId,
+                channel: "ozow",
+                amountCents: body.amountCents,
+                reasonCode: body.reasonCode,
+                reason: body.reason,
+                reference: null,
+                ozowFact: null,
+                askedOn: body.askedOn,
+                requestId: partRequestId(body.requestId),
+              })
+            : await requestStaffOzowRefund(api, body)
           : await approveStaffRefund(api, body.requestId);
       if (recorded.status !== "approved") return { success: true, data: recorded };
       // Approved: the database hands the record to one sender only, so a
