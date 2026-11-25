@@ -20,7 +20,7 @@ begin
     from (values ('internal.confirm_verification_locality(text,text)'),('internal.frontend_privacy_export_data(uuid)')) v(sig)
   loop
     if shape not in (
-        'internal.confirm_verification_locality(text,text) c32f46a4b6f62223a0dce0d6701048dc',
+        'internal.confirm_verification_locality(text,text) 9b5a984d71c4532ab4aa4799ddfef20c',
         'internal.frontend_privacy_export_data(uuid) 0ddcef84e7abeef43fa2509a31d6a298') then
       raise exception 'rollback precondition: the verified place update is not applied as reviewed (%)', shape using errcode='55000';
     end if;

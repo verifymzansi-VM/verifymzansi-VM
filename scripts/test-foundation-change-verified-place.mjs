@@ -41,7 +41,7 @@ const UPDATE = "20261125161326_change_verified_place.sql";
 const PLACE = "internal.confirm_verification_locality(text,text)";
 const EXPORT = "internal.frontend_privacy_export_data(uuid)";
 const BODIES = {
-  [PLACE]: ["0431a9726c90edf0f0b6519a4af17ff6", "c32f46a4b6f62223a0dce0d6701048dc"],
+  [PLACE]: ["0431a9726c90edf0f0b6519a4af17ff6", "9b5a984d71c4532ab4aa4799ddfef20c"],
   [EXPORT]: ["b0d8e2600a63b8e5b298ee180f488c05", "0ddcef84e7abeef43fa2509a31d6a298"],
 };
 const NOT_APPLIED = /^verified place: update not applied; members with a place: \d+$/;
@@ -113,7 +113,7 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
   await check("a different place replaces the member's place and is recorded", () => {
     assert.equal(bodyMd5(PLACE), BODIES[PLACE][1]);
     const changed = json(placeSql(thandi, "kzn", "kzn_durban"));
-    assert.equal(changed.changed, true);
+    assert.equal(changed.reused, false);
     assert.deepEqual(place(thandi), { province: "kzn", city: "kzn_durban" });
     const [recorded, ...more] = changes(thandi);
     assert.equal(more.length, 0);
@@ -138,7 +138,7 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
     // 15 days later the change is allowed.
     asOwner(`update private.verification_locality_changes set changed_at=changed_at-interval '15 days 1 minute'
       where owner_id='${thandi.id}';`);
-    assert.equal(json(placeSql(thandi, "gp", "gp_johannesburg")).changed, true);
+    assert.equal(json(placeSql(thandi, "gp", "gp_johannesburg")).reused, false);
     assert.equal(changes(thandi).length, 2);
   });
 

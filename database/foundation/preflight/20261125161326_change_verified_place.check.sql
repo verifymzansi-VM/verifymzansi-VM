@@ -22,7 +22,7 @@ with bodies as (
       else (select md5(replace(p.prosrc, E'\r\n', E'\n')) from pg_proc p where p.oid = to_regprocedure(v.sig))
     end as body
   from (values
-    ('internal.confirm_verification_locality(text,text)', '0431a9726c90edf0f0b6519a4af17ff6', 'c32f46a4b6f62223a0dce0d6701048dc'),
+    ('internal.confirm_verification_locality(text,text)', '0431a9726c90edf0f0b6519a4af17ff6', '9b5a984d71c4532ab4aa4799ddfef20c'),
     ('internal.frontend_privacy_export_data(uuid)', 'b0d8e2600a63b8e5b298ee180f488c05', '0ddcef84e7abeef43fa2509a31d6a298'),
     ('private.verification_locality_changes', null, 'table')
   ) v(sig, reviewed, updated)

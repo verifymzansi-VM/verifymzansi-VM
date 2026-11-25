@@ -16,7 +16,8 @@
 --    confirmed_at to now and records the change, at most once every 15 days
 --    (PT409 location_change_cooldown, with the time the next change is
 --    allowed as the hint). The first place a member sets is not a change.
---    The answer for a change carries "changed": true. The caller keeps the
+--    The answer for a change carries "reused": false (the reply shape the
+--    website already reads). The caller keeps the
 --    profile revision rule: internal.save_restored_profile bumps the revision
 --    when the place is not "reused".
 -- 3. internal.frontend_privacy_export_data (full body) adds the dataset
@@ -43,7 +44,7 @@ begin
   loop
     if shape not in (
         'internal.confirm_verification_locality(text,text) 0431a9726c90edf0f0b6519a4af17ff6',
-        'internal.confirm_verification_locality(text,text) c32f46a4b6f62223a0dce0d6701048dc',
+        'internal.confirm_verification_locality(text,text) 9b5a984d71c4532ab4aa4799ddfef20c',
         'internal.frontend_privacy_export_data(uuid) b0d8e2600a63b8e5b298ee180f488c05',
         'internal.frontend_privacy_export_data(uuid) 0ddcef84e7abeef43fa2509a31d6a298') then
       raise exception 'verified place precondition: a function is not a reviewed body (%)', shape using errcode='55000';
@@ -92,7 +93,7 @@ begin
       values(actor,prior.province_id,prior.city_id,p_province,p_city);
     update private.verification_localities set province_id=p_province,city_id=p_city,confirmed_at=clock_timestamp()
       where owner_id=actor;
-    return jsonb_build_object('status','approved','assurance','self_declared','province_id',p_province,'city_id',p_city,'changed',true);
+    return jsonb_build_object('status','approved','assurance','self_declared','province_id',p_province,'city_id',p_city,'reused',false);
   end if;
   insert into private.verification_localities(owner_id,province_id,city_id) values(actor,p_province,p_city)
   on conflict(owner_id) do update set province_id=excluded.province_id,city_id=excluded.city_id,confirmed_at=clock_timestamp();

@@ -11,9 +11,12 @@ import {
 import { readFoundationAccountContext, FoundationAccountContextError } from "./account-context";
 import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
 import { createLogger } from "../utils/logger";
-import { resolveRestoredLocality, LocalityInputError } from "./restored-locality";
+import {
+  resolveRestoredLocality,
+  LocalityInputError,
+  locationCooldownMessage,
+} from "./restored-locality";
 import { hasDatabaseReason } from "./error-reasons";
-import { formatSaLongDate } from "../utils/format";
 
 const log = createLogger("RestoredProfile");
 const inputSchema = profileUpdateSchema
@@ -82,16 +85,8 @@ export function handleRestoredProfileUpdate(request: NextRequest) {
           throw new ProfileRefusal(412, "Your profile changed. Reload it before saving");
         if (hasDatabaseReason(error, "legal_name_locked"))
           throw new ProfileRefusal(403, "Your verified name cannot be changed");
-        if (hasDatabaseReason(error, "location_change_cooldown")) {
-          const allowedFrom = new Date(error.hint ?? "");
-          throw new ProfileRefusal(
-            409,
-            Number.isNaN(allowedFrom.getTime())
-              ? "You can change your province and city once every 15 days."
-              : `You can change your province and city again after ${formatSaLongDate(allowedFrom)}.`,
-            "LOCATION_COOLDOWN"
-          );
-        }
+        if (hasDatabaseReason(error, "location_change_cooldown"))
+          throw new ProfileRefusal(409, locationCooldownMessage(error.hint), "LOCATION_COOLDOWN");
         if (error.code === "PT409")
           throw new ProfileRefusal(412, "Your profile changed. Reload it before saving");
         if (error.code === "22023")
