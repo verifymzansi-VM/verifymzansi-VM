@@ -34,7 +34,7 @@ with bodies as (
     ('internal.staff_email_due(text,uuid,uuid)',
       '33aed641726695e14ea1f64c4b0ba2eb', '81cdbb19b32d10b7e0edb1a9b8b82ba3'),
     ('internal.queue_staff_deadline_emails()',
-      '69ea078b94ffc5d1116dcfbd63e50744', '9dc8c0a562a998d41bec910dc740e717')
+      '69ea078b94ffc5d1116dcfbd63e50744', 'f71d05b7a15b81300ec49cbba78d2c45')
   ) v(sig, reviewed, updated)
 ),
 state as (

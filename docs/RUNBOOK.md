@@ -1250,17 +1250,21 @@ until the owner does those steps.
   `appeal:decide`, `report:resolve`), whose address is confirmed and who has a
   verified authenticator app, except whoever submitted it, the person a report
   is about, and, for an appeal, whoever took, approved or reported the decision
-  appealed against (they may not decide it). Privacy requests are always emailed
-  (they have a legal deadline). At most 30 appeal and report emails are queued
-  in any 24 hours, all staff together (the email provider's free plan allows 100
-  a day; this keeps room for members); appeals and reports past the cap get no
-  email but are still in the staff queues. The email holds only the type, a
-  reference, when it was received and the deadline, with a link to the staff
-  page: a privacy request's due date (30 days, or its extension), an appeal 3
-  and a report 2 business days after receipt (weekends skipped, public holidays
-  not, so the date shown is never later than the real one). It is not sent once
-  the item is closed, or the staff member no longer holds the role or no longer
-  has a verified authenticator app.
+  appealed against (they may not decide it). An appeal with no independent
+  decider is emailed to nobody, so check the staff appeal queue too. Privacy
+  requests have a legal deadline, so they are outside the cap: each is emailed
+  to staff who can act on it (a verified authenticator app), except that only a
+  member's first request in any 24 hours is emailed (later ones are only in the
+  staff queue). At most 30 appeal and report emails are queued in any 24 hours,
+  all staff together (the email provider's free plan allows 100 a day; this
+  keeps room for members); appeals and reports past the cap get no email but are
+  still in the staff queues. The email holds only the type, a reference, when it
+  was received and the deadline, with a link to the staff page: a privacy
+  request's due date (30 days, or its extension), an appeal 3 and a report 2
+  business days after receipt (weekends skipped, public holidays not, so the
+  date shown is never later than the real one). It is not sent once the item is
+  closed, or the staff member no longer holds the role or no longer has a
+  verified authenticator app.
 
 - Known gap: an email that fails an earlier attempt is retried later and does
   not fail the run, and a storage object that could not be deleted yet does not

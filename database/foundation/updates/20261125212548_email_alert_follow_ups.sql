@@ -23,12 +23,15 @@
 --    - An appeal is not emailed to the staff who took, approved or reported
 --      the decision appealed against: they may not decide that appeal
 --      (internal.resolve_frontend_appeal). Same two functions.
---    - A privacy request is always emailed: it has a legal deadline, so it
---      is outside the cap. Appeals and reports keep the shared cap of 30 in
---      any 24 hours (now counting appeals and reports only). The cap's count
---      is correct only at read committed (the isolation level of every
---      website and job call); at a stricter level an appeal or report queues
---      no email (it is still in the staff queue).
+--    - A privacy request has a legal deadline, so it is outside the cap: it
+--      is emailed to the staff who can act on it, except that only each
+--      member's first request in any 24 hours is emailed (a member may file 5
+--      an hour; later ones are only in the staff queue). Appeals and reports
+--      keep the shared cap of 30 in any 24 hours (now counting appeals and
+--      reports only). The cap's count is correct only at read committed (the
+--      isolation level of every website and job call); at repeatable read or
+--      serializable an appeal or report queues no email (it is still in the
+--      staff queue).
 --
 -- No API command is added or removed; the claim's result gains one optional
 -- field. The website release from the same pull request reads it and falls
@@ -56,7 +59,7 @@ begin
         'internal.queue_staff_deadline_emails() 69ea078b94ffc5d1116dcfbd63e50744',
         'internal.claim_lost_email_alert(integer) 174244d1d29cb28747f23b7a72c9b22e',
         'internal.staff_email_due(text,uuid,uuid) 81cdbb19b32d10b7e0edb1a9b8b82ba3',
-        'internal.queue_staff_deadline_emails() 9dc8c0a562a998d41bec910dc740e717') then
+        'internal.queue_staff_deadline_emails() f71d05b7a15b81300ec49cbba78d2c45') then
       raise exception 'email alert follow-ups precondition: % is not a reviewed body', shape using errcode='55000';
     end if;
   end loop;
@@ -197,14 +200,28 @@ begin
       where d.id=(item->>'action_id')::uuid and d.account_id=(item->>'appellant_id')::uuid and b is not null),
       '{}'::uuid[]);
   end if;
-  -- A privacy request is always emailed: it has a legal deadline. Appeals and
-  -- reports: at most 30 in any 24 hours together, so the email provider's
-  -- daily allowance keeps room for members' emails; items past it are still
-  -- in the staff queues. Submissions queue one at a time, so overlapping ones
-  -- cannot pass the cap; that holds only at read committed (each statement
-  -- sees what committed before it), so at a stricter level none is queued.
-  if email_kind<>'staff_privacy_request' then
-    if current_setting('transaction_isolation')<>'read committed' then return null; end if;
+  -- A privacy request has a legal deadline, so it is outside the cap below:
+  -- each member's first request in any 24 hours is emailed; later ones (a
+  -- member may file 5 an hour) are only in the staff queue. A member's
+  -- requests queue one at a time. One recorded by staff for someone without
+  -- an account is always emailed.
+  if email_kind='staff_privacy_request' then
+    if item->>'subject_user_id' is not null then
+      perform pg_advisory_xact_lock(hashtextextended('private.staff_deadline_emails:'||(item->>'subject_user_id'),0));
+      if exists(select 1 from private.outbox_events o join private.privacy_requests p on p.id=o.subject_id
+          where o.kind='staff_privacy_request' and o.created_at>statement_timestamp()-interval '24 hours'
+            and p.subject_user_id=(item->>'subject_user_id')::uuid and p.id<>new.id) then
+        return null;
+      end if;
+    end if;
+  -- Appeals and reports: at most 30 in any 24 hours together, so the email
+  -- provider's daily allowance keeps room for members' emails; items past it
+  -- are still in the staff queues. Submissions queue one at a time, so
+  -- overlapping ones cannot pass the cap; that holds only at read committed
+  -- (each statement sees what committed before it), so at a stricter level
+  -- none is queued.
+  else
+    if current_setting('transaction_isolation') in('repeatable read','serializable') then return null; end if;
     perform pg_advisory_xact_lock(hashtextextended('private.staff_deadline_emails',0));
     room := 30-(select count(*) from private.outbox_events o
       where o.kind in('staff_appeal','staff_report')

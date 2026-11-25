@@ -23,11 +23,14 @@
 //   job's check skips them;
 // - an appeal is not emailed to whoever took, approved or reported the
 //   decision appealed against;
-// - LIM-F-queue_staff_deadline_emails: a privacy request is always emailed,
-//   outside the cap; appeals and reports keep the cap of 30 in 24 hours,
-//   counting only themselves;
-// - at repeatable read or serializable an appeal or report queues no email; a
-//   privacy request still does;
+// - LIM-F-queue_staff_deadline_emails: a privacy request is emailed outside
+//   the cap; appeals and reports keep the cap of 30 in 24 hours, counting
+//   only themselves;
+// - only a member's first privacy request in 24 hours is emailed (a flood
+//   gives one email per staff member), every member's first is, and requests
+//   staff recorded for someone without an account are;
+// - at repeatable read or serializable an appeal or report queues no email (at
+//   read uncommitted it does); a privacy request still does;
 // - who may run the functions is unchanged; the rollback keeps queued emails
 //   and alerts.
 // Any later updates are applied at the end.
@@ -58,7 +61,7 @@ const REVIEWED = {
 const UPDATED = {
   [CLAIM]: "174244d1d29cb28747f23b7a72c9b22e",
   [DUE]: "81cdbb19b32d10b7e0edb1a9b8b82ba3",
-  [QUEUE]: "9dc8c0a562a998d41bec910dc740e717",
+  [QUEUE]: "f71d05b7a15b81300ec49cbba78d2c45",
 };
 const LABEL = "email alert follow-ups";
 // One lost email (lease ended) and one at its 8th attempt still in its lease.
@@ -103,10 +106,10 @@ await runTwoAdminUpdateCheck(
       );
 
     /** A member's privacy request through the production command; its id. */
-    const privacyRequest = (person, type = "access") =>
+    const privacyRequest = (person, type = "access", details = null) =>
       json(
         service(`select api.record_frontend_privacy_request('${person.id}','${person.session}','${type}',
-          'Thandi Member',null,null);`)
+          'Thandi Member',null,${details ? `'${details}'` : "null"});`)
       ).id;
     /** An appeal by `person` against `action` (none of the stored decisions by default); its id. */
     const appeal = (person, action = randomUUID(), kind = "suspension") =>
@@ -298,7 +301,7 @@ await runTwoAdminUpdateCheck(
     );
 
     await check(
-      "LIM-F-queue_staff_deadline_emails: privacy requests are always emailed, outside the cap of 30",
+      "LIM-F-queue_staff_deadline_emails: privacy requests are emailed outside the cap of 30",
       () => {
         newDay();
         filler("staff_report");
@@ -317,6 +320,48 @@ await runTwoAdminUpdateCheck(
         assert.equal(staffEmails(report(member("eaf-room-shop"))).length, 1);
         assert.deepEqual(staffEmails(appeal(member("eaf-full"))), []);
         assert.match(preflight()[0][1], /staff emails queued today: 30 \/ 30$/);
+      }
+    );
+
+    await check(
+      "a member's privacy requests: only the first in 24 hours is emailed; every member's first is",
+      () => {
+        newDay();
+        const dsar = owners(admin, admin2, governor);
+        const flooder = member("eaf-flood");
+        const first = privacyRequest(flooder, "access", "Flood request 1");
+        assert.deepEqual(staffEmails(first), dsar);
+        for (let i = 2; i <= 5; i++)
+          assert.deepEqual(
+            staffEmails(privacyRequest(flooder, "access", `Flood request ${i}`)),
+            []
+          );
+        // One email per staff member in 24 hours from the flood.
+        assert.equal(
+          q(`select count(*) from private.outbox_events o join private.privacy_requests p on p.id=o.subject_id
+            where o.kind='staff_privacy_request' and p.subject_user_id='${flooder.id}';`),
+          "3"
+        );
+        // Two other members are each emailed.
+        assert.deepEqual(staffEmails(privacyRequest(member("eaf-other-1"))), dsar);
+        assert.deepEqual(staffEmails(privacyRequest(member("eaf-other-2"))), dsar);
+        // A request staff recorded for someone without an account is emailed
+        // (to the other staff), however many there are.
+        for (const caller of ["caller1", "caller2"]) {
+          const recorded = json(
+            kit.staff(
+              admin,
+              `select api.record_frontend_privacy_intake('access','${caller}@example.invalid',null,
+              'A request received by telephone.','Recorded from a synthetic call.',null);`
+            )
+          ).id;
+          assert.deepEqual(staffEmails(recorded), owners(admin2, governor));
+        }
+        // A day later the member's next request is emailed again.
+        newDay();
+        replica(`update private.privacy_requests set created_at=created_at-interval '2 hours'
+          where subject_user_id='${flooder.id}';`);
+        assert.deepEqual(staffEmails(privacyRequest(flooder, "access", "Flood request 6")), dsar);
       }
     );
 
@@ -346,8 +391,12 @@ await runTwoAdminUpdateCheck(
           `select id from private.privacy_requests where subject_user_id='${requester.id}';`
         );
         assert.deepEqual(staffEmails(request), owners(admin, admin2, governor));
-        // At read committed the same report is emailed.
+        // At read committed the same report is emailed, and at read
+        // uncommitted (which Postgres runs as read committed).
         assert.deepEqual(staffEmails(report(shop)), owners(admin, admin2, governor, moderator));
+        const uncommitted = randomUUID();
+        q(`begin isolation level read uncommitted;\n${reportSql(shop, uncommitted)}\ncommit;`);
+        assert.deepEqual(staffEmails(uncommitted), owners(admin, admin2, governor, moderator));
       }
     );
 

@@ -5012,7 +5012,7 @@
     },
     {
       "id": "LIM-F-queue_staff_deadline_emails",
-      "title": "internal.queue_staff_deadline_emails: at most 30 staff appeal and report emails in any 24 hours, all staff together (privacy requests are not capped)",
+      "title": "internal.queue_staff_deadline_emails: at most 30 staff appeal and report emails in any 24 hours, all staff together (privacy requests are outside it: a member's first request in 24 hours is emailed)",
       "value": "30 in 24 hours",
       "category": "rate",
       "enforcedAt": [

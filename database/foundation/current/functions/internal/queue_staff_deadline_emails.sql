@@ -29,14 +29,28 @@ begin
       where d.id=(item->>'action_id')::uuid and d.account_id=(item->>'appellant_id')::uuid and b is not null),
       '{}'::uuid[]);
   end if;
-  -- A privacy request is always emailed: it has a legal deadline. Appeals and
-  -- reports: at most 30 in any 24 hours together, so the email provider's
-  -- daily allowance keeps room for members' emails; items past it are still
-  -- in the staff queues. Submissions queue one at a time, so overlapping ones
-  -- cannot pass the cap; that holds only at read committed (each statement
-  -- sees what committed before it), so at a stricter level none is queued.
-  if email_kind<>'staff_privacy_request' then
-    if current_setting('transaction_isolation')<>'read committed' then return null; end if;
+  -- A privacy request has a legal deadline, so it is outside the cap below:
+  -- each member's first request in any 24 hours is emailed; later ones (a
+  -- member may file 5 an hour) are only in the staff queue. A member's
+  -- requests queue one at a time. One recorded by staff for someone without
+  -- an account is always emailed.
+  if email_kind='staff_privacy_request' then
+    if item->>'subject_user_id' is not null then
+      perform pg_advisory_xact_lock(hashtextextended('private.staff_deadline_emails:'||(item->>'subject_user_id'),0));
+      if exists(select 1 from private.outbox_events o join private.privacy_requests p on p.id=o.subject_id
+          where o.kind='staff_privacy_request' and o.created_at>statement_timestamp()-interval '24 hours'
+            and p.subject_user_id=(item->>'subject_user_id')::uuid and p.id<>new.id) then
+        return null;
+      end if;
+    end if;
+  -- Appeals and reports: at most 30 in any 24 hours together, so the email
+  -- provider's daily allowance keeps room for members' emails; items past it
+  -- are still in the staff queues. Submissions queue one at a time, so
+  -- overlapping ones cannot pass the cap; that holds only at read committed
+  -- (each statement sees what committed before it), so at a stricter level
+  -- none is queued.
+  else
+    if current_setting('transaction_isolation') in('repeatable read','serializable') then return null; end if;
     perform pg_advisory_xact_lock(hashtextextended('private.staff_deadline_emails',0));
     room := 30-(select count(*) from private.outbox_events o
       where o.kind in('staff_appeal','staff_report')

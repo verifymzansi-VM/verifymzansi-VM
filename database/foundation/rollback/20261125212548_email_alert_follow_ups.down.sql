@@ -8,7 +8,10 @@
 -- 20261125131322_lost_email_alert_staff_deadlines.sql) and drops the column
 -- private.lost_email_alerts.payments with its check. Queued emails and alerts
 -- stay: staff privacy request emails queued past the cap are still sent, and
--- an alert offered again then has no payment count. A website from the
+-- an alert offered again then has no payment count. Afterwards privacy request
+-- emails count towards the cap of 30 again, so the ones queued in the last 24
+-- hours can leave appeals and reports without email for up to 24 hours (they
+-- are still in the staff queues). A website from the
 -- update's pull request keeps working: it falls back to counting the listed
 -- payments. It refuses (55000) unless the three functions have this update's
 -- bodies (a later update changed one: undo that update first).
@@ -26,7 +29,7 @@ begin
     if shape not in (
         'internal.claim_lost_email_alert(integer) 174244d1d29cb28747f23b7a72c9b22e',
         'internal.staff_email_due(text,uuid,uuid) 81cdbb19b32d10b7e0edb1a9b8b82ba3',
-        'internal.queue_staff_deadline_emails() 9dc8c0a562a998d41bec910dc740e717') then
+        'internal.queue_staff_deadline_emails() f71d05b7a15b81300ec49cbba78d2c45') then
       raise exception 'rollback precondition: % is not this update''s body', shape using errcode='55000';
     end if;
   end loop;

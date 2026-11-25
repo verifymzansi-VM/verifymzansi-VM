@@ -103,11 +103,15 @@ changes.
 - **Appeals.** An appeal is not emailed to whoever took, approved or reported
   the decision appealed against (they may not decide it), at queuing and before
   each send.
-- **The cap.** Privacy requests are always emailed (they have a legal deadline)
-  and do not count. Appeals and reports keep the shared cap of 30 in any 24
-  hours, now counting only themselves. At an isolation level stricter than read
-  committed the count could pass the cap, so an appeal or report then queues no
-  email (every website and job call runs at read committed).
+- **The cap.** Privacy requests have a legal deadline, so they are outside the
+  cap and do not count: each is emailed to staff who can act on it (a verified
+  authenticator app), except that only a member's first request in any 24 hours
+  is emailed (a member may file 5 an hour; later ones are only in the staff
+  queue). A request staff recorded for someone without an account is always
+  emailed. Appeals and reports keep the shared cap of 30 in any 24 hours, now
+  counting only themselves. At repeatable read or serializable the count could
+  pass the cap, so an appeal or report then queues no email (every website and
+  job call runs at read committed).
 
 Not changed: giving an alert back
 (`api.complete_lost_email_alert(p_claim, false)`) does not check who holds it.
@@ -123,7 +127,9 @@ ORDER: apply first, then merge. Read-only preflight:
 not applied"; it counts lost emails only once their lease has ended, alerts due
 for deletion, staff without an authenticator app and today's staff emails);
 rollback: `../rollback/20261125212548_email_alert_follow_ups.down.sql` (puts the
-three earlier bodies back and drops the column; queued emails and alerts stay).
+three earlier bodies back and drops the column; queued emails and alerts stay;
+afterwards privacy request emails count towards the cap again, so appeals and
+reports can go without email for up to 24 hours).
 
 Notes on the applied `20261125131322` files, which cannot be edited:
 
