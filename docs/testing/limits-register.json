@@ -10091,6 +10091,63 @@
       ]
     },
     {
+      "id": "LIM-SQL-phone-release-reason",
+      "title": "Releasing a blocked phone number: a reason of 10 to 500 characters on one line",
+      "value": "10 to 500",
+      "category": "length",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/propose_phone_number_release.sql",
+          "symbol": "internal.propose_phone_number_release",
+          "contains": "reason_text:=internal.privacy_text(p_reason,10,500);"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-release-one-phone-number.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-SQL-phone-release-waiting",
+      "title": "Releasing a blocked phone number: a request waits at most 7 days for its approval",
+      "value": "7 days",
+      "category": "expiry",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/review_phone_number_release.sql",
+          "symbol": "internal.review_phone_number_release",
+          "contains": "select count(*),count(*) filter(where n.release_proposed_at>now_at-interval '7 days'),"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-release-one-phone-number.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-SQL-phone-release-list",
+      "title": "Released phone numbers: the staff list shows the latest 50",
+      "value": "50",
+      "category": "cap",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_phone_number_releases.sql",
+          "symbol": "internal.get_phone_number_releases",
+          "contains": "order by latest.released_at desc,latest.phone limit 50) r"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-release-one-phone-number.mjs"
+        }
+      ]
+    },
+    {
       "id": "LIM-SQL-package-add-days-left",
       "title": "Adding slots to a package: at most term_days - 1 whole days left are priced (179 for a 180-day package)",
       "value": "term_days - 1",
@@ -14222,6 +14279,25 @@
           "file": "database/foundation/current/tables/private/identity_checks.sql",
           "symbol": "private.identity_checks (identity_checks_ask_reason_check)",
           "contains": "constraint identity_checks_ask_reason_check CHECK (char_length(ask_reason) >= 20 AND char_length(ask_reason) <= 2000)"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "register",
+          "file": "scripts/limits-sql.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-T-banned_phone_numbers_release_reason_check",
+      "title": "private.banned_phone_numbers: release_reason IS NULL OR length(release_reason) >= 10 AND length(release_reason) <= 500",
+      "value": ">= 10, <= 500",
+      "category": "length",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/tables/private/banned_phone_numbers.sql",
+          "symbol": "private.banned_phone_numbers (banned_phone_numbers_release_reason_check)",
+          "contains": "constraint banned_phone_numbers_release_reason_check CHECK (release_reason IS NULL OR length(release_reason) >= 10 AND length(release_reason) <= 500)"
         }
       ],
       "tests": [

@@ -52,26 +52,21 @@ const REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = new Map([
 function refuse(error: NonNullable<DatabaseError>): never {
   const known = lookupDatabaseReason(REFUSALS, error);
   if (known) throw new FoundationStaffCommandError(known[0], known[1]);
-  if (error.code === "42501") {
-    if (isStaffSecondFactorRefusal(error))
-      throw new FoundationStaffCommandError(
-        403,
-        "Verify your authenticator again, then try again.",
-        true
-      );
-    if (hasDatabaseMessage(error, "capabilityNotGranted"))
-      throw new FoundationStaffCommandError(403, "Only admins and governors can release numbers.");
-    throw new FoundationStaffCommandError(
-      403,
-      "Your staff access changed. Reload the page before continuing."
-    );
-  }
   if (error.code === "22023")
     throw new FoundationStaffCommandError(
       422,
       `Check the number and write a reason of ${RELEASE_REASON.min} to ${RELEASE_REASON.max} characters on one line.`
     );
-  throw Object.assign(new Error("Phone release command failed"), { cause: error });
+  // Unknown errors stay errors (the route answers a generic 503).
+  if (error.code !== "42501")
+    throw Object.assign(new Error("Phone release command failed"), { cause: error });
+  const mfa = isStaffSecondFactorRefusal(error);
+  const message = mfa
+    ? "Verify your authenticator again, then try again."
+    : hasDatabaseMessage(error, "capabilityNotGranted")
+      ? "Only admins and governors can release numbers."
+      : "Your staff access changed. Reload the page before continuing.";
+  throw new FoundationStaffCommandError(403, message, mfa);
 }
 
 function parse<T>(schema: z.ZodType<T>, data: unknown): T {

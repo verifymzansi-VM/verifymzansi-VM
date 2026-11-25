@@ -146,7 +146,9 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
     );
     fails(proposeSql(moderator, OLDER), "42501", /capability not granted/);
     fails(proposeSql(admin, "+2773"), "22023", /valid phone number required/);
+    // LIM-SQL-phone-release-reason: 9 and 501 characters are refused (10 to 500 pass below).
     fails(proposeSql(admin, OLDER, "too short"), "22023");
+    fails(proposeSql(admin, OLDER, "x".repeat(501)), "22023");
     refused(proposeSql(admin, "+27739999999"), "PT404", "phone_not_blocked");
     assert.ok(isBanned(OLDER));
   });
@@ -237,6 +239,7 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
     assert.ok(isBanned(OTHER));
   });
 
+  // LIM-SQL-phone-release-waiting: a request older than 7 days no longer waits.
   await check("a request expires after 7 days, and can then be asked again", () => {
     assert.equal(json(proposeSql(admin, OTHER)).status, "proposed");
     asOwner(
@@ -251,7 +254,9 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
   await check("a proposer who no longer holds the capability cannot be approved", () => {
     const leaving = world.staffUser("release-leaving", "governor");
     assert.equal(json(proposeSql(leaving, SPARE)).status, "proposed");
-    asOwner(`update private.staff_roles set revoked_at=now() where user_id='${leaving.id}';`);
+    asOwner(
+      `update private.staff_roles set revoked_at=now(),revoked_by='${admin.id}' where user_id='${leaving.id}';`
+    );
     refused(reviewSql(admin, SPARE), "PT409", "phone_release_changed");
     assert.ok(isBanned(SPARE));
     assert.equal(json(reviewSql(admin, SPARE, false)).status, "rejected");
@@ -268,6 +273,20 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
     assert.ok(Date.parse(waiting.expires_at) > Date.parse(waiting.proposed_at));
     assert.equal(releases(admin2).pending.find((p) => p.phone === SPARE).proposed_by_me, false);
     const released = mine.released.map((r) => r.phone);
+    // LIM-SQL-phone-release-list: with 52 releases on record the list shows the latest 50.
+    asOwner(`insert into private.banned_phone_numbers(identity_hmac,phone,release_reason,release_proposed_by,release_proposed_at,released_by,released_at)
+      select '${person.fingerprint}','+2774'||lpad(i::text,7,'0'),'${REASON}','${admin.id}',now()-interval '30 days',
+        '${admin2.id}',now()-interval '30 days'-make_interval(mins=>i) from generate_series(1,50) i;`);
+    const capped = releases(admin).released;
+    assert.equal(capped.length, 50);
+    assert.deepEqual(
+      capped
+        .slice(0, 2)
+        .map((r) => r.phone)
+        .sort(),
+      [CURRENT, OLDER].sort()
+    );
+    asOwner(`delete from private.banned_phone_numbers where phone like '+2774%';`);
     assert.ok(released.includes(OLDER) && released.includes(CURRENT), JSON.stringify(released));
     assert.ok(!released.includes(OTHER));
     // Blocked numbers nobody asked about are never listed.
