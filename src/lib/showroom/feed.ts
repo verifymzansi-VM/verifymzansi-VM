@@ -44,13 +44,10 @@ const presentations = new Map<string, { at: number; presentation?: FoundationCar
  * A card still unanswered shows its preview picture alone; its answer, when it
  * comes, is remembered, and the next visit reads it again if it never comes. */
 const PRESENTATION_DEADLINE_MS = 1_500;
-/** One build per showroom and area at a time: simultaneous visits share it. */
-const builds = new Map<string, { at: number; items: Promise<CarouselItem[] | null> }>();
-/** A visit joins another visit's build for at most this long: the fair-order
- * read's own 15 s limit plus the presentation deadline, with a margin. On a
- * Worker a build whose request was cancelled may never finish, so a visit never
- * joins a build older than this and stops waiting for one at this age. */
-const JOIN_MS = 17_000;
+/** One fair-order read per showroom and area at a time: simultaneous visits
+ * share it. Each visit reads its card presentations itself, so its 1.5 s wait
+ * never depends on another request. */
+const orderReads = new Map<string, Promise<FoundationShowroomCard[] | null>>();
 
 /** "New" in the card's badge spot: gold with dark green text (brand accents). */
 const NEW_TAG = "New";
@@ -143,15 +140,32 @@ function remember<V>(map: Map<string, V>, key: string, value: V, limit: number) 
 }
 
 /** The fair order's cards for the showroom and area, or null when they cannot
- * be read; either is remembered for a minute. */
+ * be read; either is remembered for a minute. Simultaneous visits share one
+ * read (see orderReads). */
 async function fairCards(
   surface: ShowroomSurface,
   area: Area,
   key: string
 ): Promise<FoundationShowroomCard[] | null> {
-  const now = Date.now();
   const kept = orders.get(key);
-  if (kept && now - kept.at < CACHE_MS) return kept.cards;
+  if (kept && Date.now() - kept.at < CACHE_MS) return kept.cards;
+  const running = orderReads.get(key);
+  if (running) return running;
+  const read = readFairCards(surface, area, key);
+  orderReads.set(key, read);
+  try {
+    return await read;
+  } finally {
+    if (orderReads.get(key) === read) orderReads.delete(key);
+  }
+}
+
+async function readFairCards(
+  surface: ShowroomSurface,
+  area: Area,
+  key: string
+): Promise<FoundationShowroomCard[] | null> {
+  const now = Date.now();
   let cards: FoundationShowroomCard[] | null = null;
   try {
     cards = await loadFoundationShowroom(foundationServerPublicApi(), {
@@ -233,11 +247,8 @@ async function cardPresentations(
 
 /** The fair order's cards with their presentations, or null when the order
  * cannot be read. */
-async function buildFairOrder(
-  surface: ShowroomSurface,
-  area: Area,
-  key: string
-): Promise<CarouselItem[] | null> {
+async function fairOrder(surface: ShowroomSurface, area: Area): Promise<CarouselItem[] | null> {
+  const key = `${surface}|${area.province ?? ""}|${area.city ?? ""}`;
   const cards = await fairCards(surface, area, key);
   if (!cards) return null;
   const presented = await cardPresentations(
@@ -247,39 +258,11 @@ async function buildFairOrder(
   return cards.map((card) => carouselItem(card, presented.get(card.id)));
 }
 
-/** The fair order for the showroom and area, or null when it cannot be read.
- * Simultaneous visits share one build (see JOIN_MS). */
-async function fairOrder(surface: ShowroomSurface, area: Area): Promise<CarouselItem[] | null> {
-  const key = `${surface}|${area.province ?? ""}|${area.city ?? ""}`;
-  const now = Date.now();
-  const running = builds.get(key);
-  if (running && now - running.at < JOIN_MS) {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    try {
-      return await Promise.race([
-        running.items,
-        new Promise<null>((resolve) => {
-          timer = setTimeout(() => resolve(null), JOIN_MS - (now - running.at));
-        }),
-      ]);
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-  const build = { at: now, items: buildFairOrder(surface, area, key) };
-  builds.set(key, build);
-  try {
-    return await build.items;
-  } finally {
-    if (builds.get(key) === build) builds.delete(key);
-  }
-}
-
-/** Forgets every remembered order, presentation and build (unit tests only). */
+/** Forgets every remembered order, presentation and read (unit tests only). */
 export function resetShowroomCachesForTests() {
   orders.clear();
   presentations.clear();
-  builds.clear();
+  orderReads.clear();
 }
 
 /** The newest posts, as before the fair order (used only when it fails). */

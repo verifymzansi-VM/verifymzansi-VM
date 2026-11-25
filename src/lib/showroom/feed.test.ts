@@ -382,7 +382,7 @@ describe("loadShowroomItems", () => {
     }
   });
 
-  it("shares one set of reads between simultaneous visits", async () => {
+  it("shares one order read between simultaneous visits", async () => {
     resolveIpGeolocation.mockReturnValue(onlyIn("Limpopo"));
     let release: (cards: unknown[]) => void = () => {};
     loadFoundationShowroom.mockReturnValue(new Promise((resolve) => (release = resolve)));
@@ -397,7 +397,50 @@ describe("loadShowroomItems", () => {
     expect(one).toEqual(two);
     expect(one.map((item) => item.logoUrl)).toEqual([`/media/${KEY(5)}`, `/media/${KEY(5)}`]);
     expect(loadFoundationShowroom).toHaveBeenCalledTimes(1);
-    expect(searchFoundationPresentedCards).toHaveBeenCalledTimes(2);
+    // Each visit reads its card presentations itself; duplicates are allowed.
+    expect(searchFoundationPresentedCards.mock.calls.length).toBeLessThanOrEqual(4);
+  });
+
+  it("returns at 1.5 s while another visit's presentation step is stuck", async () => {
+    vi.useFakeTimers();
+    // The first visit's deadline timer never fires, as when a Worker cancels
+    // the request that set it; the second visit must not depend on it.
+    const timers = globalThis.setTimeout;
+    let dropped = false;
+    const spy = vi.spyOn(globalThis, "setTimeout").mockImplementation(((
+      handler: () => void,
+      ms?: number
+    ) => {
+      if (!dropped && ms === 1_500) {
+        dropped = true;
+        return timers(() => {}, 1e9);
+      }
+      return timers(handler, ms);
+    }) as typeof setTimeout);
+    try {
+      resolveIpGeolocation.mockReturnValue(onlyIn("Mpumalanga"));
+      const videoOnly = { image_key: null, video_key: KEY(1) };
+      loadFoundationShowroom.mockResolvedValue([card(ID(1), { preview: videoOnly })]);
+      searchFoundationPresentedCards.mockReturnValue(new Promise(() => {}));
+      let stuckDone = false;
+      void loadShowroomItems("home", first).then(() => (stuckDone = true));
+      await vi.advanceTimersByTimeAsync(100);
+      let done = false;
+      const visit = loadShowroomItems("home", first).then((items) => {
+        done = true;
+        return items;
+      });
+      await vi.advanceTimersByTimeAsync(1_499);
+      expect(done).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      const items = await visit;
+      expect(items.map((item) => item.posterUrl)).toEqual([undefined]);
+      expect(stuckDone).toBe(false);
+      expect(loadFoundationShowroom).toHaveBeenCalledTimes(1);
+    } finally {
+      spy.mockRestore();
+      vi.useRealTimers();
+    }
   });
 
   it("ignores a presentation reply for another post", async () => {
