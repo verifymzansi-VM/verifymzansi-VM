@@ -898,8 +898,8 @@ it("declares and delivers the sold-post notice within the database's kind limit"
   expect(await run()).toMatchObject({ succeeded: 1 });
   const lists = calls("claim_supported_notification_outbox").map(([, a]) => a.p_supported_kinds);
   expect(lists.flat()).toEqual(expect.arrayContaining(["post_sold", "post_kept"]));
-  // 26 kinds since the staff deadline emails (20261125131322), each claim within it.
-  expect(new Set(lists.flat()).size).toBe(26);
+  // 27 kinds since the sticker renewal reminder (20261125150215), each claim within it.
+  expect(new Set(lists.flat()).size).toBe(27);
   for (const list of lists) expect(list.length).toBeLessThanOrEqual(26);
   expect(deliver).toHaveBeenCalledExactlyOnceWith(
     "synthetic@example.invalid",
@@ -990,6 +990,34 @@ it("passes the free credit reminder's end date to the email", async () => {
     { creditEndsAt: "2026-12-20T10:00:00+00:00" }
   );
 });
+it("passes the sticker renewal reminder's sticker, end and business to the email", async () => {
+  queue(
+    job({
+      kind: "sticker_renewal_reminder",
+      subject_id: "00000000-0000-4000-8000-0000000000a5",
+      sticker_kind: "seen",
+      sticker_expires_at: "2026-12-20T10:00:00+00:00",
+      sticker_business_id: "00000000-0000-4000-8000-0000000000b1",
+    })
+  );
+  expect(await run()).toMatchObject({ succeeded: 1 });
+  expect(deliver).toHaveBeenCalledExactlyOnceWith(
+    "synthetic@example.invalid",
+    "sticker_renewal_reminder",
+    `foundation-outbox/${id}`,
+    undefined,
+    {
+      stickerKind: "seen",
+      stickerEndsAt: "2026-12-20T10:00:00+00:00",
+      stickerBusinessId: "00000000-0000-4000-8000-0000000000b1",
+    }
+  );
+});
+it("finishes a sticker renewal reminder the database no longer addresses without sending it", async () => {
+  queue(job({ kind: "sticker_renewal_reminder", recipient: null, subject_id: id }));
+  expect(await run()).toMatchObject({ succeeded: 1 });
+  expect(deliver).not.toHaveBeenCalled();
+});
 it("finishes a free credit reminder the database no longer addresses without sending it", async () => {
   queue(job({ kind: "free_credit_reminder", recipient: null, subject_id: id }));
   expect(await run()).toMatchObject({ succeeded: 1 });
@@ -1070,29 +1098,47 @@ describe("a database without the newer kinds", () => {
     refuse("unsupported mail kind");
     expect(await run()).toMatchObject({ succeeded: 1 });
     const lists = calls("claim_supported_notification_outbox").map(([, a]) => a.p_supported_kinds);
-    // The newest kinds are dropped first (the staff deadline emails, the free
-    // credit reminder, the term-ending notice, the renewal reminder, then the
-    // ID-returned notice), then the sold and kept notices.
-    expect(lists.map((l) => l.length)).toEqual([3, 23, 20, 19, 18, 17, 16, 14, 14]);
-    expect(lists[2]).not.toContain("staff_report");
-    expect(lists[2]).toContain("free_credit_reminder");
-    expect(lists[3]).not.toContain("free_credit_reminder");
-    expect(lists[3]).toContain("term_ending_notice");
-    expect(lists[5]).not.toContain("term_ending_notice");
-    expect(lists[4]).toContain("slot_renewal_reminder");
-    expect(lists[5]).not.toContain("slot_renewal_reminder");
-    expect(lists[5]).toContain("verification_returned");
-    expect(lists[6]).not.toContain("verification_returned");
-    expect(lists[6]).toContain("post_sold");
-    expect(lists[7]).not.toContain("post_sold");
-    expect(lists[7]).not.toContain("post_kept");
+    // The newest kinds are dropped first (the sticker renewal reminder, the
+    // staff deadline emails, the free credit reminder, the term-ending notice,
+    // the renewal reminder, then the ID-returned notice), then the sold and
+    // kept notices.
+    expect(lists.map((l) => l.length)).toEqual([3, 24, 23, 20, 19, 18, 17, 16, 14, 14]);
+    expect(lists[2]).not.toContain("sticker_renewal_reminder");
+    expect(lists[2]).toContain("staff_report");
+    expect(lists[3]).not.toContain("staff_report");
+    expect(lists[3]).toContain("free_credit_reminder");
+    expect(lists[4]).not.toContain("free_credit_reminder");
+    expect(lists[4]).toContain("term_ending_notice");
+    expect(lists[6]).not.toContain("term_ending_notice");
+    expect(lists[5]).toContain("slot_renewal_reminder");
+    expect(lists[6]).not.toContain("slot_renewal_reminder");
+    expect(lists[6]).toContain("verification_returned");
+    expect(lists[7]).not.toContain("verification_returned");
+    expect(lists[7]).toContain("post_sold");
+    expect(lists[8]).not.toContain("post_sold");
+    expect(lists[8]).not.toContain("post_kept");
   });
   it("claims the earlier kinds after a list-length refusal, and keeps using them", async () => {
     refuse("supported mail kinds required");
     expect(await run()).toMatchObject({ succeeded: 1 });
     const lists = calls("claim_supported_notification_outbox").map(([, a]) => a.p_supported_kinds);
     // The follow-up claim keeps the earlier list instead of asking again.
-    expect(lists.map((l) => l.length)).toEqual([3, 23, 20, 19, 18, 17, 16, 14, 14]);
+    expect(lists.map((l) => l.length)).toEqual([3, 24, 23, 20, 19, 18, 17, 16, 14, 14]);
+  });
+  it("drops only the sticker renewal reminder for a database without that update", async () => {
+    queue(job({ kind: "staff_report", subject_id: id }));
+    const base = rpc.getMockImplementation()!;
+    rpc.mockImplementation(async (name, args) =>
+      name === "claim_supported_notification_outbox" &&
+      args.p_supported_kinds.includes("sticker_renewal_reminder")
+        ? { data: null, error: { code: "22023", message: "unsupported mail kind" } }
+        : base(name, args)
+    );
+    await run();
+    const lists = calls("claim_supported_notification_outbox").map(([, a]) => a.p_supported_kinds);
+    expect(lists.map((l) => l.length).slice(0, 3)).toEqual([3, 24, 23]);
+    expect(lists[2]).toContain("staff_report");
+    expect(lists[2]).not.toContain("sticker_renewal_reminder");
   });
   it("drops only the staff deadline emails for a database without that update", async () => {
     queue(job({ kind: "free_credit_reminder", credit_ends_at: "2026-12-01T10:00:00+00:00" }));
@@ -1105,7 +1151,7 @@ describe("a database without the newer kinds", () => {
     );
     expect(await run()).toMatchObject({ succeeded: 1 });
     const lists = calls("claim_supported_notification_outbox").map(([, a]) => a.p_supported_kinds);
-    expect(lists.map((l) => l.length)).toEqual([3, 23, 20, 20]);
+    expect(lists.map((l) => l.length)).toEqual([3, 24, 23, 20, 20]);
     expect(lists[3]).toContain("free_credit_reminder");
     for (const kind of ["staff_privacy_request", "staff_appeal", "staff_report"])
       expect(lists[3]).not.toContain(kind);
@@ -1121,7 +1167,7 @@ describe("a database without the newer kinds", () => {
     );
     expect(await run()).toMatchObject({ succeeded: 1 });
     const lists = calls("claim_supported_notification_outbox").map(([, a]) => a.p_supported_kinds);
-    expect(lists.map((l) => l.length)).toEqual([3, 23, 20, 19, 19]);
+    expect(lists.map((l) => l.length)).toEqual([3, 24, 23, 20, 19, 19]);
     expect(lists[4]).toContain("term_ending_notice");
     expect(lists[4]).not.toContain("free_credit_reminder");
   });
@@ -1136,9 +1182,9 @@ describe("a database without the newer kinds", () => {
     );
     expect(await run()).toMatchObject({ succeeded: 1 });
     const lists = calls("claim_supported_notification_outbox").map(([, a]) => a.p_supported_kinds);
-    expect(lists.map((l) => l.length)).toEqual([3, 23, 20, 19, 18, 18]);
-    expect(lists[5]).toContain("slot_renewal_reminder");
-    expect(lists[4]).not.toContain("term_ending_notice");
+    expect(lists.map((l) => l.length)).toEqual([3, 24, 23, 20, 19, 18, 18]);
+    expect(lists[6]).toContain("slot_renewal_reminder");
+    expect(lists[5]).not.toContain("term_ending_notice");
   });
   it("drops only the renewal reminder for a database without that update", async () => {
     queue(job({ kind: "verification_returned" }));
@@ -1151,9 +1197,9 @@ describe("a database without the newer kinds", () => {
     );
     expect(await run()).toMatchObject({ succeeded: 1 });
     const lists = calls("claim_supported_notification_outbox").map(([, a]) => a.p_supported_kinds);
-    expect(lists.map((l) => l.length)).toEqual([3, 23, 20, 19, 18, 17, 17]);
-    expect(lists[5]).toContain("verification_returned");
-    expect(lists[5]).not.toContain("slot_renewal_reminder");
+    expect(lists.map((l) => l.length)).toEqual([3, 24, 23, 20, 19, 18, 17, 17]);
+    expect(lists[6]).toContain("verification_returned");
+    expect(lists[6]).not.toContain("slot_renewal_reminder");
   });
   it("drops only the ID-returned notice for a database without that update", async () => {
     queue(job({ kind: "post_kept" }));
@@ -1166,9 +1212,9 @@ describe("a database without the newer kinds", () => {
     );
     expect(await run()).toMatchObject({ succeeded: 1 });
     const lists = calls("claim_supported_notification_outbox").map(([, a]) => a.p_supported_kinds);
-    expect(lists.map((l) => l.length)).toEqual([3, 23, 20, 19, 18, 17, 16, 16]);
-    expect(lists[6]).toContain("post_kept");
-    expect(lists[6]).not.toContain("verification_returned");
+    expect(lists.map((l) => l.length)).toEqual([3, 24, 23, 20, 19, 18, 17, 16, 16]);
+    expect(lists[7]).toContain("post_kept");
+    expect(lists[7]).not.toContain("verification_returned");
   });
   it("does not retry the claim after another invalid-parameter refusal", async () => {
     rpc.mockImplementation(async (name) =>
@@ -1549,8 +1595,16 @@ describe("staff deadline emails", () => {
       ),
       "utf8"
     );
-    for (const field of ["staff_item_type", "staff_severity", "staff_received_at", "staff_due_at"])
+    for (const field of [
+      "staff_item_type",
+      "staff_severity",
+      "staff_received_at",
+      "staff_due_at",
+      "sticker_kind",
+      "sticker_expires_at",
+      "sticker_business_id",
+    ])
       expect(sql).toContain(`'${field}'`);
-    expect(sql).toContain("cardinality(p_supported_kinds) not between 1 and 26");
+    expect(sql).toContain("cardinality(p_supported_kinds) not between 1 and 27");
   });
 });
