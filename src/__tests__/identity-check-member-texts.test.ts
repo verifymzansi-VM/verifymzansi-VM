@@ -51,10 +51,25 @@ describe("automatic ID checks, member side", () => {
   it("names the provider on the consent step with links to its two notices", () => {
     const consent = readFileSync(join(root, CONSENT_STEP), "utf8");
     expect(consent).toMatch(/VerifyMzansi asks Didit, our independent verification partner/);
+    // Where Didit handles the data, as the Privacy Policy's Didit entry says
+    // (settled legal answer D3: every country named at the ID consent step).
+    expect(consent.replace(/\s+/g, " ")).toContain(
+      "with my data held in Ireland (European Union) and some of Didit&apos;s providers in the United States"
+    );
     expect(consent).toContain("DIDIT_PRIVACY_NOTICE_URL");
     expect(consent).toContain("DIDIT_END_USER_TERMS_URL");
     expect(DIDIT_PRIVACY_NOTICE_URL).toBe("https://didit.me/terms/verification-privacy-notice");
     expect(DIDIT_END_USER_TERMS_URL).toBe("https://didit.me/terms/identity-verification");
+  });
+
+  it("states the keep-for rules the database applies on the privacy panel", () => {
+    // 20261122022323_identity_keep_for.sql: the selfie and ID number go 90 days
+    // after a good-standing closure; names, phones and the one-way code stay 5 years.
+    const panel = readFileSync(join(root, "app", "verification", "verification-ui.tsx"), "utf8");
+    expect(panel).toContain(
+      "Once verified: selfie and ID number kept until 90 days after you close your account; names, phone and a one-way code for 5 years"
+    );
+    expect(panel).not.toContain("selfie, ID number, names and phone kept until 5 years");
   });
 
   it("accepts frame messages only from the check's own origin", () => {

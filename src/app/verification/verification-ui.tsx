@@ -245,7 +245,7 @@ const PRIVACY_POINTS: { icon: IconType; title: string }[] = [
 const KEPT_ONCE_VERIFIED = {
   icon: Fingerprint,
   title:
-    "Once verified: selfie, ID number, names and phone kept until 5 years after your account closes",
+    "Once verified: selfie and ID number kept until 90 days after you close your account; names, phone and a one-way code for 5 years",
 };
 
 export function PrivacyPanel({ independent = false }: { independent?: boolean }) {
