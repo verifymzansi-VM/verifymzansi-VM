@@ -17,11 +17,6 @@ const extra = z.object({
     )
     .max(48),
 });
-export async function searchFoundationCards(api: FoundationPublicApi, input: unknown) {
-  const { data, error } = await api.rpc("search_post_cards", buildFoundationPostSearch(input));
-  if (error) throw new Error("Posts could not be loaded");
-  return parseCards(data);
-}
 function parseCards(data: unknown) {
   const enriched = extra.parse(data);
   const plain = parseFoundationPostSearch({

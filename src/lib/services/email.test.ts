@@ -336,6 +336,66 @@ describe("email service", () => {
     expect(mockSend.mock.calls.length).toBe(sent);
     vi.unstubAllEnvs();
   });
+  it("reminds a business owner 30 days before a sticker ends, with the renewal page (item 40)", async () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
+    const business = "00000000-0000-4000-8000-0000000000b1";
+    await sendPlatformNotice(
+      "owner@example.invalid",
+      "sticker_renewal_reminder",
+      "foundation-outbox/sticker",
+      undefined,
+      { stickerKind: "cipc", stickerEndsAt: "2026-12-20T10:00:00Z", stickerBusinessId: business }
+    );
+    const [message, options] = mockSend.mock.calls.at(-1)!;
+    expect(message.subject).toBe("Your VerifyMzansi sticker needs renewing soon");
+    expect(message.text).toBe(
+      `Your VerifyMzansi sticker needs renewing soon
+
+The CIPC registered sticker on one of your businesses ends on 20 December 2026 at 12:00 (South African time).
+
+Renew it now from the business's verification page so the sticker does not lapse. Our team checks your company against CIPC's records again. A renewed sticker lasts 365 days from the day it is approved.
+
+Renew my sticker: https://verifymzansi.com/dashboard/businesses/${business}/verification`
+    );
+    expect(message.html).toContain(
+      `https://verifymzansi.com/dashboard/businesses/${business}/verification`
+    );
+    expect(options.idempotencyKey).toBe("foundation-outbox/sticker");
+    await sendPlatformNotice(
+      "owner@example.invalid",
+      "sticker_renewal_reminder",
+      "foundation-outbox/seen",
+      undefined,
+      { stickerKind: "seen", stickerEndsAt: "2026-12-20T10:00:00Z", stickerBusinessId: business }
+    );
+    const [seen] = mockSend.mock.calls.at(-1)!;
+    expect(seen.text).toContain(
+      "The Seen by VerifyMzansi sticker on one of your businesses ends on 20 December 2026"
+    );
+    expect(seen.text).toContain(
+      "Book a new Seen check now from the business's verification page so the sticker does not lapse. A renewed sticker lasts 365 days from the day it is approved."
+    );
+    expect(seen.text).toContain(
+      `Book a Seen check: https://verifymzansi.com/dashboard/businesses/${business}/verification`
+    );
+    // Without the sticker or its end nothing is sent (the job retries, then reports it).
+    const sent = mockSend.mock.calls.length;
+    for (const details of [
+      { stickerKind: "cipc" as const },
+      { stickerEndsAt: "2026-12-20T10:00:00Z" },
+    ])
+      await expect(
+        sendPlatformNotice(
+          "owner@example.invalid",
+          "sticker_renewal_reminder",
+          "outbox/x",
+          undefined,
+          details
+        )
+      ).rejects.toThrow("Notice details unavailable");
+    expect(mockSend.mock.calls.length).toBe(sent);
+    vi.unstubAllEnvs();
+  });
   it("passes durable job keys to Resend for repeatable notices", async () => {
     await sendModerationNoticeEmail({
       email: "user@example.com",
