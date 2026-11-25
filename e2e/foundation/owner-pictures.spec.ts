@@ -292,3 +292,32 @@ for (const [label, viewport] of [
     }
   });
 }
+
+// Trust promise matches reality (item 41): the privacy notice, the pages whose
+// trust wording changed, and Home with the softened positioning statement in
+// its about section and footer.
+const ITEM41_PAGES = [
+  ["privacy", "/privacy"],
+  ["trust-safety", "/trust-safety"],
+  ["help-business-verification", "/help/business-verification"],
+  ["paia", "/paia"],
+  ["home", "/"],
+] as const;
+
+test.describe("owner pictures at 1280 px (item 41)", () => {
+  test.use({ viewport: { width: 1280, height: 900 } });
+  for (const [name, path] of ITEM41_PAGES)
+    test(`item41-${name}-1280`, async ({ page }) => {
+      await open(page, path);
+      await picture(page, `item41-${name}-1280`);
+    });
+});
+
+test.describe("owner pictures at 375 px (item 41)", () => {
+  test.use({ viewport: PHONE, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+  for (const [name, path] of ITEM41_PAGES)
+    test(`item41-${name}-375`, async ({ page }) => {
+      await open(page, path);
+      await picture(page, `item41-${name}-375`);
+    });
+});

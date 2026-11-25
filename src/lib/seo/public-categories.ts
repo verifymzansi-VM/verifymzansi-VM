@@ -1,5 +1,5 @@
 export const VERIFY_MZANSI_SITE_DESCRIPTION =
-  "VerifyMzansi is a trusted South African platform connecting people with verified businesses, products, services, tourism and events. Discover, connect and do business with confidence.";
+  "VerifyMzansi is a trusted South African platform connecting people with businesses, products, services, tourism and events from ID-reviewed posters. Discover, connect and do business with confidence.";
 
 export const VERIFY_MZANSI_CATEGORY_SEO = [
   {

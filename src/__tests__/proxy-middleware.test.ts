@@ -150,6 +150,18 @@ describe("proxy security headers", () => {
     expect(setCookie).toContain("vm_csrf=");
   });
 
+  it("never issues the view-and-like identifier on a page load", async () => {
+    // The Privacy Policy says the identifier comes only after a Turnstile
+    // check (/api/engagement/viewer), so a first HTML page load sets none.
+    const res = await middleware(
+      new NextRequest("http://localhost:3000/", {
+        headers: { accept: "text/html", "user-agent": "Mozilla/5.0 (Windows NT 10.0) Chrome/120" },
+      })
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get("set-cookie") ?? "").not.toContain("vmz_viewer");
+  });
+
   it("passes Cloudflare's request reference to the page as Server-Timing", async () => {
     const res = await middleware(
       new NextRequest("http://localhost:3000/", { headers: { "cf-ray": "8f1a2b3c4d5e6f70-JNB" } })

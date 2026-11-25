@@ -255,7 +255,8 @@ export function IndependentCheckStart({
           className="cursor-pointer text-sm font-normal leading-6 text-foreground/85"
         >
           I agree that VerifyMzansi asks Didit, our independent verification partner, to check my ID
-          and my face, as described in the{" "}
+          and my face, with my data held in Ireland (European Union) and some of Didit&apos;s
+          providers in the United States, as described in the{" "}
           <Link href="/privacy" prefetch={false} target="_blank" rel="noopener" className={LINK}>
             privacy policy
           </Link>

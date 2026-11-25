@@ -9,17 +9,11 @@ import { createLogger } from "@/lib/utils/logger";
 import { addReferenceTiming } from "@/lib/utils/request-reference";
 import { logRequestFailure } from "@/lib/utils/request-failure";
 import { checkLocalRateLimit, getClientIp } from "@/lib/utils/rate-limit";
-import { isAutomatedUserAgent } from "@/lib/analytics/automated-agent";
 import { detailPageKeyIsMalformed, matchDetailPage } from "@/lib/routing/detail-pages";
 import {
   dropIncomingFoundationPageSession,
   forwardFoundationPageSession,
 } from "@/lib/foundation/page-session-handoff";
-import {
-  createAnonymousViewerId,
-  ENGAGEMENT_VIEWER_COOKIE,
-  ENGAGEMENT_VIEWER_COOKIE_MAX_AGE_SECONDS,
-} from "@/lib/engagement";
 
 const logger = createLogger("Proxy");
 
@@ -267,34 +261,11 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
  * Delegates to routeRequest() for auth/routing, then wraps
  * the response with security headers (CSP nonce, HSTS, etc.).
  */
-/**
- * Issue the anonymous browser identity on the first page load. Otherwise the
- * visit, view and impression beacons a new visitor fires in parallel each mint
- * their own ID, and one person counts as several visitors.
- */
-function ensureViewerCookie(request: NextRequest, response: NextResponse): void {
-  if (request.method !== "GET" || request.nextUrl.pathname.startsWith("/api/")) return;
-  if (!request.headers.get("accept")?.includes("text/html")) return;
-  if (request.cookies.get(ENGAGEMENT_VIEWER_COOKIE)?.value) return;
-  if (response.headers.has("location") || response.status >= 400) return;
-  if (isAutomatedUserAgent(request.headers.get("user-agent"))) return;
-  response.cookies.set({
-    name: ENGAGEMENT_VIEWER_COOKIE,
-    value: createAnonymousViewerId(),
-    maxAge: ENGAGEMENT_VIEWER_COOKIE_MAX_AGE_SECONDS,
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-  });
-}
-
 export async function handleMiddlewareRequest(request: NextRequest): Promise<NextResponse> {
   // Only the page gate may hand a verified account to the page render.
   dropIncomingFoundationPageSession(request);
   try {
     const routeResponse = await routeRequest(request);
-    ensureViewerCookie(request, routeResponse);
     addReferenceTiming(request, routeResponse);
     return forwardFoundationPageSession(request, withSecurityHeaders(request, routeResponse));
   } catch (error) {

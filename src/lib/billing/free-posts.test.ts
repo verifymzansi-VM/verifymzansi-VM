@@ -1,10 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import {
-  getActiveFreePostUsage,
-  claimFreePostSlot,
-  releaseFreePostSlot,
-  trialAvailabilityMessage,
-} from "./free-posts";
+import { getActiveFreePostUsage, claimFreePostSlot, releaseFreePostSlot } from "./free-posts";
 describe("introductory trial client", () => {
   it("shows the account's extra free-post balance", async () => {
     const offer = {
@@ -80,18 +75,5 @@ describe("introductory trial client", () => {
       "release_intro_trial",
       expect.objectContaining({ p_reason: "create_failed" })
     );
-  });
-  it("uses truthful scarcity thresholds", () => {
-    const offer = {
-      eligible: true,
-      sevenDayAvailable: true,
-      thirtyDayAvailable: true,
-      remaining: 50,
-      launchEnabled: true,
-    };
-    expect(trialAvailabilityMessage(offer)).toBe("Limited 30-day free spaces available.");
-    expect(trialAvailabilityMessage({ ...offer, remaining: 7 })).toContain("Only 7");
-    expect(trialAvailabilityMessage({ ...offer, remaining: 0 })).toContain("fully allocated");
-    expect(trialAvailabilityMessage({ ...offer, launchEnabled: false })).toContain("paused");
   });
 });

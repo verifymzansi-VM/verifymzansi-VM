@@ -517,10 +517,10 @@ export async function sendVerificationApprovedEmail(
     tone: "success",
     eyebrow: "Verification complete",
     title: "Your ID has been reviewed",
-    intro: "Our team has reviewed your phone, ID and selfie. You can now post on VerifyMzansi.",
+    intro: "We have reviewed your phone, ID and selfie. You can now post on VerifyMzansi.",
     bodyHtml: `
       ${paragraph(`Hi ${accountName},`)}
-      ${paragraph("Good news. Our team has reviewed your details and your account now shows the ID reviewed sticker.")}
+      ${paragraph("Good news. We have reviewed your details and your account now shows the ID reviewed sticker.")}
       <p>You can now:</p>
       <ul>
         <li>Post products and rentals on Mzansi Market</li>
@@ -536,7 +536,7 @@ export async function sendVerificationApprovedEmail(
 
   const text = `Hi ${accountName},
 
-Good news. Our team has reviewed your phone, ID and selfie, and your account now shows the ID reviewed sticker.
+Good news. We have reviewed your phone, ID and selfie, and your account now shows the ID reviewed sticker.
 
 You can now post on Mzansi Market, Mzansi Business and Tourism & Events, and ask for the CIPC registered or Seen by VerifyMzansi sticker for your business.
 
