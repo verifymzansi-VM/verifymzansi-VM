@@ -236,6 +236,21 @@ describe("starting a check", () => {
     expect(createDiditSession).not.toHaveBeenCalled();
   });
 
+  it("sends the consent version with the start, matching the database's", async () => {
+    memberRpc(started("https://verify.didit.me/session/old"));
+    await start();
+    expect(rpc).toHaveBeenCalledWith(
+      "start_my_identity_check",
+      { p_consent_version: IDENTITY_CHECK_CONSENT_VERSION },
+      { get: false }
+    );
+    // The value of internal.identity_check_consent_version() in update
+    // 20261124235920_identity_check_consent (part 7a, PR #361). Hard-coded
+    // until database/foundation/current/functions/internal/
+    // identity_check_consent_version.sql is on main; then read it from there.
+    expect(IDENTITY_CHECK_CONSENT_VERSION).toBe("identity-check-consent-v1");
+  });
+
   it("saves the typed names as the member's name claim before the check starts", async () => {
     const order: string[] = [];
     rpc.mockImplementation(async (name: string) => {

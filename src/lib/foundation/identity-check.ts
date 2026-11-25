@@ -248,10 +248,12 @@ async function startCheck(
   };
   await lookAgainIfStale(api);
   await saveTypedNames(api, names);
-  // TODO(61 part 7a): pass the consent version (p_consent_version) once the
-  // database records it; until then the route requires the tick and the
-  // version but the database keeps no record, and the setting stays Manual.
-  const { data, error } = await api.rpc("start_my_identity_check", {}, { get: false });
+  // The database records the consent version on the new check (update
+  // 20261124235920_identity_check_consent, part 7a; it must be applied before
+  // this code is deployed). A variable, not a literal, so this also compiles
+  // against the generated types from before that update.
+  const consent = { p_consent_version: IDENTITY_CHECK_CONSENT_VERSION };
+  const { data, error } = await api.rpc("start_my_identity_check", consent, { get: false });
   if (error) {
     if (error.code === "PT409")
       throw new IdentityCheckRefusal(
