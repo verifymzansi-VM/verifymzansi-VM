@@ -162,6 +162,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 98. Remove paid add-ons (item 37) (and the group 98 part of 10 rows elsewhere) | approved by owner 2026-11-25 (answer: 'Approve them') | Advertise, plan cards, billing FAQ, showroom help and My posts no longer mention or offer Urgent, Boost or Featured; the add-on buttons on My posts and the 'Boost level' column in the business 'Post' dialog are gone. |
 | 99. Automatic ID checks: member and staff screens (item 61, part 7) (with the group 99 part of 5 rows elsewhere) | approved by owner 2026-11-25 (answers: 'Approve them' for the main screens, 'Approve both' for the loading and staff-setting pictures); plan pictures approved 2026-11-20; consent wording per decision L | Nothing while the staff setting is Manual (today's value, and it stays Manual until the consent record is in the database). On a Didit setting, Get verified's ID step shows the independent check: names, what it asks, a consent tick naming Didit with links to its two notices, Start ID check, the check inside the page, then Checking, Verified, 'A person will check your ID' or a decline with 'Try the ID check again' and 'Ask a person to look again'. Staff: an 'ID checks' card on Verify accounts (three settings, admins change it) and a Didit panel in the case view. |
 | 101. Trust promise matches reality (item 41) (no file rows of its own: the group 101 part of 12 rows elsewhere) | approved by owner 2026-11-25 (answer: 'Approve them') | Privacy Policy: a 'Who we are' section, a 'Cookies and browser storage' section, the keep-for periods the system applies, every provider and country named, and no claims of screen replays or logged number taps. PAIA names the same recipients. Trust & Safety, Advertise and the business verification help no longer say only 'our team' reviews IDs. The posting plan box loses 30-day free-post branches that could never show. Home, the footer and the site description say 'businesses, products, services, tourism and events from ID-reviewed posters' instead of 'verified businesses, products, ...'. Get verified (independent check): the privacy panel's keep-for line follows the applied rules and the consent names Ireland (European Union) and the United States. |
+| 103. Showroom video posts show their chosen frame and logo (no file rows: data only, `src/lib/showroom/feed.ts`) | awaiting owner | Home and area showrooms: a video post's card plays its video over the frame the owner chose, and a post with a logo shows it in the card, as in the chosen version; before, a video-only post showed the generic shop artwork with no video and the title's first letter instead of a logo. Posts with neither look as they do today. |
 
 Questions for the owner:
 
@@ -4153,6 +4154,27 @@ Pictures (synthetic data, not published): `screenshots/item41-trust-promise/`
 (desktop and phone).
 
 Decision: approved by owner 2026-11-25 (answer: 'Approve them').
+
+### 103. Showroom video posts show their chosen frame and logo
+
+Returns the 27 October behaviour (`0b562f42`, `carousel-item-transforms.ts`)
+to the big showroom carousel on the home page and the Mzansi Market, Mzansi
+Business and Tourism & Events pages. The showroom read gave each card only its
+preview picture, which a video-only post does not have, so the carousel showed
+`/images/fallbacks/hero-shop.svg`, never started the video, and showed the
+title's first letter where the post's logo belongs. The cards now also carry
+the owner's chosen video frame (used only when there is no preview picture) and
+the post's logo, from the public card presentation read. The carousel itself is
+unchanged.
+
+Rows: none; the change is in `src/lib/showroom/feed.ts` (outside the checked
+scope) and its unit test.
+
+Pictures (live public data, read only, not published):
+`screenshots/showroom-video-cover/` (phone 375 and desktop 1280, home and
+Tourism & Events).
+
+Decision: awaiting owner.
 
 <!-- frontend-ledger:end -->
 

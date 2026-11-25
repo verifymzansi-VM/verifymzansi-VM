@@ -1,9 +1,10 @@
 import "server-only";
 import { foundationServerPublicApi } from "@/lib/foundation/server-public";
 import {
-  searchFoundationCards,
+  searchFoundationPresentedCards,
   foundationMediaUrl,
   loadFoundationShowroom,
+  type FoundationCardPresentation,
   type FoundationShowroomRequest,
 } from "@/lib/foundation/public-cards";
 import {
@@ -29,7 +30,7 @@ const SHOWROOM_LIMITS: Record<ShowroomSurface, number> = {
 
 /** Each server copy remembers a showroom order (or that reading it failed) for
  * a minute per showroom and area, so a visit never waits on more than one
- * fair-order read a minute. */
+ * fair-order read (and one presentation read per card) a minute. */
 const CACHE_MS = 60_000;
 /** At most this many remembered orders (4 showrooms x areas); the oldest goes first. */
 const CACHE_ENTRIES = 400;
@@ -69,17 +70,33 @@ export function showroomVisitorArea(): Area {
   }
 }
 
-function carouselItem(post: {
-  id: string;
-  kind: "listing" | "business" | "event";
-  area: string;
-  title: string;
-  summary: string;
-  locality: string;
-  price_cents: string | null;
-  preview: { image_key: string | null; video_key: string | null };
-  is_new?: boolean;
-}): CarouselItem {
+/** The owner's first picture of one purpose (a video's chosen frame or the
+ * post's logo), as its media address, or undefined. */
+function presentedMediaUrl(
+  presentation: FoundationCardPresentation | undefined,
+  purpose: "poster" | "logo"
+) {
+  const first = (presentation?.frontend?.media ?? [])
+    .filter((media) => media.purpose === purpose)
+    .sort((a, b) => a.position - b.position)[0];
+  return foundationMediaUrl(first?.object_key) ?? undefined;
+}
+
+function carouselItem(
+  post: {
+    id: string;
+    kind: "listing" | "business" | "event";
+    area: string;
+    title: string;
+    summary: string;
+    locality: string;
+    price_cents: string | null;
+    preview: { image_key: string | null; video_key: string | null };
+    is_new?: boolean;
+  },
+  presentation?: FoundationCardPresentation
+): CarouselItem {
+  const logoUrl = presentedMediaUrl(presentation, "logo");
   return {
     id: post.id,
     type: post.kind === "event" ? "promotion" : post.kind,
@@ -92,10 +109,37 @@ function carouselItem(post: {
       foundationMediaUrl(post.preview.image_key) ??
       undefined,
     mediaKind: post.preview.video_key ? "video" : "image",
-    posterUrl: foundationMediaUrl(post.preview.image_key) ?? undefined,
+    // A video-only post has no preview picture: its chosen frame stands in, so
+    // the card plays the video over that frame instead of fallback artwork.
+    posterUrl:
+      foundationMediaUrl(post.preview.image_key) ?? presentedMediaUrl(presentation, "poster"),
+    ...(logoUrl ? { logoUrl } : {}),
     price: post.price_cents === null ? null : Number(post.price_cents) / 100,
     ...(post.is_new ? { statusLabel: NEW_TAG, statusClassName: NEW_TAG_CLASS } : {}),
   };
+}
+
+/** Each fair-order card's presentation (its chosen video frame and logo), read
+ * with the order so it is remembered for the same minute. A card whose read
+ * fails keeps its preview picture alone. */
+async function cardPresentations(
+  ids: readonly string[]
+): Promise<Map<string, FoundationCardPresentation>> {
+  const api = foundationServerPublicApi();
+  const found = await Promise.all(
+    ids.map((id) =>
+      searchFoundationPresentedCards(api, { post_id: id, offset: 0, limit: 1 }).then(
+        (page) => page.items.find((item) => item.id === id),
+        (error: unknown) => {
+          log.warn("Showroom card presentation unavailable; showing its preview picture alone", {
+            error: error instanceof Error ? error.message : "Unknown error",
+          });
+          return undefined;
+        }
+      )
+    )
+  );
+  return new Map(found.flatMap((item) => (item ? [[item.id, item.presentation] as const] : [])));
 }
 
 /** The fair order for the showroom and area, or null when it cannot be read;
@@ -111,7 +155,8 @@ async function fairOrder(surface: ShowroomSurface, area: Area): Promise<Carousel
       showroom: surface,
       ...area,
     });
-    items = cards.map(carouselItem);
+    const presented = await cardPresentations(cards.map((card) => card.id));
+    items = cards.map((card) => carouselItem(card, presented.get(card.id)));
   } catch (error) {
     log.warn("Fair showroom unavailable; showing the newest posts for a minute", {
       surface,
@@ -126,11 +171,11 @@ async function fairOrder(surface: ShowroomSurface, area: Area): Promise<Carousel
 
 /** The newest posts, as before the fair order (used only when it fails). */
 async function newestFirst(surface: ShowroomSurface): Promise<CarouselItem[]> {
-  const page = await searchFoundationCards(foundationServerPublicApi(), {
+  const page = await searchFoundationPresentedCards(foundationServerPublicApi(), {
     limit: SHOWROOM_LIMITS[surface],
     ...(surface === "home" ? {} : { area: surface === "tourism" ? "tourism_events" : surface }),
   });
-  return page.items.map(carouselItem);
+  return page.items.map((item) => carouselItem(item, item.presentation));
 }
 
 /** A different one of the first three at the front on each visit; the rest keep their order. */
