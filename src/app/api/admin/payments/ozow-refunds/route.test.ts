@@ -209,3 +209,100 @@ describe("while refunds through Ozow are switched off", () => {
     expect(calls("approve_staff_payment_refund")).toHaveLength(0);
   });
 });
+
+describe("part refunds and the first purchase (record_staff_refund)", () => {
+  const part = {
+    request_id: requestId,
+    status: "applied",
+    channel: "dashboard",
+    kind: "refunded",
+    line_id: null,
+    amount_cents: 2500,
+    needs_approval: false,
+    ends_paid_days: false,
+    released_activations: 0,
+    payment_status: "complete",
+    repeated: false,
+  };
+
+  it("records a dashboard part refund when Ozow's amount is the part typed", async () => {
+    answer({
+      get_staff_refund_context: { data: { ozow_transaction_id: TX, amount_cents: 6900 } },
+      record_staff_refund: { data: part },
+    });
+    ozow.get.mockResolvedValue(fact({ amountCents: 2500 }));
+    const response = await POST(
+      request({
+        ...dashboard,
+        reasonCode: "our_failure_after_fix_offered",
+        amountCents: 2500,
+        requestId: "55555555-5555-4555-8555-555555555555",
+      })
+    );
+    expect(response.status).toBe(200);
+    expect(calls("record_staff_dashboard_refund")).toHaveLength(0);
+    expect(calls("record_staff_refund")[0][1]).toMatchObject({
+      p_payment_id: payment,
+      p_line_id: null,
+      p_channel: "dashboard",
+      p_amount_cents: 2500,
+      p_reference: REFUND,
+      p_ozow_fact: { refund_id: REFUND, transaction_id: TX, amount_cents: 2500 },
+      p_asked_on: null,
+      p_request_id: "55555555-5555-4555-8555-555555555555",
+    });
+  });
+
+  it("refuses a dashboard part refund whose Ozow amount differs, without recording it", async () => {
+    answer({
+      get_staff_refund_context: { data: { ozow_transaction_id: TX, amount_cents: 6900 } },
+    });
+    ozow.get.mockResolvedValue(fact());
+    const response = await POST(request({ ...dashboard, amountCents: 2500 }));
+    expect(response.status).toBe(409);
+    expect(calls("record_staff_refund")).toHaveLength(0);
+  });
+
+  it("asks for a part refund through Ozow with the amount, while refunds through Ozow are on", async () => {
+    vi.stubEnv("OZOW_API_REFUNDS_ENABLED", "true");
+    answer({
+      record_staff_refund: {
+        data: { ...part, channel: "api", status: "awaiting_approval", needs_approval: true },
+      },
+    });
+    const response = await POST(
+      request({
+        action: "refund.request",
+        paymentId: payment,
+        reasonCode: "s14_cancellation",
+        reason: "Cancelled after the notice",
+        amountCents: 1500,
+        requestId: "55555555-5555-4555-8555-555555555555",
+      })
+    );
+    expect(response.status).toBe(200);
+    expect(calls("request_staff_ozow_refund")).toHaveLength(0);
+    expect(calls("record_staff_refund")[0][1]).toMatchObject({
+      p_channel: "ozow",
+      p_amount_cents: 1500,
+      p_reference: null,
+      p_ozow_fact: null,
+    });
+    expect(ozow.sendOzowRefund).not.toHaveBeenCalled();
+  });
+});
+
+it("asks for the form's request id before a part refund reaches the database", async () => {
+  vi.stubEnv("OZOW_API_REFUNDS_ENABLED", "true");
+  const response = await POST(
+    request({
+      action: "refund.request",
+      paymentId: payment,
+      reasonCode: "s14_cancellation",
+      reason: "Cancelled after the notice",
+      amountCents: 1500,
+    })
+  );
+  expect(response.status).toBe(422);
+  expect(calls("record_staff_refund")).toHaveLength(0);
+});
