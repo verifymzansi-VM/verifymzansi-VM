@@ -2,10 +2,14 @@ import "server-only";
 import { z } from "zod";
 import { createFoundationServiceApi, type FoundationServiceApi } from "./service-api";
 import {
-  sendOutboxFinalFailureAlert,
+  sendLostEmailAlert,
   sendPlatformNotice,
+  sendStaffDeadlineEmail,
+  type LostEmailAlert,
   type PlatformNoticeKind,
   type PostLifecycleDetails,
+  type StaffDeadlineDetails,
+  type StaffDeadlineKind,
 } from "../services/email";
 import { runFoundationPrivacyNotice } from "./privacy-notice-job";
 import { runFoundationPaymentAlerts, type PaymentAlertStep } from "./payment-alerts";
@@ -44,8 +48,19 @@ const kind = z.enum([
   "slot_renewal_reminder",
   "term_ending_notice",
   "free_credit_reminder",
+  "staff_privacy_request",
+  "staff_appeal",
+  "staff_report",
 ]);
 type Kind = z.infer<typeof kind>;
+// Emails to staff about a new privacy request, appeal or report, with its
+// deadline (20261125131322_lost_email_alert_staff_deadlines.sql).
+const staffKinds: ReadonlySet<Kind> = new Set<Kind>([
+  "staff_privacy_request",
+  "staff_appeal",
+  "staff_report",
+]);
+const isStaffKind = (k: Kind): k is Kind & StaffDeadlineKind => staffKinds.has(k);
 // Payment messages are claimed before every other kind.
 const paymentKinds: Kind[] = [
   "payment_completed",
@@ -57,6 +72,8 @@ const otherKinds = kind.options.filter((k) => !paymentKinds.includes(k));
 // such a database the job drops them one update at a time until the claim is
 // accepted, and keeps that list.
 const laterKinds: ReadonlyArray<ReadonlySet<Kind>> = [
+  // 20261125131322_lost_email_alert_staff_deadlines.sql
+  staffKinds,
   // 20261122182304_free_credit_reminder.sql
   new Set<Kind>(["free_credit_reminder"]),
   // 20261122111209_term_ending_notice.sql
@@ -112,11 +129,11 @@ const RECORD_ALLOWANCE_MS = 3_000;
 const LEASE_RESERVE_MS = SEND_BUDGET_MS;
 // The email provider's default limit is two requests a second.
 const SEND_SPACING_MS = 500;
-// The first lost message is reported at once; later ones are collected and
-// reported at the end of the email batch, or when this little of the send
-// window is left. At most two alert emails go out in one run.
-const ALERT_RESERVE_MS = 2_000;
-const MAX_ALERTS_PER_RUN = 2;
+// Lost messages (unsent after their last attempt) are found and reported by
+// the database (api.claim_lost_email_alert): one alert email a run at most,
+// and none within 15 minutes of the last one sent. The alert lists the oldest
+// of them, up to this many.
+const LOST_ALERT_LIMIT = 50;
 
 const SWEEPS = [
   // Posts move into a renewed slot's next period; renewal reminders are
@@ -195,6 +212,17 @@ const jobSchema = z
     term_package_continues: z.boolean().nullable().optional(),
     // Only for free_credit_reminder (20261122182304): when the free credit ends.
     credit_ends_at: z.iso.datetime({ offset: true }).nullable().optional(),
+    // Only for the staff deadline emails (20261125131322): the request type,
+    // appeal kind or report reason, the report's severity, when it was
+    // received and its deadline.
+    staff_item_type: z
+      .string()
+      .regex(/^[a-z_]{1,40}$/)
+      .nullable()
+      .optional(),
+    staff_severity: z.enum(["high", "standard"]).nullable().optional(),
+    staff_received_at: z.iso.datetime({ offset: true }).nullable().optional(),
+    staff_due_at: z.iso.datetime({ offset: true }).nullable().optional(),
   })
   .refine(
     (job) =>
@@ -218,10 +246,39 @@ type Delivery = (
   details?: PostLifecycleDetails
 ) => Promise<{ success: boolean; outcomeUnknown?: boolean }>;
 type RpcResult = { data: unknown; error: { code?: string; message?: string } | null };
-type Lost = { id: string; kind: string; maybeDelivered?: boolean };
-type StaffAlert = (lost: Lost[]) => Promise<{ success: boolean; outcomeUnknown?: boolean }>;
+type SendResult = Promise<{ success: boolean; outcomeUnknown?: boolean }>;
+type StaffDelivery = (
+  recipient: string,
+  kind: StaffDeadlineKind,
+  key: string,
+  details: StaffDeadlineDetails
+) => SendResult;
+// What api.claim_lost_email_alert returns: an alert (its id, how many lost
+// messages it reports and the oldest of them), or no claim.
+const lostAlertSchema = z.object({
+  claim: z.uuid().nullable(),
+  total: z.number().int().min(0),
+  items: z
+    .array(
+      z.object({
+        source: z.enum(["outbox", "privacy_notice"]),
+        id: z.uuid(),
+        kind: z.string().regex(/^[a-z_]{1,80}$/),
+        attempts: z.number().int().min(0),
+        queued_at: z.iso.datetime({ offset: true }),
+        last_error: z
+          .string()
+          .regex(/^[a-z_]{1,80}$/)
+          .nullable(),
+      })
+    )
+    .max(LOST_ALERT_LIMIT),
+});
 export interface OperationJobOptions {
-  alertStaff?: StaffAlert;
+  /** The staff email about lost messages (to the support address by default). */
+  lostEmailAlert?: (alert: LostEmailAlert) => SendResult;
+  /** The staff deadline email about a new privacy request, appeal or report. */
+  deliverStaff?: StaffDelivery;
   /** The payment alert and daily payment summary step (./payment-alerts.ts). */
   paymentAlerts?: PaymentAlertStep;
   /** The staff email about newly stuck package moves (./package-move-alerts.ts). */
@@ -256,20 +313,23 @@ export async function runFoundationOperationJobs(
 ): Promise<OperationJobSummary> {
   const now = options.now ?? Date.now;
   const sleep = options.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
-  const alertStaff = options.alertStaff ?? sendOutboxFinalFailureAlert;
+  const lostEmailAlert = options.lostEmailAlert ?? sendLostEmailAlert;
+  const deliverStaff = options.deliverStaff ?? sendStaffDeadlineEmail;
   const paymentAlerts = options.paymentAlerts ?? ((context) => runFoundationPaymentAlerts(context));
   const packageMoveAlert = options.packageMoveAlert ?? emailPackageMoveAlert;
   const deadline = now() + RUN_DEADLINE_MS;
   const failed: string[] = [];
   const summary: OperationJobSummary = { claimed: 0, succeeded: 0, retrying: 0, lost: 0, failed };
-  const lost: Lost[] = [];
+  // Messages lost in this run. The database reports them to staff
+  // (lostAlert below, in this run or a later one); they are logged at once.
+  let lostCount = 0;
   const fail = (step: string) => {
     if (!failed.includes(step)) failed.push(step);
   };
-  const lose = (id: string, kind: string) => {
-    lost.push({ id, kind });
-    // Logged at once, so the record survives even if the run is cut off.
-    log.error("Queued email reached its last attempt", { kind, id });
+  const lose = (id: string, kind: string, maybeDelivered = false) => {
+    lostCount++;
+    if (maybeDelivered) log.warn("Queued email outcome unknown at its last attempt", { kind, id });
+    else log.error("Queued email reached its last attempt", { kind, id });
   };
   // Time left before the last moment a send may start.
   const windowLeft = () => deadline - SEND_BUDGET_MS - now();
@@ -375,8 +435,8 @@ export async function runFoundationOperationJobs(
   };
 
   // `onSent` runs once a message has been handed to the provider, before its
-  // outcome is recorded, with whether the message is now lost.
-  const handle = async (raw: unknown, onSent: (lostNow: boolean) => void) => {
+  // outcome is recorded.
+  const handle = async (raw: unknown, onSent: () => void) => {
     summary.claimed++;
     const parsed = jobSchema.safeParse(raw);
     if (!parsed.success) {
@@ -450,45 +510,53 @@ export async function runFoundationOperationJobs(
       const key = `foundation-outbox/${job.id}`;
       try {
         const result = await paced(() =>
-          job.kind === "account_warning" && job.notice_reason
-            ? deliver(recipient, job.kind, key, job.notice_reason)
-            : lifecycleKinds.has(job.kind)
-              ? deliver(recipient, job.kind, key, undefined, {
-                  deletesAt: job.deletes_at ?? null,
-                  holdsSlot: job.holds_slot ?? null,
-                })
-              : job.kind === "slot_renewal_reminder" && job.subject_id
+          isStaffKind(job.kind)
+            ? deliverStaff(recipient, job.kind, key, {
+                itemId: job.subject_id ?? "",
+                itemType: job.staff_item_type ?? "",
+                severity: job.staff_severity ?? null,
+                receivedAt: job.staff_received_at ?? "",
+                dueAt: job.staff_due_at ?? "",
+              })
+            : job.kind === "account_warning" && job.notice_reason
+              ? deliver(recipient, job.kind, key, job.notice_reason)
+              : lifecycleKinds.has(job.kind)
                 ? deliver(recipient, job.kind, key, undefined, {
-                    slotEndsAt: job.slot_ends_at ?? null,
-                    slotRenewAll: job.slot_renew_all ?? null,
-                    renewSlotId: job.subject_id,
+                    deletesAt: job.deletes_at ?? null,
+                    holdsSlot: job.holds_slot ?? null,
                   })
-                : job.kind === "term_ending_notice"
+                : job.kind === "slot_renewal_reminder" && job.subject_id
                   ? deliver(recipient, job.kind, key, undefined, {
-                      termEndsAt: job.term_ends_at ?? null,
-                      termKind: job.term_kind ?? null,
-                      termHasAccess: job.term_has_access ?? null,
-                      termPackageContinues: job.term_package_continues ?? null,
+                      slotEndsAt: job.slot_ends_at ?? null,
+                      slotRenewAll: job.slot_renew_all ?? null,
+                      renewSlotId: job.subject_id,
                     })
-                  : job.kind === "free_credit_reminder"
+                  : job.kind === "term_ending_notice"
                     ? deliver(recipient, job.kind, key, undefined, {
-                        creditEndsAt: job.credit_ends_at ?? null,
+                        termEndsAt: job.term_ends_at ?? null,
+                        termKind: job.term_kind ?? null,
+                        termHasAccess: job.term_has_access ?? null,
+                        termPackageContinues: job.term_package_continues ?? null,
                       })
-                    : job.kind === "trial_started"
+                    : job.kind === "free_credit_reminder"
                       ? deliver(recipient, job.kind, key, undefined, {
-                          trialEndsAt: job.trial_ends_at ?? null,
-                          trialFundsPost: job.trial_funds_post ?? null,
+                          creditEndsAt: job.credit_ends_at ?? null,
                         })
-                      : receiptDetails
-                        ? deliver(recipient, job.kind, key, undefined, receiptDetails)
-                        : deliver(recipient, job.kind, key)
+                      : job.kind === "trial_started"
+                        ? deliver(recipient, job.kind, key, undefined, {
+                            trialEndsAt: job.trial_ends_at ?? null,
+                            trialFundsPost: job.trial_funds_post ?? null,
+                          })
+                        : receiptDetails
+                          ? deliver(recipient, job.kind, key, undefined, receiptDetails)
+                          : deliver(recipient, job.kind, key)
         );
         success = result.success;
         unknown = !success && result.outcomeUnknown === true;
       } catch {
         success = false;
       }
-      onSent(!success && !unknown && isFinal(job.attempts));
+      onSent();
     }
     const done = await call("complete_notification_outbox", {
       p_id: job.id,
@@ -508,52 +576,52 @@ export async function runFoundationOperationJobs(
     if (done.error || done.data !== true || !success) summary.retrying++;
     else summary.succeeded++;
     if (!isFinal(job.attempts) || success) return;
-    if (unknown) {
-      // Reported too, marked as possibly delivered.
-      lost.push({ id: job.id, kind: job.kind, maybeDelivered: true });
-      log.warn("Queued email outcome unknown at its last attempt", { kind: job.kind, id: job.id });
-    } else lose(job.id, job.kind);
+    // Reported too; an unknown outcome is marked as possibly delivered.
+    lose(job.id, job.kind, unknown);
   };
 
-  let alertsSent = 0;
-  let reported = 0;
-  const alertDue = () =>
-    reported < lost.length &&
-    alertsSent < MAX_ALERTS_PER_RUN &&
-    (alertsSent === 0 || windowLeft() < ALERT_RESERVE_MS);
-  // Sends one alert for the lost messages not yet reported, while a
-  // worst-case alert send still fits in the run.
-  const alertLost = async () => {
-    if (reported >= lost.length || alertsSent >= MAX_ALERTS_PER_RUN || !timeToSend()) return;
-    const batch = lost.slice(reported);
-    reported = lost.length;
-    alertsSent++;
-    let alerted = false;
+  // One alert email about lost messages, from the database: an alert whose
+  // send failed is given back and offered again unchanged, under the same key,
+  // by the next run. A refused send is logged but does not fail the run: the
+  // alert is retried every run until it goes out, so failing it would fail
+  // every run (the routine emails included) for as long as its address refuses
+  // it. Only a database error fails the run (`lost_email_alert`).
+  const lostAlert = async () => {
+    if (!timeToClaim() || !timeToSend()) return;
+    const claimed = await call(
+      "claim_lost_email_alert",
+      { p_limit: LOST_ALERT_LIMIT },
+      claimSignal
+    );
+    const alert = lostAlertSchema.safeParse(claimed.data);
+    if (claimed.error || !alert.success) return fail("lost_email_alert");
+    const { claim: token, total, items } = alert.data;
+    if (!token) return;
+    let sent = false;
     try {
-      const result = await paced(() => alertStaff(batch));
+      const result = await paced(() => lostEmailAlert({ claim: token, total, items }));
       // A refused repeat of the alert's own request means it was probably sent.
-      alerted = result.success || result.outcomeUnknown === true;
+      sent = result.success || result.outcomeUnknown === true;
     } catch {
-      alerted = false;
+      sent = false;
     }
-    if (!alerted) fail("staff_alert");
+    const done = await call("complete_lost_email_alert", { p_claim: token, p_sent: sent });
+    if (!sent) log.error("Lost email alert not sent", { alert: token, total });
+    if (done.error) fail("lost_email_alert");
   };
 
   const outbox = async (step: string, kinds: () => Kind[], limit: number) => {
     let handled = 0;
     const ahead: { claim: Promise<unknown[] | null> | null } = { claim: null };
     while (handled < limit) {
-      if (!ahead.claim && alertDue()) await alertLost();
       const pending = ahead.claim;
       ahead.claim = null;
       const rows = pending ? await pending : timeToClaim() ? await claim(step, kinds()) : null;
       if (!rows?.length) break;
       handled++;
-      await handle(rows[0], (lostNow) => {
-        // Claim the next message while this outcome is recorded, unless an
-        // alert has to go out first.
-        if (!lostNow && handled < limit && timeToClaimAhead() && !alertDue())
-          ahead.claim = claim(step, kinds());
+      await handle(rows[0], () => {
+        // Claim the next message while this outcome is recorded.
+        if (handled < limit && timeToClaimAhead()) ahead.claim = claim(step, kinds());
       });
     }
     return handled;
@@ -561,11 +629,11 @@ export async function runFoundationOperationJobs(
 
   const emails = (async () => {
     // Payment messages to members first, then staff payment alerts (at most
-    // two sends: new problems, and the daily summary when due), then
-    // privacy-request notices (legally timed, rare), then every other kind.
+    // two sends: new problems, and the daily summary when due), then the
+    // lost-email alert (at most one send), then privacy-request notices
+    // (legally timed, rare), then every other kind, staff deadline emails
+    // included.
     const payments = await outbox("claim:payment", () => paymentKinds, OUTBOX_RUN_LIMIT);
-    // A loss on the last payment slot is reported before anything else.
-    if (alertDue()) await alertLost();
     try {
       for (const step of await paymentAlerts({
         call,
@@ -577,6 +645,7 @@ export async function runFoundationOperationJobs(
     } catch {
       fail("payment_alert");
     }
+    await lostAlert();
     for (let i = 0; i < PRIVACY_RUN_LIMIT && timeToClaim(); i++) {
       let privacy;
       try {
@@ -595,12 +664,7 @@ export async function runFoundationOperationJobs(
       summary[privacy]++;
     }
     await outbox("claim:other", () => otherList, OUTBOX_RUN_LIMIT - payments);
-
-    await alertLost();
-    summary.lost = lost.length;
-    // Lost messages that no alert could cover in time stay only in the log
-    // and the database.
-    if (reported < lost.length) fail("staff_alert");
+    summary.lost = lostCount;
   })();
 
   await Promise.all([sweeps, emails]);

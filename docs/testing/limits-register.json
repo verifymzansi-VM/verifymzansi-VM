@@ -1476,6 +1476,49 @@
       ]
     },
     {
+      "id": "LIM-F-claim_lost_email_alert",
+      "title": "internal.claim_lost_email_alert: invalid lost email alert limit",
+      "value": "1 to 50",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/claim_lost_email_alert.sql",
+          "symbol": "internal.claim_lost_email_alert",
+          "contains": "if p_limit is null or p_limit not between 1 and 50 then"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-claim_lost_email_alert-2",
+      "title": "internal.claim_lost_email_alert: an email or privacy notice is lost when unsent after its 8th attempt",
+      "value": ">= 8",
+      "category": "attempts",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/claim_lost_email_alert.sql",
+          "symbol": "internal.claim_lost_email_alert",
+          "contains": "where o.processed_at is null and o.delivery_attempts>=8 and o.lost_alert_id is null"
+        },
+        {
+          "file": "database/foundation/current/functions/internal/claim_lost_email_alert.sql",
+          "symbol": "internal.claim_lost_email_alert",
+          "contains": "where j.delivered_at is null and j.attempts>=8 and j.lost_alert_id is null"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-lost-email-alert.mjs"
+        }
+      ]
+    },
+    {
       "id": "LIM-F-claim_media_cleanup",
       "title": "internal.claim_media_cleanup: limit 1 to 500",
       "value": "1 to 500",
@@ -1668,13 +1711,13 @@
     {
       "id": "LIM-F-claim_supported_notification_outbox",
       "title": "internal.claim_supported_notification_outbox: supported mail kinds required",
-      "value": "1 to 23",
+      "value": "1 to 26",
       "category": "cap",
       "enforcedAt": [
         {
           "file": "database/foundation/current/functions/internal/claim_supported_notification_outbox.sql",
           "symbol": "internal.claim_supported_notification_outbox",
-          "contains": "if p_supported_kinds is null or cardinality(p_supported_kinds) not between 1 and 23 or coalesce(array_ndims(p_supported_kinds),0)<>1"
+          "contains": "if p_supported_kinds is null or cardinality(p_supported_kinds) not between 1 and 26 or coalesce(array_ndims(p_supported_kinds),0)<>1"
         }
       ],
       "tests": [
@@ -4945,6 +4988,25 @@
         {
           "kind": "behaviour",
           "file": "scripts/limits-sql-reads.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-queue_staff_deadline_emails",
+      "title": "internal.queue_staff_deadline_emails: at most 30 staff deadline emails in any 24 hours, all staff and kinds together",
+      "value": "30 in 24 hours",
+      "category": "rate",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/queue_staff_deadline_emails.sql",
+          "symbol": "internal.queue_staff_deadline_emails",
+          "contains": "room := 30-(select count(*) from private.outbox_events o"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-lost-email-alert.mjs"
         }
       ]
     },
@@ -14267,6 +14329,11 @@
       "file": "database/foundation/current/functions/internal/get_my_frontend_verification_uploads.sql",
       "contains": "order by r.purpose,r.created_at desc,r.request_id limit 2) x;",
       "reason": "redundant read cap that never applies: distinct on (purpose) returns one row per purpose and the purpose CHECK allows two, so the bound is LIM-F-get_my_frontend_verification_uploads (one per purpose); raising this limit changes nothing"
+    },
+    {
+      "file": "database/foundation/current/functions/internal/staff_due_after.sql",
+      "contains": "if extract(isodow from local_at)<6 then counted := counted+1; end if;",
+      "reason": "Monday to Friday test that counts business days for a staff deadline, not a limit"
     }
   ]
 }
