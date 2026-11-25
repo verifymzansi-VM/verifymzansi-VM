@@ -21,13 +21,15 @@ begin
   return jsonb_build_object('items', coalesce((
     select jsonb_agg(jsonb_build_object('kind', g.kind, 'id', g.id, 'slots', g.slots, 'renewals', g.renewals,
         'ends_at', g.ends_at,
-        -- Money already returned for days we failed to provide, by part refunds
-        -- that kept the slot running (20261125194727_part_refund_follow_ups.sql).
+        -- Money already returned for days we failed to provide, by applied part
+        -- refunds that kept the slot running: of this slot, or of a whole
+        -- payment that paid for this slot only (20261125194727_part_refund_follow_ups.sql).
         'refunded_cents', (select coalesce(sum(r.amount_cents), 0) from private.payment_refund_requests r
-          where r.kind = 'refunded' and not r.ends_paid_days
-            and r.status in ('applied', 'awaiting_approval', 'approved', 'sent')
+          where r.kind = 'refunded' and not r.ends_paid_days and r.status = 'applied'
             and exists(select 1 from private.entitlements x where x.id = any(g.grants) and x.payment_id = r.payment_id
-              and (r.payment_line_id is null or r.payment_line_id = x.payment_line_id))))
+              and (r.payment_line_id = x.payment_line_id
+                or (r.payment_line_id is null and not exists(select 1 from private.payment_lines o
+                  where o.payment_id = r.payment_id and o.line_number > 1))))))
       order by g.ends_at, g.id)
     from (
       select case when bool_and(e.package_id is null) then 'individual' else 'package' end as kind,

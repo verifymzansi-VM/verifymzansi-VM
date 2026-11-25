@@ -231,7 +231,7 @@ export const STAFF_PART_REFUND_REFUSALS: ReadonlyArray<[FoundationErrorReason, [
       "refund_activate_first",
       [
         409,
-        "This payment is not activated yet. Use 'Activate what was paid for' first, then refund part of it.",
+        "This payment is not activated yet. Use 'Activate what was paid for' first, then refund part of it. If you cannot activate it, record a refund that ends the slot.",
       ],
     ],
   ];

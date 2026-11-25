@@ -29,11 +29,11 @@ with bodies as (
     ('internal.payment_refunded_before_cents(uuid)',
       'edcb14caf62c8375f0216d828ecc276d', '2c0d95fd340de5cdeb5bd1822e9328f0'),
     ('internal.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text,uuid)',
-      'ec6a4f471dc46d6c6c31338f10de07bf', 'f590f16a96b37446e3ec2381baa786c1'),
+      'ec6a4f471dc46d6c6c31338f10de07bf', 'b19dc0eb2d6059d45a2d4dc1e41509c3'),
     ('internal.get_staff_refunds_left(uuid[])',
-      '5df1c510531ea6e328ca33cba01e0b9f', '7a58e85d2b52fd70303f50779d95e39c'),
+      '5df1c510531ea6e328ca33cba01e0b9f', '213b445867763f0f1d33c3b58a4d432a'),
     ('internal.get_lost_days_preview(text)',
-      '8174b52a62082b35692a7a7237e2d807', '2dcf020a3f33118c2da1c3f3efb53877')
+      '8174b52a62082b35692a7a7237e2d807', '28911037e70036c47131c49994740942')
   ) v(sig, reviewed, updated)
 ),
 state as (

@@ -99,16 +99,20 @@ functions; no API command, argument, grant or table changes.
 - **Activate first.** A part refund that keeps the slot running is refused while
   the payment waits for "Activate what was paid for" (PT409
   `refund_activate_first`), so activation never creates the partner commission
-  after the money went back.
+  after the money went back. If it cannot be activated, staff record a refund
+  that ends the slot.
 - **The staff list read.** `api.get_staff_refunds_left` gives 0 left at payment
   level once a slot was reversed (a whole-payment refund is refused then), and
   adds `notice_ends_on` (the end of 20 South African business days' notice given
-  today) and, per slot, `paid_days` (the plan's own term) and `lost_days` (free
-  lost days added). The section 14 hint counts unused paid days from the notice
-  end, and the forms warn when lost days or money were already given for a
-  failure. `api.get_lost_days_preview` adds `refunded_cents` per term
-  (keep-running part refunds). Warnings only: nothing is refused for giving
-  both.
+  today) and, per slot, `paid_days` (the plan's own term; null for slots added
+  to a package, which are priced for the days left, so the website uses the
+  grant's dates) and `lost_days` (free lost days added while the slot ran; a
+  waiting renewal that was only moved gained none). The section 14 hint counts
+  unused paid days from the notice end, and the forms warn when lost days or
+  money were already given for a failure. `api.get_lost_days_preview` adds
+  `refunded_cents` per term (applied keep-running part refunds of the slot, or
+  of a whole payment that paid for that slot only). Warnings only: nothing is
+  refused for giving both.
 
 ORDER: **website-first** (merge and deploy, then apply): the website before this
 pull request reads both staff reads with a strict parser and would refuse the
@@ -116,7 +120,11 @@ new fields; this pull request's website reads them as optional. Read-only
 preflight: `../preflight/20261125194727_part_refund_follow_ups.check.sql`
 (expect "update not applied" and "of them on payments not activated: 0");
 rollback: `../rollback/20261125194727_part_refund_follow_ups.down.sql` (the
-update writes no rows; the rollback can run at any time).
+update writes no rows; the rollback can run at any time). Roll the database back
+**before** reverting the website: the website before this pull request refuses
+the new result fields. The rollback brings back the under-count of
+`internal.payment_refunded_before_cents` (a slot reversed after a keep-running
+part refund is not counted as refunded) and the other gaps this update closed.
 
 Notes on the rollback of `20261125133916_staff_part_refunds.sql` (that file is
 applied and is not edited): its header does not mention the `request_id` column

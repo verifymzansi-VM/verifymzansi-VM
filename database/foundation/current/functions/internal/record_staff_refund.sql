@@ -167,8 +167,8 @@ begin
   -- its partner commission is not created after the refund
   -- (20261125194727_part_refund_follow_ups.sql).
   if not ends and pay.fulfillment_status <> 'fulfilled' then
-    raise exception 'activate what was paid for first, then refund part of it' using errcode='PT409',
-      detail='refund_activate_first';
+    raise exception 'activate what was paid for first, then refund part of it; if it cannot be activated, record a refund that ends the slot'
+      using errcode='PT409', detail='refund_activate_first';
   end if;
   if p_reason_code = 'first_purchase_cancelled' then
     if p_line_id is not null or amount <> pay.amount_cents then

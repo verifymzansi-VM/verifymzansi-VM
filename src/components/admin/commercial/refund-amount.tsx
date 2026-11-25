@@ -88,7 +88,12 @@ export function cancellationCredit(
   const starts = Date.parse(room.startsAt);
   const lostDays = room.lostDays ?? 0;
   const paidEnds = Date.parse(room.endsAt) - lostDays * DAY_MS;
-  const paidDays = room.paidDays ?? Math.round((paidEnds - starts) / DAY_MS);
+  // At most the grant's own paid days: a plan's term can be longer than what
+  // was paid for (for example slots added to a package for the days left).
+  const paidDays = Math.min(
+    room.paidDays ?? Number.POSITIVE_INFINITY,
+    Math.round((paidEnds - starts) / DAY_MS)
+  );
   if (!(paidDays > 0)) return null;
   // The notice ends at the end of that day in South Africa.
   const from = room.noticeEndsOn ? Date.parse(`${room.noticeEndsOn}T00:00:00+02:00`) + DAY_MS : now;

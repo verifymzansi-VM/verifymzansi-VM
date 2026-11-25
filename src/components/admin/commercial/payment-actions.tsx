@@ -168,7 +168,7 @@ export function RefundForm({
       </p>
       {refundedBefore > 0 ? (
         <p role="note" className="text-sm font-medium">
-          Already refunded {formatPlanPrice(refundedBefore)} on this payment. A chargeback returns
+          Already returned {formatPlanPrice(refundedBefore)} on this payment. A chargeback returns
           the full amount again: check with Ozow or the bank before recording it.
         </p>
       ) : null}

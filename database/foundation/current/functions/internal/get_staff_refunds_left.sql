@@ -37,11 +37,14 @@ begin
             then internal.refund_left_cents(p.id, l.id) else 0 end,
           'starts_at', (select min(e.starts_at) from private.entitlements e where e.payment_line_id = l.id),
           'ends_at', (select max(e.ends_at) from private.entitlements e where e.payment_line_id = l.id),
-          -- The plan's own term, and the free lost days added to the slot.
-          'paid_days', (select v.duration_days from private.plan_versions v where v.id = l.plan_version_id),
+          -- The plan's own term (none for slots added to a package, which are
+          -- priced for the days left), and the free lost days added while the
+          -- slot ran (a waiting renewal that was only moved gained none).
+          'paid_days', case when p.snapshot->>'category' is distinct from 'slot_package_add'
+            then (select v.duration_days from private.plan_versions v where v.id = l.plan_version_id) end,
           'lost_days', (select coalesce(max(t.days), 0) from (select sum(a.days) as days
               from private.lost_day_additions a join private.entitlements e on e.id = a.entitlement_id
-              where e.payment_line_id = l.id group by a.entitlement_id) t))
+              where e.payment_line_id = l.id and a.starts_after = a.starts_before group by a.entitlement_id) t))
         order by l.line_number) from private.payment_lines l where l.payment_id = p.id), '[]'::jsonb))
     order by p.id), '[]'::jsonb)
     into result

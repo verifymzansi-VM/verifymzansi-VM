@@ -9,6 +9,11 @@
 -- 20261125133916_staff_part_refunds.sql). The update wrote no row, so nothing
 -- else changes. A website from the update's pull request keeps working: it
 -- reads the new result fields as optional and falls back to the earlier hints.
+-- ORDER: roll the database back BEFORE reverting the website; the website
+-- before that pull request refuses the new result fields.
+-- It brings back the under-count of internal.payment_refunded_before_cents (a
+-- slot reversed after a part refund that kept it running is not counted as
+-- refunded) and the other gaps this update closed.
 -- It refuses (55000) unless the four functions have this update's bodies (a
 -- later update changed one: undo that update first).
 begin;
@@ -26,9 +31,9 @@ begin
   loop
     if shape not in (
         'internal.payment_refunded_before_cents(uuid) 2c0d95fd340de5cdeb5bd1822e9328f0',
-        'internal.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text,uuid) f590f16a96b37446e3ec2381baa786c1',
-        'internal.get_staff_refunds_left(uuid[]) 7a58e85d2b52fd70303f50779d95e39c',
-        'internal.get_lost_days_preview(text) 2dcf020a3f33118c2da1c3f3efb53877') then
+        'internal.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text,uuid) b19dc0eb2d6059d45a2d4dc1e41509c3',
+        'internal.get_staff_refunds_left(uuid[]) 213b445867763f0f1d33c3b58a4d432a',
+        'internal.get_lost_days_preview(text) 28911037e70036c47131c49994740942') then
       raise exception 'rollback precondition: % is not this update''s body', shape using errcode='55000';
     end if;
   end loop;

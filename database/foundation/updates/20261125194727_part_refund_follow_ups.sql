@@ -20,19 +20,23 @@
 --    - A part refund that keeps the slot running is refused while the payment
 --      waits for "Activate what was paid for" (PT409 refund_activate_first),
 --      so activation does not create the partner commission after the money
---      went back. Refunds that end the paid days are unchanged.
+--      went back; if it cannot be activated, staff record a refund that ends
+--      the slot. Refunds that end the paid days are unchanged.
 -- 3. internal.get_staff_refunds_left (api.get_staff_refunds_left):
 --    - a payment with a reversed slot has 0 left at payment level (a
 --      whole-payment refund is refused then; its slots stay refundable one by
 --      one);
 --    - new field notice_ends_on: the end of 20 South African business days'
 --      notice given today, for the section 14 unused-days hint;
---    - new line fields paid_days (the plan's own term) and lost_days (the
---      free lost days added to the slot), so the hint counts only paid days
---      and the form can say when lost days were already given.
+--    - new line fields paid_days (the plan's own term; null for slots added
+--      to a package, which are priced for the days left) and lost_days (the
+--      free lost days added while the slot ran; a waiting renewal that was
+--      only moved gained none), so the hint counts only paid days and the
+--      form can say when lost days were already given.
 -- 4. internal.get_lost_days_preview (api.get_lost_days_preview): new item field
---    refunded_cents, the money already returned for that term by part refunds
---    that kept it running, so the form can say so.
+--    refunded_cents, the money already returned for that term by applied part
+--    refunds that kept it running (of the slot, or of a whole payment that paid
+--    for that slot only), so the form can say so.
 --
 -- ORDER: WEBSITE-FIRST. The website of the same pull request reads the new
 -- result fields as optional; the website before it reads both reads with a
@@ -59,11 +63,11 @@ begin
         'internal.payment_refunded_before_cents(uuid) edcb14caf62c8375f0216d828ecc276d',
         'internal.payment_refunded_before_cents(uuid) 2c0d95fd340de5cdeb5bd1822e9328f0',
         'internal.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text,uuid) ec6a4f471dc46d6c6c31338f10de07bf',
-        'internal.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text,uuid) f590f16a96b37446e3ec2381baa786c1',
+        'internal.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text,uuid) b19dc0eb2d6059d45a2d4dc1e41509c3',
         'internal.get_staff_refunds_left(uuid[]) 5df1c510531ea6e328ca33cba01e0b9f',
-        'internal.get_staff_refunds_left(uuid[]) 7a58e85d2b52fd70303f50779d95e39c',
+        'internal.get_staff_refunds_left(uuid[]) 213b445867763f0f1d33c3b58a4d432a',
         'internal.get_lost_days_preview(text) 8174b52a62082b35692a7a7237e2d807',
-        'internal.get_lost_days_preview(text) 2dcf020a3f33118c2da1c3f3efb53877') then
+        'internal.get_lost_days_preview(text) 28911037e70036c47131c49994740942') then
       raise exception 'part refund follow-ups precondition: % is neither the reviewed body nor this update''s', shape
         using errcode='55000';
     end if;
@@ -256,8 +260,8 @@ begin
   -- its partner commission is not created after the refund
   -- (20261125194727_part_refund_follow_ups.sql).
   if not ends and pay.fulfillment_status <> 'fulfilled' then
-    raise exception 'activate what was paid for first, then refund part of it' using errcode='PT409',
-      detail='refund_activate_first';
+    raise exception 'activate what was paid for first, then refund part of it; if it cannot be activated, record a refund that ends the slot'
+      using errcode='PT409', detail='refund_activate_first';
   end if;
   if p_reason_code = 'first_purchase_cancelled' then
     if p_line_id is not null or amount <> pay.amount_cents then
@@ -385,11 +389,14 @@ begin
             then internal.refund_left_cents(p.id, l.id) else 0 end,
           'starts_at', (select min(e.starts_at) from private.entitlements e where e.payment_line_id = l.id),
           'ends_at', (select max(e.ends_at) from private.entitlements e where e.payment_line_id = l.id),
-          -- The plan's own term, and the free lost days added to the slot.
-          'paid_days', (select v.duration_days from private.plan_versions v where v.id = l.plan_version_id),
+          -- The plan's own term (none for slots added to a package, which are
+          -- priced for the days left), and the free lost days added while the
+          -- slot ran (a waiting renewal that was only moved gained none).
+          'paid_days', case when p.snapshot->>'category' is distinct from 'slot_package_add'
+            then (select v.duration_days from private.plan_versions v where v.id = l.plan_version_id) end,
           'lost_days', (select coalesce(max(t.days), 0) from (select sum(a.days) as days
               from private.lost_day_additions a join private.entitlements e on e.id = a.entitlement_id
-              where e.payment_line_id = l.id group by a.entitlement_id) t))
+              where e.payment_line_id = l.id and a.starts_after = a.starts_before group by a.entitlement_id) t))
         order by l.line_number) from private.payment_lines l where l.payment_id = p.id), '[]'::jsonb))
     order by p.id), '[]'::jsonb)
     into result
@@ -423,13 +430,15 @@ begin
   return jsonb_build_object('items', coalesce((
     select jsonb_agg(jsonb_build_object('kind', g.kind, 'id', g.id, 'slots', g.slots, 'renewals', g.renewals,
         'ends_at', g.ends_at,
-        -- Money already returned for days we failed to provide, by part refunds
-        -- that kept the slot running (20261125194727_part_refund_follow_ups.sql).
+        -- Money already returned for days we failed to provide, by applied part
+        -- refunds that kept the slot running: of this slot, or of a whole
+        -- payment that paid for this slot only (20261125194727_part_refund_follow_ups.sql).
         'refunded_cents', (select coalesce(sum(r.amount_cents), 0) from private.payment_refund_requests r
-          where r.kind = 'refunded' and not r.ends_paid_days
-            and r.status in ('applied', 'awaiting_approval', 'approved', 'sent')
+          where r.kind = 'refunded' and not r.ends_paid_days and r.status = 'applied'
             and exists(select 1 from private.entitlements x where x.id = any(g.grants) and x.payment_id = r.payment_id
-              and (r.payment_line_id is null or r.payment_line_id = x.payment_line_id))))
+              and (r.payment_line_id = x.payment_line_id
+                or (r.payment_line_id is null and not exists(select 1 from private.payment_lines o
+                  where o.payment_id = r.payment_id and o.line_number > 1))))))
       order by g.ends_at, g.id)
     from (
       select case when bool_and(e.package_id is null) then 'individual' else 'package' end as kind,

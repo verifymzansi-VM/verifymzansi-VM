@@ -465,7 +465,7 @@ describe("refund follow-ups (20261125194727_part_refund_follow_ups.sql)", () => 
     fireEvent.click(screen.getByRole("button", { name: "Record chargeback" }));
     const form = screen.getByRole("form", { name: "Chargeback of this payment" });
     expect(within(form).getByRole("note")).toHaveTextContent(
-      "Already refunded R30 on this payment. A chargeback returns the full amount again"
+      "Already returned R30 on this payment. A chargeback returns the full amount again"
     );
     expect(within(form).queryByLabelText("Amount to refund (rand)")).toBeNull();
   });

@@ -34,6 +34,8 @@ import { applySteps } from "./lib/foundation-sql-lint.mjs";
 import {
   applyAndProveRollback,
   assertDriftRefused,
+  buyPackage,
+  ozowSettle,
   functionBodyMd5,
   P180,
   P30,
@@ -52,9 +54,9 @@ const REVIEWED = {
 const UPDATED = {
   "internal.payment_refunded_before_cents(uuid)": "2c0d95fd340de5cdeb5bd1822e9328f0",
   "internal.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text,uuid)":
-    "f590f16a96b37446e3ec2381baa786c1",
-  "internal.get_staff_refunds_left(uuid[])": "7a58e85d2b52fd70303f50779d95e39c",
-  "internal.get_lost_days_preview(text)": "2dcf020a3f33118c2da1c3f3efb53877",
+    "b19dc0eb2d6059d45a2d4dc1e41509c3",
+  "internal.get_staff_refunds_left(uuid[])": "213b445867763f0f1d33c3b58a4d432a",
+  "internal.get_lost_days_preview(text)": "28911037e70036c47131c49994740942",
 };
 const STAFF_COMMANDS = [
   "api.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text,uuid)",
@@ -343,7 +345,69 @@ await runTwoAdminUpdateCheck(
         lostDaysPreview(owner.email).map((i) => i.refunded_cents),
         [2500]
       );
+      // Only applied refunds of the slot itself: a refund waiting for approval
+      // is not counted, nor a whole-payment refund of an order of several slots.
+      const three = verified("follow56-preview-3");
+      const order = buy(three, P180, 3);
+      const [l1, l2, l3] = [1, 2, 3].map((n) => lineOf(order, n));
+      refund(order, { line: l1, amount: 41_000, reference: ozowRef("PRE") });
+      refund(order, { line: l2, amount: 41_000, reference: ozowRef("PRE") });
+      const waiting = refund(order, { line: l3, amount: 30_000, reference: ozowRef("PRE") });
+      assert.equal(waiting.status, "awaiting_approval");
+      const sorted = (email) =>
+        lostDaysPreview(email)
+          .map((i) => i.refunded_cents)
+          .sort((a, b) => a - b);
+      assert.deepEqual(sorted(three.email), [0, 41_000, 41_000]);
+      const two = verified("follow56-preview-2");
+      const pair = buy(two, P180, 2);
+      refund(pair, { amount: 1000, reference: ozowRef("PRE") });
+      assert.deepEqual(sorted(two.email), [0, 0]);
     });
+
+    await check(
+      "slots added to a package have no plan term; a moved renewal gained no lost days",
+      () => {
+        q(
+          "update private.slot_package_sales set on_sale=true,changed_at=now(),reason='Fixture: switched for the checks';"
+        );
+        const holder = verified("follow56-package");
+        buyPackage(kit, holder, 5);
+        const offer = json(member(holder, "select api.get_my_package_add_offer();")).package;
+        const added = json(
+          member(
+            holder,
+            `select api.start_package_add_checkout('${offer.id}',2,${2 * Number(offer.unit_price_cents)},true);`
+          )
+        );
+        ozowSettle(kit, holder, added.payment_id);
+        assert.equal(
+          q(`select snapshot->>'category' from private.payments where id='${added.payment_id}';`),
+          "slot_package_add"
+        );
+        const read = refundsLeft(added.payment_id);
+        assert.equal(read.lines.length, 1);
+        assert.equal(read.lines[0].paid_days, null);
+        q(
+          "update private.slot_package_sales set on_sale=false,changed_at=now(),reason='Fixture: switched back after the checks';"
+        );
+        // A record of lost days that only moved a waiting grant's start (as for a
+        // queued renewal) is not counted; one that extended a running grant is.
+        const owner = verified("follow56-moved");
+        const pay = buy(owner);
+        const grant = q(
+          `select e.id from private.entitlements e join private.payment_lines l on l.id=e.payment_line_id where l.payment_id='${pay}';`
+        );
+        const record = (moved) =>
+          q(`insert into private.lost_day_additions(request_id,entitlement_id,actor_id,days,starts_before,starts_after,ends_before,ends_after,reason)
+          select gen_random_uuid(),e.id,'${admin.id}',4,e.starts_at,e.starts_at+interval '${moved ? 4 : 0} days',e.ends_at,e.ends_at+interval '4 days','Fixture: lost days'
+          from private.entitlements e where e.id='${grant}';`);
+        record(true);
+        assert.equal(refundsLeft(pay).lines[0].lost_days, 0);
+        record(false);
+        assert.equal(refundsLeft(pay).lines[0].lost_days, 4);
+      }
+    );
 
     await check("grants unchanged: staff commands only; the helper is internal", () => {
       const grants = executeGrants(json, [...STAFF_COMMANDS, HELPER]);

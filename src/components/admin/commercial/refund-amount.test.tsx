@@ -134,6 +134,18 @@ describe("cancellationCredit", () => {
       noticeEndsOn: "2026-12-09",
     });
   });
+  it("never counts more paid days than the grant has (slots added to a package)", () => {
+    // Priced for 19 days of a 30-day term: the database gives no term, and a
+    // term from elsewhere is capped by the grant's own dates.
+    for (const paidDays of [null, 30]) {
+      const credit = cancellationCredit(
+        { startsAt: "2026-11-01T00:00:00Z", endsAt: "2026-11-20T00:00:00Z", paidDays },
+        13_110,
+        Date.parse("2026-11-01T00:00:00Z")
+      );
+      expect(credit).toMatchObject({ paidDays: 19, daysLeft: 19, creditCents: 8_110 });
+    }
+  });
 });
 
 describe("southAfricanToday", () => {
