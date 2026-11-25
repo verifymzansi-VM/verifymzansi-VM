@@ -1219,7 +1219,7 @@ export async function sendLostEmailAlert(alert: LostEmailAlert): Promise<SendEma
   ]);
   const more =
     alert.total > alert.items.length
-      ? `${alert.total - alert.items.length} more are not listed here. `
+      ? `${alert.total - alert.items.length} more ${alert.total - alert.items.length === 1 ? "is" : "are"} not listed here. `
       : "";
   const intro = `${count} could not be confirmed as delivered on the last attempt.`;
   const next = `${more}These emails will not be retried automatically. Check the email provider's status and the stuck emails on the staff operations page, then contact the account owners if needed. Emails marked 'may have been delivered' were refused as a repeat of an earlier request that may have gone out.`;

@@ -680,12 +680,19 @@ describe("email service", () => {
         ),
       });
       expect(payload.subject).toContain("(1 payment)");
-      expect(payload.text).toContain("1 more are not listed here.");
+      expect(payload.text).toContain("1 more is not listed here.");
       expect(payload.text).toContain("/admin/operations");
       expect(options.idempotencyKey).toBe("lost-email-alert/00000000-0000-4000-8000-0000000000a1");
       // The same alert gives the same email.
       expect(mockSend.mock.calls[1][1].idempotencyKey).toBe(options.idempotencyKey);
       expect(mockSend.mock.calls[1][0].text).toBe(payload.text);
+    });
+
+    it("says how many more lost emails are not listed, in singular or plural", async () => {
+      await sendLostEmailAlert({ ...lostAlert, total: 4 });
+      expect(mockSend.mock.calls[0][0].text).toContain("2 more are not listed here.");
+      await sendLostEmailAlert({ ...lostAlert, total: 2 });
+      expect(mockSend.mock.calls[1][0].text).not.toContain("not listed here");
     });
 
     it("marks lost emails that may have been delivered in the alert", async () => {
