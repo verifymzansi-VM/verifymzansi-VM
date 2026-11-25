@@ -4,6 +4,8 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatPlanPrice } from "@/lib/constants/pricing";
+import type { StaffRefundsLeft } from "@/lib/foundation/staff-payments";
+import type { RefundRoom } from "./refund-amount";
 import {
   ActionMessage,
   AdminCard,
@@ -302,13 +304,19 @@ export function PaymentsPanel({
   payments,
   canRefund,
   ozow,
+  refundsLeft,
 }: {
   payments: AdminPaymentRow[];
   canRefund: boolean;
   /** Refunds through Ozow: set when the database has them (see the page). */
   ozow?: OzowRefundsView;
+  /** What is left to refund per payment and slot, when the page could read
+   * it: refunds can then be part of it, and a first purchase can be
+   * cancelled (20261125110216_staff_part_refunds.sql). */
+  refundsLeft?: StaffRefundsLeft[];
 }) {
   const { run, busy, message } = useCommercialAction();
+  const leftById = new Map((refundsLeft ?? []).map((item) => [item.payment_id, item]));
   const [form, setForm] = useState<RefundTarget | null>(null);
   const [ozowForm, setOzowForm] = useState<OzowRefundTarget | null>(null);
   // When the page was opened, by this device's clock: only a hint for the
@@ -336,6 +344,29 @@ export function PaymentsPanel({
             .filter((line) => line.status === "reversed")
             .reduce((sum, line) => sum + line.amount_cents, 0);
           const ozowRecords = ozow ? ozow.records.filter((r) => r.payment_id === p.id) : [];
+          const left = leftById.get(p.id);
+          const onlyLine = left?.lines.length === 1 ? left.lines[0] : undefined;
+          const paymentRoom: RefundRoom | undefined = left
+            ? {
+                leftCents: left.left_cents,
+                refundedCents: left.refunded_cents,
+                firstPurchaseAskUntil: left.first_purchase ? left.first_purchase_ask_until : null,
+                startsAt: onlyLine?.starts_at ?? null,
+                endsAt: onlyLine?.ends_at ?? null,
+              }
+            : undefined;
+          const lineRoom = (lineId: string): RefundRoom | undefined => {
+            const slot = left?.lines.find((line) => line.line_id === lineId);
+            return left && slot
+              ? {
+                  leftCents: slot.left_cents,
+                  refundedCents: left.refunded_cents,
+                  firstPurchaseAskUntil: null,
+                  startsAt: slot.starts_at,
+                  endsAt: slot.ends_at,
+                }
+              : undefined;
+          };
           // Ozow refund paths, only for payments paid through Ozow: while
           // switched on, or once typed references retired for them.
           const throughOzow =
@@ -410,6 +441,7 @@ export function PaymentsPanel({
               label,
               accountId: p.user_id,
               renewal,
+              room: lineId ? lineRoom(lineId) : paymentRoom,
             });
           return (
             <li
@@ -526,6 +558,7 @@ export function PaymentsPanel({
                           method: choice.method,
                           ozowRefundUntil: ozowWindowDate,
                           renewal,
+                          room: choice.kind === "refunded" ? paymentRoom : undefined,
                         })
                       }
                     >
@@ -603,6 +636,8 @@ export function PaymentsPanel({
                                   method: choice.method,
                                   ozowRefundUntil: ozowWindowDate,
                                   renewal,
+                                  paymentId: p.id,
+                                  room: choice.kind === "refunded" ? lineRoom(line.id) : undefined,
                                 })
                               }
                             >
@@ -684,10 +719,20 @@ export function PaymentsPanel({
               ) : null}
               {form &&
               (form.scope === "slot" ? lines.some((l) => l.id === form.id) : form.id === p.id) ? (
-                <RefundForm target={form} busy={busy} run={run} onDone={() => setForm(null)} />
+                <RefundForm
+                  key={`${form.scope}-${form.id}-${form.kind}-${form.method ?? ""}`}
+                  target={form}
+                  busy={busy}
+                  run={run}
+                  onDone={() => setForm(null)}
+                />
               ) : null}
               {ozowForm && ozowForm.paymentId === p.id ? (
-                <OzowRefundForm target={ozowForm} onDone={() => setOzowForm(null)} />
+                <OzowRefundForm
+                  key={`${ozowForm.mode}-${ozowForm.lineId ?? ozowForm.paymentId}`}
+                  target={ozowForm}
+                  onDone={() => setOzowForm(null)}
+                />
               ) : null}
               <OzowRefundRecords records={ozowRecords} />
             </li>

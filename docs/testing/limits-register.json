@@ -3638,6 +3638,25 @@
       ]
     },
     {
+      "id": "LIM-F-get_staff_refunds_left",
+      "title": "internal.get_staff_refunds_left: up to 50 payments required",
+      "value": "> 50",
+      "category": "cap",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_staff_refunds_left.sql",
+          "symbol": "internal.get_staff_refunds_left",
+          "contains": "if p_payment_ids is null or cardinality(p_payment_ids) > 50 or array_position(p_payment_ids, null) is not null then"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-staff-part-refunds.mjs"
+        }
+      ]
+    },
+    {
       "id": "LIM-F-get_staff_package_invoice_requests",
       "title": "internal.get_staff_package_invoice_requests: staff actor changed",
       "value": "limit 100",
@@ -9953,6 +9972,25 @@
       ]
     },
     {
+      "id": "LIM-SQL-first-purchase-business-days",
+      "title": "First purchase cancelled: asked within 5 South African business days after the payment was confirmed",
+      "value": "5 business days",
+      "category": "range",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/first_purchase_last_ask_day.sql",
+          "symbol": "internal.first_purchase_last_ask_day",
+          "contains": "while counted < 5 loop"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-staff-part-refunds.mjs"
+        }
+      ]
+    },
+    {
       "id": "LIM-SQL-inbox-page-size",
       "title": "Owner inbox pages: 1 to 50 items",
       "value": "1 to 50",
@@ -14019,6 +14057,11 @@
     }
   ],
   "notLimits": [
+    {
+      "file": "database/foundation/current/functions/internal/za_business_day.sql",
+      "contains": "select extract(isodow from p_day) < 6 and not internal.za_public_holiday(p_day);",
+      "reason": "Monday to Friday (ISO day numbers 1 to 5), a calendar rule; the limit is LIM-SQL-first-purchase-business-days"
+    },
     {
       "file": "database/foundation/current/functions/internal/frontend_identity_queue_steps.sql",
       "contains": "'risk_score',s.risk_score,'risk_level',case when s.risk_score>50 then 'high' else 'low' end,",

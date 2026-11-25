@@ -38,6 +38,9 @@ export const REFUND_REASON_CODES = [
   // applied; staff are not offered it until the update is live (the current
   // database refuses it with refund_reason_code_invalid).
   "renewal_cancelled_before_start",
+  // From 20261125110216_staff_part_refunds.sql: a first purchase cancelled
+  // within 5 business days, refunded in full (api.record_staff_refund only).
+  "first_purchase_cancelled",
 ] as const;
 export type RefundReasonCode = (typeof REFUND_REASON_CODES)[number];
 export const refundReasonCode = z.enum(REFUND_REASON_CODES);
@@ -143,6 +146,83 @@ export const STAFF_REFUND_FOLLOW_UP_REFUSALS: ReadonlyArray<
     ],
   ],
 ];
+
+/**
+ * Refusals of the first-purchase and part refunds
+ * (20261125110216_staff_part_refunds.sql, api.record_staff_refund), shared by
+ * the refunds through Ozow (./ozow-refunds.ts) and the refunds recorded with
+ * a reference.
+ */
+export const STAFF_PART_REFUND_REFUSALS: ReadonlyArray<[FoundationErrorReason, [number, string]]> =
+  [
+    [
+      "refund_more_than_left",
+      [409, "That is more than is left to refund on this payment or slot. Reload the page."],
+    ],
+    ["refund_amount_invalid", [422, "Enter an amount of at least 1 cent."]],
+    [
+      "refund_whole_only",
+      [
+        409,
+        "This reason refunds everything left. Leave the amount as it is, or choose another reason.",
+      ],
+    ],
+    [
+      "refund_asked_on_unexpected",
+      [422, "The date the customer asked is only for a first purchase cancelled."],
+    ],
+    [
+      "first_purchase_not_first",
+      [409, "This is not the account's first purchase. Choose another reason."],
+    ],
+    [
+      "first_purchase_whole_payment",
+      [
+        409,
+        "A first purchase is refunded in full: the whole payment, with nothing refunded before.",
+      ],
+    ],
+    [
+      "first_purchase_asked_on_required",
+      [422, "Enter the date the customer asked in writing to cancel."],
+    ],
+    [
+      "first_purchase_asked_on_invalid",
+      [422, "The date the customer asked is between the day the payment was confirmed and today."],
+    ],
+    [
+      "first_purchase_too_late",
+      [
+        409,
+        "The customer asked after the 5 business days for cancelling a first purchase. Choose another reason if one applies.",
+      ],
+    ],
+    [
+      "first_purchase_account_erased",
+      [409, "The account that paid was erased, so its first purchase cannot be checked."],
+    ],
+    ["ozow_refund_id_required", [422, "Enter Ozow's refund id from the Ozow dashboard."]],
+    [
+      "ozow_refund_id_used",
+      [409, "That Ozow refund was already recorded. Reload the page to see it."],
+    ],
+    [
+      "payment_not_ozow",
+      [409, "This payment was not paid through Ozow. Record its refund with its reference."],
+    ],
+    [
+      "refund_in_flight",
+      [409, "A refund of this payment is on its way through Ozow. Wait for Ozow's answer."],
+    ],
+    [
+      "ozow_refund_mismatch",
+      [
+        409,
+        "This Ozow refund is for another payment or amount. Check the refund id and the amount in the Ozow dashboard.",
+      ],
+    ],
+    ["refund_ozow_failed", [409, "Ozow has no paid refund with this id. Do not record it."]],
+  ];
 
 /** Refusals of the payment commands that staff can act on, in plain words. */
 const PAYMENT_REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = new Map([
@@ -328,6 +408,8 @@ const PAYMENT_REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = n
   ],
   // Refund follow-ups (<ts>_refund_follow_ups.sql, not applied yet).
   ...STAFF_REFUND_FOLLOW_UP_REFUSALS,
+  // First-purchase and part refunds (20261125110216_staff_part_refunds.sql).
+  ...STAFF_PART_REFUND_REFUSALS,
 ]);
 
 async function settlePaymentCommand<T>(
@@ -456,6 +538,128 @@ export async function recordStaffSlotRefund(
       { get: false }
     ),
     refundResult
+  );
+}
+
+/** How the money of a refund recorded with api.record_staff_refund goes back. */
+export type StaffRefundChannel = "ozow" | "dashboard" | "reference";
+
+export type StaffPartRefundInput = {
+  paymentId: string;
+  /** One slot of the payment, or null for the whole payment. */
+  lineId: string | null;
+  channel: StaffRefundChannel;
+  /** Part of what is left, in cents; null refunds everything left. */
+  amountCents: number | null;
+  reasonCode: RefundReasonCode;
+  reason: string;
+  /** The bank or Ozow reference ("reference"), Ozow's refund id ("dashboard"). */
+  reference: string | null;
+  /** The refund as the server read it from Ozow ("dashboard", when it could). */
+  ozowFact: {
+    refund_id: string;
+    transaction_id: string;
+    amount_cents: number;
+    status: string;
+    requested_at: string | null;
+    completed_at: string | null;
+  } | null;
+  /** The day the customer asked in writing (first purchase only), YYYY-MM-DD. */
+  askedOn: string | null;
+};
+
+const partRefundResult = z.strictObject({
+  request_id: z.uuid(),
+  status: z.enum([
+    "applied",
+    "awaiting_approval",
+    "approved",
+    "sent",
+    "failed",
+    "returned",
+    "declined",
+  ]),
+  channel: z.enum(["api", "dashboard", "manual"]),
+  kind: z.literal("refunded"),
+  line_id: z.uuid().nullable(),
+  amount_cents: cents,
+  needs_approval: z.boolean(),
+  ends_paid_days: z.boolean(),
+  released_activations: count.nullable(),
+  payment_status: z.enum(actualStatuses),
+  repeated: z.boolean(),
+});
+const isoDay = z.iso.date();
+
+/**
+ * A refund of a payment or slot through Ozow, from the Ozow dashboard or with
+ * a reference, for everything left or a part of it, and the first-purchase
+ * refund (api.record_staff_refund, 20261125110216_staff_part_refunds.sql). The
+ * database decides what is left, whether the slot keeps running, the
+ * first-purchase rules and the second approver above R1 000.
+ */
+export function recordStaffRefund(api: FoundationAuthenticatedApi, input: StaffPartRefundInput) {
+  if (
+    input.amountCents !== null &&
+    !(Number.isSafeInteger(input.amountCents) && input.amountCents > 0)
+  )
+    throw new FoundationStaffCommandError(422, "Enter an amount of at least 1 cent.");
+  if (input.askedOn !== null && !isoDay.safeParse(input.askedOn).success)
+    throw new FoundationStaffCommandError(
+      422,
+      "Enter the date the customer asked in writing to cancel."
+    );
+  const reference =
+    input.channel === "reference" ? checkedReference(input.reference ?? "") : input.reference;
+  return settlePaymentCommand(
+    api.rpc(
+      "record_staff_refund",
+      {
+        p_payment_id: input.paymentId,
+        p_line_id: input.lineId,
+        p_channel: input.channel,
+        p_amount_cents: input.amountCents,
+        p_reason_code: refundReasonCode.parse(input.reasonCode),
+        p_reason: staffReason.parse(input.reason),
+        p_reference: reference,
+        p_ozow_fact: input.ozowFact,
+        p_asked_on: input.askedOn,
+      },
+      { get: false }
+    ),
+    partRefundResult
+  );
+}
+
+const refundsLeftItem = z.strictObject({
+  payment_id: z.uuid(),
+  refunded_cents: count,
+  left_cents: count,
+  ozow_refund_until: z.iso.datetime({ offset: true }).nullable(),
+  first_purchase: z.boolean(),
+  first_purchase_ask_until: isoDay.nullable(),
+  lines: z
+    .array(
+      z.strictObject({
+        line_id: z.uuid(),
+        left_cents: count,
+        starts_at: z.iso.datetime({ offset: true }).nullable(),
+        ends_at: z.iso.datetime({ offset: true }).nullable(),
+      })
+    )
+    .max(25),
+});
+export type StaffRefundsLeft = z.infer<typeof refundsLeftItem>;
+
+/**
+ * For up to 50 payments of the staff list: what was refunded and what is left
+ * (per payment and per slot), each slot's paid dates, until when Ozow refunds
+ * it, and whether it is the account's first purchase with the last day to ask.
+ */
+export function readStaffRefundsLeft(api: FoundationAuthenticatedApi, paymentIds: string[]) {
+  return settleStaffCommand(
+    api.rpc("get_staff_refunds_left", { p_payment_ids: paymentIds }, { get: false }),
+    z.array(refundsLeftItem).max(50)
   );
 }
 

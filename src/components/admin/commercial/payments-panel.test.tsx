@@ -299,3 +299,108 @@ describe("staff payments panel", () => {
     expect(sent()).toEqual({ action: "payment.refund_approve", requestId: request.id });
   });
 });
+
+describe("part refunds and the first purchase (20261125110216_staff_part_refunds.sql)", () => {
+  const left = (overrides = {}) => ({
+    payment_id: base.id,
+    refunded_cents: 0,
+    left_cents: 13800,
+    ozow_refund_until: null,
+    first_purchase: false,
+    first_purchase_ask_until: null,
+    lines: [],
+    ...overrides,
+  });
+  const fill = (form: HTMLElement, reason: string, amount?: string) => {
+    fireEvent.change(within(form).getByLabelText("Reason"), { target: { value: reason } });
+    if (amount !== undefined)
+      fireEvent.change(within(form).getByLabelText("Amount to refund (rand)"), {
+        target: { value: amount },
+      });
+    fireEvent.change(within(form).getByLabelText("Ozow refund reference"), {
+      target: { value: "OZ-PART-1" },
+    });
+    fireEvent.change(within(form).getByLabelText("Reason (audited)"), {
+      target: { value: "Lost days refunded after the fix" },
+    });
+  };
+
+  it("records a part refund that keeps the slot running with the refund action", async () => {
+    render(<PaymentsPanel canRefund payments={[base]} refundsLeft={[left()]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Record refund" }));
+    const form = screen.getByRole("form", { name: "Refund of this payment" });
+    expect(within(form).getByText(/Left to refund: R138/)).toBeInTheDocument();
+    expect(within(form).queryByRole("option", { name: /First purchase cancelled/ })).toBeNull();
+    fill(form, "our_failure_after_fix_offered", "30");
+    expect(
+      within(form).getByText("Only money goes back: the slot keeps running.")
+    ).toBeInTheDocument();
+    fireEvent.submit(form);
+    await waitFor(() => expect(fetch).toHaveBeenCalled());
+    expect(sent()).toEqual({
+      action: "payment.refund",
+      paymentId: base.id,
+      lineId: null,
+      amountCents: 3000,
+      reasonCode: "our_failure_after_fix_offered",
+      ozowReference: "OZ-PART-1",
+      reason: "Lost days refunded after the fix",
+    });
+  });
+
+  it("records a whole refund as before when nothing was refunded", async () => {
+    render(<PaymentsPanel canRefund payments={[base]} refundsLeft={[left()]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Record refund" }));
+    const form = screen.getByRole("form", { name: "Refund of this payment" });
+    fill(form, "billing_error");
+    fireEvent.submit(form);
+    await waitFor(() => expect(fetch).toHaveBeenCalled());
+    expect(sent()).toMatchObject({ action: "payment.reverse", paymentId: base.id });
+  });
+
+  it("refuses more than is left before sending anything", async () => {
+    render(
+      <PaymentsPanel
+        canRefund
+        payments={[base]}
+        refundsLeft={[left({ refunded_cents: 3000, left_cents: 10800 })]}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Record refund" }));
+    const form = screen.getByRole("form", { name: "Refund of this payment" });
+    fill(form, "s14_cancellation", "120");
+    fireEvent.submit(form);
+    expect(await within(form).findByRole("alert")).toHaveTextContent(
+      "At most R108 is left to refund."
+    );
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("offers the first purchase for the whole payment with the date the customer asked", async () => {
+    render(
+      <PaymentsPanel
+        canRefund
+        payments={[base]}
+        refundsLeft={[left({ first_purchase: true, first_purchase_ask_until: "2026-11-20" })]}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Record refund" }));
+    const form = screen.getByRole("form", { name: "Refund of this payment" });
+    fill(form, "first_purchase_cancelled");
+    fireEvent.change(within(form).getByLabelText(/Customer asked in writing on/), {
+      target: { value: "2026-11-17" },
+    });
+    fireEvent.submit(form);
+    await waitFor(() => expect(fetch).toHaveBeenCalled());
+    expect(sent()).toEqual({
+      action: "payment.refund",
+      paymentId: base.id,
+      lineId: null,
+      amountCents: null,
+      askedOn: "2026-11-17",
+      reasonCode: "first_purchase_cancelled",
+      ozowReference: "OZ-PART-1",
+      reason: "Lost days refunded after the fix",
+    });
+  });
+});

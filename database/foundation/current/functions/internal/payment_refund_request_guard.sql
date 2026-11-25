@@ -22,11 +22,27 @@ begin
   -- API record is then sent once and settles once (applied, failed or
   -- returned). Only Ozow's facts and the send bookkeeping change in between.
   if tg_op = 'INSERT' then
-    if new.account_id is distinct from (select p.owner_id from private.payments p where p.id = new.payment_id)
-      or new.amount_cents is distinct from coalesce(
+    if new.account_id is distinct from (select p.owner_id from private.payments p where p.id = new.payment_id) then
+      raise exception 'a refund is the paid amount, for the account that paid' using errcode='23514';
+    end if;
+    -- A chargeback is the paid amount of the payment or slot; a refund is at
+    -- most what is left of it (20261125110216_staff_part_refunds.sql).
+    if new.kind = 'chargeback' and new.amount_cents is distinct from coalesce(
         (select l.amount_cents from private.payment_lines l where l.id = new.payment_line_id),
         case when new.payment_line_id is null then (select p.amount_cents from private.payments p where p.id = new.payment_id) end) then
       raise exception 'a refund is the paid amount, for the account that paid' using errcode='23514';
+    end if;
+    -- (What the other refund records of the payment, and of the slot, leave;
+    -- the commands check reversed slots themselves, and a whole-payment or
+    -- slot reversal is made before its record is written.)
+    if new.kind = 'refunded' and (new.amount_cents > (select p.amount_cents from private.payments p where p.id = new.payment_id)
+          - coalesce((select sum(r.amount_cents) from private.payment_refund_requests r where r.payment_id = new.payment_id
+            and r.status in ('applied', 'awaiting_approval', 'approved', 'sent')), 0)
+        or (new.payment_line_id is not null and new.amount_cents > (select l.amount_cents from private.payment_lines l
+            where l.id = new.payment_line_id)
+          - coalesce((select sum(r.amount_cents) from private.payment_refund_requests r where r.payment_line_id = new.payment_line_id
+            and r.status in ('applied', 'awaiting_approval', 'approved', 'sent')), 0))) then
+      raise exception 'a refund is at most what is left of the payment' using errcode='PT409', detail='refund_more_than_left';
     end if;
     if new.channel in ('api', 'dashboard')
         and new.ozow_transaction_id is distinct from internal.ozow_refund_transaction(new.payment_id) then

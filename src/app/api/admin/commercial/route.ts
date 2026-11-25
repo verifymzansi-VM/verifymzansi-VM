@@ -20,6 +20,7 @@ import {
   readStaffBankTransferCustomer,
   recordStaffBankTransfer,
   recordStaffPaymentRefund,
+  recordStaffRefund,
   recordStaffSlotRefund,
   refundReasonCode,
 } from "@/lib/foundation/staff-payments";
@@ -62,6 +63,19 @@ const schema = z.discriminatedUnion("action", [
     action: z.literal("payment.reverse_slot"),
     lineId: uuid,
     kind: z.enum(["refunded", "chargeback"]),
+    reasonCode: refundReasonCode,
+    ozowReference: z.string().max(200).default(""),
+    reason,
+  }),
+  // A refund recorded with its reference for part of what is left, or a first
+  // purchase cancelled (api.record_staff_refund): the amount in cents (null:
+  // everything left) and the day the customer asked (first purchase only).
+  z.object({
+    action: z.literal("payment.refund"),
+    paymentId: uuid,
+    lineId: uuid.nullable().default(null),
+    amountCents: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).nullable().default(null),
+    askedOn: z.iso.date().nullable().default(null),
     reasonCode: refundReasonCode,
     ozowReference: z.string().max(200).default(""),
     reason,
@@ -213,6 +227,21 @@ export async function POST(request: NextRequest) {
         return {
           success: true,
           data: await recordStaffSlotRefund(api, body.lineId.toLowerCase(), body),
+        };
+      if (body.action === "payment.refund")
+        return {
+          success: true,
+          data: await recordStaffRefund(api, {
+            paymentId: body.paymentId.toLowerCase(),
+            lineId: body.lineId?.toLowerCase() ?? null,
+            channel: "reference",
+            amountCents: body.amountCents,
+            reasonCode: body.reasonCode,
+            reason: body.reason,
+            reference: body.ozowReference,
+            ozowFact: null,
+            askedOn: body.askedOn,
+          }),
         };
       if (body.action === "payment.activate")
         return {

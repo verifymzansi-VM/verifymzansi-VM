@@ -80,6 +80,82 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Staff refunds: the first purchase and part refunds, 25 November 2026
+
+`20261125110216_staff_part_refunds.sql` is pending (see the applied register).
+Launch checklist item 77. The posting terms (posting-v6) promise a first
+purchase cancelled within 5 business days, refunded in full, and refunds of part
+of a payment (unused whole days less the R50 cancellation fee, or a reasonable
+part for days we failed to provide). Until this update every refund was a whole
+payment or a whole slot.
+
+- **One refund command.**
+  `api.record_staff_refund(p_payment_id, p_line_id, p_channel, p_amount_cents, p_reason_code, p_reason, p_reference, p_ozow_fact, p_asked_on)`
+  (capability `payments:refund`, an authenticator code from the last 15 minutes,
+  the staff rule of money actions). Channels: `ozow` (the server sends it, only
+  in Ozow's 13-day window), `dashboard` (already refunded by hand in the Ozow
+  dashboard: `p_reference` is Ozow's refund id; Ozow's amount must be the amount
+  recorded) and `reference` (a bank transfer back, or Ozow's reference, under
+  the existing reference rules). Refunds only; chargebacks stay whole, on the
+  existing commands. A repeat of the same request by the same staff member
+  returns its state.
+- **The amount.** `p_amount_cents`, or null for everything left: more than 0 and
+  at most what the slot and the payment have left (`internal.refund_left_cents`:
+  paid, less refunds applied, waiting or on their way through Ozow; PT409
+  `refund_more_than_left`). The insert guard of
+  `private.payment_refund_requests` now holds every refund to what the other
+  refund records leave instead of requiring the full amount, so the existing
+  whole-refund commands can never pay back more than is left. A chargeback is
+  still the full amount. Several part refunds of one payment are allowed, one at
+  a time.
+- **The slot.** New column `ends_paid_days`, fixed when recorded: a part refund
+  for 'Our failure, after a fix was offered' or 'Billing error' keeps the slot
+  running (or it has already ended: item 75's ended slot gets money instead of
+  days); every other refund, and any refund of everything left, ends the paid
+  days as before (grant revoked, posts hidden, commission reversed). The member
+  gets the neutral 'Payment update' email either way. 'Duplicate payment' and
+  'Cancelled before the renewal started' refund everything left (PT409
+  `refund_whole_only`). A waiting renewal blocks only a refund that ends the
+  paid days, also when approving and sending.
+- **The first purchase.** Reason `first_purchase_cancelled` (new column
+  `customer_asked_on`, required with it and only with it), accepted only by the
+  new command: the account's first purchase (no payment of the same account
+  confirmed earlier, whatever happened to it later), the whole payment with
+  nothing refunded before, for a written request made on `p_asked_on`
+  (YYYY-MM-DD): not before the payment was confirmed, not in the future, and no
+  later than the 5th business day after the day it was confirmed (South African
+  time; PT409 `first_purchase_too_late`). Business days are Monday to Friday
+  except the public holidays of the Public Holidays Act
+  (`internal.za_public_holiday`: the fixed dates, the Monday after one on a
+  Sunday, Good Friday and Family Day from the Easter date, and 27 December when
+  Christmas is on a Sunday). Known limit: holidays declared for one year only
+  (for example an election day) are not counted, so such a day shortens the
+  window by one day; a forward update can add one when it is declared.
+- **Two staff members above R1 000** is unchanged: the total returned on one
+  payment, this refund included, so splitting a refund does not avoid it.
+- **The staff list read.** `api.get_staff_refunds_left(p_payment_ids)`
+  (capability `payments:view`): for up to 50 payments, what was refunded and
+  what is left (per payment and per slot), each slot's paid dates, until when
+  Ozow refunds it, and whether it is the account's first purchase with the last
+  day to ask.
+- **What a payment brought in.** `internal.payment_net_cents` (staff sales and
+  the VAT registration count) is the amount less the refunds applied (and less
+  reversed slots no refund record covers); nothing once refunded or charged back
+  without such a record, as before.
+
+Not included: credit notes (the business is not registered for VAT; whole
+refunds have none either), part chargebacks, a database-calculated section 14
+credit (the screen suggests one), a first purchase per person rather than per
+account, showing refund amounts to members, and ending a slot when the credit is
+R0.
+
+Expand only. ORDER: **apply-first** (apply in production, then merge): the
+Deploy gate probes every command of `../runtime-api-manifest.json`, and the live
+website reads nothing new. Read-only preflight:
+`../preflight/20261125110216_staff_part_refunds.check.sql`; rollback:
+`../rollback/20261125110216_staff_part_refunds.down.sql`, which refuses once a
+first-purchase or part refund was recorded (fix forward).
+
 ## Paid add-ons retired, 25 November 2026
 
 `20261125044115_retire_paid_addons.sql` was applied on 25 November 2026 at 10:17
@@ -7936,5 +8012,7 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   applied" with add-on versions on sale 0 and the same counts; production
   fingerprint after it (fingerprint.sql) matched the full replay (except the
   known schema grant difference)
+
+- `20261125110216_staff_part_refunds.sql`: pending; apply-first
 
 <!-- applied-register:end -->

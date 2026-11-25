@@ -6421,6 +6421,84 @@
         "service_role": false
       },
       "authority": "Current live member, for their own post template only: deletes it."
+    },
+    {
+      "name": "record_staff_refund",
+      "updates": ["updates/20261125110216_staff_part_refunds.sql"],
+      "arguments": [
+        {
+          "name": "p_payment_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_line_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_channel",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_amount_cents",
+          "sqlType": "bigint",
+          "optional": false
+        },
+        {
+          "name": "p_reason_code",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reference",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_ozow_fact",
+          "sqlType": "jsonb",
+          "optional": false
+        },
+        {
+          "name": "p_asked_on",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment refund capability (admins) and recent authenticator proof; the staff member's own current accepted ID review and never a payment of their own identity; records a refund of a completed payment or one open slot through Ozow (the server sends it, only within Ozow's 13-day window), from the Ozow dashboard (Ozow's refund id, used once, and the refund as the website read it from Ozow when it could: this payment's transaction and this amount) or with a bank or Ozow reference, for everything left or a part of it (at most what the payment and slot have left after refunds applied, waiting or on their way); a part refund of our failure or a billing error keeps the slot running, every other refund ends the paid days; the reason 'first purchase cancelled' only for the whole payment of the account's first purchase, asked for in writing within 5 South African business days after it was confirmed; the same approval rule as every refund (above R1,000 returned on the payment in all, a second, different staff member)."
+    },
+    {
+      "name": "get_staff_refunds_left",
+      "updates": ["updates/20261125110216_staff_part_refunds.sql"],
+      "arguments": [
+        {
+          "name": "p_payment_ids",
+          "sqlType": "uuid[]",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment view capability; for up to 50 listed payments, the amount refunded and left to refund (per payment and per slot), each slot's paid start and end, until when Ozow refunds it, and whether it is the account's first purchase with the last day to ask. No contact or identity details."
     }
   ]
 }

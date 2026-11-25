@@ -6,7 +6,7 @@ CREATE OR REPLACE FUNCTION internal.apply_ozow_refund_state(p_request_id uuid, p
  LANGUAGE plpgsql
  SET search_path TO 'pg_catalog'
 AS $function$
-declare request private.payment_refund_requests; outcome text; result jsonb; actor uuid;
+declare request private.payment_refund_requests; outcome text; actor uuid;
 begin
   select * into request from private.payment_refund_requests r where r.id = p_request_id;
   outcome := case when p_status = 'Complete' then 'complete' when p_status = 'Returned' then 'returned'
@@ -34,18 +34,12 @@ begin
     if outcome = 'complete' then
       actor := coalesce(request.approved_by, request.requested_by);
       -- The record is applied first, so the reversal is no longer held back by
-      -- internal.payment_reversal_waiting_guard; one transaction.
+      -- internal.payment_reversal_waiting_guard; one transaction. A part
+      -- refund that keeps the slot running only returns money
+      -- (20261125110216_staff_part_refunds.sql).
       update private.payment_refund_requests set status = 'applied', applied_at = statement_timestamp(),
         send_outcome = 'accepted' where id = request.id;
-      if request.payment_line_id is null then
-        result := internal.reverse_payment(request.payment_id, 'refunded', request.reason);
-        insert into private.frontend_payment_reversals(payment_id, actor_id, kind, reason, released_activations)
-          values (request.payment_id, actor, 'refunded', request.reason, (result->>'released_activations')::integer);
-      else
-        result := internal.reverse_payment_line(request.payment_line_id, 'refunded', request.reason, actor);
-      end if;
-      update private.payment_refund_requests set released_activations = (result->>'released_activations')::integer
-        where id = request.id;
+      perform internal.apply_staff_refund(request.id, actor);
       return 'applied';
     elsif outcome = 'failed' then
       update private.payment_refund_requests set status = 'failed', failed_at = statement_timestamp(),

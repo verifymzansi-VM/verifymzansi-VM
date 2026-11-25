@@ -126,6 +126,21 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         Returns: Json;
       };
       get_staff_ozow_refunds: { Args: { p_payment_ids: string[] }; Returns: Json };
+      record_staff_refund: {
+        Args: {
+          p_payment_id: string;
+          p_line_id: string | null;
+          p_channel: string;
+          p_amount_cents: number | null;
+          p_reason_code: string;
+          p_reason: string;
+          p_reference: string | null;
+          p_ozow_fact: Json | null;
+          p_asked_on: string | null;
+        };
+        Returns: Json;
+      };
+      get_staff_refunds_left: { Args: { p_payment_ids: string[] }; Returns: Json };
       close_staff_ozow_refund: { Args: { p_request_id: string; p_reason: string }; Returns: Json };
       get_staff_refund_context: {
         Args: {

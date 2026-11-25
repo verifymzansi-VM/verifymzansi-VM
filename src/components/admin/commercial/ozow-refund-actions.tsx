@@ -9,6 +9,12 @@ import { staffVerifyHref } from "@/lib/auth/staff-mfa-links";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { ActionMessage, AdminCard, ReasonField, SubmitButton, readForm } from "./commercial-action";
 import { REFUND_REASON_LABELS, refundReasonOptions } from "./payment-actions";
+import {
+  RefundAmountFields,
+  refundEndsPaidDays,
+  refundExtras,
+  type RefundRoom,
+} from "./refund-amount";
 
 /**
  * Refunds through Ozow (shown only while OZOW_API_REFUNDS_ENABLED is on):
@@ -63,6 +69,8 @@ export type OzowRefundTarget = {
   accountId: string | null;
   /** A renewal payment: "Cancelled before the renewal started" is offered. */
   renewal?: boolean;
+  /** What is left to refund: the amount can then be part of it. */
+  room?: RefundRoom;
 };
 
 const APPROVAL_ABOVE_CENTS = 100_000;
@@ -184,8 +192,18 @@ function outcomeText(status: string, answered: boolean, sent: boolean) {
 }
 
 /** The closed list of reasons (the same labels as the reference form). */
-function ReasonCodeField({ renewal }: { renewal: boolean }) {
-  const options = refundReasonOptions(renewal).map(([code, label]) => (
+function ReasonCodeField({
+  renewal,
+  firstPurchase,
+  value,
+  onChange,
+}: {
+  renewal: boolean;
+  firstPurchase: boolean;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const options = refundReasonOptions(renewal, firstPurchase).map(([code, label]) => (
     <option value={code} key={code}>
       {label}
     </option>
@@ -197,7 +215,8 @@ function ReasonCodeField({ renewal }: { renewal: boolean }) {
         required
         name="reasonCode"
         className="mt-1 block w-full rounded-md border bg-background p-2"
-        defaultValue=""
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
       >
         <option disabled value="">
           Choose a reason
@@ -217,7 +236,12 @@ export function OzowRefundForm({
   onDone: () => void;
 }) {
   const { run, busy, message } = useOzowRefundAction();
-  const needsApproval = target.priorCents + target.amountCents > APPROVAL_ABOVE_CENTS;
+  const room = target.room;
+  const [reasonCode, setReasonCode] = useState("");
+  const [amountText, setAmountText] = useState(room ? (room.leftCents / 100).toFixed(2) : "");
+  const [problem, setProblem] = useState<string | null>(null);
+  const priorCents = room ? room.refundedCents : target.priorCents;
+  const needsApproval = priorCents + target.amountCents > APPROVAL_ABOVE_CENTS;
   const dashboard = target.mode === "dashboard";
   return (
     <form
@@ -226,14 +250,23 @@ export function OzowRefundForm({
       onSubmit={async (event) => {
         event.preventDefault();
         const values = readForm(event.currentTarget);
-        const amount = formatPlanPrice(target.amountCents);
+        const part = refundExtras(values, room, target.amountCents);
+        if ("error" in part) {
+          setProblem(part.error);
+          return;
+        }
+        setProblem(null);
+        const cents = part.extras.amountCents ?? room?.leftCents ?? target.amountCents;
+        const waits = priorCents + cents > APPROVAL_ABOVE_CENTS;
+        const amount = formatPlanPrice(cents);
+        const keeps = room && !refundEndsPaidDays(values.reasonCode ?? "", cents, room.leftCents);
         if (
           !window.confirm(
             dashboard
-              ? needsApproval
+              ? waits
                 ? `Record the Ozow dashboard refund of ${amount}? It takes effect when another staff member approves it.`
-                : `Record the Ozow dashboard refund of ${amount}? Paid visibility will be withdrawn.`
-              : needsApproval
+                : `Record the Ozow dashboard refund of ${amount}? ${keeps ? "The slot keeps running." : "Paid visibility will be withdrawn."}`
+              : waits
                 ? `Refund ${amount} through Ozow? Another staff member must approve it before it is sent.`
                 : `Send a refund of ${amount} to Ozow now? Ozow pays it from the refund float.`
           )
@@ -247,6 +280,7 @@ export function OzowRefundForm({
             reasonCode: values.reasonCode,
             reason: values.reason,
             ...(dashboard ? { ozowRefundId: values.ozowRefundId ?? "" } : {}),
+            ...part.extras,
           },
           dashboard
             ? (status) =>
@@ -273,7 +307,21 @@ export function OzowRefundForm({
             : " The server sends it to Ozow; Ozow pays it to the account or card the payment came from."}
         </span>
       </p>
-      <ReasonCodeField renewal={target.renewal === true} />
+      <ReasonCodeField
+        renewal={target.renewal === true}
+        firstPurchase={target.lineId === null && room?.firstPurchaseAskUntil != null}
+        value={reasonCode}
+        onChange={setReasonCode}
+      />
+      {room ? (
+        <RefundAmountFields
+          room={room}
+          reasonCode={reasonCode}
+          fullCents={target.amountCents}
+          amount={amountText}
+          onAmount={setAmountText}
+        />
+      ) : null}
       {dashboard ? (
         <label className="block text-sm">
           <span className="font-medium">Ozow refund id</span>
@@ -290,6 +338,11 @@ export function OzowRefundForm({
         </label>
       ) : null}
       <ReasonField />
+      {problem ? (
+        <p role="alert" className="text-sm text-destructive">
+          {problem}
+        </p>
+      ) : null}
       <ActionMessage message={message} />
       <div className="flex flex-wrap gap-2">
         <SubmitButton busy={busy}>

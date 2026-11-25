@@ -6,6 +6,7 @@ import {
   readStaffBankTransfersExpired,
   readStaffBankTransfersWaiting,
   readStaffPaymentList,
+  readStaffRefundsLeft,
   staffPaymentListFilter,
 } from "@/lib/foundation/staff-payments";
 import { BankTransferPanel } from "@/components/admin/commercial/bank-transfer-form";
@@ -58,6 +59,7 @@ export default async function PaymentsAdminPage({
     packageRequests,
     packageMoves,
     sales,
+    refundsLeft,
   } = await (async () => {
     const { api } = await readFoundationServerSession();
     const result = await readStaffPaymentList(api, page, status);
@@ -99,6 +101,7 @@ export default async function PaymentsAdminPage({
       packageRequestList,
       packageMoveList,
       salesSummary,
+      refundsLeftList,
     ] = await Promise.all([
       readStaffBankTransfers(
         api,
@@ -139,6 +142,16 @@ export default async function PaymentsAdminPage({
         log.warn("Sales figures unavailable", { error });
         return null;
       }),
+      // What is left to refund, the slots' dates and first purchases
+      // (20261125110216_staff_part_refunds.sql): without them the refund forms
+      // offer whole refunds only, as before.
+      readStaffRefundsLeft(
+        api,
+        result.items.map((item) => item.id)
+      ).catch((error: unknown) => {
+        log.warn("Refund amounts unavailable", { error });
+        return null;
+      }),
     ]);
     const transfers = new Map(details.map((transfer) => [transfer.payment_id, transfer]));
     return {
@@ -166,6 +179,7 @@ export default async function PaymentsAdminPage({
       packageRequests: packageRequestList,
       packageMoves: packageMoveList,
       sales: salesSummary,
+      refundsLeft: refundsLeftList,
     };
   })();
 
@@ -270,6 +284,7 @@ export default async function PaymentsAdminPage({
       <PaymentsPanel
         payments={rows}
         canRefund={canRefund}
+        refundsLeft={refundsLeft ?? undefined}
         ozow={
           ozow
             ? {
