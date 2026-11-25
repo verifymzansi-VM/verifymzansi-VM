@@ -119,6 +119,16 @@ describe("readRestoredPostManager", () => {
     expect(result.planAdmins).toEqual(facts().plan_admins);
   });
 
+  // Paid add-ons were removed (item 37); the database may drop the dates.
+  it("accepts facts without the add-on dates", async () => {
+    const { addons: _dropped, ...withoutAddons } = facts();
+    rpc.mockResolvedValueOnce({ data: withoutAddons, error: null });
+    const result = await readRestoredPostManager(api, owner);
+    expect(result.responses[0].data).toEqual([
+      expect.objectContaining({ id: listing.id, area: "MZANSI_MARKET" }),
+    ]);
+  });
+
   it("refuses facts for another account", async () => {
     rpc.mockResolvedValueOnce({ data: facts({ account_id: uuid(2) }), error: null });
     await expect(readRestoredPostManager(api, owner)).rejects.toThrow("Account changed");

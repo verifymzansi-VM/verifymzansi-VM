@@ -125,7 +125,11 @@ const billingSchema = z.strictObject({
         slot_capacity: z.number().int().positive(),
         max_photos: z.number().int().positive(),
         max_videos: z.number().int().nonnegative(),
-        addon_capabilities: z.array(z.enum(["boost", "featured", "urgent"])).max(3),
+        // Optional: paid add-ons were removed (item 37); the database may drop it.
+        addon_capabilities: z
+          .array(z.enum(["boost", "featured", "urgent"]))
+          .max(3)
+          .optional(),
         starts_at: instant,
         ends_at: instant,
         used: z.number().int().nonnegative(),

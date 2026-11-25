@@ -771,6 +771,31 @@ it("parses only the caller's bounded billing projection", async () => {
   });
   expect(rpc).toHaveBeenCalledExactlyOnceWith("get_my_billing", {});
 });
+// Paid add-ons were removed (item 37); the database may drop the field.
+it("accepts an entitlement with or without its add-on capabilities", async () => {
+  const entitlement = {
+    id: uuid(20),
+    area: null,
+    source: "retail_paid",
+    status: "active",
+    slot_capacity: 1,
+    max_photos: 10,
+    max_videos: 1,
+    starts_at: "2026-11-01T00:00:00+00:00",
+    ends_at: "2026-12-01T00:00:00+00:00",
+    used: 0,
+  };
+  rpc.mockResolvedValueOnce({
+    data: {
+      payments: [],
+      invoices: [],
+      entitlements: [entitlement, { ...entitlement, id: uuid(21), addon_capabilities: [] }],
+    },
+    error: null,
+  });
+  const billing = await readFoundationBilling(api);
+  expect(billing.entitlements.map((entry) => entry.id)).toEqual([uuid(20), uuid(21)]);
+});
 
 // Paid add-ons are not sold (removed from the website, item 37); the database
 // can still hold add-on payments until its add-on commands are retired.

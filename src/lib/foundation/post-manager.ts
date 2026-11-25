@@ -39,8 +39,9 @@ const manager = z.strictObject({
     )
     .max(1000),
   sponsored_post_ids: z.array(z.uuid()).max(10000),
-  // Paid add-ons were removed from the website; the database still returns
-  // these dates until its add-on commands are retired. Read and ignored.
+  // Paid add-ons were removed from the website; the database may still return
+  // these dates until its add-on commands are retired. Optional, read and
+  // ignored.
   addons: z
     .array(
       z.strictObject({
@@ -50,7 +51,8 @@ const manager = z.strictObject({
         urgent_until: instant.nullable(),
       })
     )
-    .max(10000),
+    .max(10000)
+    .optional(),
 });
 export async function readRestoredPostManager(api: FoundationAuthenticatedApi, accountId: string) {
   const [result, listings, businesses, events] = await Promise.all([
