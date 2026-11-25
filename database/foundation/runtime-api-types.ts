@@ -143,7 +143,10 @@ export type FoundationRuntimeAuthenticatedDatabase = {
       };
       get_staff_refunds_left: { Args: { p_payment_ids: string[] }; Returns: Json };
       propose_phone_number_release: { Args: { p_phone: string; p_reason: string }; Returns: Json };
-      review_phone_number_release: { Args: { p_phone: string; p_approve: boolean }; Returns: Json };
+      review_phone_number_release: {
+        Args: { p_phone: string; p_proposed_at: string; p_approve: boolean };
+        Returns: Json;
+      };
       get_phone_number_releases: { Args: Record<PropertyKey, never>; Returns: Json };
       close_staff_ozow_refund: { Args: { p_request_id: string; p_reason: string }; Returns: Json };
       get_staff_refund_context: {

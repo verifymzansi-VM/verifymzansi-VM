@@ -100,7 +100,11 @@ describe("PhoneReleasesCard", () => {
     };
     fireEvent.click(within(row("+27 82 123 4567")).getByRole("button", { name: "Approve" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("A different staff member");
-    expect(sent()).toEqual({ action: "approve", phone: "+27821234567" });
+    expect(sent()).toEqual({
+      action: "approve",
+      phone: "+27821234567",
+      proposedAt: "2026-11-25T10:00:00Z",
+    });
     expect(refresh).not.toHaveBeenCalled();
   });
 
@@ -109,7 +113,11 @@ describe("PhoneReleasesCard", () => {
     answer = { ok: false, body: { code: "step_up_required" } };
     fireEvent.click(within(row("+27 83 123 4567")).getByRole("button", { name: "Withdraw" }));
     await waitFor(() => expect(push).toHaveBeenCalled());
-    expect(sent()).toEqual({ action: "reject", phone: "+27831234567" });
+    expect(sent()).toEqual({
+      action: "reject",
+      phone: "+27831234567",
+      proposedAt: "2026-11-25T10:00:00Z",
+    });
   });
 
   it("says when the requests could not be loaded", () => {

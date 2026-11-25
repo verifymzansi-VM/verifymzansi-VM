@@ -86,8 +86,8 @@ preflight then reports the database ahead, and a forward fix is preferred.
 register). Launch checklist item 21. A ban blocks every phone number the banned
 person verified (`20261117064820_ban_blocks_phone_numbers.sql`), and until now a
 number was freed only with the whole ban. Networks re-issue numbers, and a
-number can be blocked by mistake, so staff can now free one number while the ID
-ban stays.
+number can be blocked by mistake, so staff can now free one number for other
+people while the ID ban stays.
 
 - **A mark, never a delete.** `private.banned_phone_numbers` gets
   `release_reason`, `release_proposed_by`, `release_proposed_at` (a request,
@@ -95,37 +95,49 @@ ban stays.
   `internal.phone_number_banned` (full body) ignores released rows. The trigger
   that copies a ban's numbers re-runs "insert ... on conflict do nothing" when
   the ban row changes (a replacement decision, a later ban of the same person),
-  which keeps the mark, so a released number is not blocked again. The marks go
-  with the ban row (lifted, or purged after 5 years), like the numbers.
+  which keeps the mark. The marks go with the ban row (lifted, or purged after 5
+  years), like the numbers.
+- **Never for the banned person.** The new
+  `internal.phone_number_banned_for(owner, phone)` also blocks any account that
+  shares an accepted identity (revoked included) with a running ban listing the
+  number, released or not. `internal.create_verification_phone_challenge` and
+  `internal.finalize_verification_phone` (full bodies, otherwise unchanged) ask
+  it, so the banned person's other accounts can never take a released number
+  back (PT409 `phone_banned`, as before).
 - **Two staff members.** `api.propose_phone_number_release(p_phone, p_reason)`
   asks to free a number a running ban blocks now (PT404 `phone_not_blocked`
   otherwise; one waiting request per number, PT409 `phone_release_pending`; the
-  same request sent again answers `reused`).
-  `api.review_phone_number_release(p_phone, p_approve)` approves (only a
-  different staff member, 42501 `phone_release_same_staff`, while the request is
-  under 7 days old, PT409 `phone_release_not_pending`, and its proposer still
-  holds the capability, PT409 `phone_release_changed`) or rejects (anyone with
-  the capability, the proposer included). Approval marks every ban row of the
-  number released and revokes the active phone proof of that number still held
-  by an account of the banned person (only that one), so whoever holds the
-  number now can verify it. Nobody may propose or decide a release of a number
-  they verified themselves or one blocked by their own ban (42501
-  `phone_release_conflict`). Capability `account:restore` (admins and governors,
-  an authenticator code from the last 15 minutes), as for lifting a whole ban.
-- **The staff list.** `api.get_phone_number_releases()` returns the waiting
-  requests and the latest 50 releases with the full numbers, for the
-  Restrictions page. Only numbers someone asked to release are listed, never the
-  whole blocked list.
+  same request sent again answers `reused`; a request that no longer covers
+  every ban row of the number, or has expired, is replaced).
+  `api.review_phone_number_release(p_phone, p_proposed_at, p_approve)` decides
+  the request the staff member saw (`p_proposed_at` is its time, otherwise PT409
+  `phone_release_not_pending`). Rejection: anyone with the capability, the
+  proposer included. Approval: only a staff member who proposed none of its rows
+  (42501 `phone_release_same_staff`), while the request is under 7 days old,
+  covers every ban row of the number and its proposer still holds the capability
+  (PT409 `phone_release_changed`). It marks that request's rows released and
+  revokes the active phone proof of that number still held by an account of the
+  banned person (only that one, locked first), so whoever else holds the number
+  now can verify it. Nobody may propose or decide a release of a number that
+  they, or any account sharing an accepted identity with them, verified, or that
+  a ban of such an identity lists (42501 `phone_release_conflict`). Capability
+  `account:restore` (admins and governors, an authenticator code from the last
+  15 minutes), as for lifting a whole ban.
+- **The staff list.** `api.get_phone_number_releases()` returns the requests
+  that can be decided (one waiting request covering every ban row of the number;
+  a partial one is asked again) and the latest 50 releases with the full
+  numbers, for the Restrictions page. Only numbers someone asked to release are
+  listed, never the whole blocked list.
 - **Members** are told nothing (no SMS, email or notice); the banned person's ID
   ban is unchanged.
 
-Expand only: three new API commands, five new columns, one replaced body. ORDER:
-**apply first, then merge** (the Deploy gate probes every command in the runtime
-manifest). Read-only preflight:
+Expand only: three new API commands, five new columns, two new helpers and three
+replaced bodies. ORDER: **apply first, then merge** (the Deploy gate probes
+every command in the runtime manifest). Read-only preflight:
 `../preflight/20261125213005_release_one_phone_number.check.sql`; rollback:
 `../rollback/20261125213005_release_one_phone_number.down.sql` (drops the
-commands and columns and puts the earlier body back; numbers released meanwhile
-are blocked again while their ban runs).
+commands, helpers and columns and puts the three earlier bodies back; numbers
+released meanwhile are blocked again while their ban runs).
 
 ## Removing an admin needs another admin's approval, 25 November 2026
 

@@ -4431,7 +4431,8 @@ account's own hold on that number, so its new holder can verify it.
   Lerato M.' and the reason. 'None.' when empty.
 - Refusals in plain words (no running ban blocks the number, a request already
   waits, nothing waits any more, your own request, a number you verified, the
-  person who asked lost the permission). A stale authenticator code sends staff
+  person who asked lost the permission or another ban now lists the number). A
+  stale authenticator code sends staff
   to verify again and back. If the list cannot be read, the card says so and the
   rest of the page still works.
 - Members: nothing is shown or sent. Whoever holds the number now can verify it
@@ -4444,8 +4445,8 @@ Decision: awaiting owner.
 
 | File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `src/app/admin/governance/enforcement/phone-releases-card.tsx` | visual | Group 110: the new 'Blocked phone numbers' card: ask to release a number, approve, reject or withdraw a waiting request, and see the latest releases. | Admins and governors on Restrictions: everything described in group 110. | keep | awaiting owner | 2026-11-25 | fd55177809c7 |
-| `src/app/admin/governance/enforcement/phone-releases-card.test.tsx` | test | Group 110: checks what each staff member may do, the stored number sent, the checks before sending, a refusal, the re-verify redirect and the unreadable list. | Nothing (not part of a page) | keep | awaiting owner | 2026-11-25 | 1548214581e1 |
+| `src/app/admin/governance/enforcement/phone-releases-card.tsx` | visual | Group 110: the new 'Blocked phone numbers' card: ask to release a number, approve, reject or withdraw a waiting request, and see the latest releases. | Admins and governors on Restrictions: everything described in group 110. | keep | awaiting owner | 2026-11-25 | 9562ebd8e1c9 |
+| `src/app/admin/governance/enforcement/phone-releases-card.test.tsx` | test | Group 110: checks what each staff member may do, the stored number sent, the checks before sending, a refusal, the re-verify redirect and the unreadable list. | Nothing (not part of a page) | keep | awaiting owner | 2026-11-25 | d91db81a8f08 |
 
 <!-- frontend-ledger:end -->
 

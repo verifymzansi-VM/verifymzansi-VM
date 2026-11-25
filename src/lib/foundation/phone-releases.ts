@@ -45,7 +45,10 @@ const REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = new Map([
   ],
   [
     "phone_release_changed",
-    [409, "The person who asked no longer has this permission. Reject the request and ask again."],
+    [
+      409,
+      "This request can no longer be approved: the person who asked lost the permission, or another ban now blocks the number. Reject it and ask again.",
+    ],
   ],
 ]);
 
@@ -142,15 +145,17 @@ export async function proposePhoneRelease(
   );
 }
 
-/** Approves or rejects the waiting request for `number`. */
+/** Approves or rejects the waiting request for `number` that was asked at
+ * `proposedAt` (the request the staff member saw). */
 export async function reviewPhoneRelease(
   api: FoundationAuthenticatedApi,
   number: string,
+  proposedAt: string,
   approve: boolean
 ): Promise<{ status: "released" | "rejected" }> {
   const { data, error } = await api.rpc(
     "review_phone_number_release",
-    { p_phone: number, p_approve: approve },
+    { p_phone: number, p_proposed_at: proposedAt, p_approve: approve },
     { get: false }
   );
   if (error) refuse(error);

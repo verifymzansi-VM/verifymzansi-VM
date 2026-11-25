@@ -17,6 +17,7 @@ type Api = Parameters<OwnerRouteOptions["command"]>[0];
 const rpc = vi.fn();
 const api = { rpc } as unknown as Api;
 const PHONE = "+27821234567";
+const AT = "2026-11-25T21:36:54.793502+00:00";
 
 async function options() {
   await POST(
@@ -31,7 +32,7 @@ async function options() {
 async function refusalFor(error: { code: string; message: string; details?: string }) {
   const route = await options();
   rpc.mockResolvedValue({ data: null, error });
-  const thrown = await route.command(api, { action: "approve", phone: PHONE }).then(
+  const thrown = await route.command(api, { action: "approve", phone: PHONE, proposedAt: AT }).then(
     () => null,
     (e: unknown) => e
   );
@@ -72,22 +73,24 @@ describe("POST /api/admin/governance/phone-releases", () => {
     const route = await options();
     rpc.mockResolvedValueOnce({ data: { phone: PHONE, status: "released" }, error: null });
     await expect(
-      route.command(api, { action: "approve", phone: "+27 82 123 4567" })
+      route.command(api, { action: "approve", phone: "+27 82 123 4567", proposedAt: AT })
     ).resolves.toEqual({
       status: "released",
     });
     expect(rpc).toHaveBeenLastCalledWith(
       "review_phone_number_release",
-      { p_phone: PHONE, p_approve: true },
+      { p_phone: PHONE, p_proposed_at: AT, p_approve: true },
       { get: false }
     );
     rpc.mockResolvedValueOnce({ data: { phone: PHONE, status: "rejected" }, error: null });
-    await expect(route.command(api, { action: "reject", phone: "27821234567" })).resolves.toEqual({
+    await expect(
+      route.command(api, { action: "reject", phone: "27821234567", proposedAt: AT })
+    ).resolves.toEqual({
       status: "rejected",
     });
     expect(rpc).toHaveBeenLastCalledWith(
       "review_phone_number_release",
-      { p_phone: PHONE, p_approve: false },
+      { p_phone: PHONE, p_proposed_at: AT, p_approve: false },
       { get: false }
     );
   });
@@ -97,7 +100,9 @@ describe("POST /api/admin/governance/phone-releases", () => {
     for (const body of [
       { action: "propose", phone: "12345", reason: "A long enough reason" },
       { action: "propose", phone: PHONE, reason: "short" },
-      { action: "approve", phone: PHONE, reason: "not expected here" },
+      { action: "approve", phone: PHONE, proposedAt: AT, reason: "not expected here" },
+      { action: "approve", phone: PHONE },
+      { action: "reject", phone: PHONE, proposedAt: "yesterday" },
       { action: "delete", phone: PHONE },
     ])
       await expect(route.command(api, body)).rejects.toThrow();
@@ -107,9 +112,9 @@ describe("POST /api/admin/governance/phone-releases", () => {
   it("refuses an answer for another number", async () => {
     const route = await options();
     rpc.mockResolvedValue({ data: { phone: "+27820000000", status: "released" }, error: null });
-    await expect(route.command(api, { action: "approve", phone: PHONE })).rejects.toThrow(
-      "could not be confirmed"
-    );
+    await expect(
+      route.command(api, { action: "approve", phone: PHONE, proposedAt: AT })
+    ).rejects.toThrow("could not be confirmed");
   });
 
   it("words each database refusal", async () => {

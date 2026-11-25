@@ -10118,7 +10118,7 @@
         {
           "file": "database/foundation/current/functions/internal/review_phone_number_release.sql",
           "symbol": "internal.review_phone_number_release",
-          "contains": "select count(*),count(*) filter(where n.release_proposed_at>now_at-interval '7 days'),"
+          "contains": "count(*) filter(where n.release_proposed_at=p_proposed_at and p_proposed_at>now_at-interval '7 days'),"
         }
       ],
       "tests": [

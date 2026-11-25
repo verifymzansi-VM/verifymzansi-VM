@@ -10,16 +10,21 @@ AS $function$
 declare actor uuid:=internal.staff_actor('account:restore');now_at timestamptz:=clock_timestamp();
 begin
   return jsonb_build_object('actor_id',actor,
-    'pending',coalesce((select jsonb_agg(jsonb_build_object('phone',w.phone,'reason',w.release_reason,
-        'proposed_at',w.release_proposed_at,'expires_at',w.release_proposed_at+interval '7 days',
+    -- Requests that can be decided: one waiting request covers every
+    -- unreleased ban row of the number. A partial one is asked again.
+    'pending',coalesce((select jsonb_agg(jsonb_build_object('phone',w.phone,'reason',w.reason,
+        'proposed_at',w.proposed_at,'expires_at',w.proposed_at+interval '7 days',
         'proposed_by_name',internal.profile_public_name(p.display_name),
-        'proposed_by_me',w.release_proposed_by is not distinct from actor,
-        'conflicted',internal.phone_release_conflict(actor,w.phone)) order by w.release_proposed_at desc,w.phone)
-      from (select distinct on(n.phone) n.phone,n.release_reason,n.release_proposed_by,n.release_proposed_at
+        'proposed_by_me',w.proposer is not distinct from actor,
+        'conflicted',internal.phone_release_conflict(actor,w.phone)) order by w.proposed_at desc,w.phone)
+      from (select n.phone,min(n.release_reason) as reason,min(n.release_proposed_at) as proposed_at,
+            min(n.release_proposed_by::text)::uuid as proposer
           from private.banned_phone_numbers n join private.banned_identities b on b.identity_hmac=n.identity_hmac
-          where n.released_at is null and b.retain_until>now_at and n.release_proposed_at>now_at-interval '7 days'
-          order by n.phone,n.release_proposed_at desc) w
-        left join private.profiles p on p.account_id=w.release_proposed_by),'[]'::jsonb),
+          where n.released_at is null and b.retain_until>now_at
+          group by n.phone
+          having count(*)=count(*) filter(where n.release_proposed_at>now_at-interval '7 days')
+            and count(distinct n.release_proposed_at)=1) w
+        left join private.profiles p on p.account_id=w.proposer),'[]'::jsonb),
     'released',coalesce((select jsonb_agg(jsonb_build_object('phone',r.phone,'reason',r.release_reason,
         'proposed_by_name',internal.profile_public_name(pp.display_name),
         'released_by_name',internal.profile_public_name(rp.display_name),

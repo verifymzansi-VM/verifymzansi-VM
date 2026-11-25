@@ -6635,6 +6635,11 @@
           "optional": false
         },
         {
+          "name": "p_proposed_at",
+          "sqlType": "timestamp with time zone",
+          "optional": false
+        },
+        {
           "name": "p_approve",
           "sqlType": "boolean",
           "optional": false
@@ -6647,7 +6652,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current account:restore capability (admins and governors) and recent authenticator proof: approves (only a staff member other than the one who asked, while the request is under 7 days old and its proposer still holds the capability) or rejects (anyone with the capability, the proposer included) the waiting release of one blocked phone number; approval marks every ban row of that number released and revokes the active proof of that number still held by an account of the banned person, so whoever holds it now can verify it; never by a staff member who verified that number or whose own ban blocks it. The ID ban is unchanged."
+      "authority": "Current account:restore capability (admins and governors) and recent authenticator proof: decides the waiting release of one blocked phone number that the staff member saw (p_proposed_at is its request time). Rejection: anyone with the capability, the proposer included. Approval: only a staff member who proposed none of its rows, while the request is under 7 days old, covers every ban row of the number and its proposer still holds the capability; it marks that request's rows released and revokes the active proof of that number still held by an account of the banned person, so whoever else holds it can verify it. Never by a staff member who, or an account sharing an accepted identity with whom, verified that number or is banned with it. The ID ban is unchanged; the banned person can never retake the number."
     },
     {
       "name": "get_phone_number_releases",
@@ -6660,7 +6665,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current account:restore capability (admins and governors) and recent authenticator proof: the waiting release requests and the latest 50 released numbers, each with the full number, the reason, the times and the short public names of the staff who asked and approved, and whether the caller asked or may not decide; only numbers someone asked to release, never the whole blocked list, the banned person or their accounts. Records nothing."
+      "authority": "Current account:restore capability (admins and governors) and recent authenticator proof: the release requests that can be decided (one waiting request covering every ban row of the number) and the latest 50 released numbers, each with the full number, the reason, the times and the short public names of the staff who asked and approved, and whether the caller asked or may not decide; only numbers someone asked to release, never the whole blocked list, the banned person or their accounts. Records nothing."
     }
   ]
 }

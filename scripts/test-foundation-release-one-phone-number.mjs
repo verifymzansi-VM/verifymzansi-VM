@@ -27,14 +27,26 @@ import { applySteps } from "./lib/foundation-sql-lint.mjs";
 import {
   applyAndProveRollback,
   assertDriftRefused,
+  fingerprintOf,
   functionBodyMd5,
   runTwoAdminUpdateCheck,
 } from "./lib/foundation-staff-payment-world.mjs";
 
 const UPDATE = "20261125213005_release_one_phone_number.sql";
 const BANNED = "internal.phone_number_banned(text)";
-const REVIEWED = "ddfab60ae9bad5a5b3f8fb3c5200ade3";
-const UPDATED = "07c5a85df974869e998f05d22ba00240";
+const CREATE = "internal.create_verification_phone_challenge(uuid,text,text)";
+const FINALIZE = "internal.finalize_verification_phone(uuid,uuid,text)";
+const BANNED_FOR = "internal.phone_number_banned_for(uuid,text)";
+const REVIEWED = {
+  [BANNED]: "ddfab60ae9bad5a5b3f8fb3c5200ade3",
+  [CREATE]: "635dd87998cdbdb31dcb4fb20e8ef202",
+  [FINALIZE]: "2174d8a4f178fcfe207868e947ddd4af",
+};
+const UPDATED = {
+  [BANNED]: "07c5a85df974869e998f05d22ba00240",
+  [CREATE]: "ba09d4443ff6f61787a12f80bd07e6c8",
+  [FINALIZE]: "ee0f0b3ff5a0b1f335e673e4f33f72e7",
+};
 const LABEL = "release one phone number";
 const NOT_APPLIED =
   /^release one phone number: update not applied; numbers blocked: \d+; release requests waiting: 0; numbers released: 0$/;
@@ -42,7 +54,7 @@ const APPLIED =
   /^release one phone number: already applied; numbers blocked: \d+; release requests waiting: \d+; numbers released: \d+$/;
 const COMMANDS = [
   "api.propose_phone_number_release(text,text)",
-  "api.review_phone_number_release(text,boolean)",
+  "api.review_phone_number_release(text,timestamp with time zone,boolean)",
   "api.get_phone_number_releases()",
 ];
 // The banned person's older numbers, and a number a staff member once had.
@@ -50,6 +62,11 @@ const OLDER = "+27730000001";
 const OTHER = "+27730000002";
 const SPARE = "+27730000003";
 const STAFFS = "+27730000004";
+// A number the person once had that a staff member's older account verified,
+// one blocked by two bans, and one the person's other account asked a code for.
+const SHARED = "+27730000005";
+const TWICE = "+27730000006";
+const LATE = "+27730000007";
 const REASON = "The network re-issued this number to someone else";
 
 const SETUP = { update: UPDATE, label: "release", title: "Release one phone number" };
@@ -59,7 +76,7 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
   const bodyMd5 = (signature) => functionBodyMd5(kit, signature);
   const asOwner = (sql) =>
     q(`set session_replication_role=replica;\n${sql}\nset session_replication_role=origin;`);
-  const { createSql, create, refusedWith } = phoneChecks(kit);
+  const { createSql, create, finalizeSql, prove, refusedWith } = phoneChecks(kit);
   /** Running `sql` fails with `state` and this detail; returns stderr. */
   const refused = (sql, state, detail) => {
     const stderr = fails(sql, state);
@@ -87,8 +104,22 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
   const isBanned = (phone) => q(`select internal.phone_number_banned('${phone}');`) === "t";
   const proposeSql = (who, phone, reason = REASON) =>
     staff(who, `select api.propose_phone_number_release('${phone}','${reason}');`);
-  const reviewSql = (who, phone, approve = true) =>
-    staff(who, `select api.review_phone_number_release('${phone}',${approve});`);
+  /** The time of the latest request for `phone` (released or not), or null. */
+  const at = (phone) =>
+    q(
+      `select max(release_proposed_at)::text from private.banned_phone_numbers where phone='${phone}';`
+    ) || null;
+  /** Decides the request asked at `when` (by default the latest one). */
+  const reviewSql = (who, phone, approve = true, when = at(phone)) =>
+    staff(
+      who,
+      `select api.review_phone_number_release('${phone}',${when === null ? "null" : `'${when}'`},${approve});`
+    );
+  /** Adds `phone` to the running ban of `who` directly (as a later ban would). */
+  const alsoBlocked = (who, phone) =>
+    asOwner(
+      `insert into private.banned_phone_numbers(identity_hmac,phone) values('${who.fingerprint}','${phone}');`
+    );
   const releases = (who) => json(staff(who, "select api.get_phone_number_releases();"));
   const rows = (phone) =>
     json(`select coalesce(jsonb_agg(to_jsonb(n) order by identity_hmac),'[]') from private.banned_phone_numbers n
@@ -101,14 +132,18 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
   const CURRENT = q(
     `select phone from private.verification_phone_proofs where owner_id='${person.id}' and revoked_at is null;`
   );
-  for (const phone of [OLDER, OTHER, SPARE, STAFFS]) formerly(person, phone);
+  for (const phone of [OLDER, OTHER, SPARE, STAFFS, SHARED, TWICE]) formerly(person, phone);
   const banDecision = restriction(person);
   ban(banDecision, person);
   const newcomer = world.user("release-newcomer");
+  // The banned person's older account: it once had the same accepted identity
+  // (revoked) and kept its access.
+  const personsOther = world.user("release-person-other");
+  world.pastIdentity(personsOther, reviewer, person.fingerprint);
 
   // ------------------------------------------------------------ before
   await check("before the update: the numbers are blocked and nothing can release one", () => {
-    assert.equal(bodyMd5(BANNED), REVIEWED);
+    for (const [signature, md5] of Object.entries(REVIEWED)) assert.equal(bodyMd5(signature), md5);
     for (const signature of COMMANDS) assert.equal(bodyMd5(signature), "missing");
     for (const phone of [CURRENT, OLDER, OTHER]) assert.ok(isBanned(phone), phone);
   });
@@ -120,11 +155,11 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
       JSON.stringify(result)
     );
     assert.match(result[0][1], NOT_APPLIED);
-    assert.match(result[0][1], /numbers blocked: 5;/);
+    assert.match(result[0][1], /numbers blocked: 7;/);
     assertReadOnlyPreflight(database, kit.preflightSql);
   });
   await check("a premature rollback and a drifted body are refused", () => {
-    assertDriftRefused(kit, { label: LABEL, signatures: [BANNED], rows: 2 });
+    assertDriftRefused(kit, { label: LABEL, signatures: [BANNED, CREATE, FINALIZE], rows: 2 });
   });
 
   // ------------------------------------------------------------- apply
@@ -139,7 +174,7 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
   const moderator = world.staffUser("release-moderator", "moderator");
 
   await check("only admins and governors may ask, with a valid number and reason", () => {
-    assert.equal(bodyMd5(BANNED), UPDATED);
+    for (const [signature, md5] of Object.entries(UPDATED)) assert.equal(bodyMd5(signature), md5);
     fails(
       member(newcomer, `select api.propose_phone_number_release('${OLDER}','${REASON}');`),
       "42501"
@@ -177,6 +212,32 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
     assert.equal(json(reviewSql(admin2, OLDER)).reused, true);
     // Whoever holds the number now gets a code.
     assert.ok(create(newcomer, OLDER).challenge_id);
+    // A decision names the request it saw: another time is not waiting.
+    refused(
+      reviewSql(admin2, OTHER, true, "2026-01-01 00:00:00+00"),
+      "PT409",
+      "phone_release_not_pending"
+    );
+  });
+
+  await check("a release frees the number for other people only, never the banned person", () => {
+    // The banned person's other account cannot take the released number back.
+    refusedWith(createSql(personsOther, OLDER), "phone_banned");
+    // Whoever else holds it now verifies it.
+    prove(newcomer, OLDER);
+    refusedWith(createSql(personsOther, OLDER), "phone_banned");
+    // A code asked for before a number was blocked and released is refused at
+    // the last step too.
+    const sent = create(personsOther, LATE);
+    alsoBlocked(person, LATE);
+    asOwner(`update private.banned_phone_numbers set release_reason='${REASON}',release_proposed_by='${admin.id}',
+      release_proposed_at=now(),released_by='${admin2.id}',released_at=now() where phone='${LATE}';`);
+    assert.ok(!isBanned(LATE));
+    refusedWith(finalizeSql(personsOther, sent), "phone_banned");
+    // A re-ban of the same person keeps them out of it.
+    ban(restriction(person), person);
+    refusedWith(createSql(personsOther, OLDER), "phone_banned");
+    assert.ok(create(world.user("release-stranger"), LATE).challenge_id);
   });
 
   await check("the ID ban and the person's other numbers stay blocked", () => {
@@ -218,6 +279,42 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
     assert.ok(create(world.user("release-new-holder"), CURRENT).challenge_id);
   });
 
+  await check("staff whose other account verified a number cannot ask for or approve it", () => {
+    // An admin's older member account, with a revoked accepted review of the
+    // same identity, verified the number.
+    const admin3 = world.staffUser("release-admin3", "admin");
+    world.review(admin3, reviewer, "release-admin3");
+    const older = world.user("release-admin3-older");
+    world.pastIdentity(older, reviewer, fingerprintOf("release-admin3"));
+    formerly(older, SHARED);
+    refused(proposeSql(admin3, SHARED), "42501", "phone_release_conflict");
+    assert.equal(json(proposeSql(admin, SHARED)).status, "proposed");
+    refused(reviewSql(admin3, SHARED), "42501", "phone_release_conflict");
+    assert.ok(isBanned(SHARED));
+    assert.equal(json(reviewSql(admin, SHARED, false)).status, "rejected");
+  });
+
+  await check("a request that no longer covers every ban of the number is asked again", () => {
+    assert.equal(json(proposeSql(admin, TWICE)).status, "proposed");
+    const first = at(TWICE);
+    // A second banned person's ban also lists the number now.
+    const second = world.verified("release-second", reviewer);
+    ban(restriction(second), second);
+    alsoBlocked(second, TWICE);
+    refused(reviewSql(admin2, TWICE, true, first), "PT409", "phone_release_changed");
+    assert.ok(
+      !releases(admin2).pending.some((p) => p.phone === TWICE),
+      "a partial request is not listed"
+    );
+    // Anyone may still clear it; asking again covers both bans.
+    assert.equal(json(reviewSql(admin2, TWICE, false, first)).status, "rejected");
+    assert.equal(json(proposeSql(admin, TWICE)).status, "proposed");
+    assert.ok(releases(admin2).pending.some((p) => p.phone === TWICE));
+    assert.equal(json(reviewSql(admin2, TWICE)).status, "released");
+    assert.equal(rows(TWICE).filter((r) => r.released_at).length, 2);
+    assert.ok(!isBanned(TWICE));
+  });
+
   await check("staff who verified a number cannot ask for or approve its release", () => {
     const staffMember = world.staffUser("release-staff-holder", "admin");
     formerly(staffMember, STAFFS);
@@ -231,8 +328,9 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
 
   await check("the proposer or another staff member may reject; a rejected request is gone", () => {
     assert.equal(json(proposeSql(admin, OTHER)).status, "proposed");
+    const asked = at(OTHER);
     assert.equal(json(reviewSql(admin, OTHER, false)).status, "rejected");
-    refused(reviewSql(admin2, OTHER), "PT409", "phone_release_not_pending");
+    refused(reviewSql(admin2, OTHER, true, asked), "PT409", "phone_release_not_pending");
     const [row] = rows(OTHER);
     assert.equal(row.release_reason, null);
     assert.equal(row.release_proposed_by, null);
@@ -273,7 +371,7 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
     assert.ok(Date.parse(waiting.expires_at) > Date.parse(waiting.proposed_at));
     assert.equal(releases(admin2).pending.find((p) => p.phone === SPARE).proposed_by_me, false);
     const released = mine.released.map((r) => r.phone);
-    // LIM-SQL-phone-release-list: with 52 releases on record the list shows the latest 50.
+    // LIM-SQL-phone-release-list: with 54 releases on record the list shows the latest 50.
     asOwner(`insert into private.banned_phone_numbers(identity_hmac,phone,release_reason,release_proposed_by,release_proposed_at,released_by,released_at)
       select '${person.fingerprint}','+2774'||lpad(i::text,7,'0'),'${REASON}','${admin.id}',now()-interval '30 days',
         '${admin2.id}',now()-interval '30 days'-make_interval(mins=>i) from generate_series(1,50) i;`);
@@ -281,10 +379,10 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
     assert.equal(capped.length, 50);
     assert.deepEqual(
       capped
-        .slice(0, 2)
+        .slice(0, 4)
         .map((r) => r.phone)
         .sort(),
-      [CURRENT, OLDER].sort()
+      [CURRENT, LATE, OLDER, TWICE].sort()
     );
     asOwner(`delete from private.banned_phone_numbers where phone like '+2774%';`);
     assert.ok(released.includes(OLDER) && released.includes(CURRENT), JSON.stringify(released));
@@ -300,11 +398,12 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
   });
 
   await check("lifting the whole ban still frees every number and its marks", () => {
+    const asked = at(SPARE);
     q(`delete from private.banned_identities where identity_hmac='${person.fingerprint}';`);
     assert.deepEqual(rows(OLDER), []);
     assert.deepEqual(rows(SPARE), []);
     assert.ok(!isBanned(OTHER));
-    refused(reviewSql(admin2, SPARE), "PT404", "phone_not_blocked");
+    refused(reviewSql(admin2, SPARE, true, asked), "PT404", "phone_not_blocked");
   });
 
   await check("grants: staff commands for signed-in staff only; no table access", () => {
@@ -314,9 +413,15 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
       Object.fromEntries(COMMANDS.map((c) => [c, signedIn]))
     );
     const none = { anon: false, authenticated: false, service_role: false };
-    assert.deepEqual(executeGrants(json, [BANNED, "internal.phone_release_conflict(uuid,text)"]), {
-      [BANNED]: none,
-      "internal.phone_release_conflict(uuid,text)": none,
+    const helpers = [BANNED, BANNED_FOR, "internal.phone_release_conflict(uuid,text)"];
+    assert.deepEqual(
+      executeGrants(json, helpers),
+      Object.fromEntries(helpers.map((h) => [h, none]))
+    );
+    const serviceOnly = { anon: false, authenticated: false, service_role: true };
+    assert.deepEqual(executeGrants(json, [CREATE, FINALIZE]), {
+      [CREATE]: serviceOnly,
+      [FINALIZE]: serviceOnly,
     });
     for (const role of ["anon", "authenticated", "service_role"])
       assert.equal(
@@ -332,7 +437,7 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
   if (later.length) {
     applySteps(database, later);
     await check("later updates keep the release rule", () => {
-      assert.equal(bodyMd5(BANNED), UPDATED);
+      assert.equal(bodyMd5(BANNED), UPDATED[BANNED]);
       const again = world.verified("release-later", reviewer);
       formerly(again, "+27730000009");
       ban(restriction(again), again);

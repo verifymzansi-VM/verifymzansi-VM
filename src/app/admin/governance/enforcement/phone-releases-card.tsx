@@ -32,16 +32,16 @@ export function PhoneReleasesCard({ data }: { data: PhoneReleases | null }) {
   const [error, setError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
-  async function send(action: Action, number: string, why?: string) {
+  // A proposal sends its reason; a decision names the request it saw by the
+  // time it was asked.
+  async function send(action: Action, number: string, extra: Record<string, string>) {
     setBusy(`${action}:${number}`);
     setError(null);
     try {
       const res = await fetch("/api/admin/governance/phone-releases", {
         method: "POST",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify(
-          why === undefined ? { action, phone: number } : { action, phone: number, reason: why }
-        ),
+        body: JSON.stringify({ action, phone: number, ...extra }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok || body.status !== DONE[action]) {
@@ -77,7 +77,7 @@ export function PhoneReleasesCard({ data }: { data: PhoneReleases | null }) {
       setError("Explain why in at least 10 characters.");
       return;
     }
-    void send("propose", number, reason.trim());
+    void send("propose", number, { reason: reason.trim() });
   }
 
   return (
@@ -170,7 +170,9 @@ export function PhoneReleasesCard({ data }: { data: PhoneReleases | null }) {
                           ) : (
                             <Button
                               size="sm"
-                              onClick={() => void send("approve", item.phone)}
+                              onClick={() =>
+                                void send("approve", item.phone, { proposedAt: item.proposed_at })
+                              }
                               disabled={busy !== null}
                               className="gap-1"
                             >
@@ -183,7 +185,9 @@ export function PhoneReleasesCard({ data }: { data: PhoneReleases | null }) {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => void send("reject", item.phone)}
+                            onClick={() =>
+                              void send("reject", item.phone, { proposedAt: item.proposed_at })
+                            }
                             disabled={busy !== null}
                             className="gap-1"
                           >

@@ -26,7 +26,12 @@ const schema = z.discriminatedUnion("action", [
     phone,
     reason: z.string().trim().min(RELEASE_REASON.min).max(RELEASE_REASON.max),
   }),
-  z.strictObject({ action: z.enum(["approve", "reject"]), phone }),
+  // The request the staff member saw, named by the time it was asked.
+  z.strictObject({
+    action: z.enum(["approve", "reject"]),
+    phone,
+    proposedAt: z.iso.datetime({ offset: true }),
+  }),
 ]);
 
 /**
@@ -50,7 +55,12 @@ export async function POST(request: NextRequest) {
         const result = await proposePhoneRelease(api, input.phone, input.reason);
         return { status: result.status };
       }
-      const result = await reviewPhoneRelease(api, input.phone, input.action === "approve");
+      const result = await reviewPhoneRelease(
+        api,
+        input.phone,
+        input.proposedAt,
+        input.action === "approve"
+      );
       return { status: result.status };
     },
   });
