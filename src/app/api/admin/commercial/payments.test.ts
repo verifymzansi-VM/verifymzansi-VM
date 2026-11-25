@@ -422,3 +422,100 @@ it("refuses an invoice with a bad term, slot count or days to pay before any cal
     expect((await POST(request({ ...invoiceRequest, ...change }))).status).toBe(422);
   expect(rpc).not.toHaveBeenCalled();
 });
+
+it("previews and adds lost days through the two staff commands", async () => {
+  const slot = "33333333-3333-4333-8333-333333333333";
+  const requestId = "44444444-4444-4444-8444-444444444444";
+  rpc.mockResolvedValueOnce({
+    data: {
+      items: [
+        {
+          kind: "individual",
+          id: slot,
+          slots: 1,
+          renewals: 0,
+          ends_at: "2026-12-22T08:00:00+00:00",
+        },
+      ],
+    },
+    error: null,
+  });
+  const preview = await POST(
+    request({ action: "slots.lost_days_preview", accountEmail: " thandi@example.test " })
+  );
+  expect(preview.status).toBe(200);
+  expect((await preview.json()).data.items).toHaveLength(1);
+  expect(rpc).toHaveBeenLastCalledWith(
+    "get_lost_days_preview",
+    { p_email: "thandi@example.test" },
+    { get: false }
+  );
+  rpc.mockResolvedValueOnce({
+    data: {
+      request_id: requestId,
+      days: 5,
+      repeated: false,
+      items: [
+        {
+          kind: "individual",
+          id: slot,
+          slots: 1,
+          renewals: 0,
+          ends_before: "2026-12-22T08:00:00+00:00",
+          ends_after: "2026-12-27T08:00:00+00:00",
+        },
+      ],
+    },
+    error: null,
+  });
+  const added = await POST(
+    request({
+      action: "slots.add_lost_days",
+      accountEmail: "thandi@example.test",
+      days: 5,
+      reason: "Site down 3 to 5 December",
+      requestId: requestId.toUpperCase(),
+    })
+  );
+  expect(added.status).toBe(200);
+  expect((await added.json()).data).toMatchObject({ days: 5, repeated: false });
+  expect(rpc).toHaveBeenLastCalledWith(
+    "add_lost_days",
+    {
+      p_email: "thandi@example.test",
+      p_days: 5,
+      p_reason: "Site down 3 to 5 December",
+      p_request_id: requestId,
+    },
+    { get: false }
+  );
+});
+
+it("refuses lost days outside 1 to 30 before any database call, and words a refusal", async () => {
+  const response = await POST(
+    request({
+      action: "slots.add_lost_days",
+      accountEmail: "thandi@example.test",
+      days: 31,
+      reason: "Site down 3 to 5 December",
+      requestId: "44444444-4444-4444-8444-444444444444",
+    })
+  );
+  expect(response.status).toBe(422);
+  expect(rpc).not.toHaveBeenCalled();
+  rpc.mockResolvedValueOnce({
+    data: null,
+    error: { code: "PT409", details: "lost_days_nothing_running", message: "lost days" },
+  });
+  const nothing = await POST(
+    request({
+      action: "slots.add_lost_days",
+      accountEmail: "thandi@example.test",
+      days: 2,
+      reason: "Site down",
+      requestId: "44444444-4444-4444-8444-444444444444",
+    })
+  );
+  expect(nothing.status).toBe(409);
+  expect((await nothing.json()).error).toMatch(/refund instead/);
+});

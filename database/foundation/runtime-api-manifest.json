@@ -6421,6 +6421,59 @@
         "service_role": false
       },
       "authority": "Current live member, for their own post template only: deletes it."
+    },
+    {
+      "name": "get_lost_days_preview",
+      "updates": ["updates/20261125113433_add_lost_days.sql"],
+      "arguments": [
+        {
+          "name": "p_email",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payments:view capability (admin role; 12-hour authenticator rule) and the staff rule of money actions (an accepted ID review of the staff member, never their own account or the same person): the running paid terms of the active account with this email that api.add_lost_days would move: one item per Individual slot (its first grant id, slots, queued renewals, paid end) and per Multi-listing package (package id, slots, end); never names, contacts or payments. Records nothing."
+    },
+    {
+      "name": "add_lost_days",
+      "updates": ["updates/20261125113433_add_lost_days.sql"],
+      "arguments": [
+        {
+          "name": "p_email",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_days",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_request_id",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payments:refund capability (admin role; authenticator code from the last 15 minutes) and the staff rule of money actions: adds 1 to 30 days, with a reason of 5 to 500 characters, to every running paid grant (retail_paid, active, complete payment, end in the future) of the active account with this email: a running grant ends later, a queued renewal starts and ends later, every grant of a package ends later. Refuses an account with no running paid term, and a change that would take any grant above 30 added days in all; one change per member at a time; a repeated request id with the same input returns the first answer; recorded per grant in the append-only lost days record."
     }
   ]
 }

@@ -80,6 +80,64 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Add lost days to paid slots and packages, 25 November 2026
+
+`20261125113433_add_lost_days.sql` is pending (see the applied register). Launch
+checklist item 75. The posting terms (posting-v6) promise that when we fail to
+provide what a member paid for, or a suspension is overturned, we first add the
+days they lost, and that a package's slots still end together. Until this update
+no command could move a paid end date.
+
+- **The preview.** `api.get_lost_days_preview(p_email)` (capability
+  `payments:view`) lists the running paid terms of the active account with this
+  email: one item per Individual slot (its first grant, slots, queued renewals,
+  paid end) and one per Multi-listing package (its slots and end). It records
+  nothing, so staff never add days blind.
+- **The change.** `api.add_lost_days(p_email, p_days, p_reason, p_request_id)`
+  (capability `payments:refund`, an authenticator code from the last 15 minutes)
+  adds 1 to 30 days, with a reason of 5 to 500 characters, to every running paid
+  grant of the member (`retail_paid`, active, complete payment, end still in the
+  future). A running grant ends later; a queued renewal starts and ends later,
+  so the slot's chain stays unbroken; every grant of a package ends later, so
+  its slots still end together. Ended, refunded, charged-back and pending
+  grants, free credits, house slots, free trials and sponsorships never move.
+  The search end of the slots' posts follows at once; each post's own end
+  follows when the lifecycle job reaches it. Nothing is charged, invoiced or
+  emailed.
+- **Safety.** Both commands follow the staff rule of money actions
+  (`internal.assert_staff_payment_actor`). One change at a time per member: the
+  advisory lock package deliveries take, then the grants locked in id order, the
+  staff member checked again after the wait and the grants read again (PT409
+  `lost_days_busy` when a delivery changed them meanwhile). A repeated request
+  id with the same input returns the first answer and adds nothing; with other
+  input it is refused (PT409 `lost_days_request_reused`).
+- **At most 30 days per slot.** A change is refused (PT409 `lost_days_limit`)
+  when, for any grant it would move, the days already added to that grant plus
+  the new days exceed 30. Beyond that, staff refund instead.
+- **The record.** New append-only `private.lost_day_additions`: one row per
+  grant moved (request, grant, staff member, days, start and end before and
+  after, reason, time); deleted only with its grant (commerce retention).
+- **Privacy export.** `internal.frontend_privacy_export_data` (full body) adds
+  the dataset `lost_day_additions` (never the staff member). The staff export
+  reader accepts more datasets than its minimum (42), so the live website reads
+  the export unchanged.
+- **Adding slots to a package.** `internal.slot_package_add_quote` (full body)
+  counts at most term_days - 1 whole days left (179 for a 180-day package), so a
+  package with added days keeps every existing bound (the added-slots request
+  check, the website's add offer and the staff queue) and an added slot never
+  costs more than a full term; the member keeps the extra days free.
+
+Owner decisions (delegated to the coordinator): only running slots get days, an
+ended slot gets a refund instead; no all-accounts version; no automatic member
+email.
+
+Expand only. ORDER: **apply-first** (apply in production, then merge): the
+Deploy gate probes every command of `../runtime-api-manifest.json`, and the live
+website reads nothing new. Read-only preflight:
+`../preflight/20261125113433_add_lost_days.check.sql`; rollback:
+`../rollback/20261125113433_add_lost_days.down.sql`, which refuses once any days
+were added (the days and their record stay: write a forward update).
+
 ## Paid add-ons retired, 25 November 2026
 
 `20261125044115_retire_paid_addons.sql` was applied on 25 November 2026 at 10:17
@@ -7936,5 +7994,7 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   applied" with add-on versions on sale 0 and the same counts; production
   fingerprint after it (fingerprint.sql) matched the full replay (except the
   known schema grant difference)
+
+- `20261125113433_add_lost_days.sql`: pending; apply-first
 
 <!-- applied-register:end -->

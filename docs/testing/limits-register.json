@@ -9953,6 +9953,82 @@
       ]
     },
     {
+      "id": "LIM-SQL-lost-days-days",
+      "title": "Lost days: each change adds 1 to 30 days",
+      "value": "1 to 30 days",
+      "category": "range",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/add_lost_days.sql",
+          "symbol": "internal.add_lost_days",
+          "contains": "if p_days is null or p_days not between 1 and 30 then"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-lost-days.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-SQL-lost-days-reason",
+      "title": "Lost days: a reason of 5 to 500 characters on one line",
+      "value": "5 to 500",
+      "category": "length",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/add_lost_days.sql",
+          "symbol": "internal.add_lost_days",
+          "contains": "if not coalesce(internal.plain_text_valid(p_reason, 5, 500, false), false) then"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-lost-days.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-SQL-lost-days-total",
+      "title": "Lost days: at most 30 days in all per paid grant, over every change",
+      "value": "30 days",
+      "category": "range",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/add_lost_days.sql",
+          "symbol": "internal.add_lost_days",
+          "contains": "group by r.entitlement_id having sum(r.days)+p_days>30) then"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-lost-days.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-SQL-package-add-days-left",
+      "title": "Adding slots to a package: at most term_days - 1 whole days left are priced (179 for a 180-day package)",
+      "value": "term_days - 1",
+      "category": "range",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/slot_package_add_quote.sql",
+          "symbol": "internal.slot_package_add_quote",
+          "contains": "v_days := least(floor(extract(epoch from (v_ends - statement_timestamp())) / 86400)::integer, v_term - 1);"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-lost-days.mjs"
+        }
+      ]
+    },
+    {
       "id": "LIM-SQL-inbox-page-size",
       "title": "Owner inbox pages: 1 to 50 items",
       "value": "1 to 50",
@@ -12036,6 +12112,44 @@
           "file": "database/foundation/current/tables/private/free_credit_events.sql",
           "symbol": "private.free_credit_events (free_credit_events_reason_check)",
           "contains": "constraint free_credit_events_reason_check CHECK (char_length(reason) >= 5 AND char_length(reason) <= 200)"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "register",
+          "file": "scripts/limits-sql.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-T-lost_day_additions_days_check",
+      "title": "private.lost_day_additions: days >= 1 AND days <= 30",
+      "value": ">= 1, <= 30",
+      "category": "range",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/tables/private/lost_day_additions.sql",
+          "symbol": "private.lost_day_additions (lost_day_additions_days_check)",
+          "contains": "constraint lost_day_additions_days_check CHECK (days >= 1 AND days <= 30)"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "register",
+          "file": "scripts/limits-sql.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-T-lost_day_additions_reason_check",
+      "title": "private.lost_day_additions: char_length(reason) >= 5 AND char_length(reason) <= 500",
+      "value": ">= 5, <= 500",
+      "category": "length",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/tables/private/lost_day_additions.sql",
+          "symbol": "private.lost_day_additions (lost_day_additions_reason_check)",
+          "contains": "constraint lost_day_additions_reason_check CHECK (char_length(reason) >= 5 AND char_length(reason) <= 500)"
         }
       ],
       "tests": [

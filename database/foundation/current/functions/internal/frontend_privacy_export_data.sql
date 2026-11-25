@@ -49,6 +49,8 @@ begin
       from private.entitlements where owner_id=$1 order by created_at,id$q$),
     ('house_slot_events',$q$select h.entitlement_id,h.action,h.ends_at,h.recorded_at from private.house_slot_events h
       join private.entitlements e on e.id=h.entitlement_id where e.owner_id=$1 order by h.recorded_at,h.id$q$),
+    ('lost_day_additions',$q$select r.entitlement_id,r.days,r.starts_before,r.starts_after,r.ends_before,r.ends_after,r.reason,r.created_at
+      from private.lost_day_additions r join private.entitlements e on e.id=r.entitlement_id where e.owner_id=$1 order by r.created_at,r.id$q$),
     ('slot_packages',$q$select id,term_days,slot_count,created_at from private.slot_packages where owner_id=$1
       order by created_at,id$q$),
     ('package_invoice_requests',$q$select r.id,r.term_days,r.slots,r.unit_price_cents,r.total_cents,r.requested_at,r.consent_at,
