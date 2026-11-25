@@ -6,12 +6,21 @@ import {
   IDENTITY_CHECK_FRAME_ORIGIN,
   isIdentityCheckFrameMessage,
 } from "@/lib/verification/identity-check-frame";
+import {
+  DIDIT_END_USER_TERMS_URL,
+  DIDIT_PRIVACY_NOTICE_URL,
+} from "@/lib/verification/identity-check-consent";
 
 const root = join(__dirname, "..");
-/** Staff screens and server code may name the partner; member pages, help
- * and shared components may not (Didit plan, appendix D), except the two legal
- * pages that must name every provider: the Privacy Policy and the PAIA manual
- * (POPIA section 18 and settled legal answers D3 and D4). */
+/**
+ * Staff screens and server code may name the partner. Member pages, help and
+ * shared components name it only on the consent step, with links to its two
+ * notices (owner decision L, 20 Nov 2026, which replaced "never name the
+ * provider" of the Didit plan, appendix D), and on the two legal pages that
+ * must name every provider: the Privacy Policy and the PAIA manual (POPIA
+ * section 18 and settled legal answers D3 and D4).
+ */
+const CONSENT_STEP = join("app", "verification", "independent-check.tsx");
 const LEGAL_PAGES = [join("app", "privacy", "page.tsx"), join("app", "paia", "page.tsx")];
 const memberSources = [join(root, "app"), join(root, "components")];
 const staffOrServer = [
@@ -30,13 +39,22 @@ function files(dir: string): string[] {
 }
 
 describe("automatic ID checks, member side", () => {
-  it("names the provider only on the legal pages of member pages, help and shared components", () => {
+  it("names the provider only on the consent step and the legal pages of member pages, help and shared components", () => {
     const sources = memberSources.flatMap(files);
     expect(sources.some((path) => path.includes(`${sep}help${sep}verification`))).toBe(true);
     const naming = sources
       .filter((path) => /didit/i.test(readFileSync(path, "utf8")))
       .map((path) => relative(root, path));
-    expect(naming.sort()).toEqual([...LEGAL_PAGES].sort());
+    expect(naming.sort()).toEqual([CONSENT_STEP, ...LEGAL_PAGES].sort());
+  });
+
+  it("names the provider on the consent step with links to its two notices", () => {
+    const consent = readFileSync(join(root, CONSENT_STEP), "utf8");
+    expect(consent).toMatch(/VerifyMzansi asks Didit, our independent verification partner/);
+    expect(consent).toContain("DIDIT_PRIVACY_NOTICE_URL");
+    expect(consent).toContain("DIDIT_END_USER_TERMS_URL");
+    expect(DIDIT_PRIVACY_NOTICE_URL).toBe("https://didit.me/terms/verification-privacy-notice");
+    expect(DIDIT_END_USER_TERMS_URL).toBe("https://didit.me/terms/identity-verification");
   });
 
   it("accepts frame messages only from the check's own origin", () => {

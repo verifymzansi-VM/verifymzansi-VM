@@ -55,7 +55,11 @@ export type Capability =
   /** Free credits (database capabilities free_credit:view and, with an
    * authenticator code from the last 15 minutes, free_credit:give): admins. */
   | "free_credit:view"
-  | "free_credit:give";
+  | "free_credit:give"
+  /** Where members' ID checks go (database capability
+   * identity_check:configure: admins, authenticator code from the last 15
+   * minutes). */
+  | "identity_check:configure";
 
 const ROLE_CAPABILITIES: Record<StaffRole, ReadonlySet<Capability>> = {
   /* 3rd — Moderator: queue & case operations */
@@ -127,6 +131,8 @@ const ROLE_CAPABILITIES: Record<StaffRole, ReadonlySet<Capability>> = {
     // Admin-exclusive: free credits for recruited businesses.
     "free_credit:view",
     "free_credit:give",
+    // Admin-exclusive: where members' ID checks go (manual or Didit).
+    "identity_check:configure",
   ]),
 };
 
