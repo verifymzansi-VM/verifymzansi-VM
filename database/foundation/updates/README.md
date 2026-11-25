@@ -82,11 +82,12 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Add lost days to paid slots and packages, 25 November 2026
 
-`20261125113433_add_lost_days.sql` is pending (see the applied register). Launch
-checklist item 75. The posting terms (posting-v6) promise that when we fail to
-provide what a member paid for, or a suspension is overturned, we first add the
-days they lost, and that a package's slots still end together. Until this update
-no command could move a paid end date.
+`20261125113433_add_lost_days.sql` was applied on 25 November 2026 at 13:05 UTC
+(see the applied register). Launch checklist item 75. The posting terms
+(posting-v6) promise that when we fail to provide what a member paid for, or a
+suspension is overturned, we first add the days they lost, and that a package's
+slots still end together. Until this update no command could move a paid end
+date.
 
 - **The preview.** `api.get_lost_days_preview(p_email)` (capability
   `payments:view`) lists the running paid terms of the active account with this
@@ -7995,6 +7996,12 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   fingerprint after it (fingerprint.sql) matched the full replay (except the
   known schema grant difference)
 
-- `20261125113433_add_lost_days.sql`: pending; apply-first
+- `20261125113433_add_lost_days.sql`: applied 2026-11-25 13:05 UTC; apply-first,
+  owner-approved, before pull request #363 was merged; Supabase SQL editor
+  (browser), file from raw GitHub at bef94898, update sha256 starting
+  61dcf8481a3fffeb; preflight before "update not applied; running paid grants:
+  0" with no problem rows, after "already applied; running paid grants: 0;
+  additions: 0"; production fingerprint after it (fingerprint.sql) matched the
+  full replay (except the known schema grant difference)
 
 <!-- applied-register:end -->
