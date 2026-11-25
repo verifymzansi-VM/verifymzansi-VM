@@ -147,6 +147,23 @@ describe("public trust pages", () => {
       screen.getByRole("heading", { name: "Cookies and browser storage" })
     ).toBeInTheDocument();
     expect(screen.getByText(/vm_acq, 30 days/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/so a partner can be credited and we can see which channels bring sign-ups/)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/If you sign up, this is stored with your account and deleted with it/)
+    ).toBeInTheDocument();
+    // A ban keeps the full record only for an accepted ID; the ID photo still goes.
+    expect(
+      screen.getAllByText(
+        /If your ID number is banned, the one-way code is kept for 5 years from the ban; if your ID had been accepted, your selfie, encrypted ID number, the names on your ID and your verified phone numbers are kept for those 5 years too\. Your ID photo is still deleted 30 days after the decision\./
+      ).length
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getByText(
+        /no longer linked to your account; an invoice made out to you keeps the name and address on it/
+      )
+    ).toBeInTheDocument();
     // Never claims what the site does not do.
     const text = document.body.textContent ?? "";
     expect(text).not.toMatch(/records a replay/i);
