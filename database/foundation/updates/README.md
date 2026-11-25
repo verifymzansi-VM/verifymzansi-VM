@@ -80,6 +80,53 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Release one blocked phone number, 25 November 2026
+
+`20261125213005_release_one_phone_number.sql` is **pending** (see the applied
+register). Launch checklist item 21. A ban blocks every phone number the banned
+person verified (`20261117064820_ban_blocks_phone_numbers.sql`), and until now a
+number was freed only with the whole ban. Networks re-issue numbers, and a
+number can be blocked by mistake, so staff can now free one number while the ID
+ban stays.
+
+- **A mark, never a delete.** `private.banned_phone_numbers` gets
+  `release_reason`, `release_proposed_by`, `release_proposed_at` (a request,
+  waiting 7 days) and `released_by`, `released_at` (the approval).
+  `internal.phone_number_banned` (full body) ignores released rows. The trigger
+  that copies a ban's numbers re-runs "insert ... on conflict do nothing" when
+  the ban row changes (a replacement decision, a later ban of the same person),
+  which keeps the mark, so a released number is not blocked again. The marks go
+  with the ban row (lifted, or purged after 5 years), like the numbers.
+- **Two staff members.** `api.propose_phone_number_release(p_phone, p_reason)`
+  asks to free a number a running ban blocks now (PT404 `phone_not_blocked`
+  otherwise; one waiting request per number, PT409 `phone_release_pending`; the
+  same request sent again answers `reused`).
+  `api.review_phone_number_release(p_phone, p_approve)` approves (only a
+  different staff member, 42501 `phone_release_same_staff`, while the request is
+  under 7 days old, PT409 `phone_release_not_pending`, and its proposer still
+  holds the capability, PT409 `phone_release_changed`) or rejects (anyone with
+  the capability, the proposer included). Approval marks every ban row of the
+  number released and revokes the active phone proof of that number still held
+  by an account of the banned person (only that one), so whoever holds the
+  number now can verify it. Nobody may propose or decide a release of a number
+  they verified themselves or one blocked by their own ban (42501
+  `phone_release_conflict`). Capability `account:restore` (admins and governors,
+  an authenticator code from the last 15 minutes), as for lifting a whole ban.
+- **The staff list.** `api.get_phone_number_releases()` returns the waiting
+  requests and the latest 50 releases with the full numbers, for the
+  Restrictions page. Only numbers someone asked to release are listed, never the
+  whole blocked list.
+- **Members** are told nothing (no SMS, email or notice); the banned person's ID
+  ban is unchanged.
+
+Expand only: three new API commands, five new columns, one replaced body. ORDER:
+**apply first, then merge** (the Deploy gate probes every command in the runtime
+manifest). Read-only preflight:
+`../preflight/20261125213005_release_one_phone_number.check.sql`; rollback:
+`../rollback/20261125213005_release_one_phone_number.down.sql` (drops the
+commands and columns and puts the earlier body back; numbers released meanwhile
+are blocked again while their ban runs).
+
 ## Removing an admin needs another admin's approval, 25 November 2026
 
 `20261125150338_admin_removal_needs_approval.sql` was applied on 25 November
@@ -8226,5 +8273,7 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   after "already applied" with the same counts; production fingerprint after it
   (fingerprint.sql) matched the full replay (except the known schema grant
   difference)
+
+- `20261125213005_release_one_phone_number.sql`: pending
 
 <!-- applied-register:end -->

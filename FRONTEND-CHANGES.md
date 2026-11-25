@@ -168,6 +168,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 103. Showroom video posts show their chosen frame and logo (no file rows: data only, `src/lib/showroom/feed.ts`) | approved by owner 2026-11-25 (answer: 'Approve them', for the before and after pictures) | Home and area showrooms: a video post's card plays its video over the frame the owner chose, and a post with a logo shows it in the card, as in the chosen version; before, a video-only post showed the generic shop artwork with no video and the title's first letter instead of a logo. Posts with neither look as they do today. |
 | 105. Small lifecycle rules (item 40) (and the group 105 part of 1 row elsewhere) | approved by owner 2026-11-25 (answer: 'Approve with the rewording', the pictures with the sticker email reworded) | Owners of a post with an open report see that it can be hidden now and deleted once staff have looked at the report. Business owners get one email 30 days before a CIPC registered or Seen sticker ends, linking to the business's verification page, and the Seen step there offers the booking form from 60 days before the sticker ends. Free events cannot start more than 12 months ahead (the form already said so). |
 | 106. Removing an admin needs approval; appeal pages off the old backend (item 20, part 1) (and the group 106 part of 1 row elsewhere) | approved by owner 2026-11-25 (answer: 'Approve them') | Nothing for members or visitors. Admins: removing another admin now waits for a different admin's approval on Staff roles, and its header line says so. |
+| 110. Release one blocked phone number (item 21) (and the group 110 part of 1 row elsewhere) | awaiting owner | Nothing for members or visitors. Admins and governors, on Restrictions: a 'Blocked phone numbers' card to ask to free one number a ban blocks (number and reason), the waiting requests (a different staff member approves or rejects; the person who asked can withdraw) and the latest releases. The person's ID ban stays. |
 
 Questions for the owner:
 
@@ -844,7 +845,7 @@ None left: the three filter files were put back to `0b562f42` (see "Put back").
 | `src/app/admin/governance/appeals/[id]/appeal-resolve-form.tsx`    | wording-behaviour | Offers only the outcomes the new backend accepts.                                                                                                                                                                       | Staff only: 'Partially overturned' appears only when a suspension can be shortened; new placeholder.                                                                                                                                                                                                                                                                                 | keep     | awaiting owner                                            | 2026-11-08 | fbf5c869e91f |
 | `src/app/admin/governance/appeals/[id]/page.tsx`                   | wording-behaviour | Appeal page reads from the new backend. Retired-backend branch removed.                                                                                                                                                 | Staff only: new 'requires another reviewer' message when the appeal cannot be resolved by this person.                                                                                                                                                                                                                                                                               | keep     | awaiting owner                                            | 2026-11-08 | 65c0f2d9bbad |
 | `src/app/admin/governance/enforcement/lift-restriction-button.tsx` | wording-behaviour | Follows the new backend's limits.                                                                                                                                                                                       | Staff only: the reason is limited to 500 characters; error messages reworded.                                                                                                                                                                                                                                                                                                        | keep     | awaiting owner                                            | 2026-11-08 | 2e653233b0b4 |
-| `src/app/admin/governance/enforcement/page.tsx`                    | wording-behaviour | Enforcement list reads from the new backend. Retired-backend branch removed. Group 54: a restricted member is named by their short name, with the account reference beside it. | Staff only: new 'requires review through its decision' message. Group 54: Staff only: a restricted member shows as 'Thandeka D. · 1a2b3c4d…' (short name and account reference) instead of the full name. | keep     | awaiting owner; group 54 part awaiting owner | 2026-11-19 | 85af71ea50bb |
+| `src/app/admin/governance/enforcement/page.tsx`                    | wording-behaviour | Enforcement list reads from the new backend. Retired-backend branch removed. Group 54: a restricted member is named by their short name, with the account reference beside it. Group 110: adds the 'Blocked phone numbers' card. | Staff only: new 'requires review through its decision' message. Group 54: Staff only: a restricted member shows as 'Thandeka D. · 1a2b3c4d…' (short name and account reference) instead of the full name. Group 110: Staff with account:restore: the 'Blocked phone numbers' card (see group 110). | keep     | awaiting owner; group 54 part awaiting owner; group 110 part awaiting owner | 2026-11-19 | d4fd3b202a99 |
 
 ### 4. Rewiring only (no visible change)
 
@@ -4400,6 +4401,51 @@ Decision: approved by owner 2026-11-25 (answer: 'Approve them').
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `src/app/appeals/page.tsx` | rewiring | Group 106: reads the signed-in member through the live backend (the old backend's client is no longer imported). | Nothing (same look and steps) | keep | approved by owner 2026-11-25 (answer: 'Approve them') | 2026-11-25 | e8b823e91d95 |
 | `src/app/appeals/new/page.tsx` | rewiring | Group 106: reads the signed-in member through the live backend (the old backend's client is no longer imported). | Nothing (same look and steps) | keep | approved by owner 2026-11-25 (answer: 'Approve them') | 2026-11-25 | dd72d0883f19 |
+
+### 110. Release one blocked phone number (item 21)
+
+Launch checklist item 21. Database update
+`20261125213005_release_one_phone_number.sql` (pending, apply first): commands
+`api.propose_phone_number_release`, `api.review_phone_number_release` and
+`api.get_phone_number_releases` (account:restore: admins and governors, an
+authenticator code from the last 15 minutes). A ban blocks every phone number
+the banned person verified; staff can now free one number (a number the network
+gave to someone else, or one blocked by mistake) while the ID ban stays. One
+staff member asks, a different one approves. Approval also ends the banned
+account's own hold on that number, so its new holder can verify it.
+
+- Restrictions (`/admin/governance/enforcement`), between 'Active restrictions'
+  and 'Recent enforcement actions': a 'Blocked phone numbers' card. 'Free one
+  number a ban blocks, for example when the network gave it to someone else.
+  The person's ID ban stays. A different staff member approves.'
+- A form: 'Phone number' (082 123 4567, 27821234567 or +27 82 123 4567) and
+  'Why' (10 to 500 characters), with 'Ask to release'. Checked before sending
+  ('Enter a South African number, for example 082 123 4567.', 'Explain why in at
+  least 10 characters.').
+- 'Waiting for approval': each number with who asked ('You' for your own), when,
+  when it expires (7 days) and the reason. Others see 'Approve' and 'Reject'; the
+  person who asked sees 'Waiting for another staff member.' and 'Withdraw'; a
+  staff member who verified that number themselves sees 'You verified this
+  number, so someone else must decide.' and no buttons. 'None.' when empty.
+- 'Released': the latest 50, each with the date, 'asked by Thando D., approved by
+  Lerato M.' and the reason. 'None.' when empty.
+- Refusals in plain words (no running ban blocks the number, a request already
+  waits, nothing waits any more, your own request, a number you verified, the
+  person who asked lost the permission). A stale authenticator code sends staff
+  to verify again and back. If the list cannot be read, the card says so and the
+  rest of the page still works.
+- Members: nothing is shown or sent. Whoever holds the number now can verify it
+  as usual.
+
+Pictures (synthetic data, local preview, not published):
+`screenshots/item21-phone-release/` (desktop 1280 and phone 375).
+
+Decision: awaiting owner.
+
+| File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `src/app/admin/governance/enforcement/phone-releases-card.tsx` | visual | Group 110: the new 'Blocked phone numbers' card: ask to release a number, approve, reject or withdraw a waiting request, and see the latest releases. | Admins and governors on Restrictions: everything described in group 110. | keep | awaiting owner | 2026-11-25 | fd55177809c7 |
+| `src/app/admin/governance/enforcement/phone-releases-card.test.tsx` | test | Group 110: checks what each staff member may do, the stored number sent, the checks before sending, a refusal, the re-verify redirect and the unreadable list. | Nothing (not part of a page) | keep | awaiting owner | 2026-11-25 | 1548214581e1 |
 
 <!-- frontend-ledger:end -->
 
