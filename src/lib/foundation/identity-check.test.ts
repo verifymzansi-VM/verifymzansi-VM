@@ -16,7 +16,18 @@ import { networkHash } from "./identity-check-context";
 import { FoundationVerificationError } from "./verification-runtime";
 import { sendStaffOperationsEmail } from "../services/email";
 import { recordIdentityCheckResult } from "./identity-check-result";
+import {
+  FoundationProfileError,
+  readFoundationAccountProfile,
+  saveFoundationLegalNameClaim,
+} from "./account-profile";
+import { IDENTITY_CHECK_CONSENT_VERSION } from "../verification/identity-check-consent";
 vi.mock("server-only", () => ({}));
+vi.mock("./account-profile", async (original) => ({
+  ...(await original<Record<string, unknown>>()),
+  readFoundationAccountProfile: vi.fn(),
+  saveFoundationLegalNameClaim: vi.fn(),
+}));
 vi.mock("./didit-client", async (original) => ({
   ...(await original<Record<string, unknown>>()),
   createDiditSession: vi.fn(),
@@ -63,10 +74,16 @@ const post = (path: string, body: unknown = {}) =>
     headers: { "content-type": "application/json", "user-agent": "Mozilla/5.0 (iPhone)" },
     body: JSON.stringify(body),
   });
-const start = () =>
-  handleIdentityCheckStart(post("/api/verification/identity-check")) as unknown as Promise<{
+const consented = {
+  consent: true,
+  consentVersion: IDENTITY_CHECK_CONSENT_VERSION,
+  firstName: "Thando Sipho",
+  lastName: "Dlamini",
+};
+const start = (body: unknown = consented) =>
+  handleIdentityCheckStart(post("/api/verification/identity-check", body)) as unknown as Promise<{
     data?: unknown;
-    refused?: { status: number; code: string };
+    refused?: { status: number; code: string; retryAfter?: number };
   }>;
 
 beforeEach(() => {
@@ -77,6 +94,12 @@ beforeEach(() => {
   vi.mocked(sendStaffOperationsEmail).mockResolvedValue({ success: true } as never);
   vi.mocked(checkRateLimit).mockResolvedValue({ limited: false, retryAfter: 0 });
   vi.mocked(deleteDiditSession).mockResolvedValue(undefined);
+  vi.mocked(readFoundationAccountProfile).mockResolvedValue({
+    legal_first_name: "Thando Sipho",
+    legal_last_name: "Dlamini",
+    revision: 4,
+  } as never);
+  vi.mocked(saveFoundationLegalNameClaim).mockResolvedValue({} as never);
   serviceRpc.mockImplementation(async (name: string) =>
     name === "report_identity_check_unavailable"
       ? {
@@ -185,8 +208,85 @@ describe("starting a check", () => {
     expect(checkRateLimit).toHaveBeenCalledWith(
       expect.objectContaining({ key: owner, action: "verification:identity-check" })
     );
-    vi.mocked(checkRateLimit).mockResolvedValueOnce({ limited: true, retryAfter: 60 });
-    expect((await start()).refused).toMatchObject({ status: 429, code: "rate_limited" });
+    vi.mocked(checkRateLimit).mockResolvedValueOnce({ limited: true, retryAfter: 45 });
+    expect((await start()).refused).toMatchObject({
+      status: 429,
+      code: "rate_limited",
+      retryAfter: 45,
+    });
+  });
+
+  it("needs the member's consent to the current words before anything starts", async () => {
+    memberRpc(started());
+    for (const body of [
+      {},
+      { ...consented, consent: false },
+      { ...consented, consentVersion: "identity-check-consent-v0" },
+      { firstName: "Thando", lastName: "Dlamini" },
+      { ...consented, owner },
+    ]) {
+      expect((await start(body)).refused).toMatchObject({
+        status: 400,
+        code: "consent_required",
+      });
+    }
+    expect(checkRateLimit).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalled();
+    expect(saveFoundationLegalNameClaim).not.toHaveBeenCalled();
+    expect(createDiditSession).not.toHaveBeenCalled();
+  });
+
+  it("sends the consent version with the start, matching the database's", async () => {
+    memberRpc(started("https://verify.didit.me/session/old"));
+    await start();
+    expect(rpc).toHaveBeenCalledWith(
+      "start_my_identity_check",
+      { p_consent_version: IDENTITY_CHECK_CONSENT_VERSION },
+      { get: false }
+    );
+    // The value of internal.identity_check_consent_version() in update
+    // 20261124235920_identity_check_consent (part 7a, PR #361). Hard-coded
+    // until database/foundation/current/functions/internal/
+    // identity_check_consent_version.sql is on main; then read it from there.
+    expect(IDENTITY_CHECK_CONSENT_VERSION).toBe("identity-check-consent-v1");
+  });
+
+  it("saves the typed names as the member's name claim before the check starts", async () => {
+    const order: string[] = [];
+    rpc.mockImplementation(async (name: string) => {
+      order.push(name);
+      if (name === "get_identity_check_availability") return { data: noCheck, error: null };
+      return started("https://verify.didit.me/session/old");
+    });
+    vi.mocked(saveFoundationLegalNameClaim).mockImplementation(async () => {
+      order.push("save_my_legal_name");
+      return {} as never;
+    });
+    await start({ ...consented, firstName: " Thando Sipho ", lastName: "Dlamini" });
+    expect(saveFoundationLegalNameClaim).not.toHaveBeenCalled();
+    await start({ ...consented, firstName: "Thando", lastName: "Dlamini" });
+    expect(saveFoundationLegalNameClaim).toHaveBeenCalledWith(expect.anything(), {
+      expected_revision: 4,
+      first_name: "Thando",
+      last_name: "Dlamini",
+    });
+    expect(order.indexOf("save_my_legal_name")).toBeLessThan(
+      order.lastIndexOf("start_my_identity_check")
+    );
+    vi.mocked(saveFoundationLegalNameClaim).mockRejectedValueOnce(
+      new FoundationProfileError("locked")
+    );
+    expect((await start({ ...consented, firstName: "Sipho" })).refused).toMatchObject({
+      status: 409,
+      code: "legal_name_locked",
+    });
+    vi.mocked(saveFoundationLegalNameClaim).mockRejectedValueOnce(
+      new FoundationProfileError("invalid")
+    );
+    expect((await start({ ...consented, firstName: "Sipho" })).refused).toMatchObject({
+      status: 400,
+      code: "legal_name_invalid",
+    });
   });
 
   it("keeps the attached session when two starts race, and removes the extra one", async () => {
@@ -220,6 +320,10 @@ describe("starting a check", () => {
     );
     expect(await start()).toEqual({ data: { checkId: check, url: attachedUrl } });
     expect(deleteDiditSession).toHaveBeenCalledWith(expect.anything(), session);
+    // The extra session is removed after the winner is read.
+    expect(Math.max(...rpc.mock.invocationCallOrder)).toBeLessThan(
+      vi.mocked(deleteDiditSession).mock.invocationCallOrder[0]
+    );
     // A failed clean-up does not change the answer.
     vi.mocked(deleteDiditSession).mockRejectedValueOnce(new DiditError("outage"));
     expect(await start()).toEqual({ data: { checkId: check, url: attachedUrl } });
@@ -325,9 +429,13 @@ describe("a check whose result was lost", () => {
     vi.mocked(checkRateLimit).mockResolvedValueOnce({ limited: true, retryAfter: 100 });
     expect((await read()).data?.check?.status).toBe("started");
     expect(recordIdentityCheckResult).not.toHaveBeenCalled();
-    expect(checkRateLimit).toHaveBeenCalledWith(
-      expect.objectContaining({ key: check, action: "verification:identity-check-look" })
-    );
+    // Fails closed without the shared limiter, and records no security event.
+    expect(checkRateLimit).toHaveBeenCalledWith({
+      key: check,
+      action: "verification:identity-check-look",
+      degradedMode: "block",
+      quiet: true,
+    });
     await read();
     expect(recordIdentityCheckResult).toHaveBeenCalledTimes(1);
   });

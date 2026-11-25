@@ -14,6 +14,7 @@ import { nativeIdentityScopeSchema } from "../admin/native-identity-review";
 import { createLogger } from "../utils/logger";
 import { frontendIdentityContextSchema } from "./identity-review-contract";
 import { foundationSelfieCaptureSchema, selfieCaptureSignals } from "./selfie-capture";
+import { readIdentityCheckForCase } from "./identity-check-staff";
 const log = createLogger("NativeIdentityMetadata");
 const requestBody = z
   .strictObject({ stepId: z.uuid().optional(), userId: z.uuid().optional() })
@@ -99,6 +100,12 @@ export function handleRestoredIdentityMetadata(request: NextRequest) {
         capture.selfie_artifact_id !== context.selfie_artifact_id
       )
         throw new FoundationStaffCommandError(409, "The evidence changed. Reload the queue.");
+      // The case's latest automatic (Didit) check, for the case view. Best
+      // effort: the review works without it.
+      const identityCheck = await readIdentityCheckForCase(api, fence.case_id).catch(() => {
+        log.warn("Identity check for case unavailable");
+        return null;
+      });
       const foundation = nativeIdentityScopeSchema.parse({
         caseId: context.case_id,
         caseVersion: context.case_version,
@@ -137,6 +144,12 @@ export function handleRestoredIdentityMetadata(request: NextRequest) {
         review_subject_label: label,
         artifacts,
         providerResults: [],
+        identityCheck: identityCheck
+          ? {
+              ...identityCheck,
+              typedNames: `${context.claimed_names.first_name} ${context.claimed_names.last_name}`,
+            }
+          : null,
         riskSignals: [
           {
             id: context.submission_id,

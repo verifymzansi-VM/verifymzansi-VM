@@ -8,6 +8,10 @@ import { KycQueueClient } from "./kyc-queue-client";
 import { countPendingVerifications, getPendingVerificationGroups } from "@/lib/utils/admin-queries";
 import { isFeatureEnabled } from "@/lib/services/feature-flags";
 import { createLogger } from "@/lib/utils/logger";
+import { readFoundationServerSession } from "@/lib/foundation/server-session";
+import { readIdentityCheckSettings } from "@/lib/foundation/identity-check-staff";
+import type { IdentityCheckSettings } from "@/lib/admin/identity-check-settings";
+import { IdentityCheckSettingsCard } from "./identity-check-settings-card";
 
 export const metadata = {
   title: "Verify accounts — Admin",
@@ -16,8 +20,21 @@ export const metadata = {
 
 const SHOWN_LIMIT = 100;
 
+/** The ID check setting, or null when it cannot be read (the queue still
+ * shows; the card does not). */
+async function readSettings(): Promise<IdentityCheckSettings | null> {
+  try {
+    const { api } = await readFoundationServerSession();
+    return await readIdentityCheckSettings(api);
+  } catch {
+    createLogger("AdminVerificationPage").error("ID check setting read failed");
+    return null;
+  }
+}
+
 export default async function AdminVerificationPage() {
   const { user, role } = await requireStaff("queue:view");
+  const settings = await readSettings();
 
   const myClaimed = await getMyClaimedItems(user.id, "kyc");
   let loaded: [Awaited<ReturnType<typeof getPendingVerificationGroups>>, number, boolean, number];
@@ -62,6 +79,17 @@ export default async function AdminVerificationPage() {
           {totalPending} pending
         </Badge>
       </PageHeader>
+
+      {settings ? (
+        <IdentityCheckSettingsCard
+          settings={settings}
+          canChange={roleHasCapability(role, "identity_check:configure")}
+        />
+      ) : (
+        <p role="alert" className="text-sm text-muted-foreground">
+          The ID check setting could not be loaded. Refresh to try again.
+        </p>
+      )}
 
       <QueueClaimBar
         queue="kyc"
