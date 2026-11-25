@@ -66,7 +66,7 @@ test.describe("posting terms", () => {
     }
     await expect(page.getByRole("heading", { level: 1, name: "Terms of Service" })).toBeVisible();
     await expect(page.getByRole("heading", { level: 2, name: /Slots & prices/ })).toBeVisible();
-    await expect(page.getByText(/billing@verifymzansi\.com/)).toBeVisible();
+    await expect(page.getByText(/billing@verifymzansi\.com/).first()).toBeVisible();
   });
 });
 

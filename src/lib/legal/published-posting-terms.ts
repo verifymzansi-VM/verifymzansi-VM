@@ -5,6 +5,7 @@ import second from "./terms-documents/posting-v2.json";
 import third from "./terms-documents/posting-v3.json";
 import fourth from "./terms-documents/posting-v4.json";
 import fifth from "./terms-documents/posting-v5.json";
+import sixth from "./terms-documents/posting-v6.json";
 import manifest from "./terms-documents/catalogue.json";
 import type { FoundationPostingTerms } from "@/lib/foundation/posting-terms";
 
@@ -14,6 +15,7 @@ const catalogue = {
   "posting-v3": { document: third, document_hash: manifest.versions["posting-v3"] },
   "posting-v4": { document: fourth, document_hash: manifest.versions["posting-v4"] },
   "posting-v5": { document: fifth, document_hash: manifest.versions["posting-v5"] },
+  "posting-v6": { document: sixth, document_hash: manifest.versions["posting-v6"] },
 } as const;
 
 /** Archived versions are pinned independently of the current Terms page.

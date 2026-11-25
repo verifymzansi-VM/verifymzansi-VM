@@ -158,7 +158,11 @@ test("posting terms published after the baseline must come from a database updat
     "database/foundation/updates/20261117082021_switch_posting_terms_v5.sql",
     "utf8"
   );
-  const update = [v3, v4, switchToV4, v5, switchToV5].join("\n");
+  const v6 = readFileSync(
+    "database/foundation/updates/20261123225900_posting_terms_v6.sql",
+    "utf8"
+  );
+  const update = [v3, v4, switchToV4, v5, switchToV5, v6].join("\n");
   assert.equal(check(recorded, update), recorded);
   assert.throws(() => check(recorded, ""), /posting-v3 is not published by a database update/);
   assert.throws(
@@ -168,18 +172,28 @@ test("posting terms published after the baseline must come from a database updat
   // posting-v4 is published by its own update, which never makes it current;
   // the switch makes it current, as the catalogue's active version says.
   assert.throws(
-    () => check(recorded, [v3, switchToV4, v5, switchToV5].join("\n")),
+    () => check(recorded, [v3, switchToV4, v5, switchToV5, v6].join("\n")),
     /posting-v4 is not published by a database update/
   );
   assert.equal(v4.includes("update private.posting_terms_current"), false);
   // posting-v5 likewise: published by the limit update, made current by its switch.
   assert.throws(
-    () => check(recorded, [v3, v4, switchToV4, switchToV5].join("\n")),
+    () => check(recorded, [v3, v4, switchToV4, switchToV5, v6].join("\n")),
     /posting-v5 is not published by a database update/
   );
   assert.equal(v5.includes("update private.posting_terms_current"), false);
+  // posting-v6 is published and made current by one update.
   assert.throws(
-    () => check(recorded, [v3, v4, switchToV4, v5].join("\n")),
+    () => check(recorded, [v3, v4, switchToV4, v5, switchToV5].join("\n")),
+    /posting-v6 is not published by a database update/
+  );
+  const publishV6Only = v6.replace(
+    "update private.posting_terms_current set version='posting-v6' where singleton and version<>'posting-v6';",
+    ""
+  );
+  assert.notEqual(publishV6Only, v6);
+  assert.throws(
+    () => check(recorded, [v3, v4, switchToV4, v5, switchToV5, publishV6Only].join("\n")),
     /differ from the version the database updates make current/
   );
   assert.throws(

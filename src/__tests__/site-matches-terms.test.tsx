@@ -1,4 +1,4 @@
-// The public site must not promise what the Terms (posting-v5) or the live
+// The public site must not promise what the Terms (posting-v6) or the live
 // product do not: paid add-ons were removed (item 37), the sponsor offer can be
 // hidden (src/lib/hidden-features.ts), and the free first post is described as
 // the Terms' "Free first post & visibility" section describes it.
@@ -9,7 +9,7 @@ import { BillingFaq } from "@/components/billing/billing-faq";
 import { PricingOffers } from "@/components/billing/pricing-offers";
 import { RetailPricing } from "@/components/billing/retail-pricing";
 import { INDIVIDUAL_SLOT_LIMIT, POSTS_PER_SLOT_PER_30_DAYS } from "@/lib/billing/slot-checkout";
-import postingTermsV5 from "@/lib/legal/terms-documents/posting-v5.json";
+import postingTermsV6 from "@/lib/legal/terms-documents/posting-v6.json";
 import { TrialPolicy } from "@/components/billing/trial-policy";
 import { getPlanFeatureItems, PLANS, RETAIL_OFFERS } from "@/lib/constants/pricing";
 import type { PublicSponsor } from "@/lib/organisations/sponsors";
@@ -120,7 +120,7 @@ describe("paid add-ons (removed, item 37)", () => {
 });
 
 describe("the pricing page's offers (Terms: Pricing)", () => {
-  const terms = JSON.stringify(postingTermsV5);
+  const terms = JSON.stringify(postingTermsV6);
   const offers = RETAIL_OFFERS.map((offer) => ({
     ...offer,
     planIds: { MZANSI_MARKET: "p", MZANSI_BUSINESS: "p", PROMOTIONS_EVENTS: "p" },
