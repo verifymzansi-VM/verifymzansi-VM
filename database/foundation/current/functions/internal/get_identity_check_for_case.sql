@@ -19,7 +19,7 @@ begin
   if k.id is null then return jsonb_build_object('check',null); end if;
   return jsonb_build_object('check',jsonb_build_object('id',k.id,'status',k.status,'submission_id',k.submission_id,
     'reasons',to_jsonb(k.reasons),'created_at',k.created_at,'finished_at',k.finished_at,'declined_at',k.declined_at,
-    'asked_at',k.asked_at,'ask_reason',k.ask_reason));
+    'asked_at',k.asked_at,'ask_reason',k.ask_reason,'consent_version',k.consent_version,'consented_at',k.consented_at));
 end$function$;
 alter function internal.get_identity_check_for_case(uuid) owner to postgres;
 revoke all on function internal.get_identity_check_for_case(uuid) from public;

@@ -1258,6 +1258,10 @@ try {
       p_account_email: owner.email,
       p_phone: world.verified.phone,
       p_invoice_number: world.otherInvoice,
+      // The current ID check consent words
+      // (20261124235920_identity_check_consent.sql), so every principal's
+      // start reaches the checks after the consent.
+      p_consent_version: "identity-check-consent-v1",
     })[name] ?? "Synthetic access sweep value";
   const bodies = (fn) =>
     sweepBodies(fn, {

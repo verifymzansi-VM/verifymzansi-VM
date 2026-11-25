@@ -24,6 +24,8 @@ create table private.identity_checks (
   start_last_name text,
   network_hash text,
   device_kind text,
+  consent_version text,
+  consented_at timestamp with time zone,
   constraint identity_checks_ask_reason_check CHECK (char_length(ask_reason) >= 20 AND char_length(ask_reason) <= 2000),
   constraint identity_checks_asked_check CHECK ((asked_at IS NOT NULL OR ask_reason IS NULL) AND (asked_at IS NULL OR status = 'declined'::text)),
   constraint identity_checks_case_fkey FOREIGN KEY (case_id, owner_id) REFERENCES private.evidence_cases(id, subject_id) ON DELETE CASCADE,
@@ -56,5 +58,8 @@ CREATE INDEX identity_checks_owner_idx ON private.identity_checks USING btree (o
 CREATE INDEX identity_checks_selfie_artifact_idx ON private.identity_checks USING btree (selfie_artifact_id) WHERE (selfie_artifact_id IS NOT NULL);
 CREATE INDEX identity_checks_submission_owner_idx ON private.identity_checks USING btree (submission_id, owner_id) WHERE (submission_id IS NOT NULL);
 CREATE TRIGGER identity_check_clear_start BEFORE UPDATE ON private.identity_checks FOR EACH ROW WHEN (new.status <> 'started'::text) EXECUTE FUNCTION internal.identity_check_clear_start();
+CREATE TRIGGER identity_check_consent_required BEFORE INSERT ON private.identity_checks FOR EACH ROW EXECUTE FUNCTION internal.identity_check_consent_required();
 revoke all on private.identity_checks from public;
 comment on table private.identity_checks is 'Automatic ID checks: one row per check at the independent verification partner, bound to the member''s open identity case. The partner sees only the random id. status records where the result was sent (approved, with_staff, declined); the identity tables keep the verification itself.';
+comment on column private.identity_checks.consent_version is 'The version of the consent words the member agreed to before this check started (internal.identity_check_consent_version() at the time). Empty only on checks made before the consent was recorded.';
+comment on column private.identity_checks.consented_at is 'When the member agreed to the consent words for this check: the start time of the check.';
