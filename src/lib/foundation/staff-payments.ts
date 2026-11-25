@@ -222,6 +222,11 @@ export const STAFF_PART_REFUND_REFUSALS: ReadonlyArray<[FoundationErrorReason, [
       ],
     ],
     ["refund_ozow_failed", [409, "Ozow has no paid refund with this id. Do not record it."]],
+    [
+      "refund_request_reused",
+      [409, "This refund was already recorded with other details. Reload the page to see it."],
+    ],
+    ["refund_request_id_required", [422, "Reload the page and record the refund again."]],
   ];
 
 /** Refusals of the payment commands that staff can act on, in plain words. */
@@ -566,6 +571,9 @@ export type StaffPartRefundInput = {
   } | null;
   /** The day the customer asked in writing (first purchase only), YYYY-MM-DD. */
   askedOn: string | null;
+  /** One id per refund form opening, sent again on a retry: the same request
+   * returns the first record instead of refunding twice. */
+  requestId: string;
 };
 
 const partRefundResult = z.strictObject({
@@ -624,6 +632,7 @@ export function recordStaffRefund(api: FoundationAuthenticatedApi, input: StaffP
         p_reference: reference,
         p_ozow_fact: input.ozowFact,
         p_asked_on: input.askedOn,
+        p_request_id: input.requestId,
       },
       { get: false }
     ),

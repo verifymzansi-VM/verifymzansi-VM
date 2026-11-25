@@ -6423,6 +6423,59 @@
       "authority": "Current live member, for their own post template only: deletes it."
     },
     {
+      "name": "get_lost_days_preview",
+      "updates": ["updates/20261125113433_add_lost_days.sql"],
+      "arguments": [
+        {
+          "name": "p_email",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payments:view capability (admin role; 12-hour authenticator rule) and the staff rule of money actions (an accepted ID review of the staff member, never their own account or the same person): the running paid terms of the active account with this email that api.add_lost_days would move: one item per Individual slot (its first grant id, slots, queued renewals, paid end) and per Multi-listing package (package id, slots, end); never names, contacts or payments. Records nothing."
+    },
+    {
+      "name": "add_lost_days",
+      "updates": ["updates/20261125113433_add_lost_days.sql"],
+      "arguments": [
+        {
+          "name": "p_email",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_days",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_request_id",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payments:refund capability (admin role; authenticator code from the last 15 minutes) and the staff rule of money actions: adds 1 to 30 days, with a reason of 5 to 500 characters, to every running paid grant (retail_paid, active, complete payment, end in the future) of the active account with this email: a running grant ends later, a queued renewal starts and ends later, every grant of a package ends later. Refuses an account with no running paid term, and a change that would take any grant above 30 added days in all; one change per member at a time; a repeated request id with the same input returns the first answer; recorded per grant in the append-only lost days record."
+    },
+    {
       "name": "record_staff_refund",
       "updates": ["updates/20261125133916_staff_part_refunds.sql"],
       "arguments": [
@@ -6470,6 +6523,11 @@
           "name": "p_asked_on",
           "sqlType": "text",
           "optional": false
+        },
+        {
+          "name": "p_request_id",
+          "sqlType": "uuid",
+          "optional": false
         }
       ],
       "returns": "jsonb",
@@ -6479,7 +6537,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current payment refund capability (admins) and recent authenticator proof; the staff member's own current accepted ID review and never a payment of their own identity; records a refund of a completed payment or one open slot through Ozow (the server sends it, only within Ozow's 13-day window), from the Ozow dashboard (Ozow's refund id, used once, and the refund as the website read it from Ozow when it could: this payment's transaction and this amount) or with a bank or Ozow reference, for everything left or a part of it (at most what the payment and slot have left after refunds applied, waiting or on their way); a part refund of our failure or a billing error keeps the slot running, every other refund ends the paid days; the reason 'first purchase cancelled' only for the whole payment of the account's first purchase, asked for in writing within 5 South African business days after it was confirmed; the same approval rule as every refund (above R1,000 returned on the payment in all, a second, different staff member)."
+      "authority": "Current payment refund capability (admins) and recent authenticator proof; the staff member's own current accepted ID review and never a payment of their own identity; records a refund of a completed payment or one open slot through Ozow (the server sends it, only within Ozow's 13-day window), from the Ozow dashboard (Ozow's refund id, used once, and the refund as the website read it from Ozow when it could: this payment's transaction and this amount) or with a bank or Ozow reference, for everything left or a part of it (at most what the payment and slot have left after refunds applied, waiting or on their way); a part refund of our failure or a billing error keeps the slot running and reverses that slot's (or payment's) partner commission, every other refund ends the paid days; the reason 'first purchase cancelled' only for the whole payment of the account's first purchase, asked for in writing within 5 South African business days after it was confirmed; one request id per refund (the same input again returns the first record, other input is refused); the same approval rule as every refund (above R1,000 returned on the payment in all, a second, different staff member)."
     },
     {
       "name": "get_staff_refunds_left",

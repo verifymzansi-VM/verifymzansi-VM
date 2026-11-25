@@ -147,11 +147,12 @@ try {
       reference = null,
       fact = null,
       askedOn = null,
+      requestId = randomUUID(),
     } = {}
   ) =>
     staff(
       who,
-      `select api.record_staff_refund(${sqlValue(paymentId)}::uuid,${sqlValue(line)}::uuid,${sqlValue(channel)},${amount ?? "null"}::bigint,${sqlValue(code)},${sqlValue(reason)},${sqlValue(reference)},${fact ? sqlJsonb(fact) : "null::jsonb"},${sqlValue(askedOn)});`
+      `select api.record_staff_refund(${sqlValue(paymentId)}::uuid,${sqlValue(line)}::uuid,${sqlValue(channel)},${amount ?? "null"}::bigint,${sqlValue(code)},${sqlValue(reason)},${sqlValue(reference)},${fact ? sqlJsonb(fact) : "null::jsonb"},${sqlValue(askedOn)},${sqlValue(requestId)}::uuid);`
     );
   const refund = (who, paymentId, options) => json(refundSql(who, paymentId, options));
   let refNo = 0;
@@ -584,7 +585,7 @@ try {
     fails(
       member(
         naledi,
-        `select api.record_staff_refund('${pay}',null,'reference',100,'billing_error','Mine please',${sqlValue(ozowRef("SELF"))},null,null);`
+        `select api.record_staff_refund('${pay}',null,'reference',100,'billing_error','Mine please',${sqlValue(ozowRef("SELF"))},null,null,gen_random_uuid());`
       ),
       "42501"
     );
@@ -593,7 +594,7 @@ try {
     fails(
       staff(
         admin,
-        `select api.record_staff_refund('${pay}',null,'cash',null,'billing_error','Paid in cash',null,null,null);`
+        `select api.record_staff_refund('${pay}',null,'cash',null,'billing_error','Paid in cash',null,null,null,gen_random_uuid());`
       ),
       "22023",
       /refund channel required/
@@ -602,7 +603,7 @@ try {
     fails(
       staff(
         admin,
-        `select api.record_staff_refund('${pay}',null,'reference',100,'billing_error','Late code','${ozowRef("OLD")}',null,null);`,
+        `select api.record_staff_refund('${pay}',null,'reference',100,'billing_error','Late code','${ozowRef("OLD")}',null,null,gen_random_uuid());`,
         Math.floor(Date.now() / 1000) - 3600
       ),
       "42501",
@@ -752,6 +753,42 @@ try {
     );
   });
 
+  await check("a part refund that keeps the slot running reverses its partner commission", () => {
+    const partner = world.user("part-partner");
+    const pay = buy(verified("part-commission"), P30, 2);
+    const [l1, l2] = [1, 2].map((n) => lineOf(pay, n));
+    const partnerId = randomUUID();
+    replica(`insert into private.partners(id,account_id,code,created_by)
+      values('${partnerId}','${partner.id}',upper(substr(md5(gen_random_uuid()::text),1,12)),'${admin.id}');`);
+    const commission = (lineId) => {
+      const id = randomUUID();
+      replica(`insert into private.partner_commissions(id,partner_id,payment_id,payment_line_id,base_cents,rate_bps,amount_cents,eligible_at)
+        values('${id}','${partnerId}','${pay}','${lineId}',${P30.cents},2000,${P30.cents / 5},now()+interval '30 days');`);
+      return id;
+    };
+    const [c1, c2] = [commission(l1), commission(l2)];
+    const status = (id) => q(`select status from private.partner_commissions where id='${id}';`);
+    assert.deepEqual([status(c1), status(c2)], ["pending", "pending"]);
+    const kept = refund(admin, pay, {
+      line: l1,
+      amount: 1000,
+      code: "our_failure_after_fix_offered",
+      reference: ozowRef("COMM"),
+    });
+    assert.deepEqual([kept.ends_paid_days, grantStatus(grantOf(pay, 1))], [false, "active"]);
+    assert.deepEqual([status(c1), status(c2)], ["reversed", "pending"]);
+    assert.equal(
+      Number(
+        q(`select count(*) from private.notifications where account_id='${partner.id}'
+             and kind='partner_commission_reversed' and subject_id='${c1}';`)
+      ),
+      1
+    );
+    // A part refund of the whole payment reverses the payment's other commission too.
+    refund(admin, pay, { amount: 500, code: "billing_error", reference: ozowRef("COMM") });
+    assert.equal(status(c2), "reversed");
+  });
+
   // Last: once a refund was sent through Ozow, typed Ozow references retire.
   await check("several part refunds of one payment through Ozow", () => {
     const pay = buy(verified("part-api"), P180, 1, true);
@@ -782,6 +819,51 @@ try {
     );
     assert.deepEqual([payStatus(pay), grantStatus(grantOf(pay))], ["refunded", "revoked"]);
     assert.equal(net(pay), 0);
+  });
+
+  await check("the same request id: the first record again, never a second refund", () => {
+    const pay = buy(verified("part-request"), P180, 1, true);
+    const requestId = randomUUID();
+    const input = {
+      channel: "ozow",
+      amount: 2000,
+      code: "our_failure_after_fix_offered",
+      requestId,
+    };
+    const first = refund(admin, pay, input);
+    const claimed = claim(first.request_id);
+    assert.equal(
+      sendResult(first.request_id, { outcome: "accepted", ...ozowFact(claimed, "Complete") })
+        .outcome,
+      "applied"
+    );
+    // Sent again after it settled: the applied record, repeated; nothing new.
+    const again = refund(admin, pay, input);
+    assert.deepEqual(
+      [again.request_id, again.status, again.repeated],
+      [first.request_id, "applied", true]
+    );
+    assert.equal(requests(pay), 1);
+    assert.equal(left(pay), P180.cents - 2000);
+    // The same id with other input, or for another payment, is refused.
+    fails(refundSql(admin, pay, { ...input, amount: 2001 }), "PT409", /refund_request_reused/);
+    fails(
+      refundSql(admin, buy(verified("part-request-2"), P180, 1, true), input),
+      "PT409",
+      /refund_request_reused/
+    );
+    fails(
+      refundSql(admin, pay, { ...input, requestId: null }),
+      "22023",
+      /refund_request_id_required/
+    );
+    // A waiting record is returned the same way.
+    const big = buy(verified("part-request-big"), P180, 3, true);
+    const waitingInput = { ...input, amount: 110_000, requestId: randomUUID() };
+    const waiting = refund(admin, big, waitingInput);
+    assert.equal(waiting.status, "awaiting_approval");
+    const waitingAgain = refund(admin, big, waitingInput);
+    assert.deepEqual([waitingAgain.request_id, waitingAgain.repeated], [waiting.request_id, true]);
   });
 
   await check("no grant beyond the staff commands; the helpers are internal", () => {

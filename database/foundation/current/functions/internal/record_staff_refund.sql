@@ -1,7 +1,7 @@
 -- Generated from the replay of database/foundation by `pnpm db:foundation:snapshot`.
 -- Do not edit; change the schema with a reviewed file in database/foundation/updates/.
 
-CREATE OR REPLACE FUNCTION internal.record_staff_refund(p_payment_id uuid, p_line_id uuid, p_channel text, p_amount_cents bigint, p_reason_code text, p_reason text, p_reference text, p_ozow_fact jsonb, p_asked_on text)
+CREATE OR REPLACE FUNCTION internal.record_staff_refund(p_payment_id uuid, p_line_id uuid, p_channel text, p_amount_cents bigint, p_reason_code text, p_reason text, p_reference text, p_ozow_fact jsonb, p_asked_on text, p_request_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -40,6 +40,9 @@ begin
         detail='refund_asked_on_unexpected';
     end if;
   end if;
+  if p_request_id is null then
+    raise exception 'refund request id required' using errcode='22023', detail='refund_request_id_required';
+  end if;
   if p_amount_cents is not null and p_amount_cents < 1 then
     raise exception 'a refund is at least 1 cent' using errcode='22023', detail='refund_amount_invalid';
   end if;
@@ -77,6 +80,20 @@ begin
   perform 1 from private.entitlements e where e.payment_id = pay.id order by e.id for update;
   perform internal.staff_actor('payments:refund'); -- authority after any lock wait
   perform internal.assert_staff_payment_actor(actor, buyer);
+  -- The same request id again: the first record, whatever its state, when the
+  -- input is the same; otherwise refused.
+  select * into prior from private.payment_refund_requests r where r.request_id = p_request_id;
+  if found then
+    if prior.channel = channel and prior.payment_id = pay.id and prior.payment_line_id is not distinct from line.id
+        and prior.reason_code = p_reason_code and prior.reason = btrim(p_reason) and prior.requested_by = actor
+        and (p_amount_cents is null or prior.amount_cents = p_amount_cents)
+        and prior.customer_asked_on is not distinct from asked then
+      return internal.staff_refund_result(prior, true);
+    end if;
+    raise exception 'this refund request id was already used for another refund' using errcode='PT409',
+      detail='refund_request_reused';
+  end if;
+  prior := null;
   -- A repeat of the same request by the same staff member returns its state.
   if channel = 'dashboard' then
     -- A declined record took no effect, so its refund id may be recorded again.
@@ -186,7 +203,7 @@ begin
   begin
     insert into private.payment_refund_requests (id, payment_id, payment_line_id, account_id, kind, reason_code, reason,
         ozow_reference, amount_cents, recorded_before_cents, needs_approval, status, requested_by, applied_at,
-        channel, approved_at, ozow_transaction_id, ozow_refund_id, ends_paid_days, customer_asked_on)
+        channel, approved_at, ozow_transaction_id, ozow_refund_id, ends_paid_days, customer_asked_on, request_id)
       values (new_id, pay.id, line.id, pay.owner_id, 'refunded', p_reason_code, btrim(p_reason),
         case channel when 'api' then 'vm-refund-' || new_id::text when 'dashboard' then refund_id::text || ':' || new_id::text
           else reference end,
@@ -194,10 +211,14 @@ begin
         case when approval then 'awaiting_approval' when channel = 'api' then 'approved' else 'applied' end, actor,
         case when not approval and channel <> 'api' then statement_timestamp() end,
         channel, case when channel = 'api' and not approval then statement_timestamp() end,
-        transaction, refund_id, ends, asked)
+        transaction, refund_id, ends, asked, p_request_id)
       returning * into request;
   exception when unique_violation then
     get stacked diagnostics violated = constraint_name;
+    if violated = 'payment_refund_requests_request_idx' then
+      raise exception 'this refund request id was already used for another refund' using errcode='PT409',
+        detail='refund_request_reused';
+    end if;
     if violated in ('payment_refund_requests_reference_idx', 'payment_refund_requests_ozow_key_idx',
         'payment_refund_requests_ozow_refund_idx') then
       if channel = 'dashboard' then
@@ -220,6 +241,6 @@ begin
   return internal.staff_refund_result(request, false);
 end;
 $function$;
-alter function internal.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text) owner to postgres;
-revoke all on function internal.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text) from public;
-grant execute on function internal.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text) to authenticated;
+alter function internal.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text,uuid) owner to postgres;
+revoke all on function internal.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text,uuid) from public;
+grant execute on function internal.record_staff_refund(uuid,uuid,text,bigint,text,text,text,jsonb,text,uuid) to authenticated;

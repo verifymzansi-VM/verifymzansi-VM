@@ -232,7 +232,12 @@ describe("part refunds and the first purchase (record_staff_refund)", () => {
     });
     ozow.get.mockResolvedValue(fact({ amountCents: 2500 }));
     const response = await POST(
-      request({ ...dashboard, reasonCode: "our_failure_after_fix_offered", amountCents: 2500 })
+      request({
+        ...dashboard,
+        reasonCode: "our_failure_after_fix_offered",
+        amountCents: 2500,
+        requestId: "55555555-5555-4555-8555-555555555555",
+      })
     );
     expect(response.status).toBe(200);
     expect(calls("record_staff_dashboard_refund")).toHaveLength(0);
@@ -244,6 +249,7 @@ describe("part refunds and the first purchase (record_staff_refund)", () => {
       p_reference: REFUND,
       p_ozow_fact: { refund_id: REFUND, transaction_id: TX, amount_cents: 2500 },
       p_asked_on: null,
+      p_request_id: "55555555-5555-4555-8555-555555555555",
     });
   });
 
@@ -271,6 +277,7 @@ describe("part refunds and the first purchase (record_staff_refund)", () => {
         reasonCode: "s14_cancellation",
         reason: "Cancelled after the notice",
         amountCents: 1500,
+        requestId: "55555555-5555-4555-8555-555555555555",
       })
     );
     expect(response.status).toBe(200);
@@ -283,4 +290,19 @@ describe("part refunds and the first purchase (record_staff_refund)", () => {
     });
     expect(ozow.sendOzowRefund).not.toHaveBeenCalled();
   });
+});
+
+it("asks for the form's request id before a part refund reaches the database", async () => {
+  vi.stubEnv("OZOW_API_REFUNDS_ENABLED", "true");
+  const response = await POST(
+    request({
+      action: "refund.request",
+      paymentId: payment,
+      reasonCode: "s14_cancellation",
+      reason: "Cancelled after the notice",
+      amountCents: 1500,
+    })
+  );
+  expect(response.status).toBe(422);
+  expect(calls("record_staff_refund")).toHaveLength(0);
 });

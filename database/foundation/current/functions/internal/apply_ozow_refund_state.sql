@@ -36,7 +36,7 @@ begin
       -- The record is applied first, so the reversal is no longer held back by
       -- internal.payment_reversal_waiting_guard; one transaction. A part
       -- refund that keeps the slot running only returns money
-      -- (20261125110216_staff_part_refunds.sql).
+      -- (20261125133916_staff_part_refunds.sql).
       update private.payment_refund_requests set status = 'applied', applied_at = statement_timestamp(),
         send_outcome = 'accepted' where id = request.id;
       perform internal.apply_staff_refund(request.id, actor);

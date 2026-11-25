@@ -39,6 +39,14 @@ const amountCents = z
   .nullable()
   .default(null);
 const askedOn = z.iso.date().nullable().default(null);
+// One id per refund form opening, sent again on a retry (record_staff_refund).
+const requestId = uuid.nullable().default(null);
+/** The request id a refund through record_staff_refund needs. */
+function partRequestId(value: string | null) {
+  if (!value)
+    throw new FoundationStaffCommandError(422, "Reload the page and record the refund again.");
+  return value;
+}
 const schema = z.discriminatedUnion("action", [
   // A refund the server sends to Ozow: no reference is typed.
   z.object({
@@ -49,6 +57,7 @@ const schema = z.discriminatedUnion("action", [
     reason,
     amountCents,
     askedOn,
+    requestId,
   }),
   // A refund an admin already made by hand in the Ozow dashboard.
   z.object({
@@ -60,6 +69,7 @@ const schema = z.discriminatedUnion("action", [
     ozowRefundId: z.string().max(100),
     amountCents,
     askedOn,
+    requestId,
   }),
   z.object({ action: z.literal("refund.approve"), requestId: uuid }),
   // Another staff member closes a refund through Ozow that never reached Ozow.
@@ -164,6 +174,7 @@ export async function POST(request: NextRequest) {
               reference: body.ozowRefundId.trim().toLowerCase(),
               ozowFact: ozowFact ? factForDatabase(ozowFact) : null,
               askedOn: body.askedOn,
+              requestId: partRequestId(body.requestId),
             }),
           };
         return {
@@ -195,6 +206,7 @@ export async function POST(request: NextRequest) {
                 reference: null,
                 ozowFact: null,
                 askedOn: body.askedOn,
+                requestId: partRequestId(body.requestId),
               })
             : await requestStaffOzowRefund(api, body)
           : await approveStaffRefund(api, body.requestId);

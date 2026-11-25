@@ -339,6 +339,7 @@ describe("part refunds and the first purchase (20261125133916_staff_part_refunds
     await waitFor(() => expect(fetch).toHaveBeenCalled());
     expect(sent()).toEqual({
       action: "payment.refund",
+      requestId: expect.any(String),
       paymentId: base.id,
       lineId: null,
       amountCents: 3000,
@@ -394,6 +395,7 @@ describe("part refunds and the first purchase (20261125133916_staff_part_refunds
     await waitFor(() => expect(fetch).toHaveBeenCalled());
     expect(sent()).toEqual({
       action: "payment.refund",
+      requestId: expect.any(String),
       paymentId: base.id,
       lineId: null,
       amountCents: null,

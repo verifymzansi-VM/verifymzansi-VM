@@ -16,6 +16,7 @@ import { readStaffPackageInvoiceRequests } from "@/lib/foundation/package-invoic
 import { PackageInvoiceRequestPanel } from "@/components/admin/commercial/package-invoice-requests";
 import { readStaffPackageMoveFailures } from "@/lib/foundation/package-move-failures";
 import { PackageMoveAttention } from "@/components/admin/commercial/package-move-attention";
+import { LostDaysPanel } from "@/components/admin/commercial/lost-days-panel";
 import { PaymentsPanel } from "@/components/admin/commercial/partners-panel";
 import { OzowRefundAttention } from "@/components/admin/commercial/ozow-refund-actions";
 import { PageHeader } from "@/components/layout/page-header";
@@ -265,6 +266,7 @@ export default async function PaymentsAdminPage({
         />
       ) : null}
       <PackageMoveAttention failures={packageMoves} />
+      {canRefund ? <LostDaysPanel /> : null}
       {packageRequests ? (
         <PackageInvoiceRequestPanel
           canIssue={canRefund}

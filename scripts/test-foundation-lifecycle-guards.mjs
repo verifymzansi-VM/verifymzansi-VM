@@ -2446,15 +2446,16 @@ try {
   });
   await check("events: the member's privacy export includes their submissions", () => {
     const exported = json(`select internal.frontend_privacy_export_data('${cara.id}');`);
-    // 43 datasets since 20261122191646_post_templates.sql added post_templates
-    // (42 since 20261119172135_post_views_and_likes.sql added post_likes and
+    // 44 datasets since 20261125113433_add_lost_days.sql added lost_day_additions
+    // (43 since 20261122191646_post_templates.sql added post_templates;
+    // 42 since 20261119172135_post_views_and_likes.sql added post_likes and
     // post_likes_summary; 40 since 20261119082834_house_slots.sql
     // added house_slot_events; 39 since 20261119025106_package_invoices.sql added
     // package_invoice_requests; 38 since 20261114154823_slot_packages.sql added
     // slot_packages; 37 since 20261114041000_customer_invoice_pay_now.sql added
     // customer_invoices; 36 since 20261113223806 added communication_choices,
     // signup_terms and bank_transfers).
-    assert.equal(Object.keys(exported).length, 43);
+    assert.equal(Object.keys(exported).length, 44);
     const rows = exported.event_submissions;
     assert.equal(
       rows.length,

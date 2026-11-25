@@ -26,7 +26,7 @@ begin
       raise exception 'a refund is the paid amount, for the account that paid' using errcode='23514';
     end if;
     -- A chargeback is the paid amount of the payment or slot; a refund is at
-    -- most what is left of it (20261125110216_staff_part_refunds.sql).
+    -- most what is left of it (20261125133916_staff_part_refunds.sql).
     if new.kind = 'chargeback' and new.amount_cents is distinct from coalesce(
         (select l.amount_cents from private.payment_lines l where l.id = new.payment_line_id),
         case when new.payment_line_id is null then (select p.amount_cents from private.payments p where p.id = new.payment_id) end) then

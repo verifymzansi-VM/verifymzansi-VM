@@ -235,6 +235,8 @@ export function OzowRefundForm({
   const [reasonCode, setReasonCode] = useState("");
   const [amountText, setAmountText] = useState(room ? (room.leftCents / 100).toFixed(2) : "");
   const [problem, setProblem] = useState<string | null>(null);
+  // One id per form opening, sent again on a retry: never refunded twice.
+  const [requestId] = useState(() => crypto.randomUUID());
   const priorCents = room ? room.refundedCents : target.priorCents;
   const needsApproval = priorCents + target.amountCents > APPROVAL_ABOVE_CENTS;
   const dashboard = target.mode === "dashboard";
@@ -272,6 +274,7 @@ export function OzowRefundForm({
             reason: values.reason,
             ...(dashboard ? { ozowRefundId: values.ozowRefundId ?? "" } : {}),
             ...read.extras,
+            ...(Object.keys(read.extras).length > 0 ? { requestId } : {}),
           },
           dashboard
             ? (status) =>

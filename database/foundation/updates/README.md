@@ -90,15 +90,17 @@ part for days we failed to provide). Until this update every refund was a whole
 payment or a whole slot.
 
 - **One refund command.**
-  `api.record_staff_refund(p_payment_id, p_line_id, p_channel, p_amount_cents, p_reason_code, p_reason, p_reference, p_ozow_fact, p_asked_on)`
+  `api.record_staff_refund(p_payment_id, p_line_id, p_channel, p_amount_cents, p_reason_code, p_reason, p_reference, p_ozow_fact, p_asked_on, p_request_id)`
   (capability `payments:refund`, an authenticator code from the last 15 minutes,
   the staff rule of money actions). Channels: `ozow` (the server sends it, only
   in Ozow's 13-day window), `dashboard` (already refunded by hand in the Ozow
   dashboard: `p_reference` is Ozow's refund id; Ozow's amount must be the amount
   recorded) and `reference` (a bank transfer back, or Ozow's reference, under
   the existing reference rules). Refunds only; chargebacks stay whole, on the
-  existing commands. A repeat of the same request by the same staff member
-  returns its state.
+  existing commands. `p_request_id` (new column `request_id`, unique) names one
+  request: sent again with the same input it returns the first record
+  (`repeated`), whatever its state; with other input it is refused (PT409
+  `refund_request_reused`).
 - **The amount.** `p_amount_cents`, or null for everything left: more than 0 and
   at most what the slot and the payment have left (`internal.refund_left_cents`:
   paid, less refunds applied, waiting or on their way through Ozow; PT409
@@ -112,9 +114,11 @@ payment or a whole slot.
   for 'Our failure, after a fix was offered' or 'Billing error' keeps the slot
   running (or it has already ended: item 75's ended slot gets money instead of
   days); every other refund, and any refund of everything left, ends the paid
-  days as before (grant revoked, posts hidden, commission reversed). The member
-  gets the neutral 'Payment update' email either way. 'Duplicate payment' and
-  'Cancelled before the renewal started' refund everything left (PT409
+  days as before (grant revoked, posts hidden, commission reversed). A part
+  refund that keeps the slot running also reverses the partner commission of
+  that slot (or of the payment), as a slot reversal does. The member gets the
+  neutral 'Payment update' email either way. 'Duplicate payment' and 'Cancelled
+  before the renewal started' refund everything left (PT409
   `refund_whole_only`). A waiting renewal blocks only a refund that ends the
   paid days, also when approving and sending.
 - **The first purchase.** Reason `first_purchase_cancelled` (new column
@@ -155,6 +159,65 @@ website reads nothing new. Read-only preflight:
 `../preflight/20261125133916_staff_part_refunds.check.sql`; rollback:
 `../rollback/20261125133916_staff_part_refunds.down.sql`, which refuses once a
 first-purchase or part refund was recorded (fix forward).
+
+## Add lost days to paid slots and packages, 25 November 2026
+
+`20261125113433_add_lost_days.sql` was applied on 25 November 2026 at 13:05 UTC
+(see the applied register). Launch checklist item 75. The posting terms
+(posting-v6) promise that when we fail to provide what a member paid for, or a
+suspension is overturned, we first add the days they lost, and that a package's
+slots still end together. Until this update no command could move a paid end
+date.
+
+- **The preview.** `api.get_lost_days_preview(p_email)` (capability
+  `payments:view`) lists the running paid terms of the active account with this
+  email: one item per Individual slot (its first grant, slots, queued renewals,
+  paid end) and one per Multi-listing package (its slots and end). It records
+  nothing, so staff never add days blind.
+- **The change.** `api.add_lost_days(p_email, p_days, p_reason, p_request_id)`
+  (capability `payments:refund`, an authenticator code from the last 15 minutes)
+  adds 1 to 30 days, with a reason of 5 to 500 characters, to every running paid
+  grant of the member (`retail_paid`, active, complete payment, end still in the
+  future). A running grant ends later; a queued renewal starts and ends later,
+  so the slot's chain stays unbroken; every grant of a package ends later, so
+  its slots still end together. Ended, refunded, charged-back and pending
+  grants, free credits, house slots, free trials and sponsorships never move.
+  The search end of the slots' posts follows at once; each post's own end
+  follows when the lifecycle job reaches it. Nothing is charged, invoiced or
+  emailed.
+- **Safety.** Both commands follow the staff rule of money actions
+  (`internal.assert_staff_payment_actor`). One change at a time per member: the
+  advisory lock package deliveries take, then the grants locked in id order, the
+  staff member checked again after the wait and the grants read again (PT409
+  `lost_days_busy` when a delivery changed them meanwhile). A repeated request
+  id with the same input returns the first answer and adds nothing; with other
+  input it is refused (PT409 `lost_days_request_reused`).
+- **At most 30 days per slot.** A change is refused (PT409 `lost_days_limit`)
+  when, for any grant it would move, the days already added to that grant plus
+  the new days exceed 30. Beyond that, staff refund instead.
+- **The record.** New append-only `private.lost_day_additions`: one row per
+  grant moved (request, grant, staff member, days, start and end before and
+  after, reason, time); deleted only with its grant (commerce retention).
+- **Privacy export.** `internal.frontend_privacy_export_data` (full body) adds
+  the dataset `lost_day_additions` (never the staff member). The staff export
+  reader accepts more datasets than its minimum (42), so the live website reads
+  the export unchanged.
+- **Adding slots to a package.** `internal.slot_package_add_quote` (full body)
+  counts at most term_days - 1 whole days left (179 for a 180-day package), so a
+  package with added days keeps every existing bound (the added-slots request
+  check, the website's add offer and the staff queue) and an added slot never
+  costs more than a full term; the member keeps the extra days free.
+
+Owner decisions (delegated to the coordinator): only running slots get days, an
+ended slot gets a refund instead; no all-accounts version; no automatic member
+email.
+
+Expand only. ORDER: **apply-first** (apply in production, then merge): the
+Deploy gate probes every command of `../runtime-api-manifest.json`, and the live
+website reads nothing new. Read-only preflight:
+`../preflight/20261125113433_add_lost_days.check.sql`; rollback:
+`../rollback/20261125113433_add_lost_days.down.sql`, which refuses once any days
+were added (the days and their record stay: write a forward update).
 
 ## Paid add-ons retired, 25 November 2026
 
@@ -8012,6 +8075,14 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   applied" with add-on versions on sale 0 and the same counts; production
   fingerprint after it (fingerprint.sql) matched the full replay (except the
   known schema grant difference)
+
+- `20261125113433_add_lost_days.sql`: applied 2026-11-25 13:05 UTC; apply-first,
+  owner-approved, before pull request #363 was merged; Supabase SQL editor
+  (browser), file from raw GitHub at bef94898, update sha256 starting
+  61dcf8481a3fffeb; preflight before "update not applied; running paid grants:
+  0" with no problem rows, after "already applied; running paid grants: 0;
+  additions: 0"; production fingerprint after it (fingerprint.sql) matched the
+  full replay (except the known schema grant difference)
 
 - `20261125133916_staff_part_refunds.sql`: pending; apply-first
 

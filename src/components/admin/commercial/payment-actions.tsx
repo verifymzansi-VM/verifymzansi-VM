@@ -88,6 +88,8 @@ export function RefundForm({
   const [reasonCode, setReasonCode] = useState("");
   const [amount, setAmount] = useState(room ? (room.leftCents / 100).toFixed(2) : "");
   const [problem, setProblem] = useState<string | null>(null);
+  // One id per form opening, sent again on a retry: never refunded twice.
+  const [requestId] = useState(() => crypto.randomUUID());
   const what = refund ? "refund" : "chargeback";
   const bank = target.method === "invoice" || (target.method === "bank" && refund);
   const priorCents = room ? room.refundedCents : target.priorCents;
@@ -121,6 +123,7 @@ export function RefundForm({
                 paymentId: target.scope === "slot" ? target.paymentId : target.id,
                 lineId: target.scope === "slot" ? target.id : null,
                 ...part.extras,
+                requestId,
                 reasonCode: values.reasonCode,
                 ozowReference: values.ozowReference ?? "",
                 reason: values.reason,

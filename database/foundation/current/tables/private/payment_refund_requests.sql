@@ -43,6 +43,7 @@ create table private.payment_refund_requests (
   close_reason text,
   ends_paid_days boolean default true not null,
   customer_asked_on date,
+  request_id uuid,
   constraint payment_refund_requests_account_id_fkey FOREIGN KEY (account_id) REFERENCES auth.users(id) ON DELETE RESTRICT,
   constraint payment_refund_requests_amount_cents_check CHECK (amount_cents > 0),
   constraint payment_refund_requests_applied CHECK ((status = 'applied'::text) = (applied_at IS NOT NULL) AND (released_activations IS NULL OR status = 'applied'::text)),
@@ -99,6 +100,7 @@ CREATE UNIQUE INDEX payment_refund_requests_ozow_key_idx ON private.payment_refu
 CREATE UNIQUE INDEX payment_refund_requests_ozow_refund_idx ON private.payment_refund_requests USING btree (ozow_refund_id) WHERE ((ozow_refund_id IS NOT NULL) AND (status <> 'declined'::text));
 CREATE INDEX payment_refund_requests_payment_idx ON private.payment_refund_requests USING btree (payment_id);
 CREATE UNIQUE INDEX payment_refund_requests_reference_idx ON private.payment_refund_requests USING btree (lower(ozow_reference)) WHERE (status <> 'declined'::text);
+CREATE UNIQUE INDEX payment_refund_requests_request_idx ON private.payment_refund_requests USING btree (request_id) WHERE (request_id IS NOT NULL);
 CREATE INDEX payment_refund_requests_requested_by_idx ON private.payment_refund_requests USING btree (requested_by);
 CREATE INDEX payment_refund_requests_send_due_idx ON private.payment_refund_requests USING btree (status, last_send_at) WHERE ((channel = 'api'::text) AND (status = ANY (ARRAY['approved'::text, 'sent'::text])));
 CREATE INDEX payment_refund_requests_transaction_idx ON private.payment_refund_requests USING btree (ozow_transaction_id) WHERE (ozow_transaction_id IS NOT NULL);

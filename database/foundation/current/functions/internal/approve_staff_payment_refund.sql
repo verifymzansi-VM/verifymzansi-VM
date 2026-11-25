@@ -56,7 +56,7 @@ begin
   end if;
   -- A renewal of the slot bought while the refund waited: refund the renewal
   -- first (decline this one and record it again afterwards). Only a refund
-  -- that ends the paid days (20261125110216_staff_part_refunds.sql).
+  -- that ends the paid days (20261125133916_staff_part_refunds.sql).
   if request.kind = 'refunded' and request.ends_paid_days
       and internal.refund_renewal_waiting(pay.id, request.payment_line_id) then
     raise exception 'a renewal of this slot is waiting; refund the renewal first, then this period' using errcode='PT409', detail='renewal_queued';
