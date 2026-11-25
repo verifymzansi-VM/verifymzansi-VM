@@ -124,6 +124,37 @@ rollback:
 `../rollback/20261125174942_end_admin_role_before_restriction.down.sql` (puts
 the three earlier bodies back).
 
+## Small lifecycle rules, 25 November 2026
+
+`20261125150215_small_lifecycle_rules.sql` is pending (see the applied
+register). Launch checklist item 40.
+
+- **Free events at most 12 months ahead.** A new trigger on
+  `private.event_details` refuses an inserted or changed start more than 365
+  days after now (22023, detail `event_too_far_ahead`), the rule the website
+  form already applies. Unchanged starts are not checked again.
+- **Sticker renewal reminder.** New outbox kind `sticker_renewal_reminder`: one
+  email 30 days before an approved CIPC or Seen check ends, while it is still
+  its business's latest decision of that kind, no check of that kind waits for
+  review, the business is live or paused and its owner can sign in
+  (`internal.sticker_renewal_reminder_key`, queued by
+  `internal.queue_sticker_renewal_reminders` from `api.run_slot_renewals`). The
+  key names the end, so a renewed sticker gets its own reminder. Linked CIPC
+  stickers renew with their main profile and get none.
+  `internal.claim_supported_notification_outbox` (full body) accepts 27 kinds,
+  re-checks the key at claim and adds the sticker's kind, end and business.
+- **A reported post waits for staff.** `internal.delete_post` (full body)
+  refuses while any report on the post is open (PT409, detail
+  `post_report_open`), the rule the scheduled clean-up already follows. The
+  owner can still hide the post.
+
+No API command or argument is added or removed. ORDER: apply first, then merge.
+Read-only preflight:
+`../preflight/20261125150215_small_lifecycle_rules.check.sql` (expect "update
+not applied" and "events starting over 365 days ahead: 0"); rollback:
+`../rollback/20261125150215_small_lifecycle_rules.down.sql` (deletes the sticker
+reminders, which are notifications only).
+
 ## Staff refunds: the first purchase and part refunds, 25 November 2026
 
 `20261125133916_staff_part_refunds.sql` was applied on 25 November 2026 at 16:28
@@ -8191,6 +8222,8 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   "already applied" with the same counts; production fingerprint after it
   (fingerprint.sql) matched the full replay (except the known schema grant
   difference)
+
+- `20261125150215_small_lifecycle_rules.sql`: pending
 
 - `20261125174942_end_admin_role_before_restriction.sql`: pending
 

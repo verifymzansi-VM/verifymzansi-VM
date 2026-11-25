@@ -104,3 +104,25 @@ it("explains a staff hold the same way for every owner action", async () => {
   }
   expect(rpc).toHaveBeenCalledTimes(5);
 });
+it("explains that a reported post can be hidden but not deleted until staff have looked", async () => {
+  rpc.mockResolvedValueOnce({
+    data: null,
+    error: {
+      code: "PT409",
+      details: "post_report_open",
+      message: "a reported post cannot be deleted",
+    },
+  });
+  const response = await handleRestoredPostAction(request(), "delete");
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({
+    error:
+      "Someone reported this post. You can hide it now, and delete it once our team has looked at the report.",
+    reason: "post_report_open",
+  });
+  // Any other conflict keeps the general reload message.
+  rpc.mockResolvedValueOnce({ data: null, error: { code: "PT409", details: "post changed" } });
+  expect((await (await handleRestoredPostAction(request(), "delete")).json()).reason).toBe(
+    "post_changed"
+  );
+});

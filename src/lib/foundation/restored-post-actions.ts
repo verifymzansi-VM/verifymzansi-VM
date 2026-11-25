@@ -22,6 +22,10 @@ const lifecycle = z.strictObject({
  * mark sold, reactivate) is refused until an independent release. */
 const STAFF_HOLD_MESSAGE =
   "This post is hidden while our team reviews it. You can't republish, sell or delete it until the review is finished.";
+/** Deleting is refused while a report on the post is open
+ * (20261125150215_small_lifecycle_rules.sql); hiding it still works. */
+const REPORTED_POST_MESSAGE =
+  "Someone reported this post. You can hide it now, and delete it once our team has looked at the report.";
 class ActionRefusal extends Error {
   override name = "ActionRefusal";
   constructor(readonly refusal: FoundationRefusal) {
@@ -86,6 +90,12 @@ export function handleRestoredPostAction(
             error: "An active posting plan is required",
             reason: "posting_plan_required",
             upgradeUrl: `/pricing?area=${value.area}`,
+          });
+        if (code === "PT409" && hasDatabaseReason(result.error, "post_report_open"))
+          throw new ActionRefusal({
+            status: 409,
+            error: REPORTED_POST_MESSAGE,
+            reason: "post_report_open",
           });
         if (code === "PT409")
           throw new ActionRefusal({

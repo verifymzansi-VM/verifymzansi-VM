@@ -51,6 +51,7 @@ const kind = z.enum([
   "staff_privacy_request",
   "staff_appeal",
   "staff_report",
+  "sticker_renewal_reminder",
 ]);
 type Kind = z.infer<typeof kind>;
 // Emails to staff about a new privacy request, appeal or report, with its
@@ -72,6 +73,8 @@ const otherKinds = kind.options.filter((k) => !paymentKinds.includes(k));
 // such a database the job drops them one update at a time until the claim is
 // accepted, and keeps that list.
 const laterKinds: ReadonlyArray<ReadonlySet<Kind>> = [
+  // 20261125150215_small_lifecycle_rules.sql
+  new Set<Kind>(["sticker_renewal_reminder"]),
   // 20261125131322_lost_email_alert_staff_deadlines.sql
   staffKinds,
   // 20261122182304_free_credit_reminder.sql
@@ -223,6 +226,11 @@ const jobSchema = z
     staff_severity: z.enum(["high", "standard"]).nullable().optional(),
     staff_received_at: z.iso.datetime({ offset: true }).nullable().optional(),
     staff_due_at: z.iso.datetime({ offset: true }).nullable().optional(),
+    // Only for sticker_renewal_reminder (20261125150215): which sticker, when
+    // it ends and its business.
+    sticker_kind: z.enum(["cipc", "seen"]).nullable().optional(),
+    sticker_expires_at: z.iso.datetime({ offset: true }).nullable().optional(),
+    sticker_business_id: z.uuid().nullable().optional(),
   })
   .refine(
     (job) =>
@@ -542,14 +550,20 @@ export async function runFoundationOperationJobs(
                       ? deliver(recipient, job.kind, key, undefined, {
                           creditEndsAt: job.credit_ends_at ?? null,
                         })
-                      : job.kind === "trial_started"
+                      : job.kind === "sticker_renewal_reminder"
                         ? deliver(recipient, job.kind, key, undefined, {
-                            trialEndsAt: job.trial_ends_at ?? null,
-                            trialFundsPost: job.trial_funds_post ?? null,
+                            stickerKind: job.sticker_kind ?? null,
+                            stickerEndsAt: job.sticker_expires_at ?? null,
+                            stickerBusinessId: job.sticker_business_id ?? null,
                           })
-                        : receiptDetails
-                          ? deliver(recipient, job.kind, key, undefined, receiptDetails)
-                          : deliver(recipient, job.kind, key)
+                        : job.kind === "trial_started"
+                          ? deliver(recipient, job.kind, key, undefined, {
+                              trialEndsAt: job.trial_ends_at ?? null,
+                              trialFundsPost: job.trial_funds_post ?? null,
+                            })
+                          : receiptDetails
+                            ? deliver(recipient, job.kind, key, undefined, receiptDetails)
+                            : deliver(recipient, job.kind, key)
         );
         success = result.success;
         unknown = !success && result.outcomeUnknown === true;

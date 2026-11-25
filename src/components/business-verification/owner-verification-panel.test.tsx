@@ -117,3 +117,33 @@ describe("CIPC upload", () => {
     expect(screen.queryByRole("checkbox", { name: /registered office as my business/ })).toBeNull();
   });
 });
+
+describe("Seen renewal", () => {
+  const withSeen = (days: number) => {
+    const expiresAt = new Date(Date.now() + days * 86_400_000).toISOString();
+    fetchMock = vi.fn(() =>
+      json({
+        ...STATE,
+        stickers: {
+          idReviewed: true,
+          cipc: null,
+          seen: { verifiedAt: "2025-12-20T10:00:00Z", expiresAt, method: "video", city: null },
+        },
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+  };
+  it("offers the booking form from 60 days before the sticker ends", async () => {
+    withSeen(30);
+    render(<OwnerVerificationPanel businessId="b1" />);
+    expect(await screen.findByText(/Seen on live video · .* · renew by /)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Book my check" })).toBeInTheDocument();
+  });
+  it("shows only the sticker while its end is further away", async () => {
+    withSeen(200);
+    render(<OwnerVerificationPanel businessId="b1" />);
+    expect((await screen.findAllByText(/Seen on live video · /)).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/renew by/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Book my check" })).not.toBeInTheDocument();
+  });
+});

@@ -9,10 +9,10 @@ CREATE OR REPLACE FUNCTION internal.claim_supported_notification_outbox(p_suppor
 AS $function$
 declare result jsonb;
 begin
-  -- Each kind once; 26 kinds since the staff deadline emails.
-  if p_supported_kinds is null or cardinality(p_supported_kinds) not between 1 and 26 or coalesce(array_ndims(p_supported_kinds),0)<>1
+  -- Each kind once; 27 kinds since the sticker renewal reminder.
+  if p_supported_kinds is null or cardinality(p_supported_kinds) not between 1 and 27 or coalesce(array_ndims(p_supported_kinds),0)<>1
     or (select count(distinct coalesce(k,'')) from unnest(p_supported_kinds) k)<>cardinality(p_supported_kinds) then raise exception 'supported mail kinds required' using errcode='22023';end if;
-  if exists(select 1 from unnest(p_supported_kinds) k where k is null or k not in('payment_completed','payment_reversed','payment_reconciliation_required','trial_started','post_expired','post_expiry_reminder','draft_deletion_warning','post_deleted','verification_phone_confirmed','identity_accepted','enquiry_received','account_warning','content_hidden','account_suspended','account_banned','appeal_decided','business_check_update','post_sold','post_kept','verification_returned','slot_renewal_reminder','term_ending_notice','free_credit_reminder','staff_privacy_request','staff_appeal','staff_report')) then raise exception 'unsupported mail kind' using errcode='22023';end if;
+  if exists(select 1 from unnest(p_supported_kinds) k where k is null or k not in('payment_completed','payment_reversed','payment_reconciliation_required','trial_started','post_expired','post_expiry_reminder','draft_deletion_warning','post_deleted','verification_phone_confirmed','identity_accepted','enquiry_received','account_warning','content_hidden','account_suspended','account_banned','appeal_decided','business_check_update','post_sold','post_kept','verification_returned','slot_renewal_reminder','term_ending_notice','free_credit_reminder','staff_privacy_request','staff_appeal','staff_report','sticker_renewal_reminder')) then raise exception 'unsupported mail kind' using errcode='22023';end if;
   if p_limit is null or p_limit not between 1 and 50 then raise exception 'invalid limit' using errcode='22023'; end if;
   with due as (select id from private.outbox_events where kind=any(p_supported_kinds) and processed_at is null
     and delivery_attempts<8 and delivery_after<=statement_timestamp()
@@ -27,7 +27,8 @@ begin
       and (o.kind<>'slot_renewal_reminder' or internal.slot_renewal_due(o.subject_id,o.owner_id))
       and (o.kind<>'term_ending_notice' or internal.term_ending_notice_due(o.subject_id,o.owner_id))
       and (o.kind<>'free_credit_reminder' or o.dedupe_key=internal.free_credit_reminder_key(o.subject_id,o.owner_id))
-      and (o.kind not in('staff_privacy_request','staff_appeal','staff_report') or internal.staff_email_due(o.kind,o.subject_id,o.owner_id)) then u.email end,
+      and (o.kind not in('staff_privacy_request','staff_appeal','staff_report') or internal.staff_email_due(o.kind,o.subject_id,o.owner_id))
+      and (o.kind<>'sticker_renewal_reminder' or o.dedupe_key=internal.sticker_renewal_reminder_key(o.subject_id,o.owner_id)) then u.email end,
     'post_title',p.title,'post_id',p.id,'created_at',o.created_at,'notice_reason',case when o.kind='account_warning' then (select r.reason from private.frontend_report_action_receipts r join private.frontend_account_warnings w on w.receipt_id=r.id where r.id=o.subject_id and w.account_id=o.owner_id) end,
     'deletes_at',p.deletes_at,
     'holds_slot',case when p.id is not null then exists(select 1 from private.post_activations a where a.post_id=p.id and a.released_at is null) end,
@@ -66,10 +67,15 @@ begin
     'staff_received_at',coalesce(sp.received_at,sa.created_at,sr.created_at),
     'staff_due_at',case o.kind when 'staff_privacy_request' then sp.effective_due_at
       when 'staff_appeal' then internal.staff_due_after(sa.created_at,3)
-      when 'staff_report' then internal.staff_due_after(sr.created_at,2) end) order by o.created_at,o.id),'[]'::jsonb)
+      when 'staff_report' then internal.staff_due_after(sr.created_at,2) end,
+    -- The sticker renewal reminder: which sticker, when it ends and its
+    -- business (the email links to that business's verification page).
+    'sticker_kind',sc.kind,
+    'sticker_expires_at',sc.expires_at,
+    'sticker_business_id',sc.business_id) order by o.created_at,o.id),'[]'::jsonb)
     into result from claimed o left join auth.users u on u.id=o.owner_id
     left join private.enquiries e on o.kind='enquiry_received' and e.id=o.subject_id
-    left join private.posts p on o.kind not in('staff_privacy_request','staff_appeal','staff_report')
+    left join private.posts p on o.kind not in('staff_privacy_request','staff_appeal','staff_report','sticker_renewal_reminder')
       and p.id=case when o.kind='enquiry_received' then e.post_id else o.subject_id end
     left join private.entitlements tr on o.kind='trial_started' and tr.id=o.subject_id and tr.source='intro_trial'
       and tr.owner_id=o.owner_id and tr.status='active'
@@ -79,7 +85,9 @@ begin
       and fc.source='free_credit'
     left join private.privacy_requests sp on o.kind='staff_privacy_request' and sp.id=o.subject_id
     left join private.frontend_appeals sa on o.kind='staff_appeal' and sa.id=o.subject_id
-    left join private.reports sr on o.kind='staff_report' and sr.id=o.subject_id;
+    left join private.reports sr on o.kind='staff_report' and sr.id=o.subject_id
+    left join private.frontend_business_checks sc on o.kind='sticker_renewal_reminder' and sc.id=o.subject_id
+      and sc.owner_id=o.owner_id and sc.kind in('cipc','seen');
   return result;
 end;
 $function$;
