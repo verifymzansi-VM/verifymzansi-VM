@@ -111,13 +111,13 @@ begin
         'internal.payment_net_cents(private.payments) 28d85be00f5d30c0f2121b120ea55dc9',
         'internal.payment_net_cents(private.payments) 237b3d0054e49f02f2da9cd227d5c789',
         'internal.approve_staff_payment_refund(uuid) 189b3f24e9b847bf75760eeaae9b2686',
-        'internal.approve_staff_payment_refund(uuid) be81e7fe3ff545e00e9cd5b0b26e1860',
+        'internal.approve_staff_payment_refund(uuid) 5b0bbcf818b46f09b70a4f507a66a4af',
         'internal.apply_ozow_refund_state(uuid,text,timestamp with time zone,timestamp with time zone,text) 431e2541a83cf8e892efd61aa5cacd4d',
         'internal.apply_ozow_refund_state(uuid,text,timestamp with time zone,timestamp with time zone,text) 0ea76f550ca87fa76fe8431f390ceb4c',
         'internal.claim_ozow_refund_send(uuid) c16477b6080ff5e7075f63936cd5383b',
         'internal.claim_ozow_refund_send(uuid) 3b5affd02d571f3aa264dfd17ad938cb',
         'internal.za_public_holiday(date) absent',
-        'internal.za_public_holiday(date) b9cf3aed314a50c059acca41d3decc47',
+        'internal.za_public_holiday(date) da84c3f6ecadd2c77d9460af069ec241',
         'internal.za_business_day(date) absent',
         'internal.za_business_day(date) 75386489557e85499d60cba6160b094a',
         'internal.first_purchase_last_ask_day(timestamp with time zone) absent',
@@ -172,18 +172,23 @@ CREATE OR REPLACE FUNCTION internal.za_public_holiday(p_day date)
  SET search_path TO 'pg_catalog'
 AS $function$
 declare
-  fixed constant text[] := array['01-01', '03-21', '04-27', '05-01', '06-16', '08-09', '09-24', '12-16', '12-25', '12-26'];
-  y integer; a integer; b integer; c integer; d integer; e integer; f integer; g integer; h integer;
+  -- Month * 100 + day of each fixed date.
+  fixed constant integer[] := array[101, 321, 427, 501, 616, 809, 924, 1216, 1225, 1226];
+  md integer; y integer; a integer; b integer; c integer; d integer; e integer; f integer; g integer; h integer;
   i integer; k integer; l integer; m integer; easter date;
 begin
   if p_day is null then return null; end if;
+  md := extract(month from p_day)::integer * 100 + extract(day from p_day)::integer;
   -- The fixed dates of the Public Holidays Act.
-  if to_char(p_day, 'MM-DD') = any(fixed) then return true; end if;
+  if md = any(fixed) then return true; end if;
   -- A public holiday on a Sunday: the Monday after it is one.
-  if extract(isodow from p_day) = 1 and to_char(p_day - 1, 'MM-DD') = any(fixed) then return true; end if;
+  if extract(isodow from p_day) = 1
+      and extract(month from p_day - 1)::integer * 100 + extract(day from p_day - 1)::integer = any(fixed) then
+    return true;
+  end if;
   -- Christmas on a Sunday: the Monday is already the Day of Goodwill, so the
   -- Tuesday (27 December) is kept free as well.
-  if to_char(p_day, 'MM-DD') = '12-27' and extract(isodow from p_day) = 2 then return true; end if;
+  if md = 1227 and extract(isodow from p_day) = 2 then return true; end if;
   -- Good Friday and Family Day (the Monday after Easter Sunday). Easter
   -- Sunday by the Gregorian calendar (the anonymous algorithm).
   y := extract(year from p_day)::integer;
@@ -780,7 +785,7 @@ CREATE OR REPLACE FUNCTION internal.approve_staff_payment_refund(p_request_id uu
  SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$
-declare actor uuid; request private.payment_refund_requests; pay private.payments; result jsonb;
+declare actor uuid; request private.payment_refund_requests; pay private.payments;
 begin
   actor := internal.staff_actor('payments:refund');
   if p_request_id is null then raise exception 'refund request required' using errcode='22023'; end if;
@@ -859,7 +864,7 @@ begin
   -- a failed reversal puts the record back to waiting.
   update private.payment_refund_requests set status = 'applied', approved_by = actor, applied_at = statement_timestamp()
     where id = request.id;
-  result := internal.apply_staff_refund(request.id, actor);
+  perform internal.apply_staff_refund(request.id, actor);
   perform internal.staff_actor('payments:refund');
   perform internal.assert_staff_payment_actor(actor, request.account_id);
   select * into request from private.payment_refund_requests r where r.id = p_request_id;

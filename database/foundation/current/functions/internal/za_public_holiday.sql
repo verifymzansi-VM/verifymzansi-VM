@@ -8,18 +8,23 @@ CREATE OR REPLACE FUNCTION internal.za_public_holiday(p_day date)
  SET search_path TO 'pg_catalog'
 AS $function$
 declare
-  fixed constant text[] := array['01-01', '03-21', '04-27', '05-01', '06-16', '08-09', '09-24', '12-16', '12-25', '12-26'];
-  y integer; a integer; b integer; c integer; d integer; e integer; f integer; g integer; h integer;
+  -- Month * 100 + day of each fixed date.
+  fixed constant integer[] := array[101, 321, 427, 501, 616, 809, 924, 1216, 1225, 1226];
+  md integer; y integer; a integer; b integer; c integer; d integer; e integer; f integer; g integer; h integer;
   i integer; k integer; l integer; m integer; easter date;
 begin
   if p_day is null then return null; end if;
+  md := extract(month from p_day)::integer * 100 + extract(day from p_day)::integer;
   -- The fixed dates of the Public Holidays Act.
-  if to_char(p_day, 'MM-DD') = any(fixed) then return true; end if;
+  if md = any(fixed) then return true; end if;
   -- A public holiday on a Sunday: the Monday after it is one.
-  if extract(isodow from p_day) = 1 and to_char(p_day - 1, 'MM-DD') = any(fixed) then return true; end if;
+  if extract(isodow from p_day) = 1
+      and extract(month from p_day - 1)::integer * 100 + extract(day from p_day - 1)::integer = any(fixed) then
+    return true;
+  end if;
   -- Christmas on a Sunday: the Monday is already the Day of Goodwill, so the
   -- Tuesday (27 December) is kept free as well.
-  if to_char(p_day, 'MM-DD') = '12-27' and extract(isodow from p_day) = 2 then return true; end if;
+  if md = 1227 and extract(isodow from p_day) = 2 then return true; end if;
   -- Good Friday and Family Day (the Monday after Easter Sunday). Easter
   -- Sunday by the Gregorian calendar (the anonymous algorithm).
   y := extract(year from p_day)::integer;

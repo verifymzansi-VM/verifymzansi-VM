@@ -41,10 +41,10 @@ begin
     if shape not in (
         'internal.payment_refund_request_guard() 9e8a87d429606cdd7c092cee4ba695ba',
         'internal.payment_net_cents(private.payments) 237b3d0054e49f02f2da9cd227d5c789',
-        'internal.approve_staff_payment_refund(uuid) be81e7fe3ff545e00e9cd5b0b26e1860',
+        'internal.approve_staff_payment_refund(uuid) 5b0bbcf818b46f09b70a4f507a66a4af',
         'internal.apply_ozow_refund_state(uuid,text,timestamp with time zone,timestamp with time zone,text) 0ea76f550ca87fa76fe8431f390ceb4c',
         'internal.claim_ozow_refund_send(uuid) 3b5affd02d571f3aa264dfd17ad938cb',
-        'internal.za_public_holiday(date) b9cf3aed314a50c059acca41d3decc47',
+        'internal.za_public_holiday(date) da84c3f6ecadd2c77d9460af069ec241',
         'internal.za_business_day(date) 75386489557e85499d60cba6160b094a',
         'internal.first_purchase_last_ask_day(timestamp with time zone) ef96b90f35d916053e7fa5ca05acebd4',
         'internal.payment_is_first_purchase(uuid) 3f369250c24ea059f2c3b13102981076',

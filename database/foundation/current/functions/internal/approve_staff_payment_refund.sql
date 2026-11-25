@@ -7,7 +7,7 @@ CREATE OR REPLACE FUNCTION internal.approve_staff_payment_refund(p_request_id uu
  SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$
-declare actor uuid; request private.payment_refund_requests; pay private.payments; result jsonb;
+declare actor uuid; request private.payment_refund_requests; pay private.payments;
 begin
   actor := internal.staff_actor('payments:refund');
   if p_request_id is null then raise exception 'refund request required' using errcode='22023'; end if;
@@ -86,7 +86,7 @@ begin
   -- a failed reversal puts the record back to waiting.
   update private.payment_refund_requests set status = 'applied', approved_by = actor, applied_at = statement_timestamp()
     where id = request.id;
-  result := internal.apply_staff_refund(request.id, actor);
+  perform internal.apply_staff_refund(request.id, actor);
   perform internal.staff_actor('payments:refund');
   perform internal.assert_staff_payment_actor(actor, request.account_id);
   select * into request from private.payment_refund_requests r where r.id = p_request_id;
