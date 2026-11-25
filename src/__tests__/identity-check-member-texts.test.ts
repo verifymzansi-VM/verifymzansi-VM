@@ -67,7 +67,7 @@ describe("automatic ID checks, member side", () => {
     // after a good-standing closure; names, phones and the one-way code stay 5 years.
     const panel = readFileSync(join(root, "app", "verification", "verification-ui.tsx"), "utf8");
     expect(panel).toContain(
-      "Once verified: selfie and ID number kept until 90 days after you close your account; names, phone and a one-way code for 5 years"
+      "Once verified: selfie and ID number kept until 90 days after you close your account; names, phone and a one-way code until 5 years after"
     );
     expect(panel).not.toContain("selfie, ID number, names and phone kept until 5 years");
   });
