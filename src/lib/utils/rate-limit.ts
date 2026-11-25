@@ -94,6 +94,11 @@ interface RateLimitOptions {
   degradedMode?: "local" | "block";
   /** When true, check the counter without incrementing (read-only). */
   readOnly?: boolean;
+  /**
+   * When true, a limited answer records no security event: for throttles the
+   * site's own pages hit in normal use (an expected wait, not abuse).
+   */
+  quiet?: boolean;
 }
 
 interface RateLimitResult {
@@ -195,7 +200,7 @@ export function getClientRateLimitKey(request: Request): string {
  */
 export async function checkRateLimit(opts: RateLimitOptions): Promise<RateLimitResult> {
   const result = await checkSharedRateLimit(opts);
-  if (result.limited && !result.degraded)
+  if (result.limited && !result.degraded && !opts.quiet)
     recordSecurityEvent({
       event: "request.rate_limited",
       rateLimitKey: opts.key,

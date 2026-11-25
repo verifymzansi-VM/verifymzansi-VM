@@ -20,7 +20,7 @@ const STICKERS = [
   {
     icon: IdCard,
     name: "ID reviewed",
-    means: "Our team reviewed the phone, ID and selfie of the person who runs the profile.",
+    means: "We reviewed the phone, ID and selfie of the person who runs the profile.",
     not: "It doesn't check the business itself.",
   },
   {
@@ -97,7 +97,7 @@ export default function BusinessVerificationHelpPage() {
             <SectionHeading
               id="stickers-title"
               title="The three stickers"
-              lede="Each one is reviewed by our team."
+              lede="Each one is reviewed before it shows."
             />
             <ul className="mt-6 grid gap-3 sm:grid-cols-3">
               {STICKERS.map((s) => (

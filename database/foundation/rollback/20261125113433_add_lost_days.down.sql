@@ -1,4 +1,4 @@
--- Reviewed rollback for updates/20261125024039_add_lost_days.sql.
+-- Reviewed rollback for updates/20261125113433_add_lost_days.sql.
 -- Not part of the replay. Run it only if that update must be undone, after the
 -- owner has decided so; prefer a forward fix. Deploy a website without the
 -- "Add lost days" panel first: it would then get an error.

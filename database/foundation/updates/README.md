@@ -82,7 +82,7 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Add lost days to paid slots and packages, 25 November 2026
 
-`20261125024039_add_lost_days.sql` is pending (see the applied register). Launch
+`20261125113433_add_lost_days.sql` is pending (see the applied register). Launch
 checklist item 75. The posting terms (posting-v6) promise that when we fail to
 provide what a member paid for, or a suspension is overturned, we first add the
 days they lost, and that a package's slots still end together. Until this update
@@ -134,9 +134,45 @@ email.
 Expand only. ORDER: **apply-first** (apply in production, then merge): the
 Deploy gate probes every command of `../runtime-api-manifest.json`, and the live
 website reads nothing new. Read-only preflight:
-`../preflight/20261125024039_add_lost_days.check.sql`; rollback:
-`../rollback/20261125024039_add_lost_days.down.sql`, which refuses once any days
+`../preflight/20261125113433_add_lost_days.check.sql`; rollback:
+`../rollback/20261125113433_add_lost_days.down.sql`, which refuses once any days
 were added (the days and their record stay: write a forward update).
+
+## Paid add-ons retired, 25 November 2026
+
+`20261125044115_retire_paid_addons.sql` was applied on 25 November 2026 at 10:17
+UTC (see the applied register). Launch checklist item 37: Urgent, Boost and
+Featured are no longer sold. The website stopped offering them in pull request
+#358, and its readers accept the add-on fields as missing since that release.
+This update is the database step.
+
+- **Versions retired.** The three add-on versions (`private.addon_versions`,
+  boost, featured and urgent, version 1) get `retired_at`. Catalogue versions
+  are immutable, so this is final; selling an add-on again needs a new version
+  in a new update.
+- **`api.start_checkout` stays, inert.** Since
+  `20261113002421_individual_slots_r69.sql` it sells only add-ons, and it reads
+  only versions that are not retired, so it now refuses every product with 22023
+  "product not available" and creates no payment. It is a baseline command
+  (`../candidate.sql`, `../api-manifest.json`) that nothing in `src/` or
+  `workers/` calls; keeping it needs no contract step and no change to the
+  baseline contracts.
+- **Replies without add-on fields** (full bodies; every other field unchanged):
+  `internal.billing_catalogue` (no `addons` list, no plan `addon_capabilities`),
+  `internal.get_my_billing` (no slot `addon_capabilities`) and
+  `internal.get_my_frontend_post_manager` (no `addons` dates).
+- **Kept.** The add-on tables and columns (history, checks, foreign keys and
+  immutability guards) and the settlement, staff activation and refund paths for
+  add-on payments, so an add-on payment already on record is still shown and can
+  still be refunded. Pending add-on payments expire within the hour as before.
+
+No API command, argument, return type or grant changes. ORDER: apply first, then
+merge. Read-only preflight:
+`../preflight/20261125044115_retire_paid_addons.check.sql` (expect "update not
+applied", 3 add-on versions on sale, no complete, refunded or charged-back
+add-on payment and 0 add-on windows running); rollback:
+`../rollback/20261125044115_retire_paid_addons.down.sql` (puts the three read
+bodies back; the versions stay retired).
 
 ## The member's consent to the automatic ID check, 25 November 2026
 
@@ -7949,6 +7985,16 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   production fingerprint after it (fingerprint.sql) matched the full replay
   (except the known schema grant difference)
 
-- `20261125024039_add_lost_days.sql`: pending; apply-first
+- `20261125044115_retire_paid_addons.sql`: applied 2026-11-25 10:17 UTC;
+  apply-first, owner-approved, before pull request #364 was merged; Supabase SQL
+  editor (browser), file from raw GitHub at 435c0be4, update sha256 starting
+  a78b758dbfeae58b; preflight before "update not applied; add-on versions on
+  sale: 3; add-on payments: pending 0, complete 0, refunded or charged back 0,
+  other 0; add-on windows running: 0" with no problem rows, after "already
+  applied" with add-on versions on sale 0 and the same counts; production
+  fingerprint after it (fingerprint.sql) matched the full replay (except the
+  known schema grant difference)
+
+- `20261125113433_add_lost_days.sql`: pending; apply-first
 
 <!-- applied-register:end -->

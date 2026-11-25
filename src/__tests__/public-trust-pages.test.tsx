@@ -60,6 +60,10 @@ describe("public trust pages", () => {
     for (const step of ["Phone verified", "ID & selfie reviewed", "Area shared"]) {
       expect(screen.getByRole("heading", { name: step })).toBeInTheDocument();
     }
+    // True on every ID check setting (staff or Didit).
+    expect(
+      screen.getByText("Checked by our team or our verification partner, then encrypted.")
+    ).toBeInTheDocument();
     for (const label of ["Pending review", "Incomplete", "Unregistered", "ID reviewed"]) {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0);
     }
@@ -107,9 +111,67 @@ describe("public trust pages", () => {
     expect(screen.getByRole("heading", { name: "Third parties" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "What other people can see" })).toBeInTheDocument();
     expect(screen.getByText(/If we discover a data breach/i)).toBeInTheDocument();
+    // Keep-for periods as the applied database rules run them
+    // (20261122022323_identity_keep_for.sql).
+    expect(screen.getAllByText(/deleted 90 days after you close it/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/keeps only the one-way code/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/5 years after the end of the tax year/i)).toBeInTheDocument();
+    // Section 18: who is responsible, what is required, and where data goes.
+    expect(screen.getByRole("heading", { name: "Who we are" })).toBeInTheDocument();
     expect(
-      screen.getAllByText(/scheduled for deletion 30 days after the case decision/i).length
+      screen.getByText(/VERIFYMZANSI \(PTY\) LTD, registration number 2026\/155305\/07/)
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Legal notices go to legal@verifymzansi.com/)).toBeInTheDocument();
+    expect(screen.getByText(/Giving us information is voluntary/i)).toBeInTheDocument();
+    expect(screen.getByText(/Some information comes from others/i)).toBeInTheDocument();
+    for (const provider of [
+      "Supabase",
+      "Cloudflare",
+      "Didit",
+      "Resend",
+      "Zoho",
+      "Africa's Talking",
+      "Sentry",
+      "Google",
+    ])
+      expect(screen.getByText(new RegExp(`^${provider}:`))).toBeInTheDocument();
+    expect(
+      screen.getByText(/to the United Kingdom, the European Union, the United States and Kenya/)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/ask a person to look again at an automatic ID decision/i)
+    ).toBeInTheDocument();
+    expect(screen.getByText(/eServices portal/)).toBeInTheDocument();
+    // Cookies and browser storage, as the site sets them.
+    expect(
+      screen.getByRole("heading", { name: "Cookies and browser storage" })
+    ).toBeInTheDocument();
+    expect(screen.getByText(/vm_acq, 30 days/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/so a partner can be credited and we can see which channels bring sign-ups/)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/If you sign up, this is stored with your account and deleted with it/)
+    ).toBeInTheDocument();
+    // A ban keeps the full record only for an accepted ID; the ID photo still goes.
+    expect(
+      screen.getAllByText(
+        /If your ID number is banned, the one-way code is kept for 5 years from the ban; if your ID had been accepted, your selfie, encrypted ID number, the names on your ID and your verified phone numbers are kept for those 5 years too\. Your ID photo is still deleted 30 days after the decision\./
+      ).length
     ).toBeGreaterThan(0);
+    expect(
+      screen.getByText(
+        /no longer linked to your account; an invoice made out to you keeps the name and address on it/
+      )
+    ).toBeInTheDocument();
+    // Never claims what the site does not do.
+    const text = document.body.textContent ?? "";
+    expect(text).not.toMatch(/records a replay/i);
+    expect(text).toMatch(/We do not record replays of your screen/);
+    expect(text).not.toMatch(/and logged so we can stop/i);
+    expect(text).not.toMatch(/30 days after the case decision/i);
+    // Never a street address or the owner's name on this page.
+    expect(text).not.toContain("Senzo");
   });
 
   it("renders payment and verification disclaimers in terms", async () => {

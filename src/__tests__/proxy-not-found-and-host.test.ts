@@ -205,8 +205,9 @@ describe("proxy — real 404 for missing detail pages", () => {
     // Marked, so a server that fetches the rewrite again cannot loop.
     expect(response.headers.get("x-middleware-request-x-vm-rewritten")).toBe("1");
     expect(response.headers.get("set-cookie")).toContain("vm_csrf=");
-    // Not a visit: no anonymous viewer id is issued for a missing page.
-    expect(response.headers.get("set-cookie")).not.toContain("vm_viewer");
+    // A page load never issues the view-and-like identifier: only the
+    // Turnstile-checked /api/engagement/viewer route sets a signed one.
+    expect(response.headers.get("set-cookie")).not.toContain("vmz_viewer");
   });
 });
 

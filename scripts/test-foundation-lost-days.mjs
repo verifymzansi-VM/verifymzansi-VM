@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Behaviour checks for 20261125024039_add_lost_days.sql (launch checklist item
+// Behaviour checks for 20261125113433_add_lost_days.sql (launch checklist item
 // 75): a staff member previews a member's running paid slots and package, then
 // adds 1 to 30 lost days to all of them, with a reason; a slot's queued renewal
 // moves with it, a package's slots still end together, and every grant moved
@@ -38,7 +38,7 @@ import {
   runTwoAdminUpdateCheck,
 } from "./lib/foundation-staff-payment-world.mjs";
 
-const UPDATE = "20261125024039_add_lost_days.sql";
+const UPDATE = "20261125113433_add_lost_days.sql";
 const PREVIEW = "api.get_lost_days_preview(text)";
 const ADD = "api.add_lost_days(text,integer,text,uuid)";
 const INTERNAL = [

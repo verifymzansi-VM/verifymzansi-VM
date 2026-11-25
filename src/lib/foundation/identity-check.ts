@@ -18,6 +18,13 @@ import { recordIdentityCheckResult } from "./identity-check-result";
 import { sendStaffOperationsEmail } from "../services/email";
 import { SUPPORT_CONTACT_EMAIL } from "../contact-email";
 import { checkRateLimit, getClientIp } from "../utils/rate-limit";
+import {
+  FoundationProfileError,
+  readFoundationAccountProfile,
+  saveFoundationLegalNameClaim,
+} from "./account-profile";
+import { normalizePersonName } from "./person-name";
+import { IDENTITY_CHECK_CONSENT_VERSION } from "../verification/identity-check-consent";
 import { createLogger } from "../utils/logger";
 
 /**
@@ -105,7 +112,8 @@ class IdentityCheckRefusal extends Error {
   constructor(
     readonly status: number,
     readonly code: string,
-    message: string
+    message: string,
+    readonly retryAfter?: number
   ) {
     super(message);
   }
@@ -168,10 +176,13 @@ async function lookAgainIfStale(api: FoundationAuthenticatedApi, now = Date.now(
   )
     return current;
   // At most one look per check every 2 minutes, however often the page asks.
+  // Quiet: a page asking again is expected, not abuse. Without the shared
+  // limiter nobody looks again (the webhook still records the result).
   const throttle = await checkRateLimit({
     key: check.id,
     action: "verification:identity-check-look",
-    degradedMode: "local",
+    degradedMode: "block",
+    quiet: true,
   });
   if (throttle.limited) return current;
   try {
@@ -189,7 +200,45 @@ async function lookAgainIfStale(api: FoundationAuthenticatedApi, now = Date.now(
   }
 }
 
-async function startCheck(api: FoundationAuthenticatedApi, request: NextRequest) {
+/**
+ * The legal names the member typed on the start screen become their unlocked
+ * name claim (api.save_my_legal_name), which the database copies onto the new
+ * check. Unchanged names are not saved again.
+ */
+async function saveTypedNames(api: FoundationAuthenticatedApi, names: TypedNames) {
+  const first = normalizePersonName(names.firstName);
+  const last = normalizePersonName(names.lastName);
+  try {
+    const profile = await readFoundationAccountProfile(api);
+    if (profile.legal_first_name === first && profile.legal_last_name === last) return;
+    await saveFoundationLegalNameClaim(api, {
+      expected_revision: profile.revision,
+      first_name: first,
+      last_name: last,
+    });
+  } catch (error) {
+    if (!(error instanceof FoundationProfileError)) throw error;
+    if (error.reason === "invalid" || error.reason === "reserved")
+      throw new IdentityCheckRefusal(
+        400,
+        "legal_name_invalid",
+        "Type your names exactly as they are on your ID"
+      );
+    if (error.reason === "locked" || error.reason === "changed")
+      throw new IdentityCheckRefusal(
+        409,
+        "legal_name_" + error.reason,
+        "Your details changed. Reload the page and try again."
+      );
+    throw error;
+  }
+}
+
+async function startCheck(
+  api: FoundationAuthenticatedApi,
+  request: NextRequest,
+  names: TypedNames
+) {
   // Where the member started (compared with where the partner saw the check):
   // a keyed hash of the network and the kind of device only. Made first, so a
   // missing server secret creates no check and no partner session.
@@ -198,7 +247,13 @@ async function startCheck(api: FoundationAuthenticatedApi, request: NextRequest)
     p_device_kind: deviceOfUserAgent(request.headers.get("user-agent")),
   };
   await lookAgainIfStale(api);
-  const { data, error } = await api.rpc("start_my_identity_check", {}, { get: false });
+  await saveTypedNames(api, names);
+  // The database records the consent version on the new check (update
+  // 20261124235920_identity_check_consent, part 7a; it must be applied before
+  // this code is deployed). A variable, not a literal, so this also compiles
+  // against the generated types from before that update.
+  const consent = { p_consent_version: IDENTITY_CHECK_CONSENT_VERSION };
+  const { data, error } = await api.rpc("start_my_identity_check", consent, { get: false });
   if (error) {
     if (error.code === "PT409")
       throw new IdentityCheckRefusal(
@@ -236,16 +291,27 @@ async function startCheck(api: FoundationAuthenticatedApi, request: NextRequest)
     // Another start won the race and attached its own session: this one is
     // removed at the partner (best effort; unused, it holds no data) and the
     // member carries on with the attached one.
+    const winner = (await readAvailability(api)).check;
     await deleteDiditSession(config, session.sessionId).catch(() => {
       log.warn("Unused identity check session was not deleted", { reason: "parallel_start" });
     });
-    const winner = (await readAvailability(api)).check;
     if (winner?.id === check.check_id && winner.status === "started" && winner.session_url)
       return { checkId: check.check_id, url: winner.session_url };
   }
   if (attached.error) throw new Error("Identity check session was not attached");
   return { checkId: check.check_id, url: session.url };
 }
+
+type TypedNames = { firstName: string; lastName: string };
+
+/** The start screen: the member's consent to the words of
+ * IDENTITY_CHECK_CONSENT_VERSION and the names they typed. */
+const startInput = z.strictObject({
+  consent: z.literal(true),
+  consentVersion: z.literal(IDENTITY_CHECK_CONSENT_VERSION),
+  firstName: z.string().max(400),
+  lastName: z.string().max(400),
+});
 
 const askInput = z.strictObject({
   checkId: z.uuid(),
@@ -254,7 +320,13 @@ const askInput = z.strictObject({
 
 const refusal = (error: unknown): FoundationRefusal | null =>
   error instanceof IdentityCheckRefusal
-    ? { status: error.status, error: error.message, reason: error.code, code: error.code }
+    ? {
+        status: error.status,
+        error: error.message,
+        reason: error.code,
+        code: error.code,
+        ...(error.retryAfter ? { retryAfter: error.retryAfter } : {}),
+      }
     : null;
 
 /** GET: where the member's ID check goes now, and their latest check. */
@@ -288,11 +360,13 @@ async function limitAccount(accountId: string) {
       limit.degraded ? "protection_unavailable" : "rate_limited",
       limit.degraded
         ? "Protection is temporarily unavailable"
-        : "Too many requests; try again shortly"
+        : "Too many requests; try again shortly",
+      limit.degraded ? undefined : (limit.retryAfter ?? 60)
     );
 }
 
-/** POST: starts (or resumes) the member's automatic ID check. */
+/** POST: starts (or resumes) the member's automatic ID check, after their
+ * consent and with the legal names they typed. */
 export function handleIdentityCheckStart(request: NextRequest) {
   return handleFoundationOwnerRoute({
     request,
@@ -303,10 +377,17 @@ export function handleIdentityCheckStart(request: NextRequest) {
     unavailableMessage: "Verification is temporarily unavailable",
     signInMessage: "Sign in to manage verification",
     command: async (api, input, caller) => {
-      if (!z.strictObject({}).safeParse(input).success)
-        throw new IdentityCheckRefusal(400, "invalid_request", "Reload the page and try again");
+      // Consent comes before anything else: no check and no partner session
+      // without the tick on the current consent words.
+      const parsed = startInput.safeParse(input);
+      if (!parsed.success)
+        throw new IdentityCheckRefusal(
+          400,
+          "consent_required",
+          "Tick the box to agree to the ID check, then try again"
+        );
       await limitAccount(caller!.accountId);
-      return startCheck(api, request);
+      return startCheck(api, request, parsed.data);
     },
     refusal,
   });

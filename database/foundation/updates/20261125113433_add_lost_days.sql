@@ -74,8 +74,8 @@
 -- internal.slot_package_add_quote have their reviewed bodies (or this
 -- update's), each new function is absent (or this update's) and the table is
 -- absent or has this update's shape.
--- Read-only preflight: ../preflight/20261125024039_add_lost_days.check.sql.
--- Rollback: ../rollback/20261125024039_add_lost_days.down.sql.
+-- Read-only preflight: ../preflight/20261125113433_add_lost_days.check.sql.
+-- Rollback: ../rollback/20261125113433_add_lost_days.down.sql.
 begin;
 -- Never wait more than 5 seconds for anything this update needs.
 set local lock_timeout='5s';
@@ -146,7 +146,7 @@ create trigger lost_day_additions_append_only before update or delete on private
 drop trigger if exists lost_day_additions_no_truncate on private.lost_day_additions;
 create trigger lost_day_additions_no_truncate before truncate on private.lost_day_additions
   for each statement execute function internal.append_only_guard();
-comment on table private.lost_day_additions is 'Lost days (20261125024039_add_lost_days.sql): every paid grant a staff member moved to add days a member lost, with the reason. Append-only; deleted only with the grant (commerce retention).';
+comment on table private.lost_day_additions is 'Lost days (20261125113433_add_lost_days.sql): every paid grant a staff member moved to add days a member lost, with the reason. Append-only; deleted only with the grant (commerce retention).';
 
 -- 2. What would move: the member's running paid terms.
 create or replace function internal.get_lost_days_preview(p_email text)

@@ -15,7 +15,7 @@ import {
 } from "@/lib/admin/lost-days";
 
 /**
- * Adding lost days (database update 20261125024039_add_lost_days.sql). The
+ * Adding lost days (database update 20261125113433_add_lost_days.sql). The
  * preview runs through internal.staff_actor('payments:view'), the change
  * through payments:refund (admins, with an authenticator code from the last
  * 15 minutes). Both follow the staff rule of money actions: the staff member

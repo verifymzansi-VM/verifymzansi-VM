@@ -2446,7 +2446,7 @@ try {
   });
   await check("events: the member's privacy export includes their submissions", () => {
     const exported = json(`select internal.frontend_privacy_export_data('${cara.id}');`);
-    // 44 datasets since 20261125024039_add_lost_days.sql added lost_day_additions
+    // 44 datasets since 20261125113433_add_lost_days.sql added lost_day_additions
     // (43 since 20261122191646_post_templates.sql added post_templates;
     // 42 since 20261119172135_post_views_and_likes.sql added post_likes and
     // post_likes_summary; 40 since 20261119082834_house_slots.sql

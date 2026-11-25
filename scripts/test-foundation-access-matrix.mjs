@@ -302,7 +302,7 @@ const OWNER_TABLES = [
     "free_credit_events",
     "entitlement_id in (select id from private.entitlements where owner_id=$1) or actor_id=$1",
   ],
-  // Lost days (20261125024039_add_lost_days): days added to A's grants, or
+  // Lost days (20261125113433_add_lost_days): days added to A's grants, or
   // days A added as staff.
   [
     "lost_day_additions",

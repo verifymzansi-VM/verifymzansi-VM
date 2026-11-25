@@ -6424,7 +6424,7 @@
     },
     {
       "name": "get_lost_days_preview",
-      "updates": ["updates/20261125024039_add_lost_days.sql"],
+      "updates": ["updates/20261125113433_add_lost_days.sql"],
       "arguments": [
         {
           "name": "p_email",
@@ -6443,7 +6443,7 @@
     },
     {
       "name": "add_lost_days",
-      "updates": ["updates/20261125024039_add_lost_days.sql"],
+      "updates": ["updates/20261125113433_add_lost_days.sql"],
       "arguments": [
         {
           "name": "p_email",

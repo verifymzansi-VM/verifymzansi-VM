@@ -28,4 +28,4 @@ CREATE INDEX lost_day_additions_entitlement_idx ON private.lost_day_additions US
 CREATE TRIGGER lost_day_additions_append_only BEFORE DELETE OR UPDATE ON private.lost_day_additions FOR EACH ROW EXECUTE FUNCTION internal.append_only_guard();
 CREATE TRIGGER lost_day_additions_no_truncate BEFORE TRUNCATE ON private.lost_day_additions FOR EACH STATEMENT EXECUTE FUNCTION internal.append_only_guard();
 revoke all on private.lost_day_additions from public;
-comment on table private.lost_day_additions is 'Lost days (20261125024039_add_lost_days.sql): every paid grant a staff member moved to add days a member lost, with the reason. Append-only; deleted only with the grant (commerce retention).';
+comment on table private.lost_day_additions is 'Lost days (20261125113433_add_lost_days.sql): every paid grant a staff member moved to add days a member lost, with the reason. Append-only; deleted only with the grant (commerce retention).';

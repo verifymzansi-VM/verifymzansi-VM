@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Clock3,
   EyeOff,
+  Fingerprint,
   Info,
   LifeBuoy,
   Lock,
@@ -240,7 +241,17 @@ const PRIVACY_POINTS: { icon: IconType; title: string }[] = [
   { icon: Scale, title: "Handled under POPIA" },
 ];
 
-export function PrivacyPanel() {
+/** Shown with the independent check (automatic ID checks plan, section 3 privacy panel). */
+const KEPT_ONCE_VERIFIED = {
+  icon: Fingerprint,
+  title:
+    "Once verified: selfie and ID number kept until 90 days after you close your account; names, phone and a one-way code until 5 years after",
+};
+
+export function PrivacyPanel({ independent = false }: { independent?: boolean }) {
+  const points = independent
+    ? [...PRIVACY_POINTS.slice(0, 3), KEPT_ONCE_VERIFIED, ...PRIVACY_POINTS.slice(3)]
+    : PRIVACY_POINTS;
   return (
     <section aria-labelledby="verification-privacy-title" className="surface-card p-4 sm:p-5">
       <h2
@@ -251,7 +262,7 @@ export function PrivacyPanel() {
         Your privacy
       </h2>
       <ul className="mt-3 space-y-2.5">
-        {PRIVACY_POINTS.map(({ icon: Icon, title }) => (
+        {points.map(({ icon: Icon, title }) => (
           <li key={title} className="flex items-center gap-3 text-sm text-foreground/85">
             <span
               aria-hidden="true"
@@ -274,12 +285,24 @@ export function PrivacyPanel() {
   );
 }
 
-export function WhatHappensNextPanel({ verified = false }: { verified?: boolean }) {
+export function WhatHappensNextPanel({
+  verified = false,
+  independent = null,
+}: {
+  verified?: boolean;
+  /** With the independent check: "unclear" (a person checks anything
+   * unclear) or "declined" (the member can ask a person to look again). */
+  independent?: "unclear" | "declined" | null;
+}) {
   const items = verified
     ? ["Your badge shows on your profile and posts", "Update your details if they change"]
     : [
         "Finish the four checks",
-        "Our team checks your ID, usually within 1–2 working days",
+        independent === "declined"
+          ? "Our independent verification system checks your ID. If it can’t verify you, you can ask a person to look again"
+          : independent === "unclear"
+            ? "Our independent verification system checks your ID. If anything is unclear, our team checks it"
+            : "Our team checks your ID, usually within 1–2 working days",
         "Your badge appears",
       ];
 

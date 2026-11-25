@@ -30,7 +30,7 @@ const daysLabel = (days: number) => (days === 1 ? "1 day" : `${days} days`);
 
 /**
  * "Add lost days" on Payments & refunds (database update
- * 20261125024039_add_lost_days.sql). Staff first check the member's running
+ * 20261125113433_add_lost_days.sql). Staff first check the member's running
  * paid slots and package, then add 1 to 30 days to all of them with a reason.
  * The database checks the staff member, the member and every bound again;
  * a retried request (same request id) adds nothing twice.

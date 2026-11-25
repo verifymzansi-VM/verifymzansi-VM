@@ -1,4 +1,4 @@
--- Read-only preflight for updates/20261125024039_add_lost_days.sql.
+-- Read-only preflight for updates/20261125113433_add_lost_days.sql.
 --
 -- Run this file unchanged in the Supabase SQL editor before applying the
 -- update, and again after it. It changes nothing: the first statement makes

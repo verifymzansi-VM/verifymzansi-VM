@@ -1,6 +1,6 @@
 /**
  * What the staff "Add lost days" panel on Payments & refunds shows (database
- * update 20261125024039_add_lost_days.sql). Safe in client components: no
+ * update 20261125113433_add_lost_days.sql). Safe in client components: no
  * locale or time-zone APIs, so the server and the browser agree.
  *
  * The posting terms promise that when we fail to provide what a member paid
