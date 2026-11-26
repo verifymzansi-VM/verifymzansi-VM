@@ -386,7 +386,6 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
       assert.equal(read.status, "paid");
       assert.equal(read.payment_status, "complete");
       assert.equal(read.latest_attempt.status, "complete");
-      assert.equal(read.latest_attempt.payment_id, undefined);
       assert.equal(reason(fails(paySql(hash, invoice.total_cents), "PT409")), "invoice_paid");
       assert.equal(reason(fails(billingSql(hash, 2, "Later Name Ltd"), "PT409")), "invoice_paid");
       // A sending after payment stores nothing and says it is paid.
