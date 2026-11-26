@@ -435,6 +435,11 @@ export async function seedTestCopy({ root = process.cwd(), status, sql, log = ()
     token: recheck.access_token,
     refreshToken: recheck.refresh_token,
   };
+  // Trusted step: a real admin claimed long ago. Specs sign in with sessions
+  // aged up to 20 minutes, so the claim moment is placed an hour back.
+  sql(
+    `update private.staff_roles set frontend_mfa_not_before=frontend_mfa_not_before - interval '1 hour' where user_id=${quote(session.admin.id)} and role='admin';`
+  );
   assert.equal(
     sql(
       `select string_agg(role,',') from private.staff_roles where user_id=${quote(session.admin.id)};`
