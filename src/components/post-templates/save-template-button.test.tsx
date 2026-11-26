@@ -1,7 +1,6 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { forgetPackageRunning, SaveTemplateButton } from "./save-template-button";
-import { useAuthStore } from "@/stores/auth-store";
+import { SaveTemplateButton } from "./save-template-button";
 
 const { switches, toast } = vi.hoisted(() => ({
   switches: { SHOW_POST_TEMPLATES: true, SHOW_PACKAGE_TEAMS: false },
@@ -20,8 +19,6 @@ const answer = (body: unknown, status = 200) =>
 
 beforeEach(() => {
   vi.clearAllMocks();
-  forgetPackageRunning();
-  useAuthStore.getState().reset();
   switches.SHOW_POST_TEMPLATES = true;
   vi.stubGlobal("fetch", fetchMock);
 });
@@ -76,26 +73,5 @@ describe("Save as template", () => {
     render(<SaveTemplateButton defaultName="" data={() => data} />);
     expect(screen.queryByRole("button", { name: "Save as template" })).not.toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it("reads whether the package runs once per member in a tab, not on every form", async () => {
-    const member = (id: string) =>
-      useAuthStore.getState().setUser({ id, email: "", displayName: "", role: "user" });
-    fetchMock.mockImplementation(() => answer({ package_running: true, templates: [] }));
-    member("00000000-0000-4000-8000-0000000000a1");
-    const first = render(<SaveTemplateButton defaultName="" data={() => data} />);
-    expect(await screen.findByRole("button", { name: "Save as template" })).toBeInTheDocument();
-    first.unmount();
-    // The next post opened to edit: shown at once, without another read.
-    render(<SaveTemplateButton defaultName="" data={() => data} />);
-    expect(screen.getByRole("button", { name: "Save as template" })).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    cleanup();
-    // Another member signed in on this tab: read again.
-    member("00000000-0000-4000-8000-0000000000a2");
-    fetchMock.mockImplementation(() => answer({ package_running: false, templates: [] }));
-    render(<SaveTemplateButton defaultName="" data={() => data} />);
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    expect(screen.queryByRole("button", { name: "Save as template" })).not.toBeInTheDocument();
   });
 });

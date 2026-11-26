@@ -234,8 +234,9 @@ async function verifyIdentity({ api, sql, owner, reviewer, sequence }) {
 
 async function verifyPhone({ api, owner, sequence }) {
   // The website stores only a hash of the SMS code; the code never matters here.
-  // The copy is empty when seeded: numbered phones never collide, and stay
-  // below the random range the browser tests use (1000000 and up).
+  // seedTestCopy refuses a copy that is not empty, so the seeded people are
+  // numbered (+27710000001, +27710000002) and cannot share a number. Browser
+  // tests use other prefixes and check the copy first (unusedPhoneNumber).
   const phone = "+2771" + String(sequence).padStart(7, "0");
   const hash = randomBytes(32).toString("hex");
   const challenge = await api.call(

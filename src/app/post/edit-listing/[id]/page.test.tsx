@@ -9,7 +9,6 @@ import {
 import EditListingPage from "./page";
 import { useParams, useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
-import { forgetPackageRunning } from "@/components/post-templates/save-template-button";
 
 // The member accepted the current posting terms before (the edit form shows
 // no tick), unless a test serves them as not accepted yet.
@@ -203,7 +202,6 @@ describe("EditListingPage", () => {
     // "Save as template" asks whether a Multi-listing package runs: answered
     // here (none), apart from the save requests these tests count
     // (src/components/post-templates/save-template-button.test.tsx covers it).
-    forgetPackageRunning();
     templatesRead = vi.fn(async () => ({
       ok: true,
       status: 200,
@@ -245,34 +243,29 @@ describe("EditListingPage", () => {
     expectTermsAcceptedBeforeSave("/api/listings/listing-1");
   });
 
-  it.each([
-    [
-      "refused",
-      () => terms.mockResolvedValueOnce({ ok: false, status: 503, json: async () => ({}) }),
-      "The posting terms could not be accepted. Refresh this form and try again.",
-    ],
-  ])(
-    "when accepting the terms is %s, says so and uploads and saves nothing",
-    async (_case, failAcceptance, message) => {
-      serveAcceptedAt(null);
-      render(<EditListingPage />);
-      await termsLoaded();
-      await waitFor(() => expect(screen.getByDisplayValue("Used iPhone 15")).toBeInTheDocument());
-      // A new logo waits to be uploaded.
-      fireEvent.click(screen.getByRole("button", { name: "Listing logo (optional)" }));
-      fireEvent.click(screen.getByLabelText(POSTING_TERMS_TICK));
-      failAcceptance();
-      fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
-      expect(await screen.findByText(message)).toBeInTheDocument();
-      expect(terms).toHaveBeenCalledWith(
-        "/api/foundation/posting-terms",
-        expect.objectContaining({ method: "POST" })
-      );
-      // No upload and no save request.
-      expect(fetchMock).not.toHaveBeenCalled();
-      expect(mockPush).not.toHaveBeenCalled();
-    }
-  );
+  it("when accepting the terms is refused, says so and uploads and saves nothing", async () => {
+    serveAcceptedAt(null);
+    render(<EditListingPage />);
+    await termsLoaded();
+    await waitFor(() => expect(screen.getByDisplayValue("Used iPhone 15")).toBeInTheDocument());
+    // A new logo waits to be uploaded.
+    fireEvent.click(screen.getByRole("button", { name: "Listing logo (optional)" }));
+    fireEvent.click(screen.getByLabelText(POSTING_TERMS_TICK));
+    terms.mockResolvedValueOnce({ ok: false, status: 503, json: async () => ({}) });
+    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+    expect(
+      await screen.findByText(
+        "The posting terms could not be accepted. Refresh this form and try again."
+      )
+    ).toBeInTheDocument();
+    expect(terms).toHaveBeenCalledWith(
+      "/api/foundation/posting-terms",
+      expect.objectContaining({ method: "POST" })
+    );
+    // No upload and no save request.
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
+  });
 
   it("does not claim a saved update was submitted without server confirmation", async () => {
     render(<EditListingPage />);
