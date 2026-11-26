@@ -65,12 +65,18 @@ begin
   delete from private.legal_holds where id in(select h.id from private.legal_holds h
     where h.released_at<statement_timestamp()-interval '5 years' order by h.released_at limit p_limit for update skip locked);
   get diagnostics holds=row_count;
-  -- Decided appeals and released content holds: 2 years, like reports.
+  -- Decided appeals: 2 years, like reports, once the decision appealed is
+  -- gone (while it stands, its appeal stops a second one). Released content
+  -- holds: 2 years, never while an appeal against them waits.
   delete from private.frontend_appeals where id in(select a.id from private.frontend_appeals a
-    where a.resolved_at<statement_timestamp()-interval '2 years' order by a.resolved_at limit p_limit for update skip locked);
+    where a.resolved_at<statement_timestamp()-interval '2 years'
+      and not exists(select 1 from private.frontend_appealable_actions x where x.id=a.action_id)
+    order by a.resolved_at limit p_limit for update skip locked);
   get diagnostics appeals=row_count;
   delete from private.frontend_content_holds where id in(select h.id from private.frontend_content_holds h
-    where h.released_at<statement_timestamp()-interval '2 years' order by h.released_at limit p_limit for update skip locked);
+    where h.released_at<statement_timestamp()-interval '2 years'
+      and not exists(select 1 from private.frontend_appeals a where a.action_id=h.id and a.status='submitted')
+    order by h.released_at limit p_limit for update skip locked);
   get diagnostics content_holds=row_count;
   -- Staff role change proposals: 5 years after they were decided or
   -- expired, like staff roles.

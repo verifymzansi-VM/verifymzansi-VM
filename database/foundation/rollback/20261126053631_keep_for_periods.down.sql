@@ -1,4 +1,4 @@
--- Reviewed rollback for updates/20261126042049_keep_for_periods.sql.
+-- Reviewed rollback for updates/20261126053631_keep_for_periods.sql.
 -- Not part of the replay. Run it only if that update must be undone, after the
 -- owner has decided so. Prefer a forward fix.
 --
@@ -28,7 +28,7 @@ begin
         'internal.retention_tax_year_due(timestamp with time zone) e9e2b8fd093f12e0363d0fadf760ffec',
         'internal.retention_privacy_requests(integer) daec57205cdb25a6d30b767ecec59ffd',
         'internal.retention_operations(integer) a76b7c5b983c43c687d0abf47965f6f6',
-        'internal.retention_staff_records(integer) 71534668b6a4b8f10c8517fc7be0be5c',
+        'internal.retention_staff_records(integer) 94c034a1b8e5812a357fca776bc0f2a8',
         'internal.retention_verification(integer) 56e4f71f0ad4ecb994e79ea9b0d695b8',
         'internal.individual_slot_limit_guard() 9a7d826f695d7e18d815b122d6c5afd2') then
       raise exception 'rollback precondition: % is not this update''s body', shape using errcode='55000';

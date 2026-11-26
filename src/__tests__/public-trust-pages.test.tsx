@@ -116,6 +116,9 @@ describe("public trust pages", () => {
     expect(screen.getAllByText(/deleted 90 days after you close it/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/keeps only the one-way code/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/7 years after the end of the tax year/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/contact form are deleted 12 months after they are resolved/i)
+    ).toBeInTheDocument();
     // Section 18: who is responsible, what is required, and where data goes.
     expect(screen.getByRole("heading", { name: "Who we are" })).toBeInTheDocument();
     expect(

@@ -27,8 +27,10 @@
 --      claimed one (the owner's approval that the staff role commands
 --      require) 12 months after the claimant's account was erased;
 --    - runtime switch and sign-up mode change logs: 5 years.
--- 4. internal.retention_staff_records (adds five counts): decided appeals and
---    released content holds 2 years after the decision or release; staff role
+-- 4. internal.retention_staff_records (adds five counts): decided appeals 2
+--    years after the decision, once the decision appealed is gone (while it
+--    stands its appeal stops a second one); released content holds 2 years
+--    after release, never while an appeal against them waits; staff role
 --    change proposals 5 years after they were decided or expired; evidence
 --    case claim events 2 years; raised slot limits 2 years after they ended.
 -- 5. internal.retention_verification (adds one count): reasons for returning
@@ -46,8 +48,8 @@
 -- the payment change only keeps records longer.
 -- It refuses with 55000 unless the six functions have their reviewed bodies
 -- (or this update's).
--- Read-only preflight: ../preflight/20261126042049_keep_for_periods.check.sql.
--- Rollback: ../rollback/20261126042049_keep_for_periods.down.sql.
+-- Read-only preflight: ../preflight/20261126053631_keep_for_periods.check.sql.
+-- Rollback: ../rollback/20261126053631_keep_for_periods.down.sql.
 begin;
 -- Never wait more than 5 seconds for anything this update needs.
 set local lock_timeout='5s';
@@ -72,7 +74,7 @@ begin
         'internal.retention_operations(integer) c435cece42784f1bcf61a3b47ea32944',
         'internal.retention_operations(integer) a76b7c5b983c43c687d0abf47965f6f6',
         'internal.retention_staff_records(integer) 63218a3ffaab86d4ead4788f13ed5103',
-        'internal.retention_staff_records(integer) 71534668b6a4b8f10c8517fc7be0be5c',
+        'internal.retention_staff_records(integer) 94c034a1b8e5812a357fca776bc0f2a8',
         'internal.retention_verification(integer) 6a7db601e6af1cfcc55f697f7d841dd2',
         'internal.retention_verification(integer) 56e4f71f0ad4ecb994e79ea9b0d695b8',
         'internal.individual_slot_limit_guard() 556e2de64a5eb7ca998744fa0abb5c84',
@@ -267,12 +269,18 @@ begin
   delete from private.legal_holds where id in(select h.id from private.legal_holds h
     where h.released_at<statement_timestamp()-interval '5 years' order by h.released_at limit p_limit for update skip locked);
   get diagnostics holds=row_count;
-  -- Decided appeals and released content holds: 2 years, like reports.
+  -- Decided appeals: 2 years, like reports, once the decision appealed is
+  -- gone (while it stands, its appeal stops a second one). Released content
+  -- holds: 2 years, never while an appeal against them waits.
   delete from private.frontend_appeals where id in(select a.id from private.frontend_appeals a
-    where a.resolved_at<statement_timestamp()-interval '2 years' order by a.resolved_at limit p_limit for update skip locked);
+    where a.resolved_at<statement_timestamp()-interval '2 years'
+      and not exists(select 1 from private.frontend_appealable_actions x where x.id=a.action_id)
+    order by a.resolved_at limit p_limit for update skip locked);
   get diagnostics appeals=row_count;
   delete from private.frontend_content_holds where id in(select h.id from private.frontend_content_holds h
-    where h.released_at<statement_timestamp()-interval '2 years' order by h.released_at limit p_limit for update skip locked);
+    where h.released_at<statement_timestamp()-interval '2 years'
+      and not exists(select 1 from private.frontend_appeals a where a.action_id=h.id and a.status='submitted')
+    order by h.released_at limit p_limit for update skip locked);
   get diagnostics content_holds=row_count;
   -- Staff role change proposals: 5 years after they were decided or
   -- expired, like staff roles.

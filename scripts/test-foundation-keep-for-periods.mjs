@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Behaviour checks for 20261126042049_keep_for_periods.sql (launch checklist
+// Behaviour checks for 20261126053631_keep_for_periods.sql (launch checklist
 // item 51): keep-for periods for the newer personal-data tables, payment
 // records kept 7 years and privacy request proofs 3 years.
 //
@@ -35,7 +35,7 @@ import {
   runTwoAdminUpdateCheck,
 } from "./lib/foundation-staff-payment-world.mjs";
 
-const UPDATE = "20261126042049_keep_for_periods.sql";
+const UPDATE = "20261126053631_keep_for_periods.sql";
 const BODIES = {
   "internal.retention_tax_year_due(timestamp with time zone)": [
     "330c487132c054e1995261d5e92871b2",
@@ -51,7 +51,7 @@ const BODIES = {
   ],
   "internal.retention_staff_records(integer)": [
     "63218a3ffaab86d4ead4788f13ed5103",
-    "71534668b6a4b8f10c8517fc7be0be5c",
+    "94c034a1b8e5812a357fca776bc0f2a8",
   ],
   "internal.retention_verification(integer)": [
     "6a7db601e6af1cfcc55f697f7d841dd2",
@@ -315,11 +315,12 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
 
   await check("appeals and content holds: 2 years after the decision or release", () => {
     const member = world.user("keep-appellant");
-    const appeal = (status, resolvedInterval) => {
+    const banned = world.user("keep-banned");
+    const appeal = (who, status, resolvedInterval, action = randomUUID(), kind = "warning") => {
       const id = randomUUID();
       const resolved = resolvedInterval ? ago(resolvedInterval) : "null";
       asOwner(`insert into private.frontend_appeals(id,action_id,appellant_id,kind,reason,status,created_at,reviewer_id,reviewer_rationale,resolved_at)
-        values('${id}','${randomUUID()}','${member.id}','warning','I did not break the rules in this post.','${status}',${ago("3 years")},
+        values('${id}','${action}','${who.id}','${kind}','I did not break the rules in this post.','${status}',${ago("3 years")},
           ${resolvedInterval ? `'${admin.id}','Checked the post again.'` : "null,null"},${resolved});`);
       return id;
     };
@@ -330,21 +331,53 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
           ${releasedInterval ? `${ago(releasedInterval)},'${admin.id}','Fixed by the owner.'` : "null,null,null"});`);
       return id;
     };
-    const oldAppeal = appeal("dismissed", "2 years 1 day");
-    const newAppeal = appeal("upheld", "1 year 11 months");
-    const openAppeal = appeal("submitted", null);
+    /** An approved report ban of `who`, 3 years old; the decision's id (the appealable action). */
+    const ban = (who) => {
+      const caseId = randomUUID();
+      const decision = randomUUID();
+      asOwner(`insert into private.evidence_cases(id,subject_id,kind,status) values('${caseId}','${who.id}','restriction','decided');
+        insert into private.decisions(id,case_id,action,payload,case_version,reviewed_snapshot,proposed_by,proposed_at,approved_by,approved_at,status,scope_kind)
+          values('${decision}','${caseId}','restrict_account','{}',1,'[]','${admin.id}',${ago("3 years")},'${admin2.id}',${ago("3 years")},'approved','report_ban');
+        insert into private.frontend_account_restrictions(decision_id,account_id,kind,reason,emergency,starts_at)
+          values('${decision}','${who.id}','ban','Repeated scam posts.',false,${ago("3 years")});`);
+      return decision;
+    };
+    // The decision appealed is gone: deleted 2 years after its decision.
+    const oldAppeal = appeal(member, "dismissed", "2 years 1 day");
+    const newAppeal = appeal(member, "upheld", "1 year 11 months");
+    const openAppeal = appeal(member, "submitted", null);
+    // The decision appealed still stands: kept, however old.
+    const activeHold = hold(null);
+    const onActiveHold = appeal(member, "dismissed", "2 years 1 day", activeHold, "content_hidden");
+    const onBan = appeal(banned, "upheld", "2 years 1 day", ban(banned), "ban");
     const oldHold = hold("2 years 1 day");
     const newHold = hold("1 year 11 months");
-    const activeHold = hold(null);
+    // A released hold an appeal still waits on is kept with it.
+    const awaitedHold = hold("2 years 1 day");
+    const awaiting = appeal(member, "submitted", null, awaitedHold, "content_hidden");
     const result = sweep();
     assert.equal(result.staff_records.appeals, 1, JSON.stringify(result.staff_records));
     assert.equal(result.staff_records.content_holds, 1, JSON.stringify(result.staff_records));
     assert.ok(!exists("frontend_appeals", `id='${oldAppeal}'`));
-    assert.ok(exists("frontend_appeals", `id='${newAppeal}'`));
-    assert.ok(exists("frontend_appeals", `id='${openAppeal}'`));
+    for (const id of [newAppeal, openAppeal, onActiveHold, onBan, awaiting])
+      assert.ok(exists("frontend_appeals", `id='${id}'`), id);
     assert.ok(!exists("frontend_content_holds", `id='${oldHold}'`));
-    assert.ok(exists("frontend_content_holds", `id='${newHold}'`));
-    assert.ok(exists("frontend_content_holds", `id='${activeHold}'`));
+    for (const id of [newHold, activeHold, awaitedHold])
+      assert.ok(exists("frontend_content_holds", `id='${id}'`), id);
+    // A second appeal against the standing decision is still refused.
+    const second = kit.member(
+      member,
+      `select api.submit_my_frontend_appeal('${activeHold}','This hide is still wrong, please look at it again.');`
+    );
+    fails(second, "PT409", /decision already appealed/);
+    // Once the waiting appeal is decided and 2 years pass, both go (the
+    // appeal at the sweep after its hold).
+    asOwner(`update private.frontend_appeals set status='dismissed',reviewer_id='${admin.id}',
+        reviewer_rationale='Checked the post again.',resolved_at=${ago("2 years 1 day")} where id='${awaiting}';`);
+    sweep();
+    assert.ok(!exists("frontend_content_holds", `id='${awaitedHold}'`));
+    sweep();
+    assert.ok(!exists("frontend_appeals", `id='${awaiting}'`));
   });
 
   await check(

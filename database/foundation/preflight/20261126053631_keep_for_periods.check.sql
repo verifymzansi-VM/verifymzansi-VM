@@ -1,4 +1,4 @@
--- Read-only preflight for updates/20261126042049_keep_for_periods.sql.
+-- Read-only preflight for updates/20261126053631_keep_for_periods.sql.
 --
 -- Run this file unchanged in the Supabase SQL editor before applying the
 -- update, and again after it. It changes nothing: the first statement makes
@@ -14,8 +14,9 @@
 -- - "admin invitations": revoked, or whose claimant was erased, more than 12
 --   months ago;
 -- - "change logs": runtime switch and sign-up mode changes over 5 years old;
--- - "appeals and holds": appeals decided and content holds released more
---   than 2 years ago;
+-- - "appeals and holds": appeals decided more than 2 years ago whose
+--   decision is gone, and content holds released more than 2 years ago that
+--   no waiting appeal names;
 -- - "role changes": staff role change proposals decided or expired more than
 --   5 years ago;
 -- - "claim events": evidence case claim events over 2 years old;
@@ -37,7 +38,7 @@ with bodies as (
     ('internal.retention_operations(integer)',
       'c435cece42784f1bcf61a3b47ea32944', 'a76b7c5b983c43c687d0abf47965f6f6'),
     ('internal.retention_staff_records(integer)',
-      '63218a3ffaab86d4ead4788f13ed5103', '71534668b6a4b8f10c8517fc7be0be5c'),
+      '63218a3ffaab86d4ead4788f13ed5103', '94c034a1b8e5812a357fca776bc0f2a8'),
     ('internal.retention_verification(integer)',
       '6a7db601e6af1cfcc55f697f7d841dd2', '56e4f71f0ad4ecb994e79ea9b0d695b8'),
     ('internal.individual_slot_limit_guard()',
@@ -70,8 +71,10 @@ select 'summary' as kind,
     || ((select count(*) from private.frontend_feature_flag_events e where e.created_at < statement_timestamp() - interval '5 years')
       + (select count(*) from private.signup_mode_events e where e.changed_at < statement_timestamp() - interval '5 years'))
     || '; appeals and holds: '
-    || ((select count(*) from private.frontend_appeals a where a.resolved_at < statement_timestamp() - interval '2 years')
-      + (select count(*) from private.frontend_content_holds h where h.released_at < statement_timestamp() - interval '2 years'))
+    || ((select count(*) from private.frontend_appeals a where a.resolved_at < statement_timestamp() - interval '2 years'
+           and not exists(select 1 from private.frontend_appealable_actions x where x.id = a.action_id))
+      + (select count(*) from private.frontend_content_holds h where h.released_at < statement_timestamp() - interval '2 years'
+           and not exists(select 1 from private.frontend_appeals a where a.action_id = h.id and a.status = 'submitted')))
     || '; role changes: '
     || (select count(*) from private.frontend_staff_role_changes c
          where coalesce(c.decided_at, c.expires_at) < statement_timestamp() - interval '5 years')

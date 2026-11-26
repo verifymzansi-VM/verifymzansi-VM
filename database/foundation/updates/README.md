@@ -82,7 +82,7 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Keep-for periods for the newer personal-data tables, 26 November 2026
 
-`20261126042049_keep_for_periods.sql` is pending (see the applied register).
+`20261126053631_keep_for_periods.sql` is pending (see the applied register).
 Launch checklist item 51 (roadmap M7.4). No table, column, trigger, command or
 grant changes; six existing function bodies are replaced, all used by the daily
 retention sweep (`api.run_retention`, service only).
@@ -99,11 +99,13 @@ retention sweep (`api.run_retention`, service only).
   months after they were revoked, or 12 months after the claimant's account was
   erased (a claimed invitation is the owner's approval the staff role commands
   require); runtime switch and sign-up mode change logs 5 years.
-- **`internal.retention_staff_records`**: decided appeals and released content
-  holds 2 years; staff role change proposals 5 years after they were decided or
-  expired; evidence case claim events 2 years; raised slot limits 2 years after
-  they ended (`internal.individual_slot_limit_guard` now lets the sweep delete
-  them).
+- **`internal.retention_staff_records`**: decided appeals 2 years after the
+  decision, once the decision appealed is gone (while it stands, its appeal
+  stops a second one); released content holds 2 years after release, never while
+  an appeal against them waits; staff role change proposals 5 years after they
+  were decided or expired; evidence case claim events 2 years; raised slot
+  limits 2 years after they ended (`internal.individual_slot_limit_guard` now
+  lets the sweep delete them).
 - **`internal.retention_verification`**: reasons for returning an ID 12 months
   after the return, unless a legal hold or fraud hold keeps them. The five-year
   sweep of closed accounts also deletes them by case: a kept return used to stop
@@ -114,10 +116,11 @@ Not changed here: account closures (they date the identity periods; deleted with
 the Auth user), suspensions and bans, business check notes and partner records
 (separate checklist items). ORDER: apply first, then merge (safe either way:
 nothing is old enough to be deleted yet). The website release states 7 years for
-payment records and 3 years for privacy request records. Read-only preflight:
-`../preflight/20261126042049_keep_for_periods.check.sql` (expect one summary row
+payment records, 3 years for privacy request records and 12 months for
+contact-form messages. Read-only preflight:
+`../preflight/20261126053631_keep_for_periods.check.sql` (expect one summary row
 reading "update not applied" with every count 0); rollback:
-`../rollback/20261126042049_keep_for_periods.down.sql` (deleted records stay
+`../rollback/20261126053631_keep_for_periods.down.sql` (deleted records stay
 deleted). Behaviour test: `scripts/test-foundation-keep-for-periods.mjs`.
 
 ## Staff refund follow-ups, 25 November 2026
@@ -8407,6 +8410,6 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
 
 - `20261125194727_part_refund_follow_ups.sql`: pending; website-first
 
-- `20261126042049_keep_for_periods.sql`: pending; apply-first
+- `20261126053631_keep_for_periods.sql`: pending; apply-first
 
 <!-- applied-register:end -->
