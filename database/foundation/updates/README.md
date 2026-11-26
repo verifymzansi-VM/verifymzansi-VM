@@ -82,10 +82,10 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Video length checked by the database, 26 November 2026
 
-`20261126001956_video_length_checked.sql` is pending (see the applied register).
-Launch checklist item 39 (roadmap M4.4 part B). One new column, two new
-commands, one new trigger and one replaced trigger body; no command, argument,
-result or grant changes.
+`20261126001956_video_length_checked.sql` was applied on 26 November 2026 at
+18:31 UTC (see the applied register). Launch checklist item 39 (roadmap M4.4
+part B). One new column, two new commands, one new trigger and one replaced
+trigger body; no command, argument, result or grant changes.
 
 - **The length is stored.** `private.media_objects.duration_ms` holds a video's
   length in whole milliseconds, as the upload server read it from the file (null
@@ -125,8 +125,8 @@ first; the stored lengths are lost). Behaviour test:
 
 ## Staff access follow-ups, 26 November 2026
 
-`20261126001811_staff_access_follow_ups.sql` is **pending** (see the applied
-register). Launch checklist item 56, batch F.
+`20261126001811_staff_access_follow_ups.sql` was applied on 26 November 2026 at
+16:50 UTC (see the applied register). Launch checklist item 56, batch F.
 
 - **An invitation for someone who already has an authenticator app.** An owner
   admin invitation was claimed only when an authenticator app was added or
@@ -8729,8 +8729,27 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   fingerprint after the last of the five stacked updates (fingerprint.sql, 06:02
   UTC) matched the full replay (except the known schema grant difference)
 
-- `20261126001811_staff_access_follow_ups.sql`: pending
+- `20261126001811_staff_access_follow_ups.sql`: applied 2026-11-26 16:50 UTC;
+  apply-first, owner-approved, before pull request #385 was merged; Supabase SQL
+  editor (browser), file from raw GitHub at e8bc1688, update sha256 starting
+  d3900178bc952443; preflight before "staff access follow-ups: update not
+  applied; active admins: 3; admin invitations waiting: 0 (account already has
+  an authenticator app: 0); closed accounts with a staff role: 0" with no
+  problem rows, after "staff access follow-ups: already applied; active admins:
+  3; admin invitations waiting: 0 (account already has an authenticator app: 0);
+  closed accounts with a staff role: 0"; production fingerprint after the last
+  of the two stacked updates (fingerprint.sql, 18:33 UTC) matched the full
+  replay (except the known schema grant difference)
 
-- `20261126001956_video_length_checked.sql`: pending; apply-first
+- `20261126001956_video_length_checked.sql`: applied 2026-11-26 18:31 UTC;
+  apply-first, owner-approved, after pull request #385 deployed and before pull
+  request #386 was merged; Supabase SQL editor (browser), file from raw GitHub
+  at 6703262f, update sha256 starting 921862a35b6ab6da; preflight before "video
+  length check: update not applied; videos stored: 1; posts waiting with a
+  video: 0 (events: 0)" with no problem rows, after "video length check: already
+  applied; videos stored: 1; posts waiting with a video: 0 (events: 0)";
+  production fingerprint after the last of the two stacked updates
+  (fingerprint.sql, 18:33 UTC) matched the full replay (except the known schema
+  grant difference)
 
 <!-- applied-register:end -->
