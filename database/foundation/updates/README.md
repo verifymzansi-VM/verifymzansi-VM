@@ -82,10 +82,10 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Invoice payment link, 26 November 2026
 
-`20261126053701_invoice_pay_link.sql` is pending (see the applied register).
-Launch checklist items 38 and 34 (inventory A28): a customer invoice is emailed
-with a link that lets its payer see and pay it without signing in, and the
-receipt names the invoice it paid.
+`20261126053701_invoice_pay_link.sql` was applied on 26 November 2026 at 20:30
+UTC (see the applied register). Launch checklist items 38 and 34 (inventory
+A28): a customer invoice is emailed with a link that lets its payer see and pay
+it without signing in, and the receipt names the invoice it paid.
 
 - **The link.** `private.customer_invoices.pay_link_hash` keeps the SHA-256
   (hex) of the invoice's current link, unique where set. The website's email job
@@ -8793,6 +8793,14 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   (fingerprint.sql, 18:33 UTC) matched the full replay (except the known schema
   grant difference)
 
-- `20261126053701_invoice_pay_link.sql`: pending
+- `20261126053701_invoice_pay_link.sql`: applied 2026-11-26 20:30 UTC;
+  apply-first, owner-approved, before pull request #394 was merged; Supabase SQL
+  editor (browser), file from raw GitHub at 1d30293c, update sha256 starting
+  cd1e79ba0ef2af6d; preflight before "invoice payment link: update not applied;
+  unpaid invoices: 0" with no problem rows, after "invoice payment link: already
+  applied; unpaid invoices: 0; invoices with a link: 0; invoice emails: 0";
+  production fingerprint after it and 20261126053631_keep_for_periods.sql
+  (fingerprint.sql, 20:31 UTC) matched the full replay (except the known schema
+  grant difference)
 
 <!-- applied-register:end -->
