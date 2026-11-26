@@ -430,6 +430,19 @@ export async function seedTestCopy({ root = process.cwd(), status, sql, log = ()
   log("Admin: verifying an authenticator app claims the owner-setup invitation.");
   factors.admin = await enrolTotp(api, session.admin.token, "admin");
   session.admin = { ...session.admin, ...(await signIn(api, people.admin, factors.admin)) };
+  // The claim asks for a new two-step check, as every role grant does, so the
+  // admin checks the authenticator again before any staff command.
+  const recheck = await verifyTotp(api, session.admin.token, factors.admin);
+  session.admin = {
+    ...session.admin,
+    token: recheck.access_token,
+    refreshToken: recheck.refresh_token,
+  };
+  // Trusted step: a real admin claimed long ago. Specs sign in with sessions
+  // aged up to 20 minutes, so the claim moment is placed an hour back.
+  sql(
+    `update private.staff_roles set frontend_mfa_not_before=frontend_mfa_not_before - interval '1 hour' where user_id=${quote(session.admin.id)} and role='admin';`
+  );
   assert.equal(
     sql(
       `select string_agg(role,',') from private.staff_roles where user_id=${quote(session.admin.id)};`

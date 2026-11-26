@@ -172,3 +172,26 @@ describe("Add lost days", () => {
     expect(screen.getByRole("button", { name: "Check slots" })).toBeInTheDocument();
   });
 });
+
+describe("money already refunded (20261125194727_part_refund_follow_ups.sql)", () => {
+  it("warns on a term that already had money back for a failure", async () => {
+    previewItems = [
+      {
+        kind: "individual",
+        id: SLOT,
+        slots: 1,
+        renewals: 0,
+        endsAt: "2026-12-22T08:00:00.000Z",
+        refundedCents: 2500,
+      },
+      { kind: "package", id: PACKAGE, slots: 12, renewals: 0, endsAt: "2027-01-10T08:00:00.000Z" },
+    ];
+    await check();
+    const list = await screen.findByRole("list", { name: "Running paid slots" });
+    const notes = within(list).getAllByRole("note");
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toHaveTextContent(
+      "R25 was already refunded for days we failed to provide. Give money or days for one failure, not both."
+    );
+  });
+});

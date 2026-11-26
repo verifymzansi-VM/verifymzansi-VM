@@ -70,8 +70,9 @@ test.describe("routes refuse visitors who are not signed in", () => {
 test.describe("media cache policy", () => {
   // Exercises the real Next.js header pipeline, not just the route handler.
   // The copy serves media from public/e2e-media (git-ignored, emptied by `down`).
-  const stem = `audit-cache-${randomUUID()}`;
-  const key = `media/${stem}.jpg`;
+  // Uploaded photos are stored as media/<uuid>, with no extension.
+  const stem = randomUUID();
+  const key = `media/${stem}`;
   const localFile = path.join(process.cwd(), "public", "e2e-media", key);
   const bytes = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
 
@@ -92,12 +93,12 @@ test.describe("media cache policy", () => {
     expect(await response.body()).toEqual(bytes);
   });
 
-  test("a responsive fallback is cached briefly so a generated size can replace it", async ({
+  test("the original served for a missing responsive copy is cached for a day", async ({
     request,
   }) => {
-    const response = await request.get(`/api/media/serve/media/${stem}.w400.webp`);
+    const response = await request.get(`/api/media/serve/media/${stem}.w800.webp`);
     expect(response.status()).toBe(200);
-    expect(response.headers()["cache-control"]).toBe("public, max-age=300, s-maxage=300");
+    expect(response.headers()["cache-control"]).toBe("public, max-age=86400, s-maxage=86400");
     expect(await response.body()).toEqual(bytes);
   });
 

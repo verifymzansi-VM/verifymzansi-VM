@@ -88,6 +88,10 @@ function refused(error: { code?: string }) {
             : 503
   );
 }
+/** A length in seconds as the database stores it: whole milliseconds, at least 1. */
+function videoDurationMs(seconds: number): number {
+  return Math.max(1, Math.floor(seconds * 1000));
+}
 function arrayBuffer(bytes: Uint8Array) {
   const copy = new Uint8Array(bytes.length);
   copy.set(bytes);
@@ -218,19 +222,24 @@ async function uploadCheckedMedia(
     !scanForMalware(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength), file.type).safe
   )
     throw new FoundationMediaError(400);
+  // A video's length in whole milliseconds; its upload completes with it.
+  let videoMs = 0;
   if (kind === "video") {
     // Every video on the platform is at most 2 minutes (whole seconds, so the
     // phone's rounding passes). The event limit (1 minute) needs the post's
     // kind, which this upload does not carry (a file may be reused by any of
-    // the member's posts). That limit is checked only in the browser for now:
-    // the database does not check it at submit; a server check is planned.
-    const problem = videoLengthProblem(await readVideoBytesSeconds(bytes), MAX_VIDEO_SECONDS);
+    // the member's posts): the database stores the length read here and
+    // checks each post kind's limit at submit.
+    const seconds = await readVideoBytesSeconds(bytes);
+    const problem = videoLengthProblem(seconds, MAX_VIDEO_SECONDS);
     if (problem) {
       log.info("Video refused at upload", {
         reason: problem === UNREADABLE_VIDEO_LENGTH_MESSAGE ? "length_unreadable" : "too_long",
       });
       throw new FoundationMediaError(400, "video_length", problem);
     }
+    // videoLengthProblem refuses an unreadable length, so seconds is a number.
+    videoMs = videoDurationMs(seconds!);
   }
   if (isReencodableImageType(file.type)) {
     usage.allowance = await openImagesAllowance();
@@ -322,13 +331,24 @@ async function uploadCheckedMedia(
     usage.allowance.add(copyKeys.length);
     await storePhotoVariants(bucket, reserved.object_key, bytes, dimensions.width, write);
   }
-  const completed = await service.rpc("complete_frontend_media_upload", {
-    p_object_id: reserved.object_id,
-    p_size: bytes.length,
-    p_sha256: digest,
-    p_mime: file.type,
-    ...(dimensions ? { p_width: dimensions.width, p_height: dimensions.height } : {}),
-  });
+  // Videos complete with the length read above (the database checks each
+  // post kind's limit at submit); pictures with their dimensions.
+  const completed =
+    kind === "video"
+      ? await service.rpc("complete_frontend_video_upload", {
+          p_object_id: reserved.object_id,
+          p_size: bytes.length,
+          p_sha256: digest,
+          p_mime: file.type,
+          p_duration_ms: videoMs,
+        })
+      : await service.rpc("complete_frontend_media_upload", {
+          p_object_id: reserved.object_id,
+          p_size: bytes.length,
+          p_sha256: digest,
+          p_mime: file.type,
+          ...(dimensions ? { p_width: dimensions.width, p_height: dimensions.height } : {}),
+        });
   if (completed.error) refused(completed.error);
   const result = finalized.parse(completed.data);
   if (

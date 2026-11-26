@@ -97,9 +97,9 @@ it("keeps the site's price constants in step with the active Terms", () => {
 const REVIEWED_SALES_SWITCH_UPDATES = ["20261114154823_slot_packages.sql"];
 
 /** Whether SQL may change the packages sales switch
- * (private.slot_package_sales.on_sale): any statement, comments and quotes
- * left out, that names the switch table and writes or defines its on_sale
- * column or a row of it. */
+ * (private.slot_package_sales.on_sale): any statement, comments and double
+ * quotes left out, that names the switch table and writes or defines its
+ * on_sale column or a row of it. */
 function touchesPackagesSalesSwitch(sql: string): boolean {
   return sql
     .replace(/\/\*[\s\S]*?\*\//g, " ")
