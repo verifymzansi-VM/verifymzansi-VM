@@ -33,14 +33,16 @@
       "row_level_security": "b91cce098ef64beefe87624fa045d3d7",
       "triggers": "bf3ff80318cb34dc9f693937d53385ac"
     },
-    "pendingApplication": []
+    "pendingApplication": [
+      "20261126001811_staff_access_follow_ups.sql"
+    ]
   },
   "knownDifferences": [
     "Reference data is not fingerprinted. candidate.sql seeds posting-terms version posting-v2, which production does not hold: production has posting-v1 and posting-v3 (current since 20261109173012_posting_terms_v3.sql), and posting-v4 once 20261112122001_publish_posting_terms_v4.sql is applied (current from 20261112173841_switch_posting_terms_v4.sql).",
     "schema_grants: production has 8 items (d397fed9c8bd9d4fc50ebdd777899d93) and the replay 7 (categories below). The extra production item is `internal supabase_auth_admin:USAGE`, which Supabase grants when the Auth \"Before user created\" hook is switched on; no repository file creates it (see replay/hosted-auth-hook-grants.sql)."
   ],
-  "updateCount": 118,
-  "lastUpdate": "20261125150338_admin_removal_needs_approval.sql",
+  "updateCount": 119,
+  "lastUpdate": "20261126001811_staff_access_follow_ups.sql",
   "categories": {
     "column_grants": {
       "items": 10,
@@ -59,16 +61,16 @@
       "fingerprint": "821f7d069c595c075754fad9309136ac"
     },
     "function_bodies": {
-      "items": 1207,
-      "fingerprint": "63efb21abd4e7ade91d64c808652b7ee"
+      "items": 1209,
+      "fingerprint": "022fb672ee861728272af20db02d5bec"
     },
     "function_grants": {
       "items": 872,
       "fingerprint": "20b6269877bb3f52b00002a6d85fc547"
     },
     "function_metadata": {
-      "items": 1207,
-      "fingerprint": "d3ac108213b8c25ac2076bf7da11a4e2"
+      "items": 1209,
+      "fingerprint": "25b6b0a33fbcf018b3e243c788904f61"
     },
     "indexes": {
       "items": 615,
@@ -87,8 +89,8 @@
       "fingerprint": "a68294e7a9bcf7c20492a72f7c724252"
     },
     "triggers": {
-      "items": 155,
-      "fingerprint": "bf3ff80318cb34dc9f693937d53385ac"
+      "items": 156,
+      "fingerprint": "bb9c832dc17932c5f3b3cd7764d257d6"
     }
   }
 }

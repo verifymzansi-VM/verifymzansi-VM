@@ -80,6 +80,58 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Staff access follow-ups, 26 November 2026
+
+`20261126001811_staff_access_follow_ups.sql` is **pending** (see the applied
+register). Launch checklist item 56, batch F.
+
+- **An invitation for someone who already has an authenticator app.** An owner
+  admin invitation was claimed only when an authenticator app was added or
+  verified (the trigger on `auth.mfa_factors`), so a person invited after
+  setting one up never became an admin. Both paths now use one helper,
+  `internal.claim_owner_admin_invitation_for(uuid)` (no API role may run it),
+  and a new trigger on `private.owner_admin_invitations` runs it when the owner
+  adds an invitation: the person becomes an admin at once when their account
+  already has a verified authenticator app. The checks are unchanged: a
+  confirmed account that can sign in, an unclaimed and unrevoked invitation for
+  its email (only the account that signed up with it, once one has), and no
+  earlier staff role, which an invitation never reactivates.
+- **The update claims no waiting invitation itself**: making someone an admin is
+  the owner's step. The preflight counts waiting invitations whose account
+  already has an authenticator app. If that is above 0 at apply time, ask the
+  owner; for each one the owner approves, delete the invitation row and add it
+  again in the owner's SQL session, which fires the new trigger:
+  `delete from private.owner_admin_invitations where email = '<email>';` then
+  `insert into private.owner_admin_invitations (email) values ('<email>');`.
+- **Claims take the per-person lock.** The helper first takes
+  `internal.lock_evidence_subject` (the lock of ban approval, account closure,
+  erasure orders and staff role changes), then reads whether the account can
+  sign in, then locks the staff roles table, in the order staff role changes
+  use. An invitation claimed at the moment a ban is approved, the account is
+  closed or an erasure is ordered waits and then sees it, so it never leaves a
+  banned, closed or erased admin. `internal.order_account_erasure` already took
+  that lock before its staff check and is unchanged.
+- **No closure of a staff account through the service command.**
+  `internal.close_account_evidence` (behind the service-only
+  `api.close_account_evidence`, which nothing in the website or workers calls,
+  and `internal.close_account_now`) refuses an account with an active staff
+  role: PT409 "end the staff roles of this account first" (detail
+  `staff_account`), the check `internal.order_account_erasure` makes, under the
+  same lock. Members closing their own account and staff erasure orders already
+  refused such accounts.
+
+Expand only: two replaced bodies (`internal.claim_owner_admin_invitation()`,
+`internal.close_account_evidence(uuid)`), one new helper, one new trigger
+function (`internal.claim_new_owner_admin_invitation()`) and its trigger; no
+command, argument, result or grant changes. ORDER: **apply-first** (apply, then
+merge); no website code depends on it. The same pull request adds
+`/api/foundation/staff` to the proxy's staff check (`src/proxy-handler.ts`,
+`src/lib/foundation/page-access.ts`), as for `/api/admin`. Read-only preflight:
+`../preflight/20261126001811_staff_access_follow_ups.check.sql`; rollback:
+`../rollback/20261126001811_staff_access_follow_ups.down.sql` (removes the
+trigger, its function and the helper, and puts the two earlier bodies back).
+Behaviour checks: `scripts/test-foundation-staff-access-follow-ups.mjs`.
+
 ## Removing an admin needs another admin's approval, 25 November 2026
 
 `20261125150338_admin_removal_needs_approval.sql` was applied on 25 November
@@ -8226,5 +8278,7 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   after "already applied" with the same counts; production fingerprint after it
   (fingerprint.sql) matched the full replay (except the known schema grant
   difference)
+
+- `20261126001811_staff_access_follow_ups.sql`: pending
 
 <!-- applied-register:end -->
