@@ -39,7 +39,7 @@
     "Reference data is not fingerprinted. candidate.sql seeds posting-terms version posting-v2, which production does not hold: production has posting-v1 and posting-v3 (current since 20261109173012_posting_terms_v3.sql), and posting-v4 once 20261112122001_publish_posting_terms_v4.sql is applied (current from 20261112173841_switch_posting_terms_v4.sql).",
     "schema_grants: production has 8 items (d397fed9c8bd9d4fc50ebdd777899d93) and the replay 7 (categories below). The extra production item is `internal supabase_auth_admin:USAGE`, which Supabase grants when the Auth \"Before user created\" hook is switched on; no repository file creates it (see replay/hosted-auth-hook-grants.sql)."
   ],
-  "updateCount": 127,
+  "updateCount": 128,
   "lastUpdate": "20261126053701_invoice_pay_link.sql",
   "categories": {
     "column_grants": {
@@ -60,7 +60,7 @@
     },
     "function_bodies": {
       "items": 1228,
-      "fingerprint": "da6e20b56eec9baa1d1f57c7a797ff0f"
+      "fingerprint": "8b1a6aceea73564055f5e4161eaab13b"
     },
     "function_grants": {
       "items": 890,
