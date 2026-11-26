@@ -26,6 +26,7 @@ import {
   readTestCopy,
   readTestSms,
   type Person,
+  unusedPhoneNumber,
 } from "./support/test-copy";
 
 // Critical-flow test (M0.9b): a member's journey on the restored website in
@@ -252,7 +253,7 @@ test.describe("member signs up, gets verified, posts and publishes", () => {
       // Letters only (legal-name rules), unique per run so staff find this
       // member's case among earlier runs' cases.
       lastName: `Journey-${[...ref].map((c) => "abcdefghijklmnop"[parseInt(c, 16)]).join("")}`,
-      phone: `+2772${randomInt(1_000_000, 10_000_000)}`,
+      phone: unusedPhoneNumber("+2772"),
       idNumber: syntheticIdNumber(),
     };
     business = { name: `Journey Studio ${ref}` };

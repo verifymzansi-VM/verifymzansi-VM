@@ -93,39 +93,45 @@ it("keeps the site's price constants in step with the active Terms", () => {
   expect(buildCommercialCatalog([]).onSale).toBe(false);
 });
 
-/** Whether SQL turns the packages sales switch on
- * (private.slot_package_sales.on_sale), comments left out. */
-function turnsPackagesOnSale(sql: string): boolean {
+/** The update that adds the packages sales switch, reviewed: it leaves it off. */
+const REVIEWED_SALES_SWITCH_UPDATES = ["20261114154823_slot_packages.sql"];
+
+/** Whether SQL may change the packages sales switch
+ * (private.slot_package_sales.on_sale): any statement, comments and double
+ * quotes left out, that names the switch table and writes or defines its
+ * on_sale column or a row of it. */
+function touchesPackagesSalesSwitch(sql: string): boolean {
   return sql
-    .split("\n")
-    .map((line) => line.replace(/--.*$/, ""))
-    .join("\n")
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/--.*$/gm, "")
+    .replaceAll('"', "")
     .split(";")
-    .filter((statement) => /slot_package_sales/i.test(statement))
     .some(
       (statement) =>
-        /\bon_sale\s*=\s*(true|excluded\.on_sale)\b/i.test(statement) ||
-        /insert\s+into\s+private\.slot_package_sales[\s\S]*values\s*\(\s*true\s*,\s*true\b/i.test(
-          statement
-        )
+        /\bslot_package_sales\b/i.test(statement) &&
+        // on_sale named, or a row written (a positional INSERT names no column).
+        /\b(on_sale|insert|merge)\b/i.test(statement) &&
+        /\b(insert|update|alter|merge|create)\b/i.test(statement)
     );
 }
 
-it("recognises an update that puts packages on sale", () => {
-  expect(turnsPackagesOnSale("update private.slot_package_sales set on_sale = true;")).toBe(true);
-  expect(
-    turnsPackagesOnSale(
-      "insert into private.slot_package_sales (singleton, on_sale, reason) values (true, true, 'go');"
-    )
-  ).toBe(true);
-  expect(
-    turnsPackagesOnSale(
-      "insert into private.slot_package_sales (singleton, on_sale, reason) values (true, false, 'off');"
-    )
-  ).toBe(false);
-  expect(turnsPackagesOnSale("-- update private.slot_package_sales set on_sale = true;")).toBe(
-    false
-  );
+it("recognises SQL that may change the packages sales switch", () => {
+  for (const sql of [
+    "update private.slot_package_sales set on_sale = true;",
+    `update "private"."slot_package_sales" set "on_sale" = 't';`,
+    "insert into private.slot_package_sales values (true, true, 'go');",
+    "insert into private.slot_package_sales (on_sale) select true;",
+    "alter table private.slot_package_sales add column on_sale boolean default true;",
+    "create table private.slot_package_sales (on_sale boolean default true);",
+  ])
+    expect(touchesPackagesSalesSwitch(sql), sql).toBe(true);
+  for (const sql of [
+    "-- update private.slot_package_sales set on_sale = true;",
+    "/* update private.slot_package_sales set on_sale = true; */",
+    "select on_sale from private.slot_package_sales;",
+    "update private.slot_packages set on_sale = true;",
+  ])
+    expect(touchesPackagesSalesSwitch(sql), sql).toBe(false);
 });
 
 // Multi-listing prices are shown before they are sold (owner's decision of 22
@@ -136,7 +142,8 @@ it("puts packages on sale only under Terms that state the package rules", () => 
   const folder = "database/foundation/updates";
   const updates = readdirSync(folder)
     .filter((name) => name.endsWith(".sql"))
-    .filter((name) => turnsPackagesOnSale(readFileSync(`${folder}/${name}`, "utf8")));
+    .filter((name) => !REVIEWED_SALES_SWITCH_UPDATES.includes(name))
+    .filter((name) => touchesPackagesSalesSwitch(readFileSync(`${folder}/${name}`, "utf8")));
   const content = text(manifest.active_version);
   const slotPrice = `R${(PACKAGE_SLOT_PRICE_CENTS_PER_30_DAYS / 100).toLocaleString("en-US")} per slot`;
   const covered =

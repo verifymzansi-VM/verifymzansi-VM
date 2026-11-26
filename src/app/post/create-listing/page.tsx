@@ -262,7 +262,19 @@ const INITIAL_UPLOAD_STATUSES: UploadStatuses = {
   saving: "idle",
 };
 
+/**
+ * The Create listing page. The form is keyed on the copy it was opened with,
+ * so if the page is kept alive between visits (client navigation), a copy and
+ * the ordinary form (or a template) never share leftovers: moving to or from a
+ * copy starts a fresh form. A template opened in a kept ordinary form is
+ * handled by the form itself (it sets the work aside, with Undo).
+ */
 export default function CreateListingPage() {
+  const searchParams = useSearchParams();
+  return <CreateListingForm key={searchParams?.get("copy") ?? ""} />;
+}
+
+function CreateListingForm() {
   const { user, profile, isLoading } = useAuth();
   const categoryAnswers = useRef<Record<string, Record<string, string | boolean | string[]>>>({});
   const [step, setStep] = useState(0);
@@ -897,6 +909,10 @@ export default function CreateListingPage() {
         return;
       }
 
+      // A copy accepts the terms itself, first: if that fails, nothing has
+      // been uploaded.
+      if (copyId && needsTerms) await acceptTerms();
+
       // Best-effort preflight — never block the form on a health check.
       try {
         await checkUploadServiceReachable();
@@ -967,7 +983,6 @@ export default function CreateListingPage() {
 
         trialDays,
       };
-      if (copyId && needsTerms) await acceptTerms();
       const res = copyId
         ? await submitListingCopy(
             copyId,
