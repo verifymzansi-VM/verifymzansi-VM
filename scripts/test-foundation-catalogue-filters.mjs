@@ -48,10 +48,10 @@ const [PREFLIGHT, ROLLBACK] = [
 );
 const SEARCH = "internal.search_posts(jsonb)";
 const CARDS = "internal.search_post_cards(jsonb)";
-const SUMMARY = (state) =>
-  new RegExp(
-    `^catalogue filters: ${state}; listed organisations: \\d+; active affiliations: \\d+; running sponsorships: \\d+$`
-  );
+const NOT_APPLIED =
+  /^catalogue filters: update not applied; listed organisations: \d+; active affiliations: \d+; running sponsorships: \d+$/;
+const APPLIED =
+  /^catalogue filters: already applied; listed organisations: \d+; active affiliations: \d+; running sponsorships: \d+$/;
 
 const {
   started,
@@ -147,7 +147,7 @@ try {
       ["summary"],
       JSON.stringify(rows)
     );
-    assert.match(rows[0][1], SUMMARY("update not applied"));
+    assert.match(rows[0][1], NOT_APPLIED);
     assertReadOnlyPreflight(database, PREFLIGHT);
   });
 
@@ -176,7 +176,7 @@ try {
     label: "catalogue filters",
     fingerprint,
     preflightRows: preflight,
-    appliedSummary: SUMMARY("already applied"),
+    appliedSummary: APPLIED,
   });
 
   await check("grants: visitors and members only, as before", () => {
@@ -432,7 +432,7 @@ try {
       ["summary"],
       JSON.stringify(rows)
     );
-    assert.match(rows[0][1], SUMMARY("already applied"));
+    assert.match(rows[0][1], APPLIED);
   });
 
   // ---------------------------------------------------------- later steps
