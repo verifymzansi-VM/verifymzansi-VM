@@ -80,3 +80,12 @@ it("refuses to continue when the acceptance is not confirmed", async () => {
   await expect(result.current.acceptTerms()).rejects.toThrow("could not be accepted");
   expect(result.current.needsTerms).toBe(true);
 });
+it("says the terms could not be reached on a network failure, not the upload service", async () => {
+  const { result } = renderHook(() => usePostTransport());
+  await waitFor(() => expect(result.current.needsTerms).toBe(true));
+  vi.mocked(fetch).mockRejectedValueOnce(new TypeError("Failed to fetch"));
+  await expect(result.current.acceptTerms()).rejects.toThrow(
+    "We couldn't reach VerifyMzansi to accept the posting terms. Check your connection and try again."
+  );
+  expect(result.current.needsTerms).toBe(true);
+});

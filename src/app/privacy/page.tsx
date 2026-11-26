@@ -79,7 +79,7 @@ export default function PrivacyPolicyPage() {
       purpose: "Checkout, slots and packages, accounting, refunds, and dispute handling",
       recipients: "Ozow (payment provider), our accounting records, and platform support",
       retention:
-        "Kept for 5 years after the end of the tax year (1 March to the end of February) in which the payment was made, as tax law requires",
+        "Kept for 7 years from the end of the financial year in which the payment was made, as the law requires",
       deletion: "Handled under provider rules and platform legal/accounting obligations",
     },
   ] as const;

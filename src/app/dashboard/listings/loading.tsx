@@ -40,7 +40,6 @@ export default function ListingsLoading() {
             <div className="mt-3 flex gap-2 border-t border-border/60 pt-3">
               <Skeleton className="h-11 w-20 rounded-xl" />
               <Skeleton className="h-11 w-20 rounded-xl" />
-              <Skeleton className="ml-auto h-11 w-32 rounded-full" />
             </div>
           </div>
         ))}

@@ -593,6 +593,7 @@ function RejectedListingList({ listings }: { listings: DashboardItem[] }) {
                     area={listing.area}
                     expectedRevision={listing.revision}
                     contentType={listing.source}
+                    editHref={getEditHref(listing)}
                   />
                   <DeletePostButton
                     itemId={listing.id}

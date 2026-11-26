@@ -1262,10 +1262,11 @@ export default function ProfilePage() {
                           </li>
                           <li>
                             As our Terms say, closing your account counts as a request to cancel all
-                            your slots. If you are an individual or sole trader, we work out any
-                            credit for unused days after the 20-business-day notice period, minus a
-                            R50 fee; a 30-day slot usually returns nothing. Companies and other
-                            buyers that are not individuals get no credit.
+                            your slots and your Multi-listing package. If you are an individual or
+                            sole trader, we work out any credit for unused days after the
+                            20-business-day notice period, minus a R50 fee; a 30-day slot usually
+                            returns nothing. Companies and other buyers that are not individuals get
+                            no credit.
                           </li>
                           <li>You are signed out on every device and can&apos;t sign in again.</li>
                           <li>
@@ -1275,8 +1276,9 @@ export default function ProfilePage() {
                             waits until it is settled.
                           </li>
                           <li>
-                            Payment records and invoices are kept for 5 years for tax, as the law
-                            requires. Some other records, such as ID-check history, are kept as our{" "}
+                            Payment records and invoices are kept for 7 years from the end of the
+                            financial year, as the law requires. Some other records, such as
+                            ID-check history, are kept as our{" "}
                             <Link className="underline" href="/privacy#retention">
                               Privacy Policy
                             </Link>{" "}

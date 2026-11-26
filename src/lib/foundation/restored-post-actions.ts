@@ -97,12 +97,18 @@ export function handleRestoredPostAction(
             error: REPORTED_POST_MESSAGE,
             reason: "post_report_open",
           });
+        // The member accepts the current terms on the post's Edit page (the
+        // dashboard links there on this reason).
+        if (code === "PT409" && hasDatabaseReason(result.error, "posting_terms_required"))
+          throw new ActionRefusal({
+            status: 409,
+            error: "Review and accept the current posting terms before continuing",
+            reason: "posting_terms_required",
+          });
         if (code === "PT409")
           throw new ActionRefusal({
             status: 409,
-            error: hasDatabaseReason(result.error, "posting_terms_required")
-              ? "Review and accept the current posting terms before continuing"
-              : "Your post or posting allowance changed. Reload your posts before continuing.",
+            error: "Your post or posting allowance changed. Reload your posts before continuing.",
             reason: "post_changed",
           });
         if (code === "PT429")
