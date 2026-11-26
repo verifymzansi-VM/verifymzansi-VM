@@ -24,6 +24,9 @@
 // each length, nobody else does; and storage grows from 1 GB to 21 GB with
 // 100 paid slots, which hold 100 two-minute videos.
 //
+// Limits register: LIM-APP-video-length, LIM-APP-event-video-length,
+// LIM-SQL-staff-video-lengths-posts.
+//
 //   node --import tsx scripts/test-foundation-video-length.mjs
 //
 // Needs a local Docker daemon; it takes no connection settings at all.
