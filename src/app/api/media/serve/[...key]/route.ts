@@ -230,46 +230,20 @@ function rangeNotSatisfiable(size: number): NextResponse {
 }
 
 /**
- * If the requested key is a pre-generated responsive variant
- * (`<stem>.w<width>.webp`), return the original key it was derived from.
- * Returns null for non-variant keys. Variants are generated at upload time;
- * media uploaded before variants existed (or whose variant upload failed)
- * will 404 on the variant key, so the serve route falls back to the original.
+ * If the requested key is a responsive copy of an uploaded photo
+ * (`media/<uuid>.w<width>.webp`), return the photo's own key (`media/<uuid>`,
+ * which has no extension). Returns null for any other key.
  */
 function originalKeyForVariant(key: string): string | null {
-  const match = key.match(/^(.*)\.w\d+\.webp$/);
-  if (!match) return null;
-  // We don't know the original extension from the variant key alone. Try the
-  // common raster extensions in order; the caller checks existence.
-  return match[1];
-}
-
-/** Candidate original extensions to probe when a variant key is missing. */
-const VARIANT_ORIGINAL_EXTS = ["jpg", "jpeg", "png", "webp", "avif", "gif"];
-
-/** Keys made by the live backend's upload (`media/<uuid>`) have no extension. */
-const LIVE_MEDIA_KEY = /^media\/[0-9a-f-]{36}$/;
-
-/**
- * The keys that may hold the original of a missing variant. A live-backend
- * key is its own original; older keys are probed with each raster extension.
- */
-function originalCandidates(stem: string): string[] {
-  if (LIVE_MEDIA_KEY.test(stem)) return [stem];
-  return VARIANT_ORIGINAL_EXTS.map((originalExt) => `${stem}.${originalExt}`);
+  return key.match(/^(media\/[0-9a-f-]{36})\.w\d+\.webp$/)?.[1] ?? null;
 }
 
 /**
- * Live-backend copies are made only during the upload, before the photo can
- * be shown, so a missing one stays missing (an old photo, a failed copy or a
- * width not smaller than the original): cache that original for a day. Older
- * keys could gain a variant at any time, so keep their five minutes.
+ * Copies are made only during the upload, before the photo can be shown, so a
+ * missing one stays missing (a failed copy or a width not smaller than the
+ * original): cache the original served in its place for a day.
  */
-function fallbackCacheControl(stem: string): string {
-  return LIVE_MEDIA_KEY.test(stem)
-    ? "public, max-age=86400, s-maxage=86400"
-    : "public, max-age=300, s-maxage=300";
-}
+const FALLBACK_CACHE_CONTROL = "public, max-age=86400, s-maxage=86400";
 
 /**
  * Derive a filename for the Content-Disposition header from the storage key.
@@ -632,34 +606,16 @@ async function getMediaResponse(
 
   const response = await serveMediaForKey(request, key);
 
-  // Variant fallback: a pre-generated responsive variant (`<stem>.w<N>.webp`)
-  // only exists for media uploaded after variants were introduced. When the
-  // variant object is missing, serve the original image instead of a 404 so
-  // older media keeps rendering. We probe the common raster extensions.
+  // Variant fallback: when a responsive copy is missing, serve the original
+  // photo instead of a 404, but not as immutable for a year.
   if (response.status === 404) {
-    const stem = originalKeyForVariant(key);
-    if (stem) {
-      // Probe all candidate extensions in parallel — the previous sequential
-      // loop added up to 6 serial R2/S3 round-trips of latency per image for
-      // legacy media without pre-generated variants.
-      const probes = await Promise.all(
-        originalCandidates(stem).map((candidate) => serveMediaForKey(request, candidate))
-      );
-      // A failure probing one extension must not hide an existing original.
-      const hit =
-        probes.find((probe) => probe.ok || probe.status === 304) ??
-        probes.find((probe) => probe.status !== 404);
-      await Promise.allSettled(
-        probes.filter((probe) => probe !== hit).map((probe) => probe.body?.cancel())
-      );
-      if (hit) {
-        // The original can be replaced by a generated variant at this URL.
-        // Do not cache the temporary fallback as immutable for a year.
-        if (hit.ok || hit.status === 304) {
-          hit.headers.set("Cache-Control", fallbackCacheControl(stem));
-        }
-        return hit;
+    const original = originalKeyForVariant(key);
+    if (original) {
+      const fallback = await serveMediaForKey(request, original);
+      if (fallback.ok || fallback.status === 304) {
+        fallback.headers.set("Cache-Control", FALLBACK_CACHE_CONTROL);
       }
+      if (fallback.status !== 404) return fallback;
     }
   }
 
