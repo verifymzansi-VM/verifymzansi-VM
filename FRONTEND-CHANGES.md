@@ -170,6 +170,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 106. Removing an admin needs approval; appeal pages off the old backend (item 20, part 1) (and the group 106 part of 1 row elsewhere) | approved by owner 2026-11-25 (answer: 'Approve them') | Nothing for members or visitors. Admins: removing another admin now waits for a different admin's approval on Staff roles, and its header line says so. |
 | 107. Change a verified phone number or place (item 20, part 2) (no file rows of its own: the group 107 part of 4 rows elsewhere) | approved by owner 2026-11-25 (answer: 'Approve them') | Members: 'Change number' on My profile opens the phone step to verify a new number by SMS code (at most every 15 days, after the ID review); province and city can be changed on My profile at most every 15 days. |
 | 111. Showroom cards with a video and photos show the chosen frame (item 56) (no file rows: data only, `src/lib/showroom/feed.ts`) | approved by owner 2026-11-26 (answer: 'Yes to everything', for the before and after pictures) | Home and area showrooms: a post with both a video and photos plays its video over the frame the owner chose, as on the 27 October cards; before, it showed the first photo there. With no chosen frame it keeps the first photo. Posts without a video look as they do today. |
+| 108. Staff told to end an admin role before restricting that person (item 20, part 3) (no file rows: wording outside the checked scope) | approved by owner 2026-11-25 (answer: 'Approve it') | Staff only: on Reports (Ban, Suspend, emergency containment) and Governance (Approve), an action against a person who holds an admin role is refused with 'End this person's admin role first. Another admin must approve that, then try again.' |
 | 115. Test and plumbing leftovers before public opening (item 56, batch E) (and the group 115 part of 12 rows elsewhere) | awaiting owner | Nothing visible. Edit forms accept the posting terms before uploading; Create business and Create tourism share the posting-terms tick; Create listing starts fresh when the copy changes; leaving My profile right after closing the account still loads the next page in full. |
 
 Questions for the owner:
@@ -4455,6 +4456,27 @@ video and photos): `screenshots/item56c-showroom/` (Tourism & Events, phone 375
 and desktop 1280, before and after).
 
 Decision: approved by owner 2026-11-26 (answer: 'Yes to everything').
+
+### 108. Staff told to end an admin role before restricting that person (item 20, part 3)
+
+Wording only: no file in the checked scope changes, so this group has no file
+rows. Launch checklist item 20, part 3. Database update
+`20261125174942_end_admin_role_before_restriction.sql` (pending, website
+first): a ban, suspension or emergency containment of a person who holds an
+active admin role is refused. Text outside the checked scope:
+`src/lib/foundation/staff-command.ts`.
+
+- Staff only, on Reports (Ban, Suspend, emergency containment) and on
+  Governance (Approve): when the person holds an admin role, the action is
+  refused and the existing error line reads 'End this person's admin role
+  first. Another admin must approve that, then try again.' instead of 'The item
+  could not be confirmed. Reload the queue before continuing.'.
+- Nothing else changes; actions on everyone else are as before.
+
+Pictures (synthetic data, local preview, not published):
+`screenshots/item20-part3/` (desktop 1280 and phone 375).
+
+Decision: approved by owner 2026-11-25 (answer: 'Approve it').
 
 ### 115. Test and plumbing leftovers before public opening (item 56, batch E)
 
