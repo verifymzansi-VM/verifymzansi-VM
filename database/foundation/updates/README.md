@@ -82,10 +82,11 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Lifecycle rule follow-ups, 25 November 2026
 
-`20261125225855_lifecycle_rule_follow_ups.sql` is pending (see the applied
-register). Launch checklist item 56, batch D: the Low findings of the reviews of
-`20261125150215_small_lifecycle_rules.sql` (item 40). Full definitions of two
-internal functions; no API command, argument, result or grant changes.
+`20261125225855_lifecycle_rule_follow_ups.sql` was applied on 26 November 2026
+at 05:59 UTC (see the applied register). Launch checklist item 56, batch D: the
+Low findings of the reviews of `20261125150215_small_lifecycle_rules.sql` (item
+40). Full definitions of two internal functions; no API command, argument,
+result or grant changes.
 
 - **A report holds deletion for a limited time.** `internal.delete_post` refuses
   (PT409, detail `post_report_open`) only while an open report from the public
@@ -126,12 +127,13 @@ missing ID review is not sent again for the same sticker end). Behaviour test:
 
 ## Release one blocked phone number, 25 November 2026
 
-`20261125213005_release_one_phone_number.sql` is **pending** (see the applied
-register). Launch checklist item 21. A ban blocks every phone number the banned
-person verified (`20261117064820_ban_blocks_phone_numbers.sql`), and until now a
-number was freed only with the whole ban. Networks re-issue numbers, and a
-number can be blocked by mistake, so staff can now free one number for other
-people while the ID ban stays.
+`20261125213005_release_one_phone_number.sql` was applied on 26 November 2026 at
+05:55 UTC (see the applied register). Launch checklist item 21. A ban blocks
+every phone number the banned person verified
+(`20261117064820_ban_blocks_phone_numbers.sql`), and until now a number was
+freed only with the whole ban. Networks re-issue numbers, and a number can be
+blocked by mistake, so staff can now free one number for other people while the
+ID ban stays.
 
 - **A mark, never a delete.** `private.banned_phone_numbers` gets
   `release_reason`, `release_proposed_by`, `release_proposed_at` (a request,
@@ -185,8 +187,9 @@ released meanwhile are blocked again while their ban runs).
 
 ## Lost-email alert and staff deadline email follow-ups, 25 November 2026
 
-`20261125212548_email_alert_follow_ups.sql` is pending (see the applied
-register). Launch checklist item 56, batch B: the Low findings of the reviews of
+`20261125212548_email_alert_follow_ups.sql` was applied on 26 November 2026 at
+05:52 UTC (see the applied register). Launch checklist item 56, batch B: the Low
+findings of the reviews of
 `20261125131322_lost_email_alert_staff_deadlines.sql`. Full definitions of three
 internal functions and one new column; no API command, argument or grant
 changes.
@@ -249,10 +252,11 @@ Notes on the applied `20261125131322` files, which cannot be edited:
 
 ## Staff refund follow-ups, 25 November 2026
 
-`20261125194727_part_refund_follow_ups.sql` is pending (see the applied
-register). Launch checklist item 56, batch A: the Low findings of the reviews of
-`20261125133916_staff_part_refunds.sql`. Full definitions of four internal
-functions; no API command, argument, grant or table changes.
+`20261125194727_part_refund_follow_ups.sql` was applied on 26 November 2026 at
+05:32 UTC (see the applied register). Launch checklist item 56, batch A: the Low
+findings of the reviews of `20261125133916_staff_part_refunds.sql`. Full
+definitions of four internal functions; no API command, argument, grant or table
+changes.
 
 - **What was refunded.** `internal.payment_refunded_before_cents` counts a
   reversed slot unless an applied refund record that ended the paid days covers
@@ -302,13 +306,13 @@ first (`lock table private.payment_refund_requests in share mode`), then count.
 
 ## No account restriction for an admin, 25 November 2026
 
-`20261125174942_end_admin_role_before_restriction.sql` is **pending** (see the
-applied register). Launch checklist item 20, part 3. Until now two governors
-could ban an admin (an identity ban, or a report ban a moderator proposed and a
-governor approved), and one governor alone could put an admin under 72-hour
-emergency containment, again and again. A restriction removes account access, so
-`internal.staff_actor` then refused the admin, even the last one: the last-admin
-guard watches only staff roles.
+`20261125174942_end_admin_role_before_restriction.sql` was applied on 26
+November 2026 at 03:46 UTC (see the applied register). Launch checklist item 20,
+part 3. Until now two governors could ban an admin (an identity ban, or a report
+ban a moderator proposed and a governor approved), and one governor alone could
+put an admin under 72-hour emergency containment, again and again. A restriction
+removes account access, so `internal.staff_actor` then refused the admin, even
+the last one: the last-admin guard watches only staff roles.
 
 - **The rule.** A ban, suspension or emergency containment is refused with PT409
   "End this person's admin role first" (detail `subject_is_admin`) while the
@@ -8553,14 +8557,62 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   after it (fingerprint.sql) matched the full replay (except the known schema
   grant difference)
 
-- `20261125174942_end_admin_role_before_restriction.sql`: pending
+- `20261125174942_end_admin_role_before_restriction.sql`: applied 2026-11-26
+  03:46 UTC; apply-first, owner-approved, before pull request #377 was merged;
+  Supabase SQL editor (browser), file from raw GitHub at 23b0691f, update sha256
+  starting 137ee2de7c3a5690; preflight before "end admin role before
+  restriction: update not applied; active admins: 3; admins who cannot sign in:
+  0; restriction proposals about an admin: 0" with no problem rows, after "end
+  admin role before restriction: already applied; active admins: 3; admins who
+  cannot sign in: 0; restriction proposals about an admin: 0"; production
+  fingerprint after the last of the five stacked updates (fingerprint.sql, 06:02
+  UTC) matched the full replay (except the known schema grant difference)
 
-- `20261125194727_part_refund_follow_ups.sql`: pending; website-first
+- `20261125194727_part_refund_follow_ups.sql`: applied 2026-11-26 05:32 UTC;
+  website-first, owner-approved, after pull request #380 was merged and
+  deployed; Supabase SQL editor (browser), file from raw GitHub at 2c97b5dd,
+  update sha256 starting 2a54cb18c3c53cfa; preflight before "part refund
+  follow-ups: update not applied; part refunds keeping the slot running: 0; of
+  them on payments not activated: 0; slots reversed after one: 0" with no
+  problem rows, after "part refund follow-ups: already applied; part refunds
+  keeping the slot running: 0; of them on payments not activated: 0; slots
+  reversed after one: 0"; production fingerprint after the last of the five
+  stacked updates (fingerprint.sql, 06:02 UTC) matched the full replay (except
+  the known schema grant difference)
 
-- `20261125212548_email_alert_follow_ups.sql`: pending; apply-first
+- `20261125212548_email_alert_follow_ups.sql`: applied 2026-11-26 05:52 UTC;
+  apply-first, owner-approved, before pull request #381 was merged; Supabase SQL
+  editor (browser), file from raw GitHub at 65fc00ca, update sha256 starting
+  d9df49991cde7a24; preflight before "email alert follow-ups: update not
+  applied; lost emails: 0; alerts sent over 400 days ago: 0; staff without an
+  authenticator app: 0; staff emails queued today: 0 / 0" with no problem rows,
+  after "email alert follow-ups: already applied; lost emails: 0; alerts sent
+  over 400 days ago: 0; staff without an authenticator app: 0; staff emails
+  queued today: 0 / 0"; production fingerprint after the last of the five
+  stacked updates (fingerprint.sql, 06:02 UTC) matched the full replay (except
+  the known schema grant difference)
 
-- `20261125213005_release_one_phone_number.sql`: pending
+- `20261125213005_release_one_phone_number.sql`: applied 2026-11-26 05:55 UTC;
+  apply-first, owner-approved, before pull request #382 was merged; Supabase SQL
+  editor (browser), file from raw GitHub at 651b1705, update sha256 starting
+  4fb6f3732b33e7e9; preflight before "release one phone number: update not
+  applied; numbers blocked: 0; release requests waiting: 0; numbers released: 0"
+  with no problem rows, after "release one phone number: already applied;
+  numbers blocked: 0; release requests waiting: 0; numbers released: 0";
+  production fingerprint after the last of the five stacked updates
+  (fingerprint.sql, 06:02 UTC) matched the full replay (except the known schema
+  grant difference)
 
-- `20261125225855_lifecycle_rule_follow_ups.sql`: pending; apply-first
+- `20261125225855_lifecycle_rule_follow_ups.sql`: applied 2026-11-26 05:59 UTC;
+  apply-first, owner-approved, before pull request #384 was merged; Supabase SQL
+  editor (browser), file from raw GitHub at 3c235bed, update sha256 starting
+  33493f1e4e7aa735; preflight before "lifecycle rule follow-ups: update not
+  applied; posts with an open report: 0 (of which the owner may delete after the
+  update: 0); reminders waiting: 0 (of which the owner's ID is not reviewed: 0)"
+  with no problem rows, after "lifecycle rule follow-ups: already applied; posts
+  with an open report: 0 (of which the owner may delete after the update: 0);
+  reminders waiting: 0 (of which the owner's ID is not reviewed: 0)"; production
+  fingerprint after the last of the five stacked updates (fingerprint.sql, 06:02
+  UTC) matched the full replay (except the known schema grant difference)
 
 <!-- applied-register:end -->
