@@ -1,6 +1,8 @@
 import "server-only";
 import { foundationServerPublicApi } from "@/lib/foundation/server-public";
 import {
+  FoundationPostsUnavailableError,
+  searchFoundationCards,
   searchFoundationPresentedCards,
   foundationMediaUrl,
   loadFoundationShowroom,
@@ -32,7 +34,10 @@ const SHOWROOM_LIMITS: Record<ShowroomSurface, number> = {
 /** Each server copy remembers a showroom order (or that reading it failed) for
  * a minute per showroom and area, and each card's presentation (or that it has
  * none) for a minute per post, so the database sees at most one fair-order
- * read per showroom and area and one presentation read per post a minute. */
+ * read per showroom and area and one presentation read per post a minute.
+ * So a logo or chosen frame the owner removes can still show for up to about
+ * 75 s (a minute's memory of an answer that can take up to the 15 s read
+ * timeout to come); accepted for a showroom. */
 const CACHE_MS = 60_000;
 /** At most this many remembered orders (4 showrooms x areas); the oldest goes first. */
 const CACHE_ENTRIES = 400;
@@ -41,8 +46,9 @@ const orders = new Map<string, { at: number; cards: FoundationShowroomCard[] | n
 const PRESENTATION_ENTRIES = 1_000;
 const presentations = new Map<string, { at: number; presentation?: FoundationCardPresentation }>();
 /** A visit waits at most this long for the card presentations it has to read.
- * A card still unanswered shows its preview picture alone; its answer, when it
- * comes, is remembered, and the next visit reads it again if it never comes. */
+ * A card still unanswered shows its preview picture alone. Its answer may be
+ * remembered if it comes while the server copy is still running (a Worker can
+ * stop once the page is sent); otherwise the next visit reads it again. */
 const PRESENTATION_DEADLINE_MS = 1_500;
 
 /** "New" in the card's badge spot: gold with dark green text (brand accents). */
@@ -118,10 +124,13 @@ function carouselItem(
       foundationMediaUrl(post.preview.image_key) ??
       undefined,
     mediaKind: post.preview.video_key ? "video" : "image",
-    // A video-only post has no preview picture: its chosen frame stands in, so
-    // the card plays the video over that frame instead of fallback artwork.
+    // A video plays over the frame the owner chose; its preview picture (a
+    // mixed post's first photo, none for a video-only post) is used only when
+    // no chosen frame is known, as on the 27 October cards.
     posterUrl:
-      foundationMediaUrl(post.preview.image_key) ?? presentedMediaUrl(presentation, "poster"),
+      (post.preview.video_key ? presentedMediaUrl(presentation, "poster") : undefined) ??
+      foundationMediaUrl(post.preview.image_key) ??
+      undefined,
     ...(logoUrl ? { logoUrl } : {}),
     price: post.price_cents === null ? null : Number(post.price_cents) / 100,
     ...(post.is_new ? { statusLabel: NEW_TAG, statusClassName: NEW_TAG_CLASS } : {}),
@@ -165,9 +174,12 @@ async function fairCards(
 
 /** Each card's presentation (its chosen video frame and logo). Cards with none
  * remembered are read together, waiting at most PRESENTATION_DEADLINE_MS. Every
- * answer is remembered for a minute (a failed read as no presentation), even one
- * that comes after the deadline. One warning per visit counts the cards left
- * with their preview picture alone. */
+ * answer is remembered for a minute (a failed read as no presentation); one that
+ * comes after the deadline may be remembered too (see PRESENTATION_DEADLINE_MS).
+ * Reads still in flight are not shared, so under a slow database each new visit
+ * reads those cards again; accepted, since the deadline bounds each visit's wait
+ * and nothing is shared that one visit could wait on for another. One warning
+ * per visit counts the cards left with their preview picture alone. */
 async function cardPresentations(
   surface: ShowroomSurface,
   ids: readonly string[]
@@ -245,13 +257,28 @@ export function resetShowroomCachesForTests() {
   presentations.clear();
 }
 
-/** The newest posts, as before the fair order (used only when it fails). */
+/** The newest posts, as before the fair order (used only when it fails). One
+ * card failing its presentation check refuses the whole presented page, so the
+ * plain cards (preview pictures alone) stand in for that page. A failed
+ * database read is not repeated. */
 async function newestFirst(surface: ShowroomSurface): Promise<CarouselItem[]> {
-  const page = await searchFoundationPresentedCards(foundationServerPublicApi(), {
+  const api = foundationServerPublicApi();
+  const input = {
     limit: SHOWROOM_LIMITS[surface],
     ...(surface === "home" ? {} : { area: surface === "tourism" ? "tourism_events" : surface }),
-  });
-  return page.items.map((item) => carouselItem(item, item.presentation));
+  };
+  try {
+    const page = await searchFoundationPresentedCards(api, input);
+    return page.items.map((item) => carouselItem(item, item.presentation));
+  } catch (error) {
+    if (error instanceof FoundationPostsUnavailableError) throw error;
+    log.warn("Newest showroom cards refused their presentations; showing them without", {
+      surface,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    const page = await searchFoundationCards(api, input);
+    return page.items.map((item) => carouselItem(item));
+  }
 }
 
 /** A different one of the first three at the front on each visit; the rest keep their order. */
@@ -270,7 +297,15 @@ export async function loadShowroomItems(
   surface: ShowroomSurface,
   random: () => number = Math.random
 ): Promise<CarouselItem[]> {
-  const fair = await fairOrder(surface, showroomVisitorArea());
+  let fair: CarouselItem[] | null = null;
+  try {
+    fair = await fairOrder(surface, showroomVisitorArea());
+  } catch (error) {
+    log.warn("Fair showroom failed; showing the newest posts", {
+      surface,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
   // Visual pictures must be stable: the browser test copy keeps the front card.
   if (fair) return rotateFront(fair, process.env.PLAYWRIGHT_TEST_MODE === "1" ? () => 0 : random);
   try {
