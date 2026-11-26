@@ -80,6 +80,70 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Lost-email alert and staff deadline email follow-ups, 25 November 2026
+
+`20261125212548_email_alert_follow_ups.sql` is pending (see the applied
+register). Launch checklist item 56, batch B: the Low findings of the reviews of
+`20261125131322_lost_email_alert_staff_deadlines.sql`. Full definitions of three
+internal functions and one new column; no API command, argument or grant
+changes.
+
+- **Old alerts.** `internal.claim_lost_email_alert` deletes alerts sent over 400
+  days ago on every run, also while nothing is lost (before, only when a new
+  alert was made).
+- **Payment count.** New column `private.lost_email_alerts.payments`: how many
+  of all the lost emails an alert reports are payment emails, listed or not. The
+  claim returns it as `payments` (the same number when the alert is offered
+  again; null for an alert made before this update). The email's subject counts
+  payments from it; the website falls back to the listed ones without it.
+- **Authenticator app.** Staff without a verified authenticator app (who cannot
+  open any staff page) get no deadline email: the trigger leaves them out and
+  `internal.staff_email_due`, the email job's check before each send, skips
+  them.
+- **Appeals.** An appeal is not emailed to whoever took, approved or reported
+  the decision appealed against (they may not decide it), at queuing and before
+  each send.
+- **The cap.** Privacy requests have a legal deadline, so they are outside the
+  cap and do not count: each is emailed to staff who can act on it (a verified
+  authenticator app), except that only a member's first request in any 24 hours
+  is emailed (a member may file 5 an hour; later ones are only in the staff
+  queue). A request staff recorded for someone without an account is always
+  emailed. Appeals and reports keep the shared cap of 30 in any 24 hours, now
+  counting only themselves. At repeatable read or serializable the count could
+  pass the cap, so an appeal or report then queues no email (every website and
+  job call runs at read committed).
+
+Not changed: giving an alert back
+(`api.complete_lost_email_alert(p_claim, false)`) does not check who holds it.
+The alert's id is both the claim and the email's key and stays the same when the
+alert is offered again, so holders cannot be told apart without a new token in
+the API. It is safe: the hold lasts 5 minutes while a run ends within a minute,
+and the email key stops a second delivery. Privacy notices that can never be
+sent (their address changed) are already counted on the staff operations page
+("can never be sent", last 30 days).
+
+ORDER: apply first, then merge. Read-only preflight:
+`../preflight/20261125212548_email_alert_follow_ups.check.sql` (expect "update
+not applied"; it counts lost emails only once their lease has ended, alerts due
+for deletion, staff without an authenticator app and today's staff emails);
+rollback: `../rollback/20261125212548_email_alert_follow_ups.down.sql` (puts the
+three earlier bodies back and drops the column; queued emails and alerts stay;
+afterwards privacy request emails count towards the cap again, so appeals and
+reports can go without email for up to 24 hours).
+
+Notes on the applied `20261125131322` files, which cannot be edited:
+
+- Its preflight counts an email at its 8th attempt that is still within its
+  lease as lost; the alert reports it only once the lease has ended. The
+  preflight above uses the alert's rule.
+- Its rollback deletes the staff deadline emails before it drops the three
+  triggers, so a privacy request, appeal or report submitted in between queues
+  emails that stay. Run it while no submissions are expected (or check for staff
+  emails afterwards and delete them by hand).
+- Its check for unsent alerts takes no lock, so an email job run can make a new
+  alert just after the check. Pause the operations jobs Worker's schedule before
+  running it.
+
 ## Staff refund follow-ups, 25 November 2026
 
 `20261125194727_part_refund_follow_ups.sql` is pending (see the applied
@@ -8366,5 +8430,7 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
 - `20261125174942_end_admin_role_before_restriction.sql`: pending
 
 - `20261125194727_part_refund_follow_ups.sql`: pending; website-first
+
+- `20261125212548_email_alert_follow_ups.sql`: pending; apply-first
 
 <!-- applied-register:end -->

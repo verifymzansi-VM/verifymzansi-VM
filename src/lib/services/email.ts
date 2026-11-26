@@ -1235,6 +1235,8 @@ export interface LostEmailAlert {
   claim: string;
   /** Every lost row the alert reports; `items` lists the oldest of them. */
   total: number;
+  /** How many of all `total` are payment emails (missing for older alerts). */
+  payments?: number | null;
   items: ReadonlyArray<{
     source: "outbox" | "privacy_notice";
     id: string;
@@ -1254,7 +1256,8 @@ export interface LostEmailAlert {
  */
 export async function sendLostEmailAlert(alert: LostEmailAlert): Promise<SendEmailResult> {
   const appUrl = sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
-  const payments = alert.items.filter((item) => item.kind.startsWith("payment_")).length;
+  const payments =
+    alert.payments ?? alert.items.filter((item) => item.kind.startsWith("payment_")).length;
   const count = `${alert.total} queued email${alert.total === 1 ? "" : "s"}`;
   const subject = `VerifyMzansi: ${count} not confirmed delivered after the last attempt${payments ? ` (${payments} payment)` : ""}`;
   const rows = alert.items.map((item): [string, string] => [

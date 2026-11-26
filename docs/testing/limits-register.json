@@ -5012,7 +5012,7 @@
     },
     {
       "id": "LIM-F-queue_staff_deadline_emails",
-      "title": "internal.queue_staff_deadline_emails: at most 30 staff deadline emails in any 24 hours, all staff and kinds together",
+      "title": "internal.queue_staff_deadline_emails: at most 30 staff appeal and report emails in any 24 hours, all staff together (privacy requests are outside it: a member's first request in 24 hours is emailed)",
       "value": "30 in 24 hours",
       "category": "rate",
       "enforcedAt": [
@@ -5026,6 +5026,10 @@
         {
           "kind": "behaviour",
           "file": "scripts/test-foundation-lost-email-alert.mjs"
+        },
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-email-alert-follow-ups.mjs"
         }
       ]
     },
