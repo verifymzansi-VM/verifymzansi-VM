@@ -39,6 +39,7 @@ const PROTECTED_PREFIXES = [
   "/api/billing",
   "/api/verification",
   "/api/admin",
+  "/api/foundation/staff",
   "/api/appeals",
   "/api/otp",
   "/api/leads",

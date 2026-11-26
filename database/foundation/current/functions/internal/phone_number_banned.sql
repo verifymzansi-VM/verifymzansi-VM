@@ -9,7 +9,7 @@ CREATE OR REPLACE FUNCTION internal.phone_number_banned(p_phone text)
 AS $function$
   select exists(select 1 from private.banned_phone_numbers n
     join private.banned_identities b on b.identity_hmac=n.identity_hmac
-    where n.phone=p_phone and b.retain_until>clock_timestamp());
+    where n.phone=p_phone and n.released_at is null and b.retain_until>clock_timestamp());
 $function$;
 alter function internal.phone_number_banned(text) owner to postgres;
 revoke all on function internal.phone_number_banned(text) from public;

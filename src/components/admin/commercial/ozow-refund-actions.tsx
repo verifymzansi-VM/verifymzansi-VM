@@ -226,17 +226,23 @@ function ReasonCodeField({
 export function OzowRefundForm({
   target,
   onDone,
+  requestId,
+  onRecorded,
 }: {
   target: OzowRefundTarget;
   onDone: () => void;
+  /** The request id of this payment or slot, kept by the list until the
+   * refund is recorded: sent again after a lost answer, even when the form is
+   * opened again, so Ozow is never sent a second refund. */
+  requestId: string;
+  /** The refund was recorded: the list forgets its request id. */
+  onRecorded?: () => void;
 }) {
   const { run, busy, message } = useOzowRefundAction();
   const room = target.room;
   const [reasonCode, setReasonCode] = useState("");
   const [amountText, setAmountText] = useState(room ? (room.leftCents / 100).toFixed(2) : "");
   const [problem, setProblem] = useState<string | null>(null);
-  // One id per form opening, sent again on a retry: never refunded twice.
-  const [requestId] = useState(() => crypto.randomUUID());
   const priorCents = room ? room.refundedCents : target.priorCents;
   const needsApproval = priorCents + target.amountCents > APPROVAL_ABOVE_CENTS;
   const dashboard = target.mode === "dashboard";
@@ -283,7 +289,10 @@ export function OzowRefundForm({
                   : "Dashboard refund recorded. The payment is refunded."
             : outcomeText
         );
-        if (done) onDone();
+        if (done) {
+          onRecorded?.();
+          onDone();
+        }
       }}
     >
       <p className="text-sm">

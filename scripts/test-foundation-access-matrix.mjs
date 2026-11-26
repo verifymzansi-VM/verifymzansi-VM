@@ -201,6 +201,8 @@ const OWNER_TABLES = [
   ["accepted_identity_facts", "owner_id=$1"],
   ["verification_phone_proofs", "owner_id=$1"],
   ["verification_localities", "owner_id=$1"],
+  // Place changes (20261125161326_change_verified_place): A's recorded changes.
+  ["verification_locality_changes", "owner_id=$1"],
   ["payments", "owner_id=$1"],
   ["entitlements", "owner_id=$1"],
   ["organisation_applications", "applicant_id=$1"],
@@ -217,7 +219,9 @@ const OWNER_TABLES = [
   ["banned_identities", ownDecisions],
   [
     "banned_phone_numbers",
-    `identity_hmac in (select identity_hmac from private.identity_ban_bindings where ${ownFacts})`,
+    // A's numbers, or a release A asked for or approved as staff
+    // (20261125213005_release_one_phone_number).
+    `identity_hmac in (select identity_hmac from private.identity_ban_bindings where ${ownFacts}) or release_proposed_by=$1 or released_by=$1`,
   ],
   ["business_details", ownPosts],
   ["communication_choice_events", "account_id=$1"],

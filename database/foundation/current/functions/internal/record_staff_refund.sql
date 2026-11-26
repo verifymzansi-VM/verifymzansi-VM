@@ -87,7 +87,12 @@ begin
     if prior.channel = channel and prior.payment_id = pay.id and prior.payment_line_id is not distinct from line.id
         and prior.reason_code = p_reason_code and prior.reason = btrim(p_reason) and prior.requested_by = actor
         and (p_amount_cents is null or prior.amount_cents = p_amount_cents)
-        and prior.customer_asked_on is not distinct from asked then
+        and (p_amount_cents is not null or prior.ends_paid_days)
+        and prior.customer_asked_on is not distinct from asked
+        -- The bank reference, or Ozow's refund id, is the one recorded: a
+        -- corrected one is another refund (20261125194727_part_refund_follow_ups.sql).
+        and (channel <> 'manual' or lower(prior.ozow_reference) = lower(reference))
+        and (channel <> 'dashboard' or prior.ozow_refund_id = refund_id) then
       return internal.staff_refund_result(prior, true);
     end if;
     raise exception 'this refund request id was already used for another refund' using errcode='PT409',
@@ -116,6 +121,9 @@ begin
     if prior.channel = channel and prior.payment_id = pay.id and prior.payment_line_id is not distinct from line.id
         and prior.kind = 'refunded' and prior.reason_code = p_reason_code and prior.reason = btrim(p_reason)
         and prior.requested_by = actor and (p_amount_cents is null or prior.amount_cents = p_amount_cents)
+        -- "Everything left" never repeats a part refund that kept the slot
+        -- running (20261125194727_part_refund_follow_ups.sql).
+        and (p_amount_cents is not null or prior.ends_paid_days)
         and prior.customer_asked_on is not distinct from asked then
       return internal.staff_refund_result(prior, true);
     end if;
@@ -154,6 +162,14 @@ begin
   end if;
   -- The slot keeps running only for a part refund of our failure or a billing error.
   ends := amount = left_cents or p_reason_code not in ('our_failure_after_fix_offered', 'billing_error');
+  -- Money back for days we failed to provide is for a slot that was delivered:
+  -- a payment waiting for "Activate what was paid for" is activated first, so
+  -- its partner commission is not created after the refund
+  -- (20261125194727_part_refund_follow_ups.sql).
+  if not ends and pay.fulfillment_status <> 'fulfilled' then
+    raise exception 'activate what was paid for first, then refund part of it; if it cannot be activated, record a refund that ends the slot'
+      using errcode='PT409', detail='refund_activate_first';
+  end if;
   if p_reason_code = 'first_purchase_cancelled' then
     if p_line_id is not null or amount <> pay.amount_cents then
       raise exception 'a first purchase is refunded in full: the whole payment, with nothing refunded before'

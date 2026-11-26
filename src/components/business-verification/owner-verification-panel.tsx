@@ -136,9 +136,16 @@ const DOC_NAMES: Record<string, string> = {
   free_disclosure: "Free disclosure",
 };
 
+/** Dates in South African time, whatever the browser's time zone, so a
+ * "renew by" date matches the reminder email. */
 function formatDate(iso: string | null) {
   return iso
-    ? new Date(iso).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })
+    ? new Date(iso).toLocaleDateString("en-ZA", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        timeZone: "Africa/Johannesburg",
+      })
     : "";
 }
 

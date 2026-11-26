@@ -78,6 +78,14 @@ function fail(
       error: "Your posting allowance has been reached",
       reason: "posting_limit",
     });
+  // The database's 12-month limit for free events (20261125150215); the form
+  // already refuses such a start, so this is only for a stale form.
+  if (error.code === "22023" && hasDatabaseReason(error, "event_too_far_ahead"))
+    throw new PostRefusal({
+      status: 422,
+      error: "Events can start at most 12 months ahead.",
+      reason: "event_too_far_ahead",
+    });
   if (error.code === "22023" || error.code === "23514")
     throw new PostRefusal({
       status: 422,
