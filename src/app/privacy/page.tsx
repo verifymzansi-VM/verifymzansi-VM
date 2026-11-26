@@ -71,7 +71,7 @@ export default function PrivacyPolicyPage() {
         "CIPC registered and Seen by VerifyMzansi checks: CIPC documents, call notes and visit photos",
       recipients: "Restricted business-verification reviewers; never public",
       retention:
-        "Deleted 30 days after the decision. The sticker, its date and the town visited stay on the profile for 12 months",
+        "Deleted 30 days after the decision. The sticker, its date and the town visited stay on the profile for 12 months; the check record is deleted 12 months after the sticker ends",
       deletion: "Request through the data-rights workflow; calls are not recorded",
     },
     {

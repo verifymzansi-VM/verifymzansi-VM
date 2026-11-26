@@ -10,7 +10,7 @@ AS $function$
 declare candidate record; numbers integer:=0; challenges integer; proofs integer; localities integer;
   acceptances integer; signup_acceptances integer; choice_events integer; histories integer:=0; cases uuid[];
   attempt_names integer; checks integer; ask_reasons integer; disclosures integer; mode_events integer; overdue integer;
-  return_reasons integer;
+  return_reasons integer; business_details integer:=0; business_checks integer:=0; business_check private.frontend_business_checks;
 begin
   -- The encrypted ID number goes with the selfie: once the selfie is deleted
   -- or due, unless its identity record is kept (internal.identity_record_kept).
@@ -127,6 +127,52 @@ begin
     order by r.created_at limit p_limit for update of r skip locked);
   get diagnostics return_reasons=row_count;
 
+  -- Business checks, as the Privacy page says. 30 days after the decision (a
+  -- revocation is a later decision) the details go: the visit address, the
+  -- visit report, photo locations, messages, the CIPC document records, the
+  -- representative's email and the call notes. The sticker, its date and
+  -- town, the outcome and the staff note stay. The check itself goes 12
+  -- months after it ended (the sticker expired or was revoked, or the
+  -- decision). An open legal hold on the owner or fraud hold on the case
+  -- keeps everything.
+  for candidate in
+    select x.id,x.owner_id from private.frontend_business_checks x
+    where x.decided_at is not null
+      and (coalesce(x.revoked_at,x.expires_at,x.decided_at)<statement_timestamp()-interval '12 months'
+        or (coalesce(x.revoked_at,x.decided_at)<statement_timestamp()-interval '30 days'
+          and (x.visit_address is not null or x.visit_report is not null
+            or exists(select 1 from private.frontend_business_seen_photos p where p.check_id=x.id
+              and (p.latitude is not null or p.longitude is not null))
+            or exists(select 1 from private.frontend_business_check_messages m where m.check_id=x.id)
+            or exists(select 1 from private.frontend_cipc_documents d where d.check_id=x.id)
+            or exists(select 1 from private.frontend_cipc_reviews r where r.check_id=x.id
+              and (r.representative_email is not null or r.callback_record is not null)))))
+      and not internal.evidence_fraud_held(x.id)
+      and not exists(select 1 from private.legal_holds h where h.subject_id=x.owner_id and h.released_at is null)
+    order by x.decided_at,x.id limit p_limit
+  loop
+    if not pg_catalog.pg_try_advisory_xact_lock(pg_catalog.hashtextextended(candidate.owner_id::text,2408)) then continue; end if;
+    -- Revocations and hold writers take the same lock: read the check and the
+    -- holds again under it.
+    select * into business_check from private.frontend_business_checks x where x.id=candidate.id and x.decided_at is not null;
+    if not found or internal.evidence_fraud_held(candidate.id)
+      or exists(select 1 from private.legal_holds h where h.subject_id=candidate.owner_id and h.released_at is null) then continue; end if;
+    if coalesce(business_check.revoked_at,business_check.expires_at,business_check.decided_at)<statement_timestamp()-interval '12 months' then
+      delete from private.frontend_business_checks where id=candidate.id;
+      business_checks:=business_checks+1;
+    elsif coalesce(business_check.revoked_at,business_check.decided_at)<statement_timestamp()-interval '30 days' then
+      update private.frontend_business_checks set visit_address=null,visit_report=null
+        where id=candidate.id and (visit_address is not null or visit_report is not null);
+      update private.frontend_business_seen_photos set latitude=null,longitude=null
+        where check_id=candidate.id and (latitude is not null or longitude is not null);
+      delete from private.frontend_business_check_messages where check_id=candidate.id;
+      delete from private.frontend_cipc_documents where check_id=candidate.id;
+      update private.frontend_cipc_reviews set representative_email=null,callback_record=null
+        where check_id=candidate.id and (representative_email is not null or callback_record is not null);
+      business_details:=business_details+1;
+    end if;
+  end loop;
+
   -- Five years after closure: the verification history of the account, once
   -- every file is deleted, no ban still depends on it and the partner holds
   -- no copy of its checks.
@@ -222,7 +268,8 @@ begin
     'closed_account_signup_terms',signup_acceptances,'closed_account_communication_choices',choice_events,
     'closed_account_verification_histories',histories,'failed_attempt_names',attempt_names,
     'identity_checks',checks,'closed_account_ask_reasons',ask_reasons,'identity_disclosures',disclosures,
-    'identity_check_mode_events',mode_events,'overdue_partner_deletions',overdue,'return_reasons',return_reasons);
+    'identity_check_mode_events',mode_events,'overdue_partner_deletions',overdue,'return_reasons',return_reasons,
+    'business_check_details',business_details,'business_checks',business_checks);
 end;
 $function$;
 alter function internal.retention_verification(integer) owner to postgres;

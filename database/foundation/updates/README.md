@@ -80,6 +80,40 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Business-check details deleted as the Privacy page says, 26 November 2026
+
+`20261126210022_business_check_retention.sql` is pending (see the applied
+register). Launch checklist item 79. No table, column, trigger, command or grant
+is added or removed; one function body is replaced and one check rule relaxed.
+
+- **`internal.retention_verification`** (the daily retention sweep,
+  `api.run_retention`, service only) adds two counts. `business_check_details`:
+  30 days after a business check's decision, or its revocation (a later
+  decision), the visit address, the visit report, the photo locations, the
+  messages, the CIPC document records (the parsed copy of each CIPC PDF), the
+  representative's email and the call notes are deleted. The files already go 30
+  days after the decision. `business_checks`: the check record goes 12 months
+  after it ended (the sticker expired or was revoked; a refusal or withdrawal
+  ends at its decision), with its CIPC review, photo and file rows. The sticker,
+  its date and town, the CIPC sticker details on the profile, the outcome and
+  the staff note stay until then. An open legal hold on the owner or fraud hold
+  on the case keeps everything. Each check is handled under the owner's
+  verification lock, which revocations and hold writers also take.
+- **`frontend_business_checks_check1`**: a visit check needs a visit address
+  only until it is decided (was: always), so the sweep can delete it.
+
+ORDER: apply first, then merge (safe either way: no API command changes, and the
+readers already accept the cleared fields as missing). The website release adds
+to the Privacy page row 'Business verification files' that the check record is
+deleted 12 months after the sticker ends. Read-only preflight:
+`../preflight/20261126210022_business_check_retention.check.sql` (expect one
+summary row reading "update not applied"; its counts show what the next sweep
+would clear, delete and keep under a hold); rollback:
+`../rollback/20261126210022_business_check_retention.down.sql` (the earlier rule
+comes back NOT VALID if a decided visit check has no address any more; deleted
+details stay deleted). Behaviour test:
+`scripts/test-foundation-business-check-retention.mjs`.
+
 ## Keep-for periods for the newer personal-data tables, 26 November 2026
 
 `20261126053631_keep_for_periods.sql` was applied on 26 November 2026 at 20:15
@@ -8809,5 +8843,7 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   claim events: 0; slot limits: 0; ID return reasons: 0; privacy request proofs:
   0"; production fingerprint after it (fingerprint.sql, 20:18 UTC) matched the
   full replay (except the known schema grant difference)
+
+- `20261126210022_business_check_retention.sql`: pending; apply-first
 
 <!-- applied-register:end -->
