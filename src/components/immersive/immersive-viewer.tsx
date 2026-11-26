@@ -454,9 +454,9 @@ function ViewerContent({
   const activeIndex =
     foundIndex >= 0 ? foundIndex : Math.min(active.index, Math.max(0, postItems.length - 1));
   const tail = feed.items[feed.items.length - 1];
-  // An empty section says so itself (EmptyBrowse), so it has no end slide.
-  const tailItem =
-    tail && tail.type !== "post" && !(postItems.length === 0 && feed.browse) ? tail : null;
+  // An empty section says so itself (EmptyBrowse), with no end slide or arrows.
+  const emptyBrowse = postItems.length === 0 && Boolean(feed.browse);
+  const tailItem = tail && tail.type !== "post" && !emptyBrowse ? tail : null;
   // The last post dropped out while it was on screen: show the end of the list.
   const onEnd =
     endRequested ||
@@ -699,7 +699,7 @@ function ViewerContent({
         {announcement}
       </div>
 
-      {postItems.length === 0 && feed.browse ? (
+      {emptyBrowse && feed.browse ? (
         <EmptyBrowse
           browse={feed.browse}
           busy={browseBusy !== null}
@@ -773,7 +773,7 @@ function ViewerContent({
           </div>
         ) : null}
 
-        {!activeSlide || onEnd ? (
+        {(!activeSlide || onEnd) && !emptyBrowse ? (
           <div className="absolute inset-y-0 right-4 z-10 flex items-center">
             <ProfileNavigation go={go} canPrevious={canPrevious} canNext={canNext} />
           </div>

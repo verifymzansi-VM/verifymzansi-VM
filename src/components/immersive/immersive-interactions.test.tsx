@@ -157,7 +157,7 @@ describe("the end of a browsed section", () => {
     render(<ImmersiveViewer initialSlide={opened} />);
     expect(screen.getByText("Nothing here yet")).toBeInTheDocument();
     expect(screen.queryByText("You’re all caught up")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Next profile" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /^(Next|Previous) profile$/ })).toBeNull();
   });
 
   it("still ends a section that has posts with the end slide", () => {
