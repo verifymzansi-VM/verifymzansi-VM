@@ -8,6 +8,8 @@ import { getContentEditChanges } from "../content-edit-diff";
 import { FoundationStaffReadError } from "./staff-read";
 import { areaLabel, restoredArea, restoredContentType } from "./areas";
 import { readStaffCopyFacts } from "./staff-copy-facts";
+import { readStaffVideoLengths } from "./staff-video-lengths";
+import { videoLimitSeconds } from "../media/video-length";
 const instant = z.iso.datetime({ offset: true });
 const generation = z
   .string()
@@ -161,6 +163,26 @@ export async function readStaffModerationQueue(api: FoundationAuthenticatedApi, 
   for (const item of queue.allItems) {
     const found = facts.get(item.id);
     if (found) item.copy_facts = found;
+  }
+  // Each video's stored length, for the posts the reviewer holds that have a
+  // video (the queue shows review data only for those).
+  const lengths = await readStaffVideoLengths(
+    api,
+    queue.allItems
+      .filter(
+        (i) =>
+          queue.claims[`${claimTypeOf(i)}:${i.id}`]?.mine &&
+          ((i.videos?.length ?? 0) > 0 || Boolean(i.cover_video))
+      )
+      .map((i) => i.id)
+  );
+  for (const item of queue.allItems) {
+    const found = lengths.get(item.id);
+    if (found)
+      item.video_lengths = {
+        limitSeconds: videoLimitSeconds(item.itemType.startsWith("Event") ? "event" : "other"),
+        videos: found,
+      };
   }
   return queue;
 }

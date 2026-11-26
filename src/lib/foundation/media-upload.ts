@@ -88,6 +88,10 @@ function refused(error: { code?: string }) {
             : 503
   );
 }
+/** A length in seconds as the database stores it: whole milliseconds, at least 1. */
+function videoDurationMs(seconds: number): number {
+  return Math.max(1, Math.floor(seconds * 1000));
+}
 function arrayBuffer(bytes: Uint8Array) {
   const copy = new Uint8Array(bytes.length);
   copy.set(bytes);
@@ -218,19 +222,26 @@ async function uploadCheckedMedia(
     !scanForMalware(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength), file.type).safe
   )
     throw new FoundationMediaError(400);
+  let durationMs: number | null = null;
   if (kind === "video") {
     // Every video on the platform is at most 2 minutes (whole seconds, so the
     // phone's rounding passes). The event limit (1 minute) needs the post's
     // kind, which this upload does not carry (a file may be reused by any of
-    // the member's posts). That limit is checked only in the browser for now:
-    // the database does not check it at submit; a server check is planned.
-    const problem = videoLengthProblem(await readVideoBytesSeconds(bytes), MAX_VIDEO_SECONDS);
-    if (problem) {
+    // the member's posts): the database stores the length read here and
+    // checks each post kind's limit at submit.
+    const seconds = await readVideoBytesSeconds(bytes);
+    const problem = videoLengthProblem(seconds, MAX_VIDEO_SECONDS);
+    if (problem || seconds === null) {
       log.info("Video refused at upload", {
         reason: problem === UNREADABLE_VIDEO_LENGTH_MESSAGE ? "length_unreadable" : "too_long",
       });
-      throw new FoundationMediaError(400, "video_length", problem);
+      throw new FoundationMediaError(
+        400,
+        "video_length",
+        problem ?? UNREADABLE_VIDEO_LENGTH_MESSAGE
+      );
     }
+    durationMs = videoDurationMs(seconds);
   }
   if (isReencodableImageType(file.type)) {
     usage.allowance = await openImagesAllowance();
@@ -259,6 +270,28 @@ async function uploadCheckedMedia(
   const reserved = intent.parse(started.data);
   if (reserved.max_bytes < bytes.length || reserved.kind !== kind)
     throw new FoundationMediaError(503);
+  // Videos complete with the length read above (the database checks each
+  // post kind's limit at submit); pictures with their dimensions.
+  const completeUpload = async () => {
+    const completed =
+      kind === "video" && durationMs !== null
+        ? await service.rpc("complete_frontend_video_upload", {
+            p_object_id: reserved.object_id,
+            p_size: bytes.length,
+            p_sha256: digest,
+            p_mime: file.type,
+            p_duration_ms: durationMs,
+          })
+        : await service.rpc("complete_frontend_media_upload", {
+            p_object_id: reserved.object_id,
+            p_size: bytes.length,
+            p_sha256: digest,
+            p_mime: file.type,
+            ...(dimensions ? { p_width: dimensions.width, p_height: dimensions.height } : {}),
+          });
+    if (completed.error) refused(completed.error);
+    return finalized.parse(completed.data);
+  };
   const publicUrl = `${(environment.NEXT_PUBLIC_MEDIA_URL || environment.R2_PUBLIC_URL || "https://media.verifymzansi.com").replace(/\/$/, "")}/${reserved.object_key}`;
   if (reserved.state === "ready") {
     if (
@@ -269,6 +302,13 @@ async function uploadCheckedMedia(
       reserved.height !== (dimensions?.height ?? null)
     )
       throw new FoundationMediaError(409);
+    // A ready video completes again: an idempotent replay that also stores the
+    // length once for a video stored before the database kept lengths.
+    if (kind === "video") {
+      const replay = await completeUpload();
+      if (replay.state !== "ready" || replay.object_id !== reserved.object_id)
+        throw new FoundationMediaError(503);
+    }
     return foundationUploadedMediaSchema.parse({
       object_id: reserved.object_id,
       url: publicUrl,
@@ -322,15 +362,7 @@ async function uploadCheckedMedia(
     usage.allowance.add(copyKeys.length);
     await storePhotoVariants(bucket, reserved.object_key, bytes, dimensions.width, write);
   }
-  const completed = await service.rpc("complete_frontend_media_upload", {
-    p_object_id: reserved.object_id,
-    p_size: bytes.length,
-    p_sha256: digest,
-    p_mime: file.type,
-    ...(dimensions ? { p_width: dimensions.width, p_height: dimensions.height } : {}),
-  });
-  if (completed.error) refused(completed.error);
-  const result = finalized.parse(completed.data);
+  const result = await completeUpload();
   if (
     result.object_id !== reserved.object_id ||
     result.state !== "ready" ||

@@ -4,8 +4,10 @@ import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import { parseStaffModerationQueue, readStaffModerationQueue } from "./staff-moderation-queue";
 import { FoundationStaffReadError } from "./staff-read";
 import { readStaffCopyFacts } from "./staff-copy-facts";
+import { readStaffVideoLengths } from "./staff-video-lengths";
 
 vi.mock("./staff-copy-facts", () => ({ readStaffCopyFacts: vi.fn() }));
+vi.mock("./staff-video-lengths", () => ({ readStaffVideoLengths: vi.fn() }));
 
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const staff = uuid(1);
@@ -110,6 +112,7 @@ const queue = (items: unknown[], overrides: Record<string, unknown> = {}) => ({
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(readStaffCopyFacts).mockResolvedValue(new Map());
+  vi.mocked(readStaffVideoLengths).mockResolvedValue(new Map());
 });
 
 describe("parseStaffModerationQueue", () => {
@@ -309,6 +312,53 @@ describe("readStaffModerationQueue", () => {
     expect(readStaffCopyFacts).toHaveBeenCalledExactlyOnceWith(api, [uuid(101)]);
     expect(read.allItems.find((i) => i.id === uuid(101))?.copy_facts).toEqual(facts);
     expect(read.allItems.find((i) => i.id === uuid(102))?.copy_facts).toBeUndefined();
+  });
+
+  it("asks for video lengths only of held posts with a video, with each kind's limit", async () => {
+    const video = (n: number) => ({
+      object_id: uuid(300 + n),
+      object_key: `media/${uuid(400 + n)}`,
+      kind: "video",
+      state: "ready",
+      purpose: "video",
+      position: 0,
+      width: null,
+      height: null,
+      focal_x: null,
+      focal_y: null,
+    });
+    const withVideo = (n: number, kind: Kind, area: Area) =>
+      summary(n, {
+        kind,
+        area,
+        owner_id: owner,
+        claim: myClaim,
+        review: ownerPost(uuid(100 + n), kind, area, { media: [video(n)] }),
+      });
+    vi.mocked(readStaffVideoLengths).mockResolvedValueOnce(
+      new Map([
+        [uuid(101), [{ seconds: 95 }]],
+        [uuid(103), [{ seconds: null }]],
+      ])
+    );
+    rpc.mockResolvedValueOnce({
+      data: queue(
+        [
+          withVideo(1, "listing", "market"),
+          claimed(2),
+          withVideo(3, "event", "tourism_events"),
+          summary(4, { claim: otherClaim }),
+        ],
+        { my_claims: 3 }
+      ),
+      error: null,
+    });
+    const read = await readStaffModerationQueue(api, staff);
+    expect(readStaffVideoLengths).toHaveBeenCalledExactlyOnceWith(api, [uuid(101), uuid(103)]);
+    const item = (n: number) => read.allItems.find((i) => i.id === uuid(100 + n));
+    expect(item(1)?.video_lengths).toEqual({ limitSeconds: 120, videos: [{ seconds: 95 }] });
+    expect(item(3)?.video_lengths).toEqual({ limitSeconds: 60, videos: [{ seconds: null }] });
+    expect(item(2)?.video_lengths).toBeUndefined();
   });
 
   // Deliberately pins today's behaviour: this reader treats EVERY 42501 as a

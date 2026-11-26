@@ -4,6 +4,7 @@ import { z } from "zod";
 import { handleFoundationOwnerRoute, type FoundationRefusal } from "@/lib/foundation/owner-route";
 import { createLogger } from "../utils/logger";
 import { hasDatabaseReason } from "./error-reasons";
+import { videoLengthRefusalMessage } from "./video-length-refusal";
 import { foundationArea, foundationKind, restoredAreaSchema } from "./areas";
 const log = createLogger("OwnerPostActions");
 const common = {
@@ -111,6 +112,9 @@ export function handleRestoredPostAction(
             error: "Your posting allowance has been reached",
             reason: "posting_limit",
           });
+        const videoLength = videoLengthRefusalMessage(result.error);
+        if (videoLength)
+          throw new ActionRefusal({ status: 422, error: videoLength, reason: "video_length" });
         if (code === "22023" && hasDatabaseReason(result.error, "copy_new_photo_required"))
           throw new ActionRefusal({
             status: 422,

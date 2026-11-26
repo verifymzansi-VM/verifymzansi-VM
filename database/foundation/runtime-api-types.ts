@@ -794,6 +794,7 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         Args: { p_email: string; p_days: number; p_reason: string; p_request_id: string };
         Returns: Json;
       };
+      get_frontend_staff_video_lengths: { Args: { p_posts: string[] }; Returns: Json };
     };
   };
 };
@@ -1034,6 +1035,16 @@ export type FoundationRuntimeServiceDatabase = {
       purge_post_engagement: { Args: Record<never, never>; Returns: Json };
       claim_lost_email_alert: { Args: { p_limit: number }; Returns: Json };
       complete_lost_email_alert: { Args: { p_claim: string; p_sent: boolean }; Returns: boolean };
+      complete_frontend_video_upload: {
+        Args: {
+          p_object_id: string;
+          p_size: number;
+          p_sha256: string;
+          p_mime: string;
+          p_duration_ms: number;
+        };
+        Returns: Json;
+      };
     };
   };
 };
