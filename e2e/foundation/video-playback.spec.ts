@@ -4,6 +4,7 @@ import path from "node:path";
 import sharp from "sharp";
 import { expect, test, type Response } from "@playwright/test";
 import reference from "../../src/lib/domains/taxonomy/reference.json";
+import { readVideoBytesSeconds } from "../../src/lib/media/video-length";
 import {
   queryTestCopy,
   readTestCopy,
@@ -47,6 +48,40 @@ function storeMediaFile(key: string, bytes: Buffer) {
   mkdirSync(path.dirname(file), { recursive: true });
   writeFileSync(file, bytes);
   return file;
+}
+
+/**
+ * A finished video upload as the website makes it: the owner reserves it by
+ * its digest, the bytes are stored, and the service completes it with the
+ * length read from the file (the database checks it when the post is
+ * submitted).
+ */
+async function uploadVideo(
+  copy: TestCopy,
+  token: string,
+  bytes: Buffer,
+  mime: string,
+  files: string[]
+) {
+  const digest = createHash("sha256").update(bytes).digest("hex");
+  const reserved = (await command(
+    copy,
+    "reserve_frontend_media_upload",
+    { p_kind: "video", p_bytes: bytes.length, p_digest: digest },
+    token
+  )) as { object_id: string; object_key: string };
+  files.push(storeMediaFile(reserved.object_key, bytes));
+  const seconds = await readVideoBytesSeconds(new Uint8Array(bytes));
+  if (seconds === null) throw new Error("The video fixture's length cannot be read");
+  const completed = await serviceRpc("complete_frontend_video_upload", {
+    p_object_id: reserved.object_id,
+    p_size: bytes.length,
+    p_sha256: digest,
+    p_mime: mime,
+    p_duration_ms: Math.max(1, Math.floor(seconds * 1000)),
+  });
+  expect(completed.status).toBe(200);
+  return { id: reserved.object_id, key: reserved.object_key };
 }
 
 /** A finished upload: reserve as the owner, store the bytes, attest as the service. */
@@ -132,7 +167,7 @@ async function publishVideoEvent(
     height: 600,
   });
   const clip = readFileSync(VIDEO_FIXTURE);
-  const video = await upload(copy, owner.token, "video", clip, "video/webm", files);
+  const video = await uploadVideo(copy, owner.token, clip, "video/webm", files);
   post = (await command(
     copy,
     "set_post_media",
