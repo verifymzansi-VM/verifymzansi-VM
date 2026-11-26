@@ -12,6 +12,7 @@ declare
   batch private.lost_email_alerts;
   batch_id uuid;
   lost_total integer;
+  lost_payments integer;
   listed jsonb;
   nothing constant jsonb := jsonb_build_object('claim',null,'total',0,'items','[]'::jsonb);
 begin
@@ -19,6 +20,8 @@ begin
     raise exception 'invalid lost email alert limit' using errcode='22023'; end if;
   -- One email job at a time takes or makes an alert.
   perform pg_advisory_xact_lock(hashtextextended('private.lost_email_alerts',0));
+  -- Sent alerts are kept 400 days after sending, also while nothing is lost.
+  delete from private.lost_email_alerts where sent_at<now_at-interval '400 days';
   -- An alert whose send failed (its lease ended or was given back) is offered
   -- again first, unchanged: same id, same list.
   update private.lost_email_alerts a set claimed_until=now_at+interval '5 minutes'
@@ -26,7 +29,7 @@ begin
       order by x.created_at,x.id limit 1)
     returning a.* into batch;
   if found then
-    return jsonb_build_object('claim',batch.id,'total',batch.total,'items',batch.items);
+    return jsonb_build_object('claim',batch.id,'total',batch.total,'payments',batch.payments,'items',batch.items);
   end if;
   -- An alert still being sent, or one sent in the last 15 minutes: wait, so
   -- many losses at once give one email.
@@ -51,14 +54,15 @@ begin
         'kind','privacy_notice_'||j.kind,'attempts',j.attempts,'queued_at',j.created_at,'last_error',null) as item),
   lost as (select * from outbox union all select * from notices)
   select (select count(*) from lost),
+    -- The payment emails among all of them, listed or not.
+    (select count(*) from lost l where starts_with(l.item->>'kind','payment_')),
     coalesce((select jsonb_agg(l.item order by l.created_at,l.id)
       from (select * from lost order by created_at,id limit p_limit) l),'[]'::jsonb)
-    into lost_total, listed;
+    into lost_total, lost_payments, listed;
   if lost_total=0 then return nothing; end if;
-  delete from private.lost_email_alerts where sent_at<now_at-interval '400 days';
-  insert into private.lost_email_alerts(id,created_at,claimed_until,items,total)
-    values(batch_id,now_at,now_at+interval '5 minutes',listed,lost_total);
-  return jsonb_build_object('claim',batch_id,'total',lost_total,'items',listed);
+  insert into private.lost_email_alerts(id,created_at,claimed_until,items,total,payments)
+    values(batch_id,now_at,now_at+interval '5 minutes',listed,lost_total,lost_payments);
+  return jsonb_build_object('claim',batch_id,'total',lost_total,'payments',lost_payments,'items',listed);
 end;
 $function$;
 alter function internal.claim_lost_email_alert(integer) owner to postgres;

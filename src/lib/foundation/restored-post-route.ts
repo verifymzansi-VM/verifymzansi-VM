@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { hasDatabaseMessage, hasDatabaseReason } from "./error-reasons";
+import { videoLengthRefusalMessage } from "./video-length-refusal";
 import { collectionArea } from "./areas";
 import { handleFoundationOwnerRoute, type FoundationRefusal } from "@/lib/foundation/owner-route";
 import { readFoundationAccountContext, FoundationAccountContextError } from "./account-context";
@@ -24,9 +25,12 @@ class PostRefusal extends Error {
   }
 }
 function fail(
-  error: { code?: string; details?: string | null; message?: string },
+  error: { code?: string; details?: string | null; message?: string; hint?: string | null },
   collection: PublicCollection
 ): never {
+  const videoLength = videoLengthRefusalMessage(error);
+  if (videoLength)
+    throw new PostRefusal({ status: 422, error: videoLength, reason: "video_length" });
   if (hasDatabaseReason(error, "posting_verification_required"))
     throw new PostRefusal({
       status: 403,
@@ -73,6 +77,14 @@ function fail(
       status: 429,
       error: "Your posting allowance has been reached",
       reason: "posting_limit",
+    });
+  // The database's 12-month limit for free events (20261125150215); the form
+  // already refuses such a start, so this is only for a stale form.
+  if (error.code === "22023" && hasDatabaseReason(error, "event_too_far_ahead"))
+    throw new PostRefusal({
+      status: 422,
+      error: "Events can start at most 12 months ahead.",
+      reason: "event_too_far_ahead",
     });
   if (error.code === "22023" || error.code === "23514")
     throw new PostRefusal({

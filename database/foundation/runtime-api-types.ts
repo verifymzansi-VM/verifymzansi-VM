@@ -142,6 +142,12 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         Returns: Json;
       };
       get_staff_refunds_left: { Args: { p_payment_ids: string[] }; Returns: Json };
+      propose_phone_number_release: { Args: { p_phone: string; p_reason: string }; Returns: Json };
+      review_phone_number_release: {
+        Args: { p_phone: string; p_proposed_at: string; p_approve: boolean };
+        Returns: Json;
+      };
+      get_phone_number_releases: { Args: Record<PropertyKey, never>; Returns: Json };
       close_staff_ozow_refund: { Args: { p_request_id: string; p_reason: string }; Returns: Json };
       get_staff_refund_context: {
         Args: {
@@ -794,6 +800,7 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         Args: { p_email: string; p_days: number; p_reason: string; p_request_id: string };
         Returns: Json;
       };
+      get_frontend_staff_video_lengths: { Args: { p_posts: string[] }; Returns: Json };
     };
   };
 };
@@ -1034,6 +1041,16 @@ export type FoundationRuntimeServiceDatabase = {
       purge_post_engagement: { Args: Record<never, never>; Returns: Json };
       claim_lost_email_alert: { Args: { p_limit: number }; Returns: Json };
       complete_lost_email_alert: { Args: { p_claim: string; p_sent: boolean }; Returns: boolean };
+      complete_frontend_video_upload: {
+        Args: {
+          p_object_id: string;
+          p_size: number;
+          p_sha256: string;
+          p_mime: string;
+          p_duration_ms: number;
+        };
+        Returns: Json;
+      };
     };
   };
 };

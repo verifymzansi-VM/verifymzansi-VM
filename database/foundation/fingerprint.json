@@ -19,60 +19,63 @@
     ],
     "notYetCompared": [],
     "howToCompare": "In the Supabase SQL editor (read-only), run `set search_path to \"$user\", public;` first, so pg_get_indexdef prints `extensions.gin_trgm_ops` as the replay does, then run database/foundation/fingerprint.sql unchanged and compare each row with categories below.",
-    "matchedThroughUpdate": "20261125161326_change_verified_place.sql",
+    "matchedThroughUpdate": "20261125225855_lifecycle_rule_follow_ups.sql",
     "matchedFingerprints": {
       "column_grants": "5e5623672e80b927048d8553487d5442",
-      "columns": "bd044a358991e6312c9ef86b9298e290",
-      "constraints": "76b3faff2919c2520edca0fc2a5ddeae",
+      "columns": "3ee2af8145e2989c4f59db8f0f5e3664",
+      "constraints": "a31fe8cd63efdd3075cdae1f37cca10b",
       "event_triggers": "821f7d069c595c075754fad9309136ac",
-      "function_bodies": "ed4b86b04673d83770cfe26a683e86a5",
-      "function_grants": "20b6269877bb3f52b00002a6d85fc547",
-      "function_metadata": "d3ac108213b8c25ac2076bf7da11a4e2",
-      "indexes": "8275f9731e44d6fc84e54a0c7b991597",
+      "function_bodies": "eb9d9474a07100c1b6841540bec76f49",
+      "function_grants": "3f7ff23b70ed43398f49ac1f5779c315",
+      "function_metadata": "bcae5b9e88b72dd67ceacc007585ddb2",
+      "indexes": "edf5e53767ac7a22ac6aa6a3d7e1f52e",
       "policies": "085a305fbc41d38d34eb40c3748c0793",
       "row_level_security": "833c95cfe0709cc6ab0ed86504463fef",
       "triggers": "bf3ff80318cb34dc9f693937d53385ac"
     },
-    "pendingApplication": []
+    "pendingApplication": [
+      "20261126001811_staff_access_follow_ups.sql",
+      "20261126001956_video_length_checked.sql"
+    ]
   },
   "knownDifferences": [
     "Reference data is not fingerprinted. candidate.sql seeds posting-terms version posting-v2, which production does not hold: production has posting-v1 and posting-v3 (current since 20261109173012_posting_terms_v3.sql), and posting-v4 once 20261112122001_publish_posting_terms_v4.sql is applied (current from 20261112173841_switch_posting_terms_v4.sql).",
     "schema_grants: production has 8 items (d397fed9c8bd9d4fc50ebdd777899d93) and the replay 7 (categories below). The extra production item is `internal supabase_auth_admin:USAGE`, which Supabase grants when the Auth \"Before user created\" hook is switched on; no repository file creates it (see replay/hosted-auth-hook-grants.sql)."
   ],
-  "updateCount": 119,
-  "lastUpdate": "20261125161326_change_verified_place.sql",
+  "updateCount": 126,
+  "lastUpdate": "20261126001956_video_length_checked.sql",
   "categories": {
     "column_grants": {
       "items": 10,
       "fingerprint": "5e5623672e80b927048d8553487d5442"
     },
     "columns": {
-      "items": 1540,
-      "fingerprint": "bd044a358991e6312c9ef86b9298e290"
+      "items": 1547,
+      "fingerprint": "381e610f94547ef93e5833a318a3f3de"
     },
     "constraints": {
-      "items": 1342,
-      "fingerprint": "76b3faff2919c2520edca0fc2a5ddeae"
+      "items": 1349,
+      "fingerprint": "f2e5c1afdd99f6e2e2fe13a97e12c874"
     },
     "event_triggers": {
       "items": 1,
       "fingerprint": "821f7d069c595c075754fad9309136ac"
     },
     "function_bodies": {
-      "items": 1207,
-      "fingerprint": "ed4b86b04673d83770cfe26a683e86a5"
+      "items": 1222,
+      "fingerprint": "c4a342bee3cd26a38b02501996b0a0d0"
     },
     "function_grants": {
-      "items": 872,
-      "fingerprint": "20b6269877bb3f52b00002a6d85fc547"
+      "items": 882,
+      "fingerprint": "c4357fe50c367951eb54bf6fd6262bf0"
     },
     "function_metadata": {
-      "items": 1207,
-      "fingerprint": "d3ac108213b8c25ac2076bf7da11a4e2"
+      "items": 1222,
+      "fingerprint": "a6547f6c1ea9096696c825b9648499be"
     },
     "indexes": {
-      "items": 617,
-      "fingerprint": "8275f9731e44d6fc84e54a0c7b991597"
+      "items": 619,
+      "fingerprint": "edf5e53767ac7a22ac6aa6a3d7e1f52e"
     },
     "policies": {
       "items": 4,
@@ -87,8 +90,8 @@
       "fingerprint": "a68294e7a9bcf7c20492a72f7c724252"
     },
     "triggers": {
-      "items": 155,
-      "fingerprint": "bf3ff80318cb34dc9f693937d53385ac"
+      "items": 157,
+      "fingerprint": "534926ff5fd0890045de1f0a6122bcd6"
     }
   }
 }

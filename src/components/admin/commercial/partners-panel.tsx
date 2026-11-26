@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatPlanPrice } from "@/lib/constants/pricing";
@@ -300,6 +300,12 @@ export interface AdminPaymentRow {
   } | null;
 }
 
+/** The refund form a request id belongs to: what is refunded, and how. */
+const refundFormKey = (form: RefundTarget) =>
+  `${form.scope}:${form.id}:${form.kind}:${form.method ?? ""}`;
+const ozowFormKey = (form: OzowRefundTarget) =>
+  `ozow:${form.mode}:${form.paymentId}:${form.lineId ?? ""}`;
+
 export function PaymentsPanel({
   payments,
   canRefund,
@@ -323,6 +329,27 @@ export function PaymentsPanel({
   // line that says until when Ozow refunds a payment. Every refund way stays
   // offered; the database decides and its refusal says what to do instead.
   const [openedAt] = useState(() => Date.now());
+  // One request id per refund form (payment or slot, and way), kept until the
+  // refund is recorded: opening the form again after a lost answer sends the
+  // same id, so the database returns the first refund instead of a second one.
+  const requestIds = useRef(new Map<string, string>());
+  const requestIdFor = (key: string) => {
+    const known = requestIds.current.get(key);
+    if (known) return known;
+    const fresh = crypto.randomUUID();
+    requestIds.current.set(key, fresh);
+    return fresh;
+  };
+  const [formRequestId, setFormRequestId] = useState("");
+  const [ozowRequestId, setOzowRequestId] = useState("");
+  const openForm = (target: RefundTarget) => {
+    setFormRequestId(requestIdFor(refundFormKey(target)));
+    setForm(target);
+  };
+  const openOzowForm = (target: OzowRefundTarget) => {
+    setOzowRequestId(requestIdFor(ozowFormKey(target)));
+    setOzowForm(target);
+  };
   return (
     <AdminCard
       title="Recent payments"
@@ -353,6 +380,9 @@ export function PaymentsPanel({
                 firstPurchaseAskUntil: left.first_purchase ? left.first_purchase_ask_until : null,
                 startsAt: onlyLine?.starts_at ?? null,
                 endsAt: onlyLine?.ends_at ?? null,
+                paidDays: onlyLine?.paid_days ?? null,
+                lostDays: onlyLine?.lost_days ?? 0,
+                noticeEndsOn: left.notice_ends_on ?? null,
               }
             : undefined;
           const lineRoom = (lineId: string): RefundRoom | undefined => {
@@ -364,6 +394,9 @@ export function PaymentsPanel({
                   firstPurchaseAskUntil: null,
                   startsAt: slot.starts_at,
                   endsAt: slot.ends_at,
+                  paidDays: slot.paid_days ?? null,
+                  lostDays: slot.lost_days ?? 0,
+                  noticeEndsOn: left.notice_ends_on ?? null,
                 }
               : undefined;
           };
@@ -432,7 +465,7 @@ export function PaymentsPanel({
             cents: number,
             label: string
           ) =>
-            setOzowForm({
+            openOzowForm({
               mode,
               paymentId: p.id,
               lineId,
@@ -547,7 +580,7 @@ export function PaymentsPanel({
                       className="h-10"
                       disabled={busy}
                       onClick={() =>
-                        setForm({
+                        openForm({
                           scope: "payment",
                           id: p.id,
                           kind: choice.kind,
@@ -558,7 +591,7 @@ export function PaymentsPanel({
                           method: choice.method,
                           ozowRefundUntil: ozowWindowDate,
                           renewal,
-                          room: choice.kind === "refunded" ? paymentRoom : undefined,
+                          room: paymentRoom,
                         })
                       }
                     >
@@ -625,7 +658,7 @@ export function PaymentsPanel({
                               className="h-10"
                               disabled={busy}
                               onClick={() =>
-                                setForm({
+                                openForm({
                                   scope: "slot",
                                   id: line.id,
                                   kind: choice.kind,
@@ -637,7 +670,7 @@ export function PaymentsPanel({
                                   ozowRefundUntil: ozowWindowDate,
                                   renewal,
                                   paymentId: p.id,
-                                  room: choice.kind === "refunded" ? lineRoom(line.id) : undefined,
+                                  room: lineRoom(line.id),
                                 })
                               }
                             >
@@ -725,6 +758,8 @@ export function PaymentsPanel({
                   busy={busy}
                   run={run}
                   onDone={() => setForm(null)}
+                  requestId={formRequestId}
+                  onRecorded={() => requestIds.current.delete(refundFormKey(form))}
                 />
               ) : null}
               {ozowForm && ozowForm.paymentId === p.id ? (
@@ -732,6 +767,8 @@ export function PaymentsPanel({
                   key={`${ozowForm.mode}-${ozowForm.lineId ?? ozowForm.paymentId}`}
                   target={ozowForm}
                   onDone={() => setOzowForm(null)}
+                  requestId={ozowRequestId}
+                  onRecorded={() => requestIds.current.delete(ozowFormKey(ozowForm))}
                 />
               ) : null}
               <OzowRefundRecords records={ozowRecords} />
