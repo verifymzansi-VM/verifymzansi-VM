@@ -63,9 +63,11 @@ const platformNotices = {
     "Payment received",
     "We received your payment. Need your invoice? Reply to this email.",
   ],
+  // Every refund or reversal, including a part refund that keeps the slot
+  // running, so the words name neither.
   payment_reversed: [
     "Payment update",
-    "A payment reversal has been recorded. Review the current details in Billing.",
+    "A refund or reversal of a payment has been recorded. Review the current details in Billing.",
   ],
   payment_reconciliation_required: [
     "Payment review in progress",
@@ -1233,6 +1235,8 @@ export interface LostEmailAlert {
   claim: string;
   /** Every lost row the alert reports; `items` lists the oldest of them. */
   total: number;
+  /** How many of all `total` are payment emails (missing for older alerts). */
+  payments?: number | null;
   items: ReadonlyArray<{
     source: "outbox" | "privacy_notice";
     id: string;
@@ -1252,7 +1256,8 @@ export interface LostEmailAlert {
  */
 export async function sendLostEmailAlert(alert: LostEmailAlert): Promise<SendEmailResult> {
   const appUrl = sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
-  const payments = alert.items.filter((item) => item.kind.startsWith("payment_")).length;
+  const payments =
+    alert.payments ?? alert.items.filter((item) => item.kind.startsWith("payment_")).length;
   const count = `${alert.total} queued email${alert.total === 1 ? "" : "s"}`;
   const subject = `VerifyMzansi: ${count} not confirmed delivered after the last attempt${payments ? ` (${payments} payment)` : ""}`;
   const rows = alert.items.map((item): [string, string] => [

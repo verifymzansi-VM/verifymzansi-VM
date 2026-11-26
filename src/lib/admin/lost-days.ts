@@ -23,6 +23,9 @@ export interface LostDaysTerm {
   /** Renewals queued after the running period (an Individual slot only). */
   renewals: number;
   endsAt: string;
+  /** Money already returned for this term by part refunds that kept it
+   * running (set once 20261125194727_part_refund_follow_ups.sql is applied). */
+  refundedCents?: number;
 }
 
 /** One term as the command moved it. */

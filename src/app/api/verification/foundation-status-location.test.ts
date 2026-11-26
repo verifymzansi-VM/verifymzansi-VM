@@ -180,6 +180,34 @@ it("rejects mismatched locations, claimed authority and missing CSRF before muta
   );
   expect(rpc).not.toHaveBeenCalled();
 });
+it("accepts the reply for a changed place (reused false) as a success", async () => {
+  // The exact reply internal.confirm_verification_locality gives when it
+  // replaces a member's place (20261125161326_change_verified_place).
+  rpc.mockResolvedValueOnce({
+    data: {
+      status: "approved",
+      assurance: "self_declared",
+      province_id: "gp",
+      city_id: "gp_johannesburg",
+      reused: false,
+    },
+    error: null,
+  });
+  const response = await POST(request({ province: "Gauteng", city: "Johannesburg" }));
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ success: true });
+});
+it("says when a place can change again after a change in the last 15 days", async () => {
+  rpc.mockResolvedValueOnce({
+    data: null,
+    error: { code: "PT409", details: "location_change_cooldown", hint: "2026-12-10T08:00:00Z" },
+  });
+  const response = await POST(request({ province: "Gauteng", city: "Johannesburg" }));
+  expect(response.status).toBe(409);
+  expect((await response.json()).error).toBe(
+    "You can change your province and city again after 10 December 2026."
+  );
+});
 it("preserves the native confirmed-locality lock instead of overwriting it", async () => {
   rpc.mockResolvedValue({ data: null, error: { code: "PT409" } });
   expect((await POST(request({ province: "Gauteng", city: "Johannesburg" }))).status).toBe(403);

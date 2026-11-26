@@ -108,6 +108,18 @@ it("reports a stale profile without mislabelling it as a phone-number conflict",
   expect(response.status).toBe(412);
   expect((await response.json()).error).toMatch(/Reload/);
 });
+it("says when a changed province and city can be saved again", async () => {
+  rpc.mockResolvedValue({
+    data: null,
+    error: { code: "PT409", details: "location_change_cooldown", hint: "2026-12-10T08:00:00Z" },
+  });
+  const response = await POST(request(body));
+  expect(response.status).toBe(409);
+  expect(await response.json()).toMatchObject({
+    code: "LOCATION_COOLDOWN",
+    error: "You can change your province and city again after 10 December 2026.",
+  });
+});
 it("never changes a canonical phone from the profile form", async () => {
   const response = await POST(request({ ...body, phone: "0830000000" }));
   expect(response.status).toBe(403);
