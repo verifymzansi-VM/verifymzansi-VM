@@ -4,6 +4,7 @@ import { Footer } from "@/components/layout/footer";
 import { InvoiceWithPayPanel } from "@/components/billing/invoice-with-pay-panel";
 import { readInvoiceByLink } from "@/lib/foundation/customer-invoices";
 import { readOnlinePaymentMaxCents } from "@/lib/foundation/payment-limits";
+import { BILLING_EMAIL } from "@/lib/billing/slot-checkout";
 
 export const metadata: Metadata = {
   title: "Pay invoice",
@@ -26,8 +27,8 @@ const MESSAGES = {
     text: "Nothing was paid. To try again, open the payment link in the invoice email.",
   },
   invalid: {
-    title: "This payment link does not work",
-    text: "Use the link in the newest invoice email: each email has a new link, and older ones stop working. The account holder can also sign in and pay the invoice from their invoices.",
+    title: "This payment link has expired or does not work",
+    text: `Please ask the account holder to sign in and pay it, or email ${BILLING_EMAIL}.`,
   },
 } as const;
 

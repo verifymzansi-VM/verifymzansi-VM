@@ -4539,9 +4539,9 @@ invoice email and the receipt row) and `src/lib/services/email.ts`.
 
 | File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `src/app/pay-invoice/page.tsx` | visual | New: the invoice payment link page (no sign-in; the link's token names the invoice). | Anyone with the emailed link: the invoice document and, beside it (below on phones), the same pay panel as the member's invoice page (billing details, the cooling-off box, Pay now, printing); a paid or cancelled invoice shows printing only. Back from Ozow: 'Thank you' and 'Once Ozow confirms the payment, the invoice shows as paid and a receipt is emailed to the account holder. To check, open the payment link in the invoice email again.'; after a cancel: 'Payment not completed' and 'Nothing was paid. To try again, open the payment link in the invoice email.'; a link that does not work: 'This payment link does not work' and 'Use the link in the newest invoice email: each email has a new link, and older ones stop working. The account holder can also sign in and pay the invoice from their invoices.' | keep | awaiting owner | 2026-11-26 | f2087322550d |
+| `src/app/pay-invoice/page.tsx` | visual | New: the invoice payment link page (no sign-in; the link's token names the invoice). | Anyone with the emailed link: the invoice document and, beside it (below on phones), the same pay panel as the member's invoice page (billing details, the cooling-off box, Pay now, printing); a paid or cancelled invoice shows printing only. Back from Ozow: 'Thank you' and 'Once Ozow confirms the payment, the invoice shows as paid and a receipt is emailed to the account holder. To check, open the payment link in the invoice email again.'; after a cancel: 'Payment not completed' and 'Nothing was paid. To try again, open the payment link in the invoice email.'; a link that has expired or does not work: 'This payment link has expired or does not work' and 'Please ask the account holder to sign in and pay it, or email billing@verifymzansi.com.' (wording approved by owner 2026-11-26) | keep | awaiting owner | 2026-11-26 | 96a21b99fda3 |
 | `src/components/billing/invoice-with-pay-panel.tsx` | helper | Shared by the member's invoice page and the invoice payment link page: the invoice document and, beside it, the payment panel (moved from the member's invoice page, unchanged; on the link page the panel posts the link's token and the document says Pay now is on this page). | Nothing new (the same document and panel) | keep | awaiting owner | 2026-11-26 | 18307963f547 |
-| `src/app/pay-invoice/page.test.tsx` | test | Tests for the payment link page: never indexed, no referrer, the invoice with the link's token, the three messages. | Nothing (not part of a page) | keep | awaiting owner | 2026-11-26 | 0787d5e5214c |
+| `src/app/pay-invoice/page.test.tsx` | test | Tests for the payment link page: never indexed, no referrer, the invoice with the link's token, the three messages. | Nothing (not part of a page) | keep | awaiting owner | 2026-11-26 | 4a25bafaee53 |
 
 - Invoice email (new; every invoice staff issue): subject 'Invoice VM-2026-000012
   from VerifyMzansi'; 'Your invoice', 'VerifyMzansi sent you an invoice. You can
@@ -4556,13 +4556,15 @@ invoice email and the receipt row) and `src/lib/services/email.ts`.
   invoice under Invoices and choose Pay now'.
 - Payment link page, when Pay now is refused because of the account behind
   the invoice (its ID review, another open payment, its slot limit or its
-  package): one message under the button, 'This invoice can't be paid online
-  right now. Please contact the business that sent it, or VerifyMzansi
-  support.' Refusals about the invoice itself (paid, cancelled, a bank
+  package, or opening the Ozow request is refused for the account): one message
+  under the button, 'This invoice can't be paid online right now. Please ask the
+  account holder to sign in and pay it, or email billing@verifymzansi.com.'
+  (approved by owner 2026-11-26) Refusals about the invoice itself (paid, cancelled, a bank
   transfer being checked, a changed total) keep their words. The member's
   invoice page is unchanged.
 - A payment link stops working 30 days after the invoice's due date; it then
-  shows the same 'This payment link does not work' page.
+  shows the same 'This payment link has expired or does not work' page
+  (approved by owner 2026-11-26).
 - 'Payment received' email for an invoice payment (Ozow or bank transfer): a
   row 'Invoice paid: VM-2026-000012' under 'Invoice number' (the receipt's own
   INV- number). Label to be chosen by the owner.

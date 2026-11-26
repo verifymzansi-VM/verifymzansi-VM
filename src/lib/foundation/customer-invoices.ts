@@ -456,8 +456,7 @@ const invoiceLinkToken = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
  * so the link reveals nothing about the account. The invoice's own state
  * (paid, cancelled, a transfer being checked, a changed total) keeps the
  * member's words. */
-const LINK_ACCOUNT_REFUSAL =
-  "This invoice can't be paid online right now. Please contact the business that sent it, or VerifyMzansi support.";
+const LINK_ACCOUNT_REFUSAL = `This invoice can't be paid online right now. Please ask the account holder to sign in and pay it, or email ${BILLING_EMAIL}.`;
 const LINK_WORDING: InvoiceMemberWording = {
   reasons: new Map([
     ...MEMBER_REFUSALS,

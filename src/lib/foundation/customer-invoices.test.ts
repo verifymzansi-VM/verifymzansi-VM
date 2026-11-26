@@ -464,7 +464,7 @@ describe("the invoice payment link", () => {
 
   it("words a refused Ozow request (the account's package or another payment) the same neutral way", async () => {
     const neutral =
-      "This invoice can't be paid online right now. Please contact the business that sent it, or VerifyMzansi support.";
+      "This invoice can't be paid online right now. Please ask the account holder to sign in and pay it, or email billing@verifymzansi.com.";
     for (const refusal of [
       new FoundationBillingError(409, "Your Multi-listing package is busy.", "package_busy"),
       new FoundationBillingError(409, "Your package runs.", "package_active"),
@@ -493,7 +493,7 @@ describe("the invoice payment link", () => {
 
   it("words every refusal about the account the same neutral way, and the invoice's own state as for the member", async () => {
     const neutral =
-      "This invoice can't be paid online right now. Please contact the business that sent it, or VerifyMzansi support.";
+      "This invoice can't be paid online right now. Please ask the account holder to sign in and pay it, or email billing@verifymzansi.com.";
     const pay = (answer: unknown) =>
       startInvoicePaymentByLink(
         { token, expectedTotalCents: 62100, coolingOffConsent: true },

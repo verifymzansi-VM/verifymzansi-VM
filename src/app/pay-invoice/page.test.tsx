@@ -50,7 +50,7 @@ describe("the invoice payment link page (items 34, 38)", () => {
     vi.mocked(readInvoiceByLink).mockResolvedValue(null);
     render(await PayInvoicePage(params({ token })));
     expect(
-      screen.getByRole("heading", { name: "This payment link does not work" })
+      screen.getByRole("heading", { name: "This payment link has expired or does not work" })
     ).toBeInTheDocument();
     expect(screen.queryByText(/panel/)).toBeNull();
   });
