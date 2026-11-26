@@ -2,6 +2,8 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ImmersiveActionRail } from "./immersive-action-rail";
 import { ImmersiveTopBar } from "./immersive-top-bar";
+import { ImmersiveViewer } from "./immersive-viewer";
+import type { FeedItem, FeedSequence } from "./use-feed-sequence";
 import {
   ViewerAppearanceProvider,
   VIEWER_THEME_KEY,
@@ -12,6 +14,10 @@ import type { FeedSlide } from "@/lib/feed/types";
 
 vi.mock("@/components/listings/content-like-button", () => ({ ContentLikeButton: () => null }));
 vi.mock("@/components/brand", () => ({ BrandMark: () => <span>VerifyMzansi</span> }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn() }) }));
+// The viewer's list, set by each test.
+const feed = vi.hoisted(() => ({ current: null as unknown }));
+vi.mock("./use-feed-sequence", () => ({ useFeedSequence: () => feed.current }));
 const slide = {
   key: "listings:one",
   id: "one",
@@ -124,5 +130,43 @@ describe("desktop profile interactions", () => {
     } finally {
       blockedWrite.mockRestore();
     }
+  });
+});
+
+describe("the end of a browsed section", () => {
+  const opened = { ...slide, id: "opened", vertical: "tourism" } as FeedSlide;
+  function sequence(items: FeedItem[]): FeedSequence {
+    return {
+      ready: true,
+      sessionId: "session",
+      sourceLabel: "",
+      returnUrl: null,
+      notice: null,
+      items,
+      open: false,
+      totalKnown: items.filter((item) => item.type === "post").length,
+      retrySlide: vi.fn(),
+      retryGrow: vi.fn(),
+      browse: defaultBrowse("business", null),
+      browseTo: vi.fn(),
+    } as FeedSequence;
+  }
+
+  it("shows one message for a section with no posts", () => {
+    feed.current = sequence([{ type: "end", terminal: "exhausted" }]);
+    render(<ImmersiveViewer initialSlide={opened} />);
+    expect(screen.getByText("Nothing here yet")).toBeInTheDocument();
+    expect(screen.queryByText("You’re all caught up")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Next profile" })).toBeDisabled();
+  });
+
+  it("still ends a section that has posts with the end slide", () => {
+    feed.current = sequence([
+      { type: "post", id: "one", ref: { kind: "b", id: "one" }, slide: undefined, failed: false },
+      { type: "end", terminal: "exhausted" },
+    ]);
+    render(<ImmersiveViewer initialSlide={opened} />);
+    expect(screen.getByText("You’re all caught up")).toBeInTheDocument();
+    expect(screen.queryByText("Nothing here yet")).not.toBeInTheDocument();
   });
 });

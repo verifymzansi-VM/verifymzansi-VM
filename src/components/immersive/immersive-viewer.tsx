@@ -454,7 +454,9 @@ function ViewerContent({
   const activeIndex =
     foundIndex >= 0 ? foundIndex : Math.min(active.index, Math.max(0, postItems.length - 1));
   const tail = feed.items[feed.items.length - 1];
-  const tailItem = tail && tail.type !== "post" ? tail : null;
+  // An empty section says so itself (EmptyBrowse), so it has no end slide.
+  const tailItem =
+    tail && tail.type !== "post" && !(postItems.length === 0 && feed.browse) ? tail : null;
   // The last post dropped out while it was on screen: show the end of the list.
   const onEnd =
     endRequested ||
