@@ -36,47 +36,48 @@
     "pendingApplication": [
       "20261125174942_end_admin_role_before_restriction.sql",
       "20261125194727_part_refund_follow_ups.sql",
-      "20261125212548_email_alert_follow_ups.sql"
+      "20261125212548_email_alert_follow_ups.sql",
+      "20261125213005_release_one_phone_number.sql"
     ]
   },
   "knownDifferences": [
     "Reference data is not fingerprinted. candidate.sql seeds posting-terms version posting-v2, which production does not hold: production has posting-v1 and posting-v3 (current since 20261109173012_posting_terms_v3.sql), and posting-v4 once 20261112122001_publish_posting_terms_v4.sql is applied (current from 20261112173841_switch_posting_terms_v4.sql).",
     "schema_grants: production has 8 items (d397fed9c8bd9d4fc50ebdd777899d93) and the replay 7 (categories below). The extra production item is `internal supabase_auth_admin:USAGE`, which Supabase grants when the Auth \"Before user created\" hook is switched on; no repository file creates it (see replay/hosted-auth-hook-grants.sql)."
   ],
-  "updateCount": 122,
-  "lastUpdate": "20261125212548_email_alert_follow_ups.sql",
+  "updateCount": 123,
+  "lastUpdate": "20261125213005_release_one_phone_number.sql",
   "categories": {
     "column_grants": {
       "items": 10,
       "fingerprint": "5e5623672e80b927048d8553487d5442"
     },
     "columns": {
-      "items": 1541,
-      "fingerprint": "f12c0cae45c5828bc3d324d2878bcfe8"
+      "items": 1546,
+      "fingerprint": "3ee2af8145e2989c4f59db8f0f5e3664"
     },
     "constraints": {
-      "items": 1343,
-      "fingerprint": "a7ed40dbc4c783ed6f0f1c713a17fae2"
+      "items": 1348,
+      "fingerprint": "a31fe8cd63efdd3075cdae1f37cca10b"
     },
     "event_triggers": {
       "items": 1,
       "fingerprint": "821f7d069c595c075754fad9309136ac"
     },
     "function_bodies": {
-      "items": 1207,
-      "fingerprint": "39442774f807c84f493bde50496bd28f"
+      "items": 1215,
+      "fingerprint": "2f7706b1e96b47225330d925bccaf1d2"
     },
     "function_grants": {
-      "items": 872,
-      "fingerprint": "20b6269877bb3f52b00002a6d85fc547"
+      "items": 878,
+      "fingerprint": "3f7ff23b70ed43398f49ac1f5779c315"
     },
     "function_metadata": {
-      "items": 1207,
-      "fingerprint": "d3ac108213b8c25ac2076bf7da11a4e2"
+      "items": 1215,
+      "fingerprint": "bcae5b9e88b72dd67ceacc007585ddb2"
     },
     "indexes": {
-      "items": 617,
-      "fingerprint": "8275f9731e44d6fc84e54a0c7b991597"
+      "items": 619,
+      "fingerprint": "edf5e53767ac7a22ac6aa6a3d7e1f52e"
     },
     "policies": {
       "items": 4,
