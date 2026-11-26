@@ -825,8 +825,12 @@ async function openFoundationCheckout(
   )
     throw new FoundationBillingError(503);
   // Whatever the quote was for, an add-on payment never reaches the provider
-  // (nor gets a stored checkout address back).
-  if (pay.product_kind === "addon") throw addonNotSold();
+  // (nor gets a stored checkout address back). Logged so staff can see one
+  // was attempted; nothing was charged, so it is not a payment problem.
+  if (pay.product_kind === "addon") {
+    log.warn("Add-on payment refused before the provider", { paymentId: pay.id });
+    throw addonNotSold();
+  }
   if (pay.checkout_url) {
     const checkoutUrl = checkoutRedirect(pay.checkout_url);
     if (continueOpen) {

@@ -165,12 +165,19 @@ export default function ProfilePage() {
     { label: "Up to 128 characters", met: newPassword.length <= 128 },
   ];
 
-  // Once the page unmounts, no delayed redirect may still fire or be set.
+  // Once the page unmounts, no delayed redirect may still fire or be set. If
+  // the member leaves while one is waiting (the session has ended), the page
+  // they go to is loaded in full instead, so nothing from the session stays in
+  // memory.
   useEffect(() => {
     unmountedRef.current = false;
     return () => {
       unmountedRef.current = true;
-      if (leaveTimerRef.current !== null) window.clearTimeout(leaveTimerRef.current);
+      if (leaveTimerRef.current !== null) {
+        window.clearTimeout(leaveTimerRef.current);
+        leaveTimerRef.current = null;
+        window.location.assign(window.location.href);
+      }
     };
   }, []);
 
@@ -589,7 +596,11 @@ export default function ProfilePage() {
    * this session survives in memory; the delay lets the toast be read first. */
   async function leaveAfterSessionEnded(path: string) {
     await forgetBrowserSession();
-    if (unmountedRef.current) return;
+    // Already left (unmounted): load the page the member went to in full.
+    if (unmountedRef.current) {
+      window.location.assign(window.location.href);
+      return;
+    }
     leaveTimerRef.current = window.setTimeout(() => {
       window.location.assign(new URL(path, window.location.origin).toString());
     }, ACCOUNT_DELETED_REDIRECT_DELAY_MS);

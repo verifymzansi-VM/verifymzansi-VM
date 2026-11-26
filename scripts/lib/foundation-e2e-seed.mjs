@@ -7,7 +7,7 @@
 // emails are read from the local mail catcher, phone proofs use the service
 // commands the website calls after an SMS code matches.
 import assert from "node:assert/strict";
-import { createHash, randomBytes, randomInt, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import sharp from "sharp";
@@ -232,9 +232,12 @@ async function verifyIdentity({ api, sql, owner, reviewer, sequence }) {
   assert.equal(reviewed.status, "accepted");
 }
 
-async function verifyPhone({ api, owner }) {
+async function verifyPhone({ api, owner, sequence }) {
   // The website stores only a hash of the SMS code; the code never matters here.
-  const phone = "+2771" + String(randomInt(1000000, 10000000));
+  // seedTestCopy refuses a copy that is not empty, so the seeded people are
+  // numbered (+27710000001, +27710000002) and cannot share a number. Browser
+  // tests use other prefixes and check the copy first (unusedPhoneNumber).
+  const phone = "+2771" + String(sequence).padStart(7, "0");
   const hash = randomBytes(32).toString("hex");
   const challenge = await api.call(
     "create_verification_phone_challenge",
@@ -427,6 +430,19 @@ export async function seedTestCopy({ root = process.cwd(), status, sql, log = ()
   log("Admin: verifying an authenticator app claims the owner-setup invitation.");
   factors.admin = await enrolTotp(api, session.admin.token, "admin");
   session.admin = { ...session.admin, ...(await signIn(api, people.admin, factors.admin)) };
+  // The claim asks for a new two-step check, as every role grant does, so the
+  // admin checks the authenticator again before any staff command.
+  const recheck = await verifyTotp(api, session.admin.token, factors.admin);
+  session.admin = {
+    ...session.admin,
+    token: recheck.access_token,
+    refreshToken: recheck.refresh_token,
+  };
+  // Trusted step: a real admin claimed long ago. Specs sign in with sessions
+  // aged up to 20 minutes, so the claim moment is placed an hour back.
+  sql(
+    `update private.staff_roles set frontend_mfa_not_before=frontend_mfa_not_before - interval '1 hour' where user_id=${quote(session.admin.id)} and role='admin';`
+  );
   assert.equal(
     sql(
       `select string_agg(role,',') from private.staff_roles where user_id=${quote(session.admin.id)};`
@@ -456,7 +472,7 @@ export async function seedTestCopy({ root = process.cwd(), status, sql, log = ()
       reviewer: session.admin,
       sequence: sequence + 1,
     });
-    await verifyPhone({ api, owner: session[key] });
+    await verifyPhone({ api, owner: session[key], sequence: sequence + 1 });
     await api.call(
       "confirm_verification_locality",
       { p_province: "gp", p_city: "gp_johannesburg" },

@@ -28,7 +28,8 @@ export const LEGAL_CONTACT_EMAIL = "legal@verifymzansi.com";
 
 const BILLING_CONTACT_EMAIL = "billing@verifymzansi.com";
 const VERIFICATION_CONTACT_EMAIL = "verification@verifymzansi.com";
-const ABUSE_CONTACT_EMAIL = "abuse@verifymzansi.com";
+/** Where reports of unlawful or rule-breaking posts go (Terms: reporting). */
+export const ABUSE_CONTACT_EMAIL = "abuse@verifymzansi.com";
 
 export function supportReference(id: string): string {
   return `VM-${id.toUpperCase()}`;

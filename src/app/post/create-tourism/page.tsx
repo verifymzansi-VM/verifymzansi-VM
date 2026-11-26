@@ -1,4 +1,5 @@
 "use client";
+import { PostingTermsConsent } from "@/components/post/posting-terms-consent";
 import { PostSelect } from "@/components/post/post-select";
 import { EventDateFields } from "@/components/post/event-date-fields";
 import { eventTimeToIso } from "@/lib/forms/event-time";
@@ -3635,36 +3636,17 @@ function CreateTourismContent() {
                       )}
                     </PostFormSection>
                     <PostFormSection title="Final check">
-                      <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-border bg-muted/30 p-4 text-sm leading-6">
-                        <input
-                          id="tourism-terms-checkbox"
-                          type="checkbox"
-                          checked={termsAccepted}
-                          onChange={(event) => {
-                            setTermsAccepted(event.target.checked);
-                            clearErrors("termsAccepted");
-                          }}
-                          className="mt-1 h-4 w-4 shrink-0 rounded accent-teal-600"
-                          aria-invalid={!!fieldErrors.termsAccepted}
-                        />
-                        <span>
-                          I accept the VerifyMzansi posting terms, including the free-post
-                          visibility period and my responsibility for the accuracy and legality of
-                          this tourism or event post.{" "}
-                          <a
-                            className="font-semibold text-teal-700 underline underline-offset-2 dark:text-teal-300"
-                            href="/terms"
-                          >
-                            View terms
-                          </a>
-                          .
-                          {fieldErrors.termsAccepted && (
-                            <span className="mt-1 block text-destructive">
-                              {fieldErrors.termsAccepted}
-                            </span>
-                          )}
-                        </span>
-                      </label>
+                      <PostingTermsConsent
+                        id="tourism-terms-checkbox"
+                        checked={termsAccepted}
+                        onCheckedChange={(checked) => {
+                          setTermsAccepted(checked);
+                          clearErrors("termsAccepted");
+                        }}
+                        error={fieldErrors.termsAccepted}
+                        subject="tourism or event post"
+                        accent="teal"
+                      />
                     </PostFormSection>
                     {renderPreview()}
                   </div>

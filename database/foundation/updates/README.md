@@ -80,10 +80,394 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Video length checked by the database, 26 November 2026
+
+`20261126001956_video_length_checked.sql` is pending (see the applied register).
+Launch checklist item 39 (roadmap M4.4 part B). One new column, two new
+commands, one new trigger and one replaced trigger body; no command, argument,
+result or grant changes.
+
+- **The length is stored.** `private.media_objects.duration_ms` holds a video's
+  length in whole milliseconds, as the upload server read it from the file (null
+  for pictures and for videos stored before this update). Once set it never
+  changes (`internal.media_object_transition_guard`).
+- **`api.complete_frontend_video_upload`** (service_role only) completes a
+  content-bound video upload like `api.complete_frontend_media_upload` and
+  stores the length. It refuses a length of 121 s or more, no length, or a
+  picture. Called again for a ready video it is an idempotent replay.
+- **Checked at submit.** `internal.guard_video_length_submission`, a trigger on
+  `private.posts` like the posting terms guard, refuses every move into
+  `pending_moderation` (submit, resubmit, reactivation, an edit's submission)
+  while the post has a video whose stored length is longer than its kind allows
+  (events 60 s, everything else 120 s; whole seconds decide) with 22023
+  `video_too_long` (hint `<seconds>/<limit>`). A video with no stored length
+  passes: videos stored before this update are not checked. Approval and the
+  rest of the lifecycle are unchanged.
+- **Staff see it.** `api.get_frontend_staff_video_lengths` (staff with
+  `queue:view`) returns the stored length of each video of up to 50 posts
+  waiting for review whose review claim the caller holds, the same rule as the
+  queue's review data.
+- **Storage** already grows with paid slots (`internal.media_storage_allowance`:
+  (2 x package slots + 10) x 100 MB); the behaviour test proves that 100 slots
+  hold 100 two-minute videos. Unchanged.
+
+ORDER: apply first, then merge. The live website calls neither new command and
+parses nothing this adds. Until the new website is deployed, a video it uploads
+has no stored length and is not checked. Posts already waiting for review when
+the update is applied are not checked either: staff check the preflight's
+"events: N" posts by hand (an event's video at most 1 minute). It refuses with
+55000 unless the guard has its reviewed body (or this update's). Read-only
+preflight: `../preflight/20261126001956_video_length_checked.check.sql` (expect
+one summary row reading "update not applied"); rollback:
+`../rollback/20261126001956_video_length_checked.down.sql` (undo the website
+first; the stored lengths are lost). Behaviour test:
+`scripts/test-foundation-video-length.mjs`.
+
+## Staff access follow-ups, 26 November 2026
+
+`20261126001811_staff_access_follow_ups.sql` is **pending** (see the applied
+register). Launch checklist item 56, batch F.
+
+- **An invitation for someone who already has an authenticator app.** An owner
+  admin invitation was claimed only when an authenticator app was added or
+  verified (the trigger on `auth.mfa_factors`), so a person invited after
+  setting one up never became an admin. Both paths now use one helper,
+  `internal.claim_owner_admin_invitation_for(uuid)` (no API role may run it),
+  and a new trigger on `private.owner_admin_invitations` runs it when the owner
+  adds an invitation: the person becomes an admin at once when their account
+  already has a verified authenticator app. The checks are unchanged: a
+  confirmed account that can sign in, an unclaimed and unrevoked invitation for
+  its email (only the account that signed up with it, once one has), and no
+  earlier staff role, which an invitation never reactivates.
+- **A new two-step check after every claim.** A claimed role sets
+  `frontend_mfa_not_before` to the moment of the claim, as every other role
+  grant does (`internal.apply_frontend_staff_role`), on both paths: the person's
+  sessions pass no staff command until they check their authenticator app again
+  (this covers an older session when a second app is enrolled).
+- **The update claims no waiting invitation itself**: making someone an admin is
+  the owner's step. The preflight counts waiting invitations whose account
+  already has an authenticator app. If that is above 0 at apply time, ask the
+  owner. For each one the owner approves, add it again in the owner's SQL
+  session, which fires the new trigger, keeping who signed up with it:
+
+  ```sql
+  with d as (delete from private.owner_admin_invitations where lower(email)=lower('<email>') and claimed_at is null and revoked_at is null returning email, signed_up_at, signed_up_by) insert into private.owner_admin_invitations(email, signed_up_at, signed_up_by) select email, signed_up_at, signed_up_by from d returning email;
+  ```
+
+  Revoke each one the owner does not approve (both snippets compare addresses
+  ignoring capitals and show the address they changed; none shown means no
+  match):
+  `update private.owner_admin_invitations set revoked_at = now() where lower(email) = lower('<email>') and claimed_at is null and revoked_at is null returning email;`.
+
+- **An invitation refused while the person was restricted** (banned, suspended,
+  closed or unable to sign in when it was added or their app was checked) stays
+  waiting. Once the restriction ends, add it again the same way.
+- **Claims take the per-person lock.** The helper first takes
+  `internal.lock_evidence_subject` (the lock of ban approval, account closure,
+  erasure orders and staff role changes), then reads whether the account can
+  sign in, then locks the staff roles table, in the order staff role changes
+  use. An invitation claimed at the moment a ban is approved, the account is
+  closed or an erasure is ordered waits and then sees it.
+  `internal.order_account_erasure` already took that lock before its staff check
+  and is unchanged. That this never leaves a banned admin also relies on
+  `20261125174942_end_admin_role_before_restriction.sql` (pull request #377,
+  applied before this update): when the claim comes first, the ban approval
+  waits for it and then refuses to restrict the new admin.
+- **No closure of a staff account through the service command.**
+  `internal.close_account_evidence` (behind the service-only
+  `api.close_account_evidence`, which nothing in the website or workers calls,
+  and `internal.close_account_now`) refuses an account with an active staff
+  role: PT409 "end the staff roles of this account first" (detail
+  `staff_account`), the check `internal.order_account_erasure` makes, under the
+  same lock. Members closing their own account and staff erasure orders already
+  refused such accounts.
+
+Expand only: two replaced bodies (`internal.claim_owner_admin_invitation()`,
+`internal.close_account_evidence(uuid)`), one new helper, one new trigger
+function (`internal.claim_new_owner_admin_invitation()`) and its trigger; no
+command, argument, result or grant changes. ORDER: **apply-first** (apply, then
+merge); no website code depends on it. The same pull request adds
+`/api/foundation/staff` to the proxy's staff check (`src/proxy-handler.ts`,
+`src/lib/foundation/page-access.ts`), as for `/api/admin`. Read-only preflight:
+`../preflight/20261126001811_staff_access_follow_ups.check.sql`; rollback:
+`../rollback/20261126001811_staff_access_follow_ups.down.sql` (removes the
+trigger, its function and the helper, and puts the two earlier bodies back).
+Behaviour checks: `scripts/test-foundation-staff-access-follow-ups.mjs`.
+
+## Lifecycle rule follow-ups, 25 November 2026
+
+`20261125225855_lifecycle_rule_follow_ups.sql` was applied on 26 November 2026
+at 05:59 UTC (see the applied register). Launch checklist item 56, batch D: the
+Low findings of the reviews of `20261125150215_small_lifecycle_rules.sql` (item
+40). Full definitions of two internal functions; no API command, argument,
+result or grant changes.
+
+- **A report holds deletion for a limited time.** `internal.delete_post` refuses
+  (PT409, detail `post_report_open`) only while an open report from the public
+  exists and either that report is less than 7 days old or
+  `internal.post_report_deferred` holds, the scheduled clean-up's own rule: it
+  stops waiting 7 days after the post would otherwise be deleted (67 days after
+  its last change when it has no deletion date). So an owner can delete a
+  reported post only once the report is 7 days old and the clean-up's waiting
+  time has passed. The 7 days from the report matter for a post that has not
+  changed for months (the clean-up's clock reads the post itself, not its edit
+  copy), so staff always have time to look. Before, any open report refused with
+  no end, so a report nobody looked at could keep a paid slot or a free event
+  place taken. A staff duplicate-event flag no longer stops the owner's deletion
+  (it names a pair of posts, and the website says someone reported the post).
+  The scheduled clean-up is unchanged: it still waits for any open report, staff
+  flags included.
+- **The sticker reminder needs a reviewed ID.**
+  `internal.sticker_renewal_reminder_key` also requires
+  `internal.frontend_business_identity_reviewed(owner)`, which renewing needs.
+  The email job compares the queued key with the current one, so a reminder
+  queued before the review lapsed is finished as skipped without a send, and it
+  is not sent again for that sticker end (its key is already used), even if the
+  review is accepted again before the end. Its 30 days stay the period
+  `internal.queue_sticker_renewal_reminders` uses to pick candidates; the
+  behaviour test checks both read the same interval.
+
+ORDER: apply first, then merge (either order is safe: the website part only adds
+the "Events can start at most 12 months ahead." message and shows the business
+verification dates in South African time). Read-only preflight:
+`../preflight/20261125225855_lifecycle_rule_follow_ups.check.sql` (expect
+"update not applied"; it counts posts with an open report, those whose owner may
+delete them after the update, and unsent sticker reminders whose owner's ID is
+not reviewed); rollback:
+`../rollback/20261125225855_lifecycle_rule_follow_ups.down.sql` (puts item 40's
+two bodies back; nothing is deleted, and a reminder skipped meanwhile for a
+missing ID review is not sent again for the same sticker end). Behaviour test:
+`scripts/test-foundation-lifecycle-rule-follow-ups.mjs`.
+
+## Release one blocked phone number, 25 November 2026
+
+`20261125213005_release_one_phone_number.sql` was applied on 26 November 2026 at
+05:55 UTC (see the applied register). Launch checklist item 21. A ban blocks
+every phone number the banned person verified
+(`20261117064820_ban_blocks_phone_numbers.sql`), and until now a number was
+freed only with the whole ban. Networks re-issue numbers, and a number can be
+blocked by mistake, so staff can now free one number for other people while the
+ID ban stays.
+
+- **A mark, never a delete.** `private.banned_phone_numbers` gets
+  `release_reason`, `release_proposed_by`, `release_proposed_at` (a request,
+  waiting 7 days) and `released_by`, `released_at` (the approval).
+  `internal.phone_number_banned` (full body) ignores released rows. The trigger
+  that copies a ban's numbers re-runs "insert ... on conflict do nothing" when
+  the ban row changes (a replacement decision, a later ban of the same person),
+  which keeps the mark. The marks go with the ban row (lifted, or purged after 5
+  years), like the numbers.
+- **Never for the banned person.** The new
+  `internal.phone_number_banned_for(owner, phone)` also blocks any account that
+  shares an accepted identity (revoked included) with a running ban listing the
+  number, released or not. `internal.create_verification_phone_challenge` and
+  `internal.finalize_verification_phone` (full bodies, otherwise unchanged) ask
+  it, so the banned person's other accounts can never take a released number
+  back (PT409 `phone_banned`, as before).
+- **Two staff members.** `api.propose_phone_number_release(p_phone, p_reason)`
+  asks to free a number a running ban blocks now (PT404 `phone_not_blocked`
+  otherwise; one waiting request per number, PT409 `phone_release_pending`; the
+  same request sent again answers `reused`; a request that no longer covers
+  every ban row of the number, or has expired, is replaced).
+  `api.review_phone_number_release(p_phone, p_proposed_at, p_approve)` decides
+  the request the staff member saw (`p_proposed_at` is its time, otherwise PT409
+  `phone_release_not_pending`). Rejection: anyone with the capability, the
+  proposer included. Approval: only a staff member who proposed none of its rows
+  (42501 `phone_release_same_staff`), while the request is under 7 days old,
+  covers every ban row of the number and its proposer still holds the capability
+  (PT409 `phone_release_changed`). It marks that request's rows released and
+  revokes the active phone proof of that number still held by an account of the
+  banned person (only that one, locked first), so whoever else holds the number
+  now can verify it. Nobody may propose or decide a release of a number that
+  they, or any account sharing an accepted identity with them, verified, or that
+  a ban of such an identity lists (42501 `phone_release_conflict`). Capability
+  `account:restore` (admins and governors, an authenticator code from the last
+  15 minutes), as for lifting a whole ban.
+- **The staff list.** `api.get_phone_number_releases()` returns the requests
+  that can be decided (one waiting request covering every ban row of the number;
+  a partial one is asked again) and the latest 50 releases with the full
+  numbers, for the Restrictions page. Only numbers someone asked to release are
+  listed, never the whole blocked list.
+- **Members** are told nothing (no SMS, email or notice); the banned person's ID
+  ban is unchanged.
+
+Expand only: three new API commands, five new columns, two new helpers and three
+replaced bodies. ORDER: **apply first, then merge** (the Deploy gate probes
+every command in the runtime manifest). Read-only preflight:
+`../preflight/20261125213005_release_one_phone_number.check.sql`; rollback:
+`../rollback/20261125213005_release_one_phone_number.down.sql` (drops the
+commands, helpers and columns and puts the three earlier bodies back; numbers
+released meanwhile are blocked again while their ban runs).
+
+## Lost-email alert and staff deadline email follow-ups, 25 November 2026
+
+`20261125212548_email_alert_follow_ups.sql` was applied on 26 November 2026 at
+05:52 UTC (see the applied register). Launch checklist item 56, batch B: the Low
+findings of the reviews of
+`20261125131322_lost_email_alert_staff_deadlines.sql`. Full definitions of three
+internal functions and one new column; no API command, argument or grant
+changes.
+
+- **Old alerts.** `internal.claim_lost_email_alert` deletes alerts sent over 400
+  days ago on every run, also while nothing is lost (before, only when a new
+  alert was made).
+- **Payment count.** New column `private.lost_email_alerts.payments`: how many
+  of all the lost emails an alert reports are payment emails, listed or not. The
+  claim returns it as `payments` (the same number when the alert is offered
+  again; null for an alert made before this update). The email's subject counts
+  payments from it; the website falls back to the listed ones without it.
+- **Authenticator app.** Staff without a verified authenticator app (who cannot
+  open any staff page) get no deadline email: the trigger leaves them out and
+  `internal.staff_email_due`, the email job's check before each send, skips
+  them.
+- **Appeals.** An appeal is not emailed to whoever took, approved or reported
+  the decision appealed against (they may not decide it), at queuing and before
+  each send.
+- **The cap.** Privacy requests have a legal deadline, so they are outside the
+  cap and do not count: each is emailed to staff who can act on it (a verified
+  authenticator app), except that only a member's first request in any 24 hours
+  is emailed (a member may file 5 an hour; later ones are only in the staff
+  queue). A request staff recorded for someone without an account is always
+  emailed. Appeals and reports keep the shared cap of 30 in any 24 hours, now
+  counting only themselves. At repeatable read or serializable the count could
+  pass the cap, so an appeal or report then queues no email (every website and
+  job call runs at read committed).
+
+Not changed: giving an alert back
+(`api.complete_lost_email_alert(p_claim, false)`) does not check who holds it.
+The alert's id is both the claim and the email's key and stays the same when the
+alert is offered again, so holders cannot be told apart without a new token in
+the API. It is safe: the hold lasts 5 minutes while a run ends within a minute,
+and the email key stops a second delivery. Privacy notices that can never be
+sent (their address changed) are already counted on the staff operations page
+("can never be sent", last 30 days).
+
+ORDER: apply first, then merge. Read-only preflight:
+`../preflight/20261125212548_email_alert_follow_ups.check.sql` (expect "update
+not applied"; it counts lost emails only once their lease has ended, alerts due
+for deletion, staff without an authenticator app and today's staff emails);
+rollback: `../rollback/20261125212548_email_alert_follow_ups.down.sql` (puts the
+three earlier bodies back and drops the column; queued emails and alerts stay;
+afterwards privacy request emails count towards the cap again, so appeals and
+reports can go without email for up to 24 hours).
+
+Notes on the applied `20261125131322` files, which cannot be edited:
+
+- Its preflight counts an email at its 8th attempt that is still within its
+  lease as lost; the alert reports it only once the lease has ended. The
+  preflight above uses the alert's rule.
+- Its rollback deletes the staff deadline emails before it drops the three
+  triggers, so a privacy request, appeal or report submitted in between queues
+  emails that stay. Run it while no submissions are expected (or check for staff
+  emails afterwards and delete them by hand).
+- Its check for unsent alerts takes no lock, so an email job run can make a new
+  alert just after the check. Pause the operations jobs Worker's schedule before
+  running it.
+
+## Staff refund follow-ups, 25 November 2026
+
+`20261125194727_part_refund_follow_ups.sql` was applied on 26 November 2026 at
+05:32 UTC (see the applied register). Launch checklist item 56, batch A: the Low
+findings of the reviews of `20261125133916_staff_part_refunds.sql`. Full
+definitions of four internal functions; no API command, argument, grant or table
+changes.
+
+- **What was refunded.** `internal.payment_refunded_before_cents` counts a
+  reversed slot unless an applied refund record that ended the paid days covers
+  it, so a slot reversed after a keep-running part refund is no longer
+  under-reported.
+- **Repeats.** In `internal.record_staff_refund`, "everything left"
+  (`p_amount_cents` null) never returns an earlier part refund that kept the
+  slot running as a repeat (by request id or by reference); and the same request
+  id with a corrected bank reference or Ozow refund id is refused (PT409
+  `refund_request_reused`) instead of returning the old record.
+- **Activate first.** A part refund that keeps the slot running is refused while
+  the payment waits for "Activate what was paid for" (PT409
+  `refund_activate_first`), so activation never creates the partner commission
+  after the money went back. If it cannot be activated, staff record a refund
+  that ends the slot.
+- **The staff list read.** `api.get_staff_refunds_left` gives 0 left at payment
+  level once a slot was reversed (a whole-payment refund is refused then), and
+  adds `notice_ends_on` (the end of 20 South African business days' notice given
+  today) and, per slot, `paid_days` (the plan's own term; null for slots added
+  to a package, which are priced for the days left, so the website uses the
+  grant's dates) and `lost_days` (free lost days added while the slot ran; a
+  waiting renewal that was only moved gained none). The section 14 hint counts
+  unused paid days from the notice end, and the forms warn when lost days or
+  money were already given for a failure. `api.get_lost_days_preview` adds
+  `refunded_cents` per term (applied keep-running part refunds of the slot, or
+  of a whole payment that paid for that slot only). Warnings only: nothing is
+  refused for giving both.
+
+ORDER: **website-first** (merge and deploy, then apply): the website before this
+pull request reads both staff reads with a strict parser and would refuse the
+new fields; this pull request's website reads them as optional. Read-only
+preflight: `../preflight/20261125194727_part_refund_follow_ups.check.sql`
+(expect "update not applied" and "of them on payments not activated: 0");
+rollback: `../rollback/20261125194727_part_refund_follow_ups.down.sql` (the
+update writes no rows; the rollback can run at any time). Roll the database back
+**before** reverting the website: the website before this pull request refuses
+the new result fields. The rollback brings back the under-count of
+`internal.payment_refunded_before_cents` (a slot reversed after a keep-running
+part refund is not counted as refunded) and the other gaps this update closed.
+
+Notes on the rollback of `20261125133916_staff_part_refunds.sql` (that file is
+applied and is not edited): its header does not mention the `request_id` column
+and index it drops; and it counts part refunds before it locks
+`private.payment_refund_requests`, so a part refund recorded at that moment
+could slip past its refusal. A later rollback that needs it must lock the table
+first (`lock table private.payment_refund_requests in share mode`), then count.
+
+## No account restriction for an admin, 25 November 2026
+
+`20261125174942_end_admin_role_before_restriction.sql` was applied on 26
+November 2026 at 03:46 UTC (see the applied register). Launch checklist item 20,
+part 3. Until now two governors could ban an admin (an identity ban, or a report
+ban a moderator proposed and a governor approved), and one governor alone could
+put an admin under 72-hour emergency containment, again and again. A restriction
+removes account access, so `internal.staff_actor` then refused the admin, even
+the last one: the last-admin guard watches only staff roles.
+
+- **The rule.** A ban, suspension or emergency containment is refused with PT409
+  "End this person's admin role first" (detail `subject_is_admin`) while the
+  person holds an active admin role (`private.staff_roles` role `admin`,
+  `revoked_at` null). Removing an admin goes through the existing role change
+  (with `20261125150338_admin_removal_needs_approval.sql`, a different admin
+  approves it); then the person can be restricted like anyone else. Erasure
+  already refuses staff accounts (`internal.order_account_erasure`).
+- **Every path is covered** by three full bodies (api wrappers, arguments,
+  results and grants unchanged): `internal.propose_decision`
+  (`api.propose_decision` with `restrict_account`, and
+  `api.propose_verified_identity_ban`, which calls it);
+  `internal.propose_frontend_report_restriction`
+  (`api.execute_frontend_report_action_v2` `suspend` and `ban`, including the
+  emergency containment it applies at once); and `internal.approve_decision`
+  (`api.approve_decision` and `api.decide_frontend_governance`), checked again
+  in case the person became an admin after the proposal. Approval is the only
+  way a proposal takes effect (`internal.frontend_report_restriction_effect`,
+  `internal.bind_native_restriction_for_review` and
+  `internal.verification_decision_effect` run on it). Each check runs after the
+  subject's lock, which staff role changes also take.
+- **Governors and moderators are not protected**: a moderator can still be
+  contained at once, and a governor's or moderator's role can be ended at once
+  by an admin. Restrictions already in place are unchanged; the preflight counts
+  admins who cannot sign in and restriction proposals about an admin (approving
+  one is refused from the update on).
+- **Trade-off.** A hacked admin can now only be stopped by two other admins or
+  the owner's SQL session (owner accepted 26 Nov).
+
+Expand only: no command, argument or grant changes. ORDER: either order is
+safe (the website words the new refusal); released apply-first on 26 November
+2026. Read-only preflight:
+`../preflight/20261125174942_end_admin_role_before_restriction.check.sql`;
+rollback:
+`../rollback/20261125174942_end_admin_role_before_restriction.down.sql` (puts
+the three earlier bodies back).
+
 ## Members change their verified place, 25 November 2026
 
-`20261125161326_change_verified_place.sql` is pending (see the applied
-register). Launch checklist item 20, part 2.
+`20261125161326_change_verified_place.sql` was applied on 26 November 2026 at
+02:01 UTC (see the applied register). Launch checklist item 20, part 2.
 
 - New table `private.verification_locality_changes` (from and to province and
   city, and the time), row level security on, no grants. It belongs to the
@@ -150,7 +534,8 @@ decided). Behaviour test:
 - **Sticker renewal reminder.** New outbox kind `sticker_renewal_reminder`: one
   email 30 days before an approved CIPC or Seen check ends, while it is still
   its business's latest decision of that kind, no check of that kind waits for
-  review, the business is live or paused and its owner can sign in
+  review, the business is in any state except archived or sold (draft, under
+  review, rejected, live or paused) and its owner can sign in
   (`internal.sticker_renewal_reminder_key`, queued by
   `internal.queue_sticker_renewal_reminders` from `api.run_slot_renewals`). The
   key names the end, so a renewed sticker gets its own reminder. Linked CIPC
@@ -168,6 +553,28 @@ Read-only preflight:
 not applied" and "events starting over 365 days ahead: 0"); rollback:
 `../rollback/20261125150215_small_lifecycle_rules.down.sql` (deletes the sticker
 reminders, which are notifications only).
+
+`20261125225855_lifecycle_rule_follow_ups.sql` (below) later limits the deletion
+rule to public reports within the clean-up's waiting time and asks the reminder
+for a reviewed ID. Notes on the applied `20261125150215` files, which cannot be
+edited:
+
+- **During the apply.** Its check for events starting more than 365 days ahead
+  runs before the trigger exists and takes no lock on `private.event_details`,
+  so an event saved in that moment with a start that far ahead can slip in. The
+  website form refuses such a start, so only a direct call could do it; the
+  preflight run after the update shows the count (expect 0).
+- **Rolling back and re-applying.** Its rollback deletes the sticker reminders,
+  sent or not. Applying the update again queues a fresh reminder for every
+  sticker then ending within 30 days, so owners already reminded get a second
+  email. And while it is rolled back nothing stops an event starting more than
+  365 days ahead; one saved meanwhile makes the re-apply refuse (55000, "events
+  start more than 365 days ahead") until that event is moved or removed.
+- **Rollback header.** It says the `internal.delete_post` body it puts back is
+  from `20261104101932_restored_owner_post_actions.sql`; that body was last set
+  by `20261109104020_post_expiry_rules.sql`. The bytes it restores are the right
+  ones (its precondition and the behaviour test check them); only the name in
+  the comment is wrong.
 
 ## Staff refunds: the first purchase and part refunds, 25 November 2026
 
@@ -8255,6 +8662,75 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   (fingerprint.sql) matched the full replay (except the known schema grant
   difference)
 
-- `20261125161326_change_verified_place.sql`: pending
+- `20261125161326_change_verified_place.sql`: applied 2026-11-26 02:01 UTC;
+  apply-first, owner-approved, before pull request #376 was merged; Supabase SQL
+  editor (browser), file from raw GitHub at f8578cd7, update sha256 starting
+  81a4568c156240c7; preflight before "verified place: update not applied;
+  members with a place: 3" with no problem rows, after "verified place: already
+  applied; members with a place: 3; place changes: 0"; production fingerprint
+  after it (fingerprint.sql) matched the full replay (except the known schema
+  grant difference)
+
+- `20261125174942_end_admin_role_before_restriction.sql`: applied 2026-11-26
+  03:46 UTC; apply-first, owner-approved, before pull request #377 was merged;
+  Supabase SQL editor (browser), file from raw GitHub at 23b0691f, update sha256
+  starting 137ee2de7c3a5690; preflight before "end admin role before
+  restriction: update not applied; active admins: 3; admins who cannot sign in:
+  0; restriction proposals about an admin: 0" with no problem rows, after "end
+  admin role before restriction: already applied; active admins: 3; admins who
+  cannot sign in: 0; restriction proposals about an admin: 0"; production
+  fingerprint after the last of the five stacked updates (fingerprint.sql, 06:02
+  UTC) matched the full replay (except the known schema grant difference)
+
+- `20261125194727_part_refund_follow_ups.sql`: applied 2026-11-26 05:32 UTC;
+  website-first, owner-approved, after pull request #380 was merged and
+  deployed; Supabase SQL editor (browser), file from raw GitHub at 2c97b5dd,
+  update sha256 starting 2a54cb18c3c53cfa; preflight before "part refund
+  follow-ups: update not applied; part refunds keeping the slot running: 0; of
+  them on payments not activated: 0; slots reversed after one: 0" with no
+  problem rows, after "part refund follow-ups: already applied; part refunds
+  keeping the slot running: 0; of them on payments not activated: 0; slots
+  reversed after one: 0"; production fingerprint after the last of the five
+  stacked updates (fingerprint.sql, 06:02 UTC) matched the full replay (except
+  the known schema grant difference)
+
+- `20261125212548_email_alert_follow_ups.sql`: applied 2026-11-26 05:52 UTC;
+  apply-first, owner-approved, before pull request #381 was merged; Supabase SQL
+  editor (browser), file from raw GitHub at 65fc00ca, update sha256 starting
+  d9df49991cde7a24; preflight before "email alert follow-ups: update not
+  applied; lost emails: 0; alerts sent over 400 days ago: 0; staff without an
+  authenticator app: 0; staff emails queued today: 0 / 0" with no problem rows,
+  after "email alert follow-ups: already applied; lost emails: 0; alerts sent
+  over 400 days ago: 0; staff without an authenticator app: 0; staff emails
+  queued today: 0 / 0"; production fingerprint after the last of the five
+  stacked updates (fingerprint.sql, 06:02 UTC) matched the full replay (except
+  the known schema grant difference)
+
+- `20261125213005_release_one_phone_number.sql`: applied 2026-11-26 05:55 UTC;
+  apply-first, owner-approved, before pull request #382 was merged; Supabase SQL
+  editor (browser), file from raw GitHub at 651b1705, update sha256 starting
+  4fb6f3732b33e7e9; preflight before "release one phone number: update not
+  applied; numbers blocked: 0; release requests waiting: 0; numbers released: 0"
+  with no problem rows, after "release one phone number: already applied;
+  numbers blocked: 0; release requests waiting: 0; numbers released: 0";
+  production fingerprint after the last of the five stacked updates
+  (fingerprint.sql, 06:02 UTC) matched the full replay (except the known schema
+  grant difference)
+
+- `20261125225855_lifecycle_rule_follow_ups.sql`: applied 2026-11-26 05:59 UTC;
+  apply-first, owner-approved, before pull request #384 was merged; Supabase SQL
+  editor (browser), file from raw GitHub at 3c235bed, update sha256 starting
+  33493f1e4e7aa735; preflight before "lifecycle rule follow-ups: update not
+  applied; posts with an open report: 0 (of which the owner may delete after the
+  update: 0); reminders waiting: 0 (of which the owner's ID is not reviewed: 0)"
+  with no problem rows, after "lifecycle rule follow-ups: already applied; posts
+  with an open report: 0 (of which the owner may delete after the update: 0);
+  reminders waiting: 0 (of which the owner's ID is not reviewed: 0)"; production
+  fingerprint after the last of the five stacked updates (fingerprint.sql, 06:02
+  UTC) matched the full replay (except the known schema grant difference)
+
+- `20261126001811_staff_access_follow_ups.sql`: pending
+
+- `20261126001956_video_length_checked.sql`: pending; apply-first
 
 <!-- applied-register:end -->

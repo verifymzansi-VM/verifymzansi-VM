@@ -4,17 +4,13 @@ import test from "node:test";
 import {
   baselineFrom,
   compareWithBaseline,
-  definedFunctionNames,
   isScannedFile,
   measureLegacySurface,
   resolveSpecifier,
   topFiles,
 } from "./lib/legacy-surface.mjs";
 
-const names = {
-  apiNames: new Set(["submit_enquiry", "get_public_posts"]),
-  retiredFunctionNames: new Set(["record_site_visit", "staff_session_is_active", "submit_enquiry"]),
-};
+const names = { apiNames: new Set(["submit_enquiry", "get_public_posts"]) };
 const measure = (files) => measureLegacySurface(files, names);
 
 test("scans production sources only", () => {
@@ -85,7 +81,7 @@ test("counts backend switches", () => {
   assert.equal(result.perFile["src/a.ts"].backendSwitches, 2);
 });
 
-test("retired command names exclude foundation api commands and include wrapper literals", () => {
+test("retired command names come from literal calls and exclude foundation api commands", () => {
   const result = measure([
     {
       path: "src/a.ts",
@@ -96,19 +92,14 @@ test("retired command names exclude foundation api commands and include wrapper 
         'await client.rpc("never_defined_anywhere");',
       ].join("\n"),
     },
+    // A name passed to .rpc() through a variable is not resolved.
     {
       path: "src/staff-session.ts",
-      text: 'type Fn = "staff_session_is_active" | "submit_enquiry";\nconst run = (fn: Fn) => admin.rpc(fn, {});',
+      text: 'type Fn = "staff_session_is_active";\nconst run = (fn: Fn) => admin.rpc(fn, {});',
     },
-    // Without a dynamic .rpc() call, a matching string literal is not a command.
-    { path: "src/label.ts", text: 'const label = "staff_session_is_active";' },
   ]);
-  assert.deepEqual(result.retiredCommandNames, [
-    "never_defined_anywhere",
-    "record_site_visit",
-    "staff_session_is_active",
-  ]);
-  assert.equal(result.counts.retiredCommandNames, 3);
+  assert.deepEqual(result.retiredCommandNames, ["never_defined_anywhere", "record_site_visit"]);
+  assert.equal(result.counts.retiredCommandNames, 2);
   assert.equal(result.counts.retiredCommandCalls, 3);
 });
 
@@ -241,20 +232,6 @@ test("documented limits: what a regex cannot follow", () => {
     },
   ]);
   assert.equal(result.perFile["src/app/page.tsx"]?.retiredTableReads, 1);
-});
-
-test("reads function names from the retired migration tree", () => {
-  const sql = [
-    "create or replace function public.record_site_visit(p_path text) returns void",
-    'CREATE FUNCTION "public"."staff_access_of"(p_user uuid)',
-    "create function toggle_content_like ()",
-    "create or replace function private.not_public(x int)",
-  ].join(";\n");
-  assert.deepEqual([...definedFunctionNames([sql])].sort(), [
-    "record_site_visit",
-    "staff_access_of",
-    "toggle_content_like",
-  ]);
 });
 
 test("the ratchet fails on rises and on unrecorded falls", () => {

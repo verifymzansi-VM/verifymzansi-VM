@@ -4,6 +4,7 @@ import { z } from "zod";
 import { handleFoundationOwnerRoute, type FoundationRefusal } from "@/lib/foundation/owner-route";
 import { createLogger } from "../utils/logger";
 import { hasDatabaseReason } from "./error-reasons";
+import { videoLengthRefusalMessage } from "./video-length-refusal";
 import { foundationArea, foundationKind, restoredAreaSchema } from "./areas";
 const log = createLogger("OwnerPostActions");
 const common = {
@@ -22,8 +23,9 @@ const lifecycle = z.strictObject({
  * mark sold, reactivate) is refused until an independent release. */
 const STAFF_HOLD_MESSAGE =
   "This post is hidden while our team reviews it. You can't republish, sell or delete it until the review is finished.";
-/** Deleting is refused while a report on the post is open
- * (20261125150215_small_lifecycle_rules.sql); hiding it still works. */
+/** Deleting is refused while a report from the public on the post is open,
+ * as long as the scheduled clean-up waits for it (20261125150215, narrowed by
+ * 20261125225855); hiding it still works. */
 const REPORTED_POST_MESSAGE =
   "Someone reported this post. You can hide it now, and delete it once our team has looked at the report.";
 class ActionRefusal extends Error {
@@ -117,6 +119,9 @@ export function handleRestoredPostAction(
             error: "Your posting allowance has been reached",
             reason: "posting_limit",
           });
+        const videoLength = videoLengthRefusalMessage(result.error);
+        if (videoLength)
+          throw new ActionRefusal({ status: 422, error: videoLength, reason: "video_length" });
         if (code === "22023" && hasDatabaseReason(result.error, "copy_new_photo_required"))
           throw new ActionRefusal({
             status: 422,

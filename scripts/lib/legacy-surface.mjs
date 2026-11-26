@@ -43,8 +43,6 @@ const NON_TABLE_RECEIVERS = new Set([
 // template literal inside a regular expression).
 const SPECIFIER = /(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*|\bimport\s+)(["'])([^"'\n]+)\1/g;
 const LITERAL_RPC = /\.rpc\s*(?:<[^>()]*>)?\(\s*(["'\x60])([A-Za-z0-9_]+)\1/g;
-const DYNAMIC_RPC = /\.rpc\s*(?:<[^>()]*>)?\(\s*[^"'\x60\s)]/;
-const STRING_NAME = /(["'\x60])([a-z][a-z0-9_]*)\1/g;
 const TABLE_READ = /(\w+)?\s*\.from\s*(?:<[^>()]*>)?\(\s*(["'\x60])([A-Za-z0-9_]+)\2/g;
 // A table named through an UPPER_SNAKE string constant instead of a literal:
 // `const PROFILE_TABLE = "account_profiles"` (const, let or var, optionally
@@ -66,8 +64,6 @@ const TABLE_CONSTANT =
 const CONSTANT_TABLE_READ =
   /(\w+)?\s*\.from\s*(?:<[^>()]*>)?\(\s*(\w+\.)?([A-Z][A-Z0-9_]*)\s*(?:as\s[^,)]*)?[,)]/g;
 const BACKEND_SWITCH = /\bgetDataBackend\s*\(\s*\)/g;
-const DEFINED_FUNCTION =
-  /create\s+(?:or\s+replace\s+)?function\s+(?:"?public"?\s*\.\s*)?"?([a-z0-9_]+)"?\s*\(/gi;
 
 /** @param {string} file repository-relative path with forward slashes */
 export function isScannedFile(file) {
@@ -90,19 +86,6 @@ export function resolveSpecifier(file, specifier) {
   else if (specifier.startsWith(".")) target = path.posix.join(path.posix.dirname(file), specifier);
   else return null;
   return target.replace(/\.(?:[cm]?[jt]sx?)$/, "").replace(/\/index$/, "");
-}
-
-/**
- * Names of public functions the retired migration tree (supabase/migrations)
- * defines. Used only to resolve names passed to `.rpc(variable)` wrappers.
- * @param {string[]} sqlTexts
- */
-export function definedFunctionNames(sqlTexts) {
-  const names = new Set();
-  for (const text of sqlTexts) {
-    for (const match of text.matchAll(DEFINED_FUNCTION)) names.add(match[1].toLowerCase());
-  }
-  return names;
 }
 
 /**
@@ -145,11 +128,10 @@ function tableConstantsOf(files) {
 
 /**
  * @param {{ path: string, text: string }[]} files scanned production files
- * @param {{ apiNames: Set<string>, retiredFunctionNames: Set<string> }} names
- *   apiNames: every foundation `api` command (database/foundation manifests);
- *   retiredFunctionNames: functions the retired migration tree defines.
+ * @param {{ apiNames: Set<string> }} names
+ *   apiNames: every foundation `api` command (database/foundation manifests).
  */
-export function measureLegacySurface(files, { apiNames, retiredFunctionNames }) {
+export function measureLegacySurface(files, { apiNames }) {
   const tableConstants = tableConstantsOf(files);
   let backendSwitches = 0;
   let retiredCommandCalls = 0;
@@ -180,15 +162,6 @@ export function measureLegacySurface(files, { apiNames, retiredFunctionNames }) 
       commandNames.add(match[2]);
       retiredCommandCalls += 1;
       bump(file, "retiredCommandCalls");
-    }
-    // Wrappers that call `.rpc(name)` with a variable: resolve the retired
-    // names they spell out as string literals.
-    if (DYNAMIC_RPC.test(text)) {
-      for (const match of text.matchAll(STRING_NAME)) {
-        if (retiredFunctionNames.has(match[2]) && !apiNames.has(match[2])) {
-          commandNames.add(match[2]);
-        }
-      }
     }
 
     for (const match of text.matchAll(TABLE_READ)) {

@@ -57,6 +57,9 @@ export function updateCheckKit(database, update, current) {
  */
 export function createPaymentWorld({ q, json }) {
   q(`create schema vmtest;
+    -- Verified phone numbers come from one sequence, so two members never
+    -- share one (verification_phone_unique_active_idx).
+    create sequence if not exists vmtest.phone_seq maxvalue 9999999;
     create function vmtest.member(p_label text) returns jsonb language plpgsql as $$
     declare uid uuid:=gen_random_uuid(); sid uuid:=gen_random_uuid(); mail text; begin
       mail:=p_label||'-'||uid||'@example.invalid';
@@ -78,7 +81,7 @@ export function createPaymentWorld({ q, json }) {
       insert into private.accepted_identity_facts(owner_id,submission_id,identity_hmac,reviewed_by)
         values(p_owner,gen_random_uuid(),p_fp,p_staff);
       insert into private.verification_phone_proofs(owner_id,challenge_id,phone)
-        values(p_owner,gen_random_uuid(),'+2782'||lpad((abs(hashtext(p_owner::text))%10000000)::text,7,'0'));
+        values(p_owner,gen_random_uuid(),'+2782'||lpad(nextval('vmtest.phone_seq')::text,7,'0'));
       insert into private.verification_localities(owner_id,province_id,city_id) values(p_owner,'gp','gp_johannesburg');
       perform set_config('session_replication_role','origin',true);
     end$$;
@@ -88,6 +91,27 @@ export function createPaymentWorld({ q, json }) {
       perform set_config('session_replication_role','replica',true);
       insert into private.accepted_identity_facts(owner_id,submission_id,identity_hmac,reviewed_by,revoked_at)
         values(p_owner,gen_random_uuid(),p_fp,p_staff,now());
+      perform set_config('session_replication_role','origin',true);
+    end$$;
+    -- A full accepted ID review, as internal.frontend_business_identity_reviewed
+    -- reads it: a decided ID case, its submission with a clean ID photo and
+    -- selfie, and the accepted fact naming that submission.
+    create function vmtest.reviewed(p_owner uuid,p_staff uuid,p_fp text) returns void language plpgsql as $$
+    declare cid uuid:=gen_random_uuid(); sid uuid:=gen_random_uuid(); ia uuid:=gen_random_uuid(); fa uuid:=gen_random_uuid();
+    begin
+      perform set_config('session_replication_role','replica',true);
+      insert into private.evidence_cases(id,subject_id,kind,status,version) values(cid,p_owner,'kyc','decided',2);
+      insert into private.evidence_artifacts(id,case_id,owner_id,purpose,object_key,state,sha256)
+        values(ia,cid,p_owner,'id_front','fixture/'||ia,'clean',repeat('a',64)),
+          (fa,cid,p_owner,'selfie','fixture/'||fa,'clean',repeat('b',64));
+      insert into private.verification_identity_submissions(id,case_id,owner_id,case_version,id_artifact_id,selfie_artifact_id,
+          identity_hmac,identity_key_id,number_ciphertext,number_iv,number_tag,encryption_key_id,receipt_id,recipe,risk_score)
+        values(sid,cid,p_owner,1,ia,fa,p_fp,'identity-match-v1',
+          repeat('a',26),repeat('b',24),repeat('c',32),'identity-number-v1',gen_random_uuid(),'manual-id-selfie-v1',10);
+      insert into private.accepted_identity_facts(owner_id,submission_id,identity_hmac,reviewed_by) values(p_owner,sid,p_fp,p_staff);
+      insert into private.verification_phone_proofs(owner_id,challenge_id,phone)
+        values(p_owner,gen_random_uuid(),'+2782'||lpad((abs(hashtext(p_owner::text))%10000000)::text,7,'0'));
+      insert into private.verification_localities(owner_id,province_id,city_id) values(p_owner,'gp','gp_johannesburg');
       perform set_config('session_replication_role','origin',true);
     end$$;
     create function vmtest.post(p_owner uuid,p_kind text,p_area text) returns uuid language plpgsql as $$
@@ -116,6 +140,14 @@ export function createPaymentWorld({ q, json }) {
       const m = user(label);
       m.fingerprint = fingerprintOf(label);
       q(`select vmtest.verified('${m.id}','${reviewer.id}','${m.fingerprint}');`);
+      return m;
+    },
+    /** A member with a full accepted ID review (ID photo, selfie, decided case),
+     * which the business checks need. */
+    reviewedId: (label, reviewer) => {
+      const m = user(label);
+      m.fingerprint = fingerprintOf(label);
+      q(`select vmtest.reviewed('${m.id}','${reviewer.id}','${m.fingerprint}');`);
       return m;
     },
     review: (person, reviewer, label) =>

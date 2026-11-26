@@ -17,6 +17,7 @@ import {
   serviceRpc,
   signIn,
   type TestCopy,
+  unusedPhoneNumber,
 } from "./test-copy";
 
 const API_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.apiPort}`;
@@ -163,7 +164,7 @@ async function verifyIdentity(copy: TestCopy, ownerId: string, token: string) {
 /** The phone proof the website records after a matching SMS code (the
  * member pages open only for members with a verified phone). */
 export async function verifyPhone(ownerId: string) {
-  const phone = `+2773${randomInt(1_000_000, 10_000_000)}`;
+  const phone = unusedPhoneNumber("+2773");
   const hash = randomBytes(32).toString("hex");
   const challenge = await serviceCall("create_verification_phone_challenge", {
     p_owner: ownerId,

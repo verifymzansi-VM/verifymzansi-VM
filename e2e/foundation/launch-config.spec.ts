@@ -142,13 +142,19 @@ const REMOVED_PAGES = [
   ),
 ];
 
-/** Routes removed for launch (old trial tools and the old operations
- * "Retry" route): each answers 404. */
+const SOME_POST = "00000000-0000-4000-8000-000000000000";
+
+/** Routes removed for launch (old trial tools, the old operations "Retry"
+ * route, and the paid add-on checkouts removed in item 37): each answers 404. */
 const REMOVED_ROUTES = [
   "/api/admin/ops/jobs/retry",
   "/api/admin/trials",
   "/api/trials",
-  "/api/trial-extensions/00000000-0000-4000-8000-000000000000",
+  `/api/trial-extensions/${SOME_POST}`,
+  ...["listings", "businesses", "promotions"].flatMap((area) =>
+    ["boost", "featured", "urgent"].map((addon) => `/api/${area}/${SOME_POST}/${addon}`)
+  ),
+  "/api/foundation/billing/addon",
 ];
 
 function seededPostId(title: string) {

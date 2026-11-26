@@ -813,6 +813,9 @@ it("never sends an add-on payment to the provider, whatever the quote was for", 
   await expect(addonCheckout()).rejects.toMatchObject(addonNotSold);
   expect(createOzowHostedPayment).not.toHaveBeenCalled();
   expect(machine.mock.calls.map(([name]) => name)).toEqual(["claim_checkout_request"]);
+  expect(logged.warn).toHaveBeenCalledWith("Add-on payment refused before the provider", {
+    paymentId: addonClaim().id,
+  });
 });
 it("never hands back a stored add-on checkout address", async () => {
   machine.mockResolvedValueOnce({
