@@ -9,10 +9,10 @@ CREATE OR REPLACE FUNCTION internal.claim_supported_notification_outbox(p_suppor
 AS $function$
 declare result jsonb;
 begin
-  -- Each kind once; 27 kinds since the sticker renewal reminder.
-  if p_supported_kinds is null or cardinality(p_supported_kinds) not between 1 and 27 or coalesce(array_ndims(p_supported_kinds),0)<>1
+  -- Each kind once; 28 kinds since the invoice email.
+  if p_supported_kinds is null or cardinality(p_supported_kinds) not between 1 and 28 or coalesce(array_ndims(p_supported_kinds),0)<>1
     or (select count(distinct coalesce(k,'')) from unnest(p_supported_kinds) k)<>cardinality(p_supported_kinds) then raise exception 'supported mail kinds required' using errcode='22023';end if;
-  if exists(select 1 from unnest(p_supported_kinds) k where k is null or k not in('payment_completed','payment_reversed','payment_reconciliation_required','trial_started','post_expired','post_expiry_reminder','draft_deletion_warning','post_deleted','verification_phone_confirmed','identity_accepted','enquiry_received','account_warning','content_hidden','account_suspended','account_banned','appeal_decided','business_check_update','post_sold','post_kept','verification_returned','slot_renewal_reminder','term_ending_notice','free_credit_reminder','staff_privacy_request','staff_appeal','staff_report','sticker_renewal_reminder')) then raise exception 'unsupported mail kind' using errcode='22023';end if;
+  if exists(select 1 from unnest(p_supported_kinds) k where k is null or k not in('payment_completed','payment_reversed','payment_reconciliation_required','trial_started','post_expired','post_expiry_reminder','draft_deletion_warning','post_deleted','verification_phone_confirmed','identity_accepted','enquiry_received','account_warning','content_hidden','account_suspended','account_banned','appeal_decided','business_check_update','post_sold','post_kept','verification_returned','slot_renewal_reminder','term_ending_notice','free_credit_reminder','staff_privacy_request','staff_appeal','staff_report','sticker_renewal_reminder','invoice_issued')) then raise exception 'unsupported mail kind' using errcode='22023';end if;
   if p_limit is null or p_limit not between 1 and 50 then raise exception 'invalid limit' using errcode='22023'; end if;
   with due as (select id from private.outbox_events where kind=any(p_supported_kinds) and processed_at is null
     and delivery_attempts<8 and delivery_after<=statement_timestamp()
@@ -23,7 +23,7 @@ begin
     from due where o.id=due.id returning o.*)
   select coalesce(jsonb_agg(jsonb_build_object('id',o.id,'kind',o.kind,'subject_id',o.subject_id,
     'owner_id',o.owner_id,'claim_token',o.delivery_claim,'locked_until',o.delivery_until,
-    'attempts',o.delivery_attempts,'recipient',case when u.email_confirmed_at is not null and not u.is_anonymous and (o.kind not in('account_warning','content_hidden','account_suspended','account_banned','appeal_decided','business_check_update','verification_returned') or not exists(select 1 from private.account_closures c where c.user_id=u.id))
+    'attempts',o.delivery_attempts,'recipient',case when u.email_confirmed_at is not null and not u.is_anonymous and (o.kind not in('account_warning','content_hidden','account_suspended','account_banned','appeal_decided','business_check_update','verification_returned','invoice_issued') or not exists(select 1 from private.account_closures c where c.user_id=u.id))
       and (o.kind<>'slot_renewal_reminder' or internal.slot_renewal_due(o.subject_id,o.owner_id))
       and (o.kind<>'term_ending_notice' or internal.term_ending_notice_due(o.subject_id,o.owner_id))
       and (o.kind<>'free_credit_reminder' or o.dedupe_key=internal.free_credit_reminder_key(o.subject_id,o.owner_id))
@@ -75,7 +75,7 @@ begin
     'sticker_business_id',sc.business_id) order by o.created_at,o.id),'[]'::jsonb)
     into result from claimed o left join auth.users u on u.id=o.owner_id
     left join private.enquiries e on o.kind='enquiry_received' and e.id=o.subject_id
-    left join private.posts p on o.kind not in('staff_privacy_request','staff_appeal','staff_report','sticker_renewal_reminder')
+    left join private.posts p on o.kind not in('staff_privacy_request','staff_appeal','staff_report','sticker_renewal_reminder','invoice_issued')
       and p.id=case when o.kind='enquiry_received' then e.post_id else o.subject_id end
     left join private.entitlements tr on o.kind='trial_started' and tr.id=o.subject_id and tr.source='intro_trial'
       and tr.owner_id=o.owner_id and tr.status='active'
