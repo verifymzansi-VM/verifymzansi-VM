@@ -117,7 +117,7 @@ describe("AdvertisePage", () => {
       "If we wrongly reject a post, a paid slot does not work, or the site is down for more than 24 hours in a row, we first add the days you lost; if you still ask, we refund a reasonable part of the price for those days.",
       "If you are an individual (sole traders included), you can cancel a slot or a Multi-listing package by emailing billing@verifymzansi.com from your account's email address.",
       "It runs for 20 more business days, then we credit its unused whole days, less a R50 fee; if that is R0 or less, nothing is paid, so cancelling a 30-day slot usually returns nothing.",
-      "Closing your account cancels all your slots and your package.",
+      "Closing your account counts as a request to cancel all your slots and your package.",
       "Companies and other organisations are not refunded for unused days.",
       "Billing errors and duplicate payments are refunded in full once we have checked them.",
       "Refunds are paid to the original payment method, through our payment provider's refund service, or by EFT into a bank account in your own name, within 30 days after we approve them.",
