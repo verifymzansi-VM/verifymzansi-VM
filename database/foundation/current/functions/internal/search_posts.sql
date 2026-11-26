@@ -10,7 +10,14 @@ AS $function$
 declare
   req jsonb := coalesce(p_request, '{}');
   allowed text[] := array['q', 'sort', 'area', 'category', 'activity', 'province', 'city', 'price_mode',
-    'min_price_cents', 'max_price_cents', 'condition', 'attributes', 'cursor', 'limit', 'offset', 'post_id', 'business_type', 'event_state', 'event_order', 'storefront', 'make'];
+    'min_price_cents', 'max_price_cents', 'condition', 'attributes', 'cursor', 'limit', 'offset', 'post_id', 'business_type', 'event_state', 'event_order', 'storefront', 'make',
+    'organisation', 'programme', 'sponsored', 'kind', 'ids_only'];
+  v_ids boolean := false;
+  v_kind text;
+  v_org_filter boolean := false;
+  v_org uuid;
+  v_programme uuid;
+  v_sponsored boolean := false;
   v_sort text;
   v_offset integer := 0;
   v_post_id uuid;
@@ -55,15 +62,20 @@ begin
   if exists (select 1 from jsonb_object_keys(req) k where k <> all (allowed)) then
     raise exception 'unknown search filter' using errcode = '22023';
   end if;
-  if exists (select 1 from jsonb_each(req) e where e.key not in ('attributes', 'limit', 'offset', 'min_price_cents', 'max_price_cents')
+  if exists (select 1 from jsonb_each(req) e where e.key not in ('attributes', 'limit', 'offset', 'min_price_cents', 'max_price_cents', 'sponsored', 'ids_only')
       and jsonb_typeof(e.value) <> 'string') then
     raise exception 'search filters must be strings' using errcode = '22023';
   end if;
+  if exists (select 1 from jsonb_each(req) e where e.key in ('sponsored', 'ids_only')
+      and jsonb_typeof(e.value) <> 'boolean') then
+    raise exception 'sponsored and ids_only must be true or false' using errcode = '22023';
+  end if;
+  v_ids := coalesce((req->>'ids_only')::boolean, false);
 
   if req ? 'limit' then
-    if jsonb_typeof(req->'limit') <> 'number' or (req->>'limit') !~ '^[0-9]{1,2}$'
-      or (req->>'limit')::integer not between 1 and 48 then
-      raise exception 'limit must be 1 to 48' using errcode = '22023';
+    if jsonb_typeof(req->'limit') <> 'number' or (req->>'limit') !~ '^[0-9]{1,3}$'
+      or (req->>'limit')::integer not between 1 and (case when v_ids then 200 else 48 end) then
+      raise exception 'limit must be 1 to 48, or 1 to 200 with ids_only' using errcode = '22023';
     end if;
     v_limit := (req->>'limit')::integer;
   end if;
@@ -95,6 +107,30 @@ begin
   if v_make is not null and (v_store is null or length(v_make) not between 1 and 80) then
     raise exception 'make filter requires a storefront' using errcode='22023';
   end if;
+  v_kind := req->>'kind';
+  if v_kind is not null and v_kind not in ('listing','business','event') then
+    raise exception 'unknown post kind' using errcode='22023';
+  end if;
+  -- One listed organisation's supported posts (an unknown or unlisted slug
+  -- matches nothing), optionally one of its programmes or its sponsored posts.
+  if req ? 'organisation' then
+    if req->>'organisation' !~ '^[a-z0-9]+(-[a-z0-9]+)*$' or length(req->>'organisation') > 60 then
+      raise exception 'invalid organisation' using errcode='22023';
+    end if;
+    v_org_filter := true;
+    select o.id into v_org from private.organisations o
+      where o.slug = req->>'organisation' and internal.organisation_listed(o);
+  end if;
+  if (req ? 'programme' or req ? 'sponsored') and not v_org_filter then
+    raise exception 'programme and sponsored filters require an organisation' using errcode='22023';
+  end if;
+  if req ? 'programme' then
+    if req->>'programme' !~* '^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$' then
+      raise exception 'invalid programme' using errcode='22023';
+    end if;
+    v_programme := (req->>'programme')::uuid;
+  end if;
+  v_sponsored := coalesce((req->>'sponsored')::boolean, false);
   v_business_type := req->>'business_type';
   if v_business_type is not null and v_business_type not in
     ('mall_store','standalone_shop','home_business','mobile_service','online_only','market_stall') then
@@ -249,6 +285,13 @@ begin
         where a.post_id=d.post_id and a.released_at is null and c.package_id=v_store_package)))
       and (v_make is null or exists(select 1 from private.listing_details ld
         where ld.post_id=d.post_id and lower(ld.attributes->>'make')=lower(v_make)))
+      and (v_kind is null or d.kind=v_kind)
+      and (not v_org_filter or exists(select 1 from private.organisation_affiliations af
+        where af.organisation_id=v_org and af.post_id=d.post_id and af.status='active'
+          and (v_programme is null or af.programme_id=v_programme)))
+      and (not v_sponsored or exists(select 1 from private.organisation_sponsorships sp
+        where sp.organisation_id=v_org and sp.post_id=d.post_id and sp.status='active'
+          and sp.starts_at<=statement_timestamp() and sp.ends_at>statement_timestamp()))
       and (v_business_type is null or (d.kind='business' and b.business_type=v_business_type))
       and (v_event_state is null or (d.kind='event' and (
         v_event_state='all'
@@ -317,7 +360,8 @@ begin
   end if;
 
   return jsonb_build_object(
-    'items', v_items,
+    'items', case when v_ids then (select coalesce(jsonb_agg(x.item->'id' order by x.n), '[]')
+      from jsonb_array_elements(v_items) with ordinality x(item, n)) else v_items end,
     'sort', v_sort,
     'total', v_total,
     'facets', jsonb_build_object('categories', coalesce(v_facets, '{}')),

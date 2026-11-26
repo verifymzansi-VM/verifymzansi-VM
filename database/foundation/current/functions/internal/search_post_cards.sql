@@ -9,6 +9,9 @@ CREATE OR REPLACE FUNCTION internal.search_post_cards(p_request jsonb)
 AS $function$
 declare result jsonb; cards jsonb; presentation boolean:=false; frontend boolean:=false;
 begin
+  if p_request ? 'ids_only' then
+    raise exception 'ids_only is not a card option' using errcode='22023';
+  end if;
   if p_request ? 'presentation' then
     if jsonb_typeof(p_request->'presentation') is distinct from 'boolean' then
       raise exception 'invalid presentation option' using errcode='22023';

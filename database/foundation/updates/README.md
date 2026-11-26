@@ -235,9 +235,9 @@ guard watches only staff roles.
 - **Trade-off.** A hacked admin can now only be stopped by two other admins or
   the owner's SQL session (owner accepted 26 Nov).
 
-Expand only: no command, argument or grant changes. ORDER: either order is
-safe (the website words the new refusal); released apply-first on 26 November
-2026. Read-only preflight:
+Expand only: no command, argument or grant changes. ORDER: either order is safe
+(the website words the new refusal); released apply-first on 26 November 2026.
+Read-only preflight:
 `../preflight/20261125174942_end_admin_role_before_restriction.check.sql`;
 rollback:
 `../rollback/20261125174942_end_admin_role_before_restriction.down.sql` (puts
@@ -8432,5 +8432,7 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
 - `20261125194727_part_refund_follow_ups.sql`: pending; website-first
 
 - `20261125212548_email_alert_follow_ups.sql`: pending; apply-first
+
+- `20261126062428_catalogue_filters_in_database.sql`: pending; apply-first
 
 <!-- applied-register:end -->
