@@ -12,7 +12,7 @@ begin
   if p_posts is null or cardinality(p_posts) not between 1 and 50 or array_ndims(p_posts)<>1
     or array_position(p_posts,null) is not null then
     raise exception 'bounded post list required' using errcode='22023';end if;
-  select coalesce(jsonb_agg(jsonb_build_object('post_id',p.id,'object_key',m.object_key,'duration_ms',m.duration_ms)
+  select coalesce(jsonb_agg(jsonb_build_object('post_id',p.id,'duration_ms',m.duration_ms)
       order by p.id,pm.purpose,pm.position),'[]'::jsonb) into result
     from private.posts p
     join private.queue_claims q on q.post_id=p.id and q.claimed_by=actor and q.claim_expires_at>clock_timestamp()

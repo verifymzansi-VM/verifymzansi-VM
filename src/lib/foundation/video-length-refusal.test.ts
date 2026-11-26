@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { VIDEO_LENGTH_UNKNOWN_MESSAGE, videoLengthRefusalMessage } from "./video-length-refusal";
+import { videoLengthRefusalMessage } from "./video-length-refusal";
 
 describe("videoLengthRefusalMessage", () => {
   it("names the video's length and the post kind's limit", () => {
@@ -16,13 +16,6 @@ describe("videoLengthRefusalMessage", () => {
       expect(videoLengthRefusalMessage({ code: "22023", details: "video_too_long", hint })).toBe(
         "Your video is longer than this post allows. Please choose a shorter video."
       );
-  });
-
-  it("asks for the video again when its length was never stored", () => {
-    expect(videoLengthRefusalMessage({ code: "22023", details: "video_length_unknown" })).toBe(
-      VIDEO_LENGTH_UNKNOWN_MESSAGE
-    );
-    expect(VIDEO_LENGTH_UNKNOWN_MESSAGE).toMatch(/upload the video again/);
   });
 
   it("ignores every other refusal", () => {

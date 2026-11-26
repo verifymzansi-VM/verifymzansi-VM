@@ -9,20 +9,21 @@
 // gate, with the synthetic world of the staff payment checks (members and
 // staff written directly as the database owner, accepted ID reviews as
 // synthetic identity facts, members and staff acting through the production
-// API commands with synthetic sessions). Before the update it publishes an
-// event with a video and leaves a listing draft with one (videos stored
+// API commands with synthetic sessions). Before the update it publishes two
+// events with a video and leaves a listing draft with one (videos stored
 // without a length). It checks the read-only preflight, a drifted body and a
 // premature rollback, applies the update and proves apply -> rollback ->
 // apply, then checks: the grants; the upload server's video completion
 // (stores the length, refuses 121 s, no length or a picture, replays
-// idempotently, fills a missing length once, never changes it); submitting a
-// listing with a 120.999 s video passes and with 121 s is refused with the
-// length and the limit; an event with a 60.999 s video passes and with 61 s
-// (a listing's video reused) is refused; a video without a stored length is
-// refused until uploaded again; an edit of the published event keeps its old
-// video but may not swap in a longer one; staff holding the review claim see
-// each length, nobody else does; and storage grows from 1 GB to 21 GB with
-// 100 paid slots, which hold 100 two-minute videos.
+// idempotently, never changes it); submitting a listing with a 120.999 s
+// video passes and with 121 s is refused with the length and the limit; an
+// event with a 60.999 s video passes and with 61 s (a listing's video reused)
+// is refused; a video without a stored length passes (a submit, and a paused
+// event reactivated), while a known over-limit length is still refused at
+// reactivation; an edit of the published event keeps its old video but may
+// not swap in a longer one; staff holding the review claim see each length,
+// nobody else does; and storage grows from 1 GB to 21 GB with 100 paid slots,
+// which hold 100 two-minute videos.
 //
 // Limits register: LIM-APP-video-length, LIM-APP-event-video-length,
 // LIM-SQL-staff-video-lengths-posts.
@@ -31,7 +32,7 @@
 //
 // Needs a local Docker daemon; it takes no connection settings at all.
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { assertReadOnlyPreflight, executeGrants } from "./lib/foundation-sql-checks.mjs";
 import {
   applyAndProveRollback,
@@ -128,16 +129,22 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
   // ------------------------------------------------------------ before
   let liveEvent;
   let liveEventVideo;
+  let pausedEvent;
+  let pausedEventVideo;
   let oldDraft;
   await check(
-    "before the update: an event with a video goes live, a listing draft holds one",
+    "before the update: two events with a video go live, a listing draft holds one",
     () => {
       assert.equal(bodyMd5(GUARD), REVIEWED);
       liveEventVideo = videoObject();
       liveEvent = draft("event", liveEventVideo);
-      assert.equal(submit(liveEvent).status, "pending_moderation");
-      approve(liveEvent);
-      assert.equal(row(liveEvent).status, "live");
+      pausedEventVideo = videoObject();
+      pausedEvent = draft("event", pausedEventVideo);
+      for (const id of [liveEvent, pausedEvent]) {
+        assert.equal(submit(id).status, "pending_moderation");
+        approve(id);
+        assert.equal(row(id).status, "live");
+      }
       oldDraft = draft("listing", videoObject());
     }
   );
@@ -250,19 +257,6 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
     );
   });
 
-  await check("a video completed the old way gets its length once, then keeps it", () => {
-    const u = reserve(seller);
-    json(
-      service(
-        `select api.complete_frontend_media_upload('${u.id}',${u.bytes},'${u.digest}','video/mp4');`
-      )
-    );
-    assert.deepEqual(stored(u.id), { state: "ready", duration_ms: null });
-    assert.deepEqual(json(completeVideoSql(u, 30_000)), { object_id: u.id, state: "ready" });
-    assert.deepEqual(stored(u.id), { state: "ready", duration_ms: 30_000 });
-    fails(completeVideoSql(u, 31_000), "PT409", /upload completion changed/);
-  });
-
   const withLength = (ms) => {
     const id = videoObject();
     q(`update private.media_objects set duration_ms=${ms} where id='${id}';`);
@@ -298,18 +292,38 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
     }
   );
 
-  await check("a video stored before the update is refused at submit until uploaded again", () => {
-    const refusal = fails(submitSql(oldDraft), "22023", /upload the video again/);
-    assert.match(refusal, /video_length_unknown/);
-    assert.equal(row(oldDraft).status, "draft");
-    q(
-      `update private.post_media set object_id='${withLength(45_000)}' where post_id='${oldDraft}' and purpose='video';`
+  await check("a video stored before the update (no stored length) is submitted", () => {
+    const oldVideo = q(
+      `select object_id from private.post_media where post_id='${oldDraft}' and purpose='video';`
     );
+    assert.equal(stored(oldVideo).duration_ms, null);
     assert.equal(submit(oldDraft).status, "pending_moderation");
   });
 
+  const postAction = (id, action) =>
+    member(
+      seller,
+      `select api.execute_my_frontend_post_action('${randomUUID()}','${id}',${row(id).revision},'${action}','event','tourism_events');`
+    );
   await check(
-    "an edit of the published event keeps its old video but may not swap in a longer one",
+    "a paused event with a pre-update video reactivates; with a known 75 s video it is refused",
+    () => {
+      assert.equal(stored(pausedEventVideo).duration_ms, null);
+      json(postAction(pausedEvent, "deactivate"));
+      assert.equal(row(pausedEvent).status, "paused");
+      assert.equal(json(postAction(pausedEvent, "reactivate")).status, "live");
+      assert.equal(row(pausedEvent).status, "live");
+      // The same video, now with a known length over the event limit.
+      q(`update private.media_objects set duration_ms=75000 where id='${pausedEventVideo}';`);
+      json(postAction(pausedEvent, "deactivate"));
+      const refusal = fails(postAction(pausedEvent, "reactivate"), "22023", /video_too_long/);
+      assert.match(refusal, /HINT:\s+75\/60/);
+      assert.equal(row(pausedEvent).status, "paused");
+    }
+  );
+
+  await check(
+    "an edit of the published event keeps its old video (no stored length) but may not swap in a longer one",
     () => {
       const edit = json(
         member(seller, `select api.create_post_edit('${liveEvent}',${row(liveEvent).revision});`)
@@ -341,9 +355,8 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
     assert.deepEqual(json(lengthsSql(admin2, [pendingListing, oldDraft])), []);
     json(staff(admin2, `select api.claim_queue_item('post','${pendingListing}');`));
     json(staff(admin2, `select api.claim_queue_item('post','${unknownPending}');`));
-    const key = q(`select object_key from private.media_objects where id='${listingVideo}';`);
     assert.deepEqual(json(lengthsSql(admin2, [pendingListing, unknownPending, oldDraft])), [
-      { post_id: pendingListing, object_key: key, duration_ms: 120_999 },
+      { post_id: pendingListing, duration_ms: 120_999 },
     ]);
     // Another reviewer, without the claim, sees nothing of that post.
     assert.deepEqual(json(lengthsSql(moderator, [pendingListing])), []);

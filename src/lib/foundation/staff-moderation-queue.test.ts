@@ -4,10 +4,8 @@ import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import { parseStaffModerationQueue, readStaffModerationQueue } from "./staff-moderation-queue";
 import { FoundationStaffReadError } from "./staff-read";
 import { readStaffCopyFacts } from "./staff-copy-facts";
-import { readStaffVideoLengths } from "./staff-video-lengths";
 
 vi.mock("./staff-copy-facts", () => ({ readStaffCopyFacts: vi.fn() }));
-vi.mock("./staff-video-lengths", () => ({ readStaffVideoLengths: vi.fn() }));
 
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const staff = uuid(1);
@@ -112,7 +110,6 @@ const queue = (items: unknown[], overrides: Record<string, unknown> = {}) => ({
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(readStaffCopyFacts).mockResolvedValue(new Map());
-  vi.mocked(readStaffVideoLengths).mockResolvedValue(new Map());
 });
 
 describe("parseStaffModerationQueue", () => {
@@ -314,7 +311,7 @@ describe("readStaffModerationQueue", () => {
     expect(read.allItems.find((i) => i.id === uuid(102))?.copy_facts).toBeUndefined();
   });
 
-  it("asks for video lengths only of held posts with a video, with each kind's limit", async () => {
+  describe("video lengths", () => {
     const video = (n: number) => ({
       object_id: uuid(300 + n),
       object_key: `media/${uuid(400 + n)}`,
@@ -335,30 +332,76 @@ describe("readStaffModerationQueue", () => {
         claim: myClaim,
         review: ownerPost(uuid(100 + n), kind, area, { media: [video(n)] }),
       });
-    vi.mocked(readStaffVideoLengths).mockResolvedValueOnce(
-      new Map([
-        [uuid(101), [{ seconds: 95 }]],
-        [uuid(103), [{ seconds: null }]],
-      ])
-    );
-    rpc.mockResolvedValueOnce({
-      data: queue(
-        [
-          withVideo(1, "listing", "market"),
-          claimed(2),
-          withVideo(3, "event", "tourism_events"),
-          summary(4, { claim: otherClaim }),
+    const lengthsCall = (answer: unknown) => {
+      rpc.mockResolvedValueOnce({
+        data: queue(
+          [
+            withVideo(1, "listing", "market"),
+            claimed(2),
+            withVideo(3, "event", "tourism_events"),
+            summary(4, { claim: otherClaim }),
+          ],
+          { my_claims: 3 }
+        ),
+        error: null,
+      });
+      rpc.mockResolvedValueOnce(answer);
+      return readStaffModerationQueue(api, staff);
+    };
+    const item = (read: Awaited<ReturnType<typeof readStaffModerationQueue>>, n: number) =>
+      read.allItems.find((i) => i.id === uuid(100 + n));
+
+    it("asks only for held posts with a video; whole seconds in media order, each kind's limit", async () => {
+      const read = await lengthsCall({
+        data: [
+          { post_id: uuid(101), duration_ms: 95_999 },
+          { post_id: uuid(103), duration_ms: null },
+          { post_id: uuid(103), duration_ms: 1 },
+          { post_id: uuid(109), duration_ms: 1000 },
         ],
-        { my_claims: 3 }
-      ),
-      error: null,
+        error: null,
+      });
+      expect(rpc).toHaveBeenLastCalledWith(
+        "get_frontend_staff_video_lengths",
+        { p_posts: [uuid(101), uuid(103)] },
+        { get: false }
+      );
+      expect(item(read, 1)?.video_lengths).toEqual({
+        limitSeconds: 120,
+        videos: [{ seconds: 95 }],
+      });
+      expect(item(read, 3)?.video_lengths).toEqual({
+        limitSeconds: 60,
+        videos: [{ seconds: null }, { seconds: 0 }],
+      });
+      expect(item(read, 2)?.video_lengths).toBeUndefined();
+      expect(read.allItems.some((i) => i.id === uuid(109))).toBe(false);
     });
-    const read = await readStaffModerationQueue(api, staff);
-    expect(readStaffVideoLengths).toHaveBeenCalledExactlyOnceWith(api, [uuid(101), uuid(103)]);
-    const item = (n: number) => read.allItems.find((i) => i.id === uuid(100 + n));
-    expect(item(1)?.video_lengths).toEqual({ limitSeconds: 120, videos: [{ seconds: 95 }] });
-    expect(item(3)?.video_lengths).toEqual({ limitSeconds: 60, videos: [{ seconds: null }] });
-    expect(item(2)?.video_lengths).toBeUndefined();
+
+    it("asks nothing when the reviewer holds no post with a video", async () => {
+      rpc.mockResolvedValueOnce({ data: queue([claimed(1)], { my_claims: 1 }), error: null });
+      await readStaffModerationQueue(api, staff);
+      expect(rpc).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+      ["a refused read", { data: null, error: { code: "42501" } }],
+      [
+        "an unexpected shape",
+        {
+          data: [{ post_id: uuid(101), object_key: `media/${uuid(401)}`, duration_ms: 1000 }],
+          error: null,
+        },
+      ],
+      [
+        "a length over the limit",
+        { data: [{ post_id: uuid(101), duration_ms: 121_000 }], error: null },
+      ],
+    ])("leaves the lengths out after %s, without failing the queue", async (_case, answer) => {
+      const read = await lengthsCall(answer);
+      expect(read.allItems).toHaveLength(4);
+      expect(read.allItems.every((i) => i.video_lengths === undefined)).toBe(true);
+    });
   });
 
   // Deliberately pins today's behaviour: this reader treats EVERY 42501 as a

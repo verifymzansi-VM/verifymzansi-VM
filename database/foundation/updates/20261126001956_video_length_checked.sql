@@ -15,16 +15,14 @@
 --   content-bound video upload exactly like api.complete_frontend_media_upload
 --   and stores the length; a length of 121 s or more, an unknown length or a
 --   picture is refused. Called again for a video that is already ready it is
---   an idempotent replay, and it fills in the length once for a video stored
---   earlier without one.
+--   an idempotent replay.
 -- - internal.guard_video_length_submission, a trigger on private.posts like
 --   the posting terms guard, refuses every move into pending_moderation
 --   (submit, resubmit, reactivation, an edit's submission) while the post has
---   a video longer than its kind allows (60 s for events, 120 s otherwise:
---   22023 video_too_long, hint "<whole seconds>/<limit>") or a video without a
---   stored length (22023 video_length_unknown: the owner uploads it again). A
---   video already on the live post an edit copies keeps passing, so a live
---   post keeps its current video until it ends. Approval and the rest of the
+--   a video whose stored length is longer than its kind allows (60 s for
+--   events, 120 s otherwise: 22023 video_too_long, hint
+--   "<whole seconds>/<limit>"). A video without a stored length passes: videos
+--   stored before this update are not checked. Approval and the rest of the
 --   lifecycle are unchanged.
 -- - api.get_frontend_staff_video_lengths (authenticated staff with
 --   queue:view, new) returns the stored length of each video of up to 50
@@ -37,8 +35,9 @@
 -- replaced trigger body; no command, argument or result changes.
 -- ORDER: apply first, then merge. The live website calls neither new command
 -- and parses no field this adds. Until the new website is deployed, a video it
--- uploads has no stored length, so a post with that video is refused at submit
--- and the owner uploads the video again.
+-- uploads has no stored length and is not checked. Posts already waiting for
+-- review when this is applied are not checked either: staff check the
+-- preflight's "events: N" posts by hand (an event's video at most 1 minute).
 -- It refuses with 55000 unless the guard has its reviewed body (or this
 -- update's).
 -- Read-only preflight: ../preflight/20261126001956_video_length_checked.check.sql.
@@ -119,30 +118,23 @@ $$;
 revoke all on function api.complete_frontend_video_upload(uuid,integer,text,text,integer) from public,anon,authenticated,service_role;
 grant execute on function api.complete_frontend_video_upload(uuid,integer,text,text,integer) to service_role;
 
--- Every move into the review queue: each video must have a stored length
--- within the post kind's limit (events 60 s, everything else 120 s, whole
--- seconds). A video already on the live post an edit copies keeps passing.
+-- Every move into the review queue: no video's stored length may exceed the
+-- post kind's limit (events 60 s, everything else 120 s, whole seconds). A
+-- video without a stored length (stored before this update) passes.
 create or replace function internal.guard_video_length_submission()
 returns trigger language plpgsql security definer set search_path=pg_catalog as $$
-declare limit_seconds integer;bad record;
+declare limit_seconds integer;longest integer;
 begin
   if new.status<>'pending_moderation' then return new;end if;
   if tg_op='UPDATE' then
     if old.status='pending_moderation' then return new;end if;
   end if;
   limit_seconds:=case when new.kind='event' then 60 else 120 end;
-  select m.duration_ms into bad from private.post_media pm join private.media_objects m on m.id=pm.object_id
-    where pm.post_id=new.id and m.kind='video'
-      and (m.duration_ms is null or m.duration_ms>=(limit_seconds+1)*1000)
-      and not (new.edit_of is not null and exists(select 1 from private.post_media o
-        where o.post_id=new.edit_of and o.object_id=pm.object_id))
-    order by m.duration_ms desc nulls first limit 1;
-  if not found then return new;end if;
-  if bad.duration_ms is null then
-    raise exception 'upload the video again so its length can be checked' using errcode='22023',detail='video_length_unknown';
-  end if;
+  select max(m.duration_ms) into longest from private.post_media pm join private.media_objects m on m.id=pm.object_id
+    where pm.post_id=new.id and m.kind='video';
+  if longest is null or longest<(limit_seconds+1)*1000 then return new;end if;
   raise exception 'the video is longer than this post allows' using errcode='22023',detail='video_too_long',
-    hint=format('%s/%s',bad.duration_ms/1000,limit_seconds);
+    hint=format('%s/%s',longest/1000,limit_seconds);
 end$$;
 revoke all on function internal.guard_video_length_submission() from public,anon,authenticated,service_role;
 drop trigger if exists video_length_submission_guard on private.posts;
@@ -158,7 +150,7 @@ begin
   if p_posts is null or cardinality(p_posts) not between 1 and 50 or array_ndims(p_posts)<>1
     or array_position(p_posts,null) is not null then
     raise exception 'bounded post list required' using errcode='22023';end if;
-  select coalesce(jsonb_agg(jsonb_build_object('post_id',p.id,'object_key',m.object_key,'duration_ms',m.duration_ms)
+  select coalesce(jsonb_agg(jsonb_build_object('post_id',p.id,'duration_ms',m.duration_ms)
       order by p.id,pm.purpose,pm.position),'[]'::jsonb) into result
     from private.posts p
     join private.queue_claims q on q.post_id=p.id and q.claimed_by=actor and q.claim_expires_at>clock_timestamp()

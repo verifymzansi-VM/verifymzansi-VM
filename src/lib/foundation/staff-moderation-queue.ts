@@ -8,8 +8,9 @@ import { getContentEditChanges } from "../content-edit-diff";
 import { FoundationStaffReadError } from "./staff-read";
 import { areaLabel, restoredArea, restoredContentType } from "./areas";
 import { readStaffCopyFacts } from "./staff-copy-facts";
-import { readStaffVideoLengths } from "./staff-video-lengths";
 import { videoLimitSeconds } from "../media/video-length";
+import { createLogger } from "../utils/logger";
+const log = createLogger("StaffModerationQueue");
 const instant = z.iso.datetime({ offset: true });
 const generation = z
   .string()
@@ -138,6 +139,42 @@ export function parseStaffModerationQueue(input: unknown, accountId: string) {
     totalWaiting: facts.total,
     failedAreas: [] as string[],
   };
+}
+const staffVideoLengths = z
+  .array(
+    z.strictObject({
+      post_id: z.uuid(),
+      duration_ms: z.number().int().min(1).max(120999).nullable(),
+    })
+  )
+  .max(500);
+/**
+ * For the posts the reviewer has claimed: each video's stored length in whole
+ * seconds (null when not recorded), in the post's media order
+ * (api.get_frontend_staff_video_lengths). A hint for the reviewer only, so a
+ * failed read leaves it out instead of failing the queue.
+ */
+async function readStaffVideoLengths(api: FoundationAuthenticatedApi, postIds: string[]) {
+  const lengths = new Map<string, { seconds: number | null }[]>();
+  if (postIds.length === 0) return lengths;
+  try {
+    const result = await api.rpc(
+      "get_frontend_staff_video_lengths",
+      { p_posts: postIds.slice(0, 50) },
+      { get: false }
+    );
+    if (result.error) throw new Error(result.error.code ?? "read failed");
+    for (const row of staffVideoLengths.parse(result.data)) {
+      if (!postIds.includes(row.post_id)) continue;
+      const seconds = row.duration_ms === null ? null : Math.floor(row.duration_ms / 1000);
+      lengths.set(row.post_id, [...(lengths.get(row.post_id) ?? []), { seconds }]);
+    }
+  } catch (error) {
+    log.warn("Video lengths unavailable", {
+      error: error instanceof Error ? error.message : "unknown",
+    });
+  }
+  return lengths;
 }
 export async function readStaffModerationQueue(api: FoundationAuthenticatedApi, accountId: string) {
   const result = await api.rpc(

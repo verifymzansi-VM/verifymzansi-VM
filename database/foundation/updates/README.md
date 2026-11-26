@@ -94,17 +94,15 @@ result or grant changes.
 - **`api.complete_frontend_video_upload`** (service_role only) completes a
   content-bound video upload like `api.complete_frontend_media_upload` and
   stores the length. It refuses a length of 121 s or more, no length, or a
-  picture. Called again for a ready video it is an idempotent replay, and it
-  fills in the length once for a video stored earlier without one.
+  picture. Called again for a ready video it is an idempotent replay.
 - **Checked at submit.** `internal.guard_video_length_submission`, a trigger on
   `private.posts` like the posting terms guard, refuses every move into
   `pending_moderation` (submit, resubmit, reactivation, an edit's submission)
-  while the post has a video longer than its kind allows (events 60 s,
-  everything else 120 s; whole seconds decide) with 22023 `video_too_long` (hint
-  `<seconds>/<limit>`), or a video with no stored length with 22023
-  `video_length_unknown` (the owner uploads it again). A video already on the
-  live post an edit copies keeps passing, so a live post keeps its current video
-  until it ends. Approval and the rest of the lifecycle are unchanged.
+  while the post has a video whose stored length is longer than its kind allows
+  (events 60 s, everything else 120 s; whole seconds decide) with 22023
+  `video_too_long` (hint `<seconds>/<limit>`). A video with no stored length
+  passes: videos stored before this update are not checked. Approval and the
+  rest of the lifecycle are unchanged.
 - **Staff see it.** `api.get_frontend_staff_video_lengths` (staff with
   `queue:view`) returns the stored length of each video of up to 50 posts
   waiting for review whose review claim the caller holds, the same rule as the
@@ -115,12 +113,12 @@ result or grant changes.
 
 ORDER: apply first, then merge. The live website calls neither new command and
 parses nothing this adds. Until the new website is deployed, a video it uploads
-has no stored length, so a post with that video is refused at submit and the
-owner uploads it again; videos stored before the update are treated the same. It
-refuses with 55000 unless the guard has its reviewed body (or this update's).
-Read-only preflight:
-`../preflight/20261126001956_video_length_checked.check.sql` (expect one summary
-row reading "update not applied"); rollback:
+has no stored length and is not checked. Posts already waiting for review when
+the update is applied are not checked either: staff check the preflight's
+"events: N" posts by hand (an event's video at most 1 minute). It refuses with
+55000 unless the guard has its reviewed body (or this update's). Read-only
+preflight: `../preflight/20261126001956_video_length_checked.check.sql` (expect
+one summary row reading "update not applied"); rollback:
 `../rollback/20261126001956_video_length_checked.down.sql` (undo the website
 first; the stored lengths are lost). Behaviour test:
 `scripts/test-foundation-video-length.mjs`.

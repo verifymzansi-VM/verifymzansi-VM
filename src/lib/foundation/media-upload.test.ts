@@ -105,7 +105,7 @@ it("refuses WebM (stored videos are MP4 only) before reserving quota or storing 
   expect(attest).not.toHaveBeenCalled();
   expect(write).not.toHaveBeenCalled();
 });
-it("resolves a committed upload after a lost completion reply without writing twice", async () => {
+it("resolves a committed upload after a lost completion reply without writing or attesting twice", async () => {
   vi.mocked(putImmutableR2Bytes).mockClear();
   let committed = false;
   const rpc = vi.fn(async (_name, args) => ({
@@ -123,13 +123,10 @@ it("resolves a committed upload after a lost completion reply without writing tw
     },
     error: null,
   }));
-  const attest = vi
-    .fn()
-    .mockImplementationOnce(async () => {
-      committed = true;
-      throw new Error("completion reply lost");
-    })
-    .mockResolvedValue({ data: { object_id: objectId, state: "ready" }, error: null });
+  const attest = vi.fn(async () => {
+    committed = true;
+    throw new Error("completion reply lost");
+  });
   const file = new File([fixture().slice().buffer], "fixture.mp4", { type: "video/mp4" });
   await expect(
     uploadFoundationMedia(
@@ -148,11 +145,7 @@ it("resolves a committed upload after a lost completion reply without writing tw
     url: `https://media.verifymzansi.com/${key}`,
   });
   expect(putImmutableR2Bytes).toHaveBeenCalledTimes(1);
-  // A ready video completes again (an idempotent replay that also stores the
-  // length of a video kept before the database stored lengths).
-  expect(attest).toHaveBeenCalledTimes(2);
-  expect(attest.mock.calls[1]).toEqual(attest.mock.calls[0]);
-  expect(attest.mock.calls[1][0]).toBe("complete_frontend_video_upload");
+  expect(attest).toHaveBeenCalledTimes(1);
   expect(rpc.mock.calls[0][1].p_digest).toBe(rpc.mock.calls[1][1].p_digest);
 });
 it("keeps an uncertain transfer reserved instead of rejecting its potentially stored bytes", async () => {

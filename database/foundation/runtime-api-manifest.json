@@ -6638,7 +6638,7 @@
         "authenticated": false,
         "service_role": true
       },
-      "authority": "Trusted upload server only; completes a content-bound video upload exactly like complete_frontend_media_upload (current active owner, exact content receipt, immutable completion metadata) and stores the length it read from the file, 1 to 120999 ms (whole seconds up to 2 minutes); refuses pictures; a repeated call returns the same ready object and stores the length once for a video stored without one; the length never changes afterwards."
+      "authority": "Trusted upload server only; completes a content-bound video upload exactly like complete_frontend_media_upload (current active owner, exact content receipt, immutable completion metadata) and stores the length it read from the file, 1 to 120999 ms (whole seconds up to 2 minutes); refuses pictures; a repeated call returns the same ready object; the length never changes afterwards."
     },
     {
       "name": "get_frontend_staff_video_lengths",
@@ -6657,7 +6657,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current queue view capability and recent authenticator proof; for up to 50 listed posts waiting for review whose review claim the caller holds, each video's object key and stored length (null when not recorded). No owner, contact or identity details."
+      "authority": "Current queue view capability and recent authenticator proof; for up to 50 listed posts waiting for review whose review claim the caller holds, each video's stored length (null when not recorded). No owner, contact or identity details."
     }
   ]
 }

@@ -169,7 +169,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 105. Small lifecycle rules (item 40) (and the group 105 part of 1 row elsewhere) | approved by owner 2026-11-25 (answer: 'Approve with the rewording', the pictures with the sticker email reworded) | Owners of a post with an open report see that it can be hidden now and deleted once staff have looked at the report. Business owners get one email 30 days before a CIPC registered or Seen sticker ends, linking to the business's verification page, and the Seen step there offers the booking form from 60 days before the sticker ends. Free events cannot start more than 12 months ahead (the form already said so). |
 | 106. Removing an admin needs approval; appeal pages off the old backend (item 20, part 1) (and the group 106 part of 1 row elsewhere) | approved by owner 2026-11-25 (answer: 'Approve them') | Nothing for members or visitors. Admins: removing another admin now waits for a different admin's approval on Staff roles, and its header line says so. |
 | 111. Showroom cards with a video and photos show the chosen frame (item 56) (no file rows: data only, `src/lib/showroom/feed.ts`) | approved by owner 2026-11-26 (answer: 'Yes to everything', for the before and after pictures) | Home and area showrooms: a post with both a video and photos plays its video over the frame the owner chose, as on the 27 October cards; before, it showed the first photo there. With no chosen frame it keeps the first photo. Posts without a video look as they do today. |
-| 113. Video length checked by the database (item 39) (no file rows of its own: the group 113 part of 2 rows elsewhere) | awaiting owner | Nothing for members or visitors, except a clear message when a post's video is too long for it (events: 1 minute, other posts: 2 minutes) or was stored before lengths were kept. Staff: the review panel shows each video's length and the limit. |
+| 113. Video length checked by the database (item 39) (no file rows of its own: the group 113 part of 2 rows elsewhere) | awaiting owner | Nothing for members or visitors, except a clear message when a post's video is too long for it (events: 1 minute, other posts: 2 minutes). Staff: the review panel shows each video's length and the limit. |
 
 Questions for the owner:
 
@@ -4428,19 +4428,18 @@ Launch checklist item 39. Database update
 `20261126001956_video_length_checked.sql` (pending, apply first): the upload
 server stores each video's length (read from the file) through the new
 `api.complete_frontend_video_upload`; submitting a post refuses a video longer
-than its kind allows (events 1 minute, everything else 2 minutes) or one whose
-length was never stored; staff read the lengths through
-`api.get_frontend_staff_video_lengths`.
+than its kind allows (events 1 minute, everything else 2 minutes; a video
+stored before the update has no length and is not checked); staff read the
+lengths through `api.get_frontend_staff_video_lengths`.
 
 - Content moderation (staff), a claimed post with a video: under the photos
   and video, 'Video length: 1 min 35 s (limit 2 minutes)'; for an event 'limit
-  1 minute'; 'not recorded' for a video stored before lengths were kept (an
-  edit that keeps a live post's video). Also in the business review, under
+  1 minute'; 'not recorded' for a video stored before lengths were kept.
+  Also in the business review, under
   'Business media'.
 - Sellers, when submitting (create, edit, resubmit or reactivate): a refusal
   in the existing error message, 'Your video is 1 min 30 s; the limit is 1
-  minute', or 'We couldn't check your video's length. Please upload the video
-  again.' Nothing else changes on the posting forms.
+  minute'. Nothing else changes on the posting forms.
 
 File rows: the group 113 part of the
 `src/components/admin/moderation/moderation-preview-panel.tsx` and
