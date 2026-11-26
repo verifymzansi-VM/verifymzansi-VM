@@ -173,6 +173,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 108. Staff told to end an admin role before restricting that person (item 20, part 3) (no file rows: wording outside the checked scope) | approved by owner 2026-11-25 (answer: 'Approve it') | Staff only: on Reports (Ban, Suspend, emergency containment) and Governance (Approve), an action against a person who holds an admin role is refused with 'End this person's admin role first. Another admin must approve that, then try again.' |
 | 109. Staff refund follow-ups (item 56, batch A) (no file rows of its own: the group 109 part of 8 rows elsewhere) | approved by owner 2026-11-26 (answer: 'Yes to everything') | Members: the 'Payment update' email now reads 'A refund or reversal of a payment has been recorded. Review the current details in Billing.' (was 'A payment reversal has been recorded. …'), also right for a part refund that keeps the slot running. Staff on Payments & refunds: the section 14 hint counts paid days from the end of the 20 business days' notice, without free lost days; the refund forms say when lost days were already added, and Add lost days says when money was already refunded for a failure (warnings only); a chargeback says how much was already returned; a refund form opened again after a lost answer sends the same request, so nothing is refunded twice. |
 | 110. Release one blocked phone number (item 21) (and the group 110 part of 1 row elsewhere) | approved by owner 2026-11-26 (answer: 'Yes to everything') | Nothing for members or visitors. Admins and governors, on Restrictions: a 'Blocked phone numbers' card to ask to free one number a ban blocks (number and reason), the waiting requests (a different staff member approves or rejects; the person who asked can withdraw) and the latest releases. The person's ID ban stays. |
+| 112. Lifecycle rule follow-ups (item 56, batch D) | approved by owner 2026-11-26 (answer: 'Yes to both') (no file rows: the group 112 part of 2 existing rows; text outside the checked scope in `src/lib/foundation/restored-post-route.ts`) | Business verification page: dates are shown in South African time, so an owner abroad sees the same 'renew by' date as the reminder email (no change in South Africa). Saving a free event that starts more than 12 months ahead says 'Events can start at most 12 months ahead.' instead of the general message (the form already blocks this). On My posts, while a report from the public is open, the owner can delete the post only once the report is 7 days old and the post's clean-up waiting time has passed; a staff duplicate flag no longer stops it; the message is unchanged. |
 
 Questions for the owner:
 
@@ -3148,7 +3149,7 @@ and one byte over, so the limits register can mark it proven: the profile photo
 
 | File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `src/components/business-verification/owner-verification-panel.test.tsx` | test | Group 76: a test that a 5 MB CIPC PDF is read and one byte more is refused before anything is uploaded. Group 105: tests that the Seen booking form shows from 60 days before the sticker ends, and not earlier. | Nothing (not part of a page) | keep | awaiting owner; group 105 part approved by owner 2026-11-25 (answer: 'Approve with the rewording', the pictures with the sticker email reworded) | 2026-11-21 | 33edae55401c |
+| `src/components/business-verification/owner-verification-panel.test.tsx` | test | Group 76: a test that a 5 MB CIPC PDF is read and one byte more is refused before anything is uploaded. Group 105: tests that the Seen booking form shows from 60 days before the sticker ends, and not earlier. Group 112: a test that the 'renew by' date is shown in South African time for a browser elsewhere. | Nothing (not part of a page) | keep | awaiting owner; group 105 part approved by owner 2026-11-25 (answer: 'Approve with the rewording', the pictures with the sticker email reworded); group 112 part approved by owner 2026-11-26 (answer: 'Yes to both') | 2026-11-26 | ea0e0db6e8ec |
 
 Decision: awaiting owner.
 
@@ -4375,7 +4376,7 @@ Decision: approved by owner 2026-11-25 (answer: 'Approve with the rewording', th
 
 | File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `src/components/business-verification/owner-verification-panel.tsx` | visual | Group 105: the Seen step shows 'renew by' and the existing booking form from 60 days before the Seen sticker ends, as CIPC's renewal does. | Business owners with a Seen sticker ending within 60 days: everything described in group 105. | keep | approved by owner 2026-11-25 (answer: 'Approve with the rewording', the pictures with the sticker email reworded) | 2026-11-25 | d1607e0977cc |
+| `src/components/business-verification/owner-verification-panel.tsx` | visual | Group 105: the Seen step shows 'renew by' and the existing booking form from 60 days before the Seen sticker ends, as CIPC's renewal does. Group 112: every date on the panel is shown in South African time, whatever the browser's time zone. | Business owners with a Seen sticker ending within 60 days: everything described in group 105. Group 112: owners whose browser is set to another time zone may see a date one day different (now the South African date, as in the reminder email); in South Africa nothing changes. | keep | approved by owner 2026-11-25 (answer: 'Approve with the rewording', the pictures with the sticker email reworded); group 112 part approved by owner 2026-11-26 (answer: 'Yes to both') | 2026-11-26 | 99192bec3c77 |
 
 ### 106. Removing an admin needs approval; appeal pages off the old backend (item 20, part 1)
 
@@ -4570,6 +4571,37 @@ Decision: approved by owner 2026-11-26 (answer: 'Yes to everything').
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `src/app/admin/governance/enforcement/phone-releases-card.tsx` | visual | Group 110: the new 'Blocked phone numbers' card: ask to release a number, approve, reject or withdraw a waiting request, and see the latest releases. | Admins and governors on Restrictions: everything described in group 110. | keep | approved by owner 2026-11-26 (answer: 'Yes to everything') | 2026-11-25 | 9562ebd8e1c9 |
 | `src/app/admin/governance/enforcement/phone-releases-card.test.tsx` | test | Group 110: checks what each staff member may do, the stored number sent, the checks before sending, a refusal, the re-verify redirect and the unreadable list. | Nothing (not part of a page) | keep | approved by owner 2026-11-26 (answer: 'Yes to everything') | 2026-11-25 | d91db81a8f08 |
+
+### 112. Lifecycle rule follow-ups (item 56, batch D)
+
+Launch checklist item 56, batch D: follow-ups to group 105 (item 40). Database
+update `20261125225855_lifecycle_rule_follow_ups.sql` (pending, apply first).
+No new screen; one new message and one date change. Text outside the checked
+scope: `src/lib/foundation/restored-post-route.ts`.
+
+- Business verification page (`/dashboard/businesses/<id>/verification`):
+  every date on the panel ('Checked …', '· renew by …', the Seen line and the
+  message dates) is shown in South African time. Before, it followed the
+  browser's time zone, so an owner abroad could see a 'renew by' date one day
+  off from the reminder email, which says South African time. In South Africa
+  nothing changes.
+- Posting or editing a free event: if the database refuses a start more than 12
+  months ahead (the form already refuses it, so only a stale form gets here),
+  the message under the form reads 'Events can start at most 12 months ahead.'
+  instead of 'Check the category, dates, media and posting allowance before
+  submitting'.
+- My posts, deleting a reported post: the message ('Someone reported this post.
+  You can hide it now, and delete it once our team has looked at the report.')
+  is unchanged, but it now shows only for a report from the public, and only
+  until both of these have passed: 7 days from the report, and the scheduled
+  clean-up's waiting time (67 days after the post's last change, or 7 days
+  after its deletion date). A staff duplicate-event flag no longer stops the
+  owner deleting.
+
+Pictures: none (the wording above is the whole change; the date looks the same
+in South Africa).
+
+Decision: approved by owner 2026-11-26 (answer: 'Yes to both').
 
 <!-- frontend-ledger:end -->
 

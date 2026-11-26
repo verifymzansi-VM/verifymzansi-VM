@@ -22,8 +22,9 @@ const lifecycle = z.strictObject({
  * mark sold, reactivate) is refused until an independent release. */
 const STAFF_HOLD_MESSAGE =
   "This post is hidden while our team reviews it. You can't republish, sell or delete it until the review is finished.";
-/** Deleting is refused while a report on the post is open
- * (20261125150215_small_lifecycle_rules.sql); hiding it still works. */
+/** Deleting is refused while a report from the public on the post is open,
+ * as long as the scheduled clean-up waits for it (20261125150215, narrowed by
+ * 20261125225855); hiding it still works. */
 const REPORTED_POST_MESSAGE =
   "Someone reported this post. You can hide it now, and delete it once our team has looked at the report.";
 class ActionRefusal extends Error {
