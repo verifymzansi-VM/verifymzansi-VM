@@ -1,14 +1,17 @@
 -- Generated from the replay of database/foundation by `pnpm db:foundation:snapshot`.
 -- Do not edit; change the schema with a reviewed file in database/foundation/updates/.
 
-CREATE OR REPLACE FUNCTION internal.save_my_invoice_billing(p_invoice_number text, p_revision integer, p_buyer_name text, p_buyer_address text, p_buyer_registration_number text)
+CREATE OR REPLACE FUNCTION internal.save_my_invoice_billing(p_invoice_number text, p_revision integer, p_buyer_name text, p_buyer_address text, p_buyer_registration_number text, p_link_hash text)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$
-declare actor uuid := internal.price_draft_actor(); inv private.customer_invoices; name text; address text; registration text;
+declare actor uuid; caller private.customer_invoices; inv private.customer_invoices; name text; address text; registration text;
 begin
+  if p_link_hash is null then
+    actor := internal.price_draft_actor();
+  end if;
   name := regexp_replace(btrim(coalesce(p_buyer_name, '')), '\s+', ' ', 'g');
   address := regexp_replace(regexp_replace(btrim(coalesce(p_buyer_address, ''), E' \n\r\t'), E'\r\n?', E'\n', 'g'),
     E'[ \t]+', ' ', 'g');
@@ -19,9 +22,12 @@ begin
     raise exception 'business or buyer name (2 to 160 characters), address (5 to 300) and a registration number of letters and digits required'
       using errcode='22023', detail='invoice_billing_invalid';
   end if;
-  inv := internal.lock_my_issued_invoice(actor, p_invoice_number);
+  -- The member's own invoice, or the one a payment link names (20261126053701).
+  caller := internal.customer_invoice_for_caller(p_invoice_number, p_link_hash);
+  actor := caller.account_id;
+  inv := internal.lock_my_issued_invoice(actor, caller.invoice_number);
   if (inv.buyer_name, inv.buyer_address, inv.buyer_registration_number) is not distinct from (name, address, registration) then
-    perform internal.price_draft_actor();
+    if p_link_hash is null then perform internal.price_draft_actor(); end if;
     return internal.customer_invoice_dto(inv, null) || jsonb_build_object('repeated', true);
   end if;
   if inv.revision <> p_revision then
@@ -30,10 +36,13 @@ begin
   update private.customer_invoices set buyer_name = name, buyer_address = address,
       buyer_registration_number = registration, buyer_saved_at = statement_timestamp(), revision = revision + 1
     where id = inv.id returning * into inv;
-  perform internal.price_draft_actor(); -- final live owner/session check after all waits
+  if p_link_hash is null then
+    perform internal.price_draft_actor(); -- final live owner/session check after all waits
+  end if;
   return internal.customer_invoice_dto(inv, null) || jsonb_build_object('repeated', false);
 end;
 $function$;
-alter function internal.save_my_invoice_billing(text,integer,text,text,text) owner to postgres;
-revoke all on function internal.save_my_invoice_billing(text,integer,text,text,text) from public;
-grant execute on function internal.save_my_invoice_billing(text,integer,text,text,text) to authenticated;
+alter function internal.save_my_invoice_billing(text,integer,text,text,text,text) owner to postgres;
+revoke all on function internal.save_my_invoice_billing(text,integer,text,text,text,text) from public;
+grant execute on function internal.save_my_invoice_billing(text,integer,text,text,text,text) to authenticated;
+grant execute on function internal.save_my_invoice_billing(text,integer,text,text,text,text) to service_role;

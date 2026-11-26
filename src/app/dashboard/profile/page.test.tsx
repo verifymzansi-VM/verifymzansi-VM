@@ -353,7 +353,7 @@ describe("ProfilePage", () => {
         "As our Terms say, closing your account counts as a request to cancel all your slots. If you are an individual or sole trader, we work out any credit for unused days after the 20-business-day notice period, minus a R50 fee; a 30-day slot usually returns nothing. Companies and other buyers that are not individuals get no credit.",
         "You are signed out on every device and can't sign in again.",
         "Erasing your profile, posts, enquiries, photos and videos is planned for 17 December 2026, 30 days after closing. If a payment, refund, invoice, report or legal hold is still open, erasure waits until it is settled.",
-        /^Payment records and invoices are kept for 5 years for tax, as the law requires\. Some other records, such as ID-check history, are kept as our/,
+        /^Payment records and invoices are kept for 7 years, as company and tax law require\. Some other records, such as ID-check history, are kept as our/,
         "For your safety, this works only within 15 minutes of signing in with your password or Google.",
       ])
         expect(within(dialog).getByText(text)).toBeInTheDocument();
