@@ -1,13 +1,15 @@
 -- Staff access follow-ups (launch checklist item 56, batch F).
 --
 -- 1. An owner admin invitation is claimed by one helper,
---    internal.claim_owner_admin_invitation_for(uuid). Until now only a new or
+--    internal.claim_owner_admin_invitation_for(uuid,boolean). Until now only a new or
 --    newly verified authenticator app (the trigger on auth.mfa_factors)
 --    claimed it, so a person invited after setting up an authenticator app
 --    was never made an admin. A new trigger on private.owner_admin_invitations
 --    now runs the same helper when the owner adds an invitation: the person
 --    becomes an admin at once when their account already has a verified
---    authenticator app. The checks are unchanged: a confirmed account that can
+--    authenticator app, and (as after any other role grant) their sessions
+--    need a new two-step check before any staff command. The checks are
+--    unchanged: a confirmed account that can
 --    sign in, an unclaimed and unrevoked invitation for its email (only the
 --    account that signed up with it, once one has), and no earlier staff role
 --    (never reactivated). This update claims nothing itself; an invitation
@@ -56,8 +58,11 @@ begin
 end$$;
 
 -- The one place an owner admin invitation is claimed. Returns whether this
--- call made the account an admin.
-create or replace function internal.claim_owner_admin_invitation_for(p_user uuid)
+-- call made the account an admin. p_new_check: the person's sessions need a
+-- new two-step check before any staff command (as internal.apply_frontend_staff_role
+-- sets); used when the owner adds the invitation, not when the authenticator
+-- app check that claims it has just happened.
+create or replace function internal.claim_owner_admin_invitation_for(p_user uuid, p_new_check boolean default false)
 returns boolean language plpgsql security definer set search_path to 'pg_catalog' as $$
 declare invitation private.owner_admin_invitations; account_email text;
 begin
@@ -85,13 +90,14 @@ begin
   if exists(select 1 from private.staff_roles r where r.user_id=p_user) then
     return false; -- A prior/revoked assignment is never reactivated by an invitation.
   end if;
-  insert into private.staff_roles(user_id,role) values(p_user,'admin');
+  insert into private.staff_roles(user_id,role,frontend_mfa_not_before)
+    values(p_user,'admin',case when p_new_check then statement_timestamp() end);
   update private.owner_admin_invitations set claimed_by=p_user,claimed_at=now()
     where email=invitation.email;
   return true;
 end$$;
-alter function internal.claim_owner_admin_invitation_for(uuid) owner to postgres;
-revoke all on function internal.claim_owner_admin_invitation_for(uuid) from public,anon,authenticated,service_role;
+alter function internal.claim_owner_admin_invitation_for(uuid,boolean) owner to postgres;
+revoke all on function internal.claim_owner_admin_invitation_for(uuid,boolean) from public,anon,authenticated,service_role;
 
 -- A new or newly verified authenticator app (trigger on auth.mfa_factors).
 create or replace function internal.claim_owner_admin_invitation()
@@ -103,12 +109,13 @@ begin
 end$$;
 revoke all on function internal.claim_owner_admin_invitation() from public,anon,authenticated,service_role;
 
--- A new invitation for an account that already has a verified authenticator app.
+-- A new invitation for an account that already has a verified authenticator
+-- app: its existing sessions need a new two-step check before staff commands.
 create or replace function internal.claim_new_owner_admin_invitation()
 returns trigger language plpgsql security definer set search_path to 'pg_catalog' as $$
 begin
   if new.claimed_at is not null or new.revoked_at is not null then return new; end if;
-  perform internal.claim_owner_admin_invitation_for(u.id) from auth.users u
+  perform internal.claim_owner_admin_invitation_for(u.id, true) from auth.users u
     where lower(u.email)=new.email and (new.signed_up_at is null or u.id=new.signed_up_by)
     order by u.id;
   return new;

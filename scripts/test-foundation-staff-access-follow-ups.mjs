@@ -52,7 +52,28 @@ const assertSummary = (detail, pattern, waiting, withApp) => {
 const SETUP = { update: UPDATE, label: "staffaccess", title: "Staff access follow-ups" };
 await runTwoAdminUpdateCheck(SETUP, async (run) => {
   const { database, check, kit, world } = run;
-  const { q, json, fails, service, preflight } = kit;
+  const { q, json, fails, service, staff, preflight } = kit;
+  // How many admin capabilities internal.staff_actor grants `who`'s session
+  // with an authenticator app check at `totpAt` (Unix seconds).
+  q(`create function vmtest.admin_capabilities_passing() returns integer language plpgsql
+    security definer set search_path to pg_catalog as $$
+    declare c text; n integer:=0; begin
+      for c in select capability from private.staff_capabilities where role='admin' order by capability loop
+        begin perform internal.staff_actor(c); n:=n+1; exception when others then null; end;
+      end loop;
+      return n;
+    end$$;
+    grant usage on schema vmtest to authenticated;
+    grant execute on function vmtest.admin_capabilities_passing() to authenticated;`);
+  const adminCapabilities = Number(
+    q(`select count(*) from private.staff_capabilities where role='admin';`)
+  );
+  const capabilitiesPassing = (who, totpAt) =>
+    Number(q(staff(who, "select vmtest.admin_capabilities_passing();", totpAt)));
+  const checkAfter = (who) =>
+    q(
+      `select coalesce(frontend_mfa_not_before::text,'none') from private.staff_roles where user_id='${who.id}' and revoked_at is null;`
+    );
   const { session, sessionAfter } = psqlSessions(database);
   const bodyMd5 = (signature) => functionBodyMd5(kit, signature);
   const assertBodies = (index) => {
@@ -138,8 +159,27 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
       invite(person);
       assert.equal(role(person), "admin");
       assert.equal(claimedBy(person), person.id);
+      assert.notEqual(checkAfter(person), "none");
     }
   );
+
+  await check("after a claim by invitation, an old session needs a new two-step check", () => {
+    const person = world.user("staffaccess-old-session");
+    addApp(person);
+    q(`update auth.sessions set aal='aal2' where id='${person.session}';`);
+    const tenMinutesAgo = Math.floor(Date.now() / 1000) - 600;
+    invite(person);
+    assert.equal(role(person), "admin");
+    assert.ok(adminCapabilities > 0);
+    assert.equal(capabilitiesPassing(person, tenMinutesAgo), 0);
+    // A check at (or after) the moment of the claim passes every capability.
+    const fresh = Number(
+      q(
+        `select ceil(extract(epoch from frontend_mfa_not_before))::bigint from private.staff_roles where user_id='${person.id}' and revoked_at is null;`
+      )
+    );
+    assert.equal(capabilitiesPassing(person, fresh), adminCapabilities);
+  });
 
   await check("without an authenticator app the invitation waits; a new app claims it", () => {
     const person = world.user("staffaccess-new-app");
@@ -155,6 +195,9 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
     addApp(later);
     assert.equal(role(later), "admin");
     assert.equal(claimedBy(later), later.id);
+    // The authenticator-app check that claimed it has just happened.
+    assert.equal(checkAfter(person), "none");
+    assert.equal(checkAfter(later), "none");
   });
 
   await check(
@@ -253,7 +296,7 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
       json(`select jsonb_build_object('service',has_function_privilege('service_role','api.close_account_evidence(uuid)','execute'),
         'anon',has_function_privilege('anon','api.close_account_evidence(uuid)','execute'),
         'authenticated',has_function_privilege('authenticated','api.close_account_evidence(uuid)','execute'),
-        'helper',has_function_privilege('service_role','internal.claim_owner_admin_invitation_for(uuid)','execute'),
+        'helper',has_function_privilege('service_role','internal.claim_owner_admin_invitation_for(uuid,boolean)','execute'),
         'trigger',has_function_privilege('authenticated','internal.claim_new_owner_admin_invitation()','execute'));`);
     assert.deepEqual(grants, {
       service: true,

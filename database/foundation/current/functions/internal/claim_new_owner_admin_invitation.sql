@@ -9,7 +9,7 @@ CREATE OR REPLACE FUNCTION internal.claim_new_owner_admin_invitation()
 AS $function$
 begin
   if new.claimed_at is not null or new.revoked_at is not null then return new; end if;
-  perform internal.claim_owner_admin_invitation_for(u.id) from auth.users u
+  perform internal.claim_owner_admin_invitation_for(u.id, true) from auth.users u
     where lower(u.email)=new.email and (new.signed_up_at is null or u.id=new.signed_up_by)
     order by u.id;
   return new;

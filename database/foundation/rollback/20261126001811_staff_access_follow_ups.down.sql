@@ -60,7 +60,7 @@ end;
 $function$;
 revoke all on function internal.claim_owner_admin_invitation() from public,anon,authenticated,service_role;
 
-drop function if exists internal.claim_owner_admin_invitation_for(uuid);
+drop function if exists internal.claim_owner_admin_invitation_for(uuid,boolean);
 
 create or replace function internal.close_account_evidence(p_user_id uuid)
 returns jsonb language plpgsql security definer set search_path to 'pg_catalog' as $function$
