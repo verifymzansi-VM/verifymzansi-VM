@@ -20,6 +20,7 @@ create table private.owner_admin_invitations (
 alter table private.owner_admin_invitations owner to postgres;
 alter table private.owner_admin_invitations enable row level security;
 CREATE INDEX owner_admin_invitations_signed_up_by_idx ON private.owner_admin_invitations USING btree (signed_up_by) WHERE (signed_up_by IS NOT NULL);
+CREATE TRIGGER claim_new_owner_admin_invitation AFTER INSERT ON private.owner_admin_invitations FOR EACH ROW EXECUTE FUNCTION internal.claim_new_owner_admin_invitation();
 create policy owner_admin_signup_hook on private.owner_admin_invitations as permissive for select to supabase_auth_admin
   using (true);
 revoke all on private.owner_admin_invitations from public;

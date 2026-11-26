@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import { hasDatabaseReason } from "./error-reasons";
+import { videoLengthRefusalMessage } from "./video-length-refusal";
 
 const request = z.strictObject({
   id: z.uuid().transform((value) => value.toLowerCase()),
@@ -28,6 +29,8 @@ export async function submitFoundationPost(api: FoundationAuthenticatedApi, inpu
     }
   );
   if (error) {
+    const videoLength = videoLengthRefusalMessage(error);
+    if (videoLength) throw new Error(videoLength);
     if (error.code === "PT409" && hasDatabaseReason(error, "posting_terms_required"))
       throw new Error("Review and accept the current posting terms before submitting");
     if (error.code === "PT503" && hasDatabaseReason(error, "posting_terms_unavailable"))

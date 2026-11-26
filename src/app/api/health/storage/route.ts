@@ -150,11 +150,10 @@ export async function GET(request: Request) {
     };
   }
 
-  // Check 6: Encryption test (same path as uploadKycDocument)
+  // Check 6: Encryption test (the encryption used for private evidence files)
   try {
-    const { encryptFile } = await import("@/lib/utils/encryption");
-    const testBlob = new Blob(["test-data"], { type: "application/octet-stream" });
-    await encryptFile(testBlob);
+    const { encryptData } = await import("@/lib/utils/encryption");
+    await encryptData(Buffer.from("test-data"));
     diagnostics.encryptionTest = { success: true };
   } catch (err) {
     diagnostics.encryptionTest = {

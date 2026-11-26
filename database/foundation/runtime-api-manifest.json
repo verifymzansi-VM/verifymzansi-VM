@@ -487,7 +487,8 @@
       "name": "get_payment_receipt",
       "updates": [
         "updates/20261113021223_staff_payment_fixes.sql",
-        "updates/20261113162457_staff_invoice_payments.sql"
+        "updates/20261113162457_staff_invoice_payments.sql",
+        "updates/20261126053701_invoice_pay_link.sql"
       ],
       "arguments": [
         {
@@ -503,7 +504,7 @@
         "authenticated": false,
         "service_role": true
       },
-      "authority": "Service-only read for the receipt email: one payment's amount, currency, completion time, product kind, label, slot count, status, delivery status, merchant reference, Ozow transaction id, payment method (ozow or invoice), the bank reference of a recorded bank transfer and invoice (number, description, issue time), with its owner id; null for an unknown payment. No contact or identity details."
+      "authority": "Service-only read for the receipt email: one payment's amount, currency, completion time, product kind, label, slot count, status, delivery status, merchant reference, Ozow transaction id, payment method (ozow or invoice), the bank reference of a recorded bank transfer and invoice (number, description, issue time), with its owner id; null for an unknown payment. No contact or identity details. Adds the customer invoice number (VM-YYYY-NNNNNN) the payment paid, from its snapshot, or null for a checkout (20261126053701)."
     },
     {
       "name": "record_staff_invoice_payment",
@@ -4558,7 +4559,8 @@
       "name": "get_my_invoice",
       "updates": [
         "updates/20261114041000_customer_invoice_pay_now.sql",
-        "updates/20261118044440_bank_transfer_expiry.sql"
+        "updates/20261118044440_bank_transfer_expiry.sql",
+        "updates/20261126053701_invoice_pay_link.sql"
       ],
       "arguments": [
         {
@@ -4578,7 +4580,10 @@
     },
     {
       "name": "save_my_invoice_billing",
-      "updates": ["updates/20261114041000_customer_invoice_pay_now.sql"],
+      "updates": [
+        "updates/20261114041000_customer_invoice_pay_now.sql",
+        "updates/20261126053701_invoice_pay_link.sql"
+      ],
       "arguments": [
         {
           "name": "p_invoice_number",
@@ -4620,7 +4625,8 @@
       "updates": [
         "updates/20261114041000_customer_invoice_pay_now.sql",
         "updates/20261117082020_online_payment_limit.sql",
-        "updates/20261118044440_bank_transfer_expiry.sql"
+        "updates/20261118044440_bank_transfer_expiry.sql",
+        "updates/20261126053701_invoice_pay_link.sql"
       ],
       "arguments": [
         {
@@ -4647,6 +4653,117 @@
         "service_role": false
       },
       "authority": "A signed-in account with current access and a live session, only for its own invoices (any other number, or a malformed one, reads as not found): an unpaid, not void invoice with billing details, the cooling-off box ticked (recorded once with time and wording version), the total shown equal to the invoice total and at most internal.online_payment_max_cents() (above it the invoice is paid by bank transfer only: PT413 online_payment_above_limit), the plan still on sale at the invoice price, an accepted ID review and room within the Individual slot limit counting open checkouts: returns the attempt whose Ozow page is open or that was never sent to Ozow, refuses while an attempt is still being checked or a bank transfer to the invoice waits for confirmation (one that has waited 14 days has expired and no longer holds it) or another payment for the same slot term is open at Ozow, and otherwise starts an ordinary pending Ozow payment of the invoice total with one line per slot and the invoice number as its reference (attempt n after the first: '<number>-n'; at most 20). Settled by the existing Ozow notice and status check; completion pays the invoice."
+    },
+    {
+      "name": "get_invoice_by_link",
+      "updates": ["updates/20261126053701_invoice_pay_link.sql"],
+      "arguments": [
+        {
+          "name": "p_token_hash",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "The website's server only, for the payer of an emailed invoice who is not signed in: p_token_hash is the SHA-256 (hex) of the invoice's current payment link (a missing or unknown hash, a link more than 30 days past the invoice's due date, or an account that is erased, closed or blocked, reads as not found, PT404 invoice_unavailable; any role but the service role is refused, 42501); that invoice's account then acts exactly as with api.get_my_invoice, with the same answer."
+    },
+    {
+      "name": "save_invoice_billing_by_link",
+      "updates": ["updates/20261126053701_invoice_pay_link.sql"],
+      "arguments": [
+        {
+          "name": "p_token_hash",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_revision",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_buyer_name",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_buyer_address",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_buyer_registration_number",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "The website's server only, for the payer of an emailed invoice who is not signed in: p_token_hash is the SHA-256 (hex) of the invoice's current payment link (a missing or unknown hash, a link more than 30 days past the invoice's due date, or an account that is erased, closed or blocked, reads as not found, PT404 invoice_unavailable; any role but the service role is refused, 42501); that invoice's account then acts exactly as with api.save_my_invoice_billing (an unpaid invoice, at its current revision)."
+    },
+    {
+      "name": "start_invoice_payment_by_link",
+      "updates": ["updates/20261126053701_invoice_pay_link.sql"],
+      "arguments": [
+        {
+          "name": "p_token_hash",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_expected_total_cents",
+          "sqlType": "bigint",
+          "optional": false
+        },
+        {
+          "name": "p_cooling_off_consent",
+          "sqlType": "boolean",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "The website's server only, for the payer of an emailed invoice who is not signed in: p_token_hash is the SHA-256 (hex) of the invoice's current payment link (a missing or unknown hash, a link more than 30 days past the invoice's due date, or an account that is erased, closed or blocked, reads as not found, PT404 invoice_unavailable; any role but the service role is refused, 42501); that invoice's account then acts exactly as with api.start_invoice_payment (every rule of the member's Pay now), and the answer adds owner_id, the invoice's account, for the server's Ozow request (claim_checkout_request, complete_checkout_request)."
+    },
+    {
+      "name": "prepare_invoice_email",
+      "updates": ["updates/20261126053701_invoice_pay_link.sql"],
+      "arguments": [
+        {
+          "name": "p_invoice_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_token_hash",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only step of the invoice email job, just before sending: on an unpaid invoice of a linked account it stores p_token_hash (SHA-256 hex of the new payment link; it replaces the link of an earlier sending) and answers the invoice number, status, account id, description, total and due date; a paid or void invoice is answered without storing anything (the job does not send it). An erased account's or unknown invoice is PT404 invoice_unavailable; a malformed hash 22023."
     },
     {
       "name": "record_staff_invoice_transfer",
@@ -6600,6 +6717,64 @@
         "service_role": false
       },
       "authority": "Current payment view capability; for up to 50 listed payments, the amount refunded and left to refund (per payment and per slot), each slot's paid start and end, until when Ozow refunds it, and whether it is the account's first purchase with the last day to ask. No contact or identity details."
+    },
+    {
+      "name": "complete_frontend_video_upload",
+      "updates": ["updates/20261126001956_video_length_checked.sql"],
+      "arguments": [
+        {
+          "name": "p_object_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_size",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_sha256",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_mime",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_duration_ms",
+          "sqlType": "integer",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Trusted upload server only; completes a content-bound video upload exactly like complete_frontend_media_upload (current active owner, exact content receipt, immutable completion metadata) and stores the length it read from the file, 1 to 120999 ms (whole seconds up to 2 minutes); refuses pictures; a repeated call returns the same ready object; the length never changes afterwards."
+    },
+    {
+      "name": "get_frontend_staff_video_lengths",
+      "updates": ["updates/20261126001956_video_length_checked.sql"],
+      "arguments": [
+        {
+          "name": "p_posts",
+          "sqlType": "uuid[]",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current queue view capability and recent authenticator proof; for up to 50 listed posts waiting for review whose review claim the caller holds, each video's stored length (null when not recorded). No owner, contact or identity details."
     },
     {
       "name": "propose_phone_number_release",

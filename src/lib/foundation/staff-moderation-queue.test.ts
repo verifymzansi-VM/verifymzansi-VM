@@ -311,6 +311,97 @@ describe("readStaffModerationQueue", () => {
     expect(read.allItems.find((i) => i.id === uuid(102))?.copy_facts).toBeUndefined();
   });
 
+  describe("video lengths", () => {
+    const video = (n: number) => ({
+      object_id: uuid(300 + n),
+      object_key: `media/${uuid(400 + n)}`,
+      kind: "video",
+      state: "ready",
+      purpose: "video",
+      position: 0,
+      width: null,
+      height: null,
+      focal_x: null,
+      focal_y: null,
+    });
+    const withVideo = (n: number, kind: Kind, area: Area) =>
+      summary(n, {
+        kind,
+        area,
+        owner_id: owner,
+        claim: myClaim,
+        review: ownerPost(uuid(100 + n), kind, area, { media: [video(n)] }),
+      });
+    const lengthsCall = (answer: unknown) => {
+      rpc.mockResolvedValueOnce({
+        data: queue(
+          [
+            withVideo(1, "listing", "market"),
+            claimed(2),
+            withVideo(3, "event", "tourism_events"),
+            summary(4, { claim: otherClaim }),
+          ],
+          { my_claims: 3 }
+        ),
+        error: null,
+      });
+      rpc.mockResolvedValueOnce(answer);
+      return readStaffModerationQueue(api, staff);
+    };
+    const item = (read: Awaited<ReturnType<typeof readStaffModerationQueue>>, n: number) =>
+      read.allItems.find((i) => i.id === uuid(100 + n));
+
+    it("asks only for held posts with a video; whole seconds in media order, each kind's limit", async () => {
+      const read = await lengthsCall({
+        data: [
+          { post_id: uuid(101), duration_ms: 95_999 },
+          { post_id: uuid(103), duration_ms: null },
+          { post_id: uuid(103), duration_ms: 1 },
+        ],
+        error: null,
+      });
+      expect(rpc).toHaveBeenLastCalledWith(
+        "get_frontend_staff_video_lengths",
+        { p_posts: [uuid(101), uuid(103)] },
+        { get: false }
+      );
+      expect(item(read, 1)?.video_lengths).toEqual({
+        limitSeconds: 120,
+        videos: [{ seconds: 95 }],
+      });
+      expect(item(read, 3)?.video_lengths).toEqual({
+        limitSeconds: 60,
+        videos: [{ seconds: null }, { seconds: 0 }],
+      });
+      expect(item(read, 2)?.video_lengths).toBeUndefined();
+    });
+
+    it("asks nothing when the reviewer holds no post with a video", async () => {
+      rpc.mockResolvedValueOnce({ data: queue([claimed(1)], { my_claims: 1 }), error: null });
+      await readStaffModerationQueue(api, staff);
+      expect(rpc).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+      ["a refused read", { data: null, error: { code: "42501" } }],
+      [
+        "an unexpected shape",
+        {
+          data: [{ post_id: uuid(101), object_key: `media/${uuid(401)}`, duration_ms: 1000 }],
+          error: null,
+        },
+      ],
+      [
+        "a length over the limit",
+        { data: [{ post_id: uuid(101), duration_ms: 121_000 }], error: null },
+      ],
+    ])("leaves the lengths out after %s, without failing the queue", async (_case, answer) => {
+      const read = await lengthsCall(answer);
+      expect(read.allItems).toHaveLength(4);
+      expect(read.allItems.every((i) => i.video_lengths === undefined)).toBe(true);
+    });
+  });
+
   // Deliberately pins today's behaviour: this reader treats EVERY 42501 as a
   // second-factor refusal (mfaRequired), whatever the message says, so a lost
   // role also sends staff to re-verify first. Change this test only together

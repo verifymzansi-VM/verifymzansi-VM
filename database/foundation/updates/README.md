@@ -80,6 +80,247 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Catalogue filters run in the database, 26 November 2026
+
+`20261126062428_catalogue_filters_in_database.sql` is pending (see the applied
+register). Launch checklist item 29. No table, column, index, trigger, command,
+argument or grant is added or removed; two existing function bodies are
+replaced. Three public lists filtered, merged or paged in the website after
+reading far more cards than they showed: an organisation's supported businesses
+(`/organisation/<slug>` and `/mzansi-business?org=`, which missed any business
+past position 4,800), a text search under Businesses without a category (two
+reads merged in the website, up to 480 results) and Video mode (four pages of 50
+full cards per section, only to use their ids).
+
+- **`internal.search_posts`** (full body; behind `api.search_posts` and
+  `internal.search_post_cards`) gains five optional request keys, so each list
+  is one filtered, ordered, counted and paged call: `organisation` (a slug of a
+  listed organisation; an unknown or unlisted slug matches nothing), `programme`
+  (a uuid, needs `organisation`), `sponsored` (true or false, needs
+  `organisation`; only posts with a sponsorship by that organisation running
+  now), `kind` (listing, business or event; business without an area is the
+  Business area plus the tourism businesses) and `ids_only` (true or false:
+  `items` is then a list of post ids in the same order, and a page may hold 1 to
+  200 instead of 1 to 48). Filters, order, totals, offsets (at most 4,800),
+  cursors and replies to requests without the new keys are unchanged.
+- **`internal.search_post_cards`** (full body) refuses `ids_only` (22023), so a
+  card page stays at most 48 cards.
+- **Guards.** The update refuses with 55000 unless both functions have a
+  reviewed body (or this update's), by md5 of the body with line ends
+  normalised: `internal.search_posts` `590ffdf23439ddbf6772f70afd199740` becomes
+  `3084bc16bb1a0fe19ed94f19a3e23089`; `internal.search_post_cards`
+  `6bb60ea1828671af6f73e785d217c8ba` becomes `4d8eb454d3e5650e8bf9f553ae0c0b50`.
+
+ORDER: **apply-first** (apply, then merge). The website release from the same
+pull request sends the new keys, which the earlier body refuses as unknown; the
+earlier website never sends them and gets the same replies as before. Read-only
+preflight: `../preflight/20261126062428_catalogue_filters_in_database.check.sql`
+(expect "update not applied" as the only row; run it again after the update,
+expecting "already applied"); rollback:
+`../rollback/20261126062428_catalogue_filters_in_database.down.sql` (puts the
+earlier bodies back byte for byte; undo the website release first, and it
+refuses with 55000 when a later update changed either function).
+
+## Invoice payment link, 26 November 2026
+
+`20261126053701_invoice_pay_link.sql` was applied on 26 November 2026 at 20:30
+UTC (see the applied register). Launch checklist items 38 and 34 (inventory
+A28): a customer invoice is emailed with a link that lets its payer see and pay
+it without signing in, and the receipt names the invoice it paid.
+
+- **The link.** `private.customer_invoices.pay_link_hash` keeps the SHA-256
+  (hex) of the invoice's current link, unique where set. The website's email job
+  makes the link (32 random bytes) just before it sends, and stores its hash
+  with the new service command `api.prepare_invoice_email` (only while the
+  invoice is unpaid); each sending replaces the hash, so the latest email holds
+  the live link.
+- **The email.** `internal.notify_invoice_issued` (full body) also queues an
+  outbox row of the new kind `invoice_issued`, one per invoice, for every way
+  staff issue an invoice; `internal.claim_supported_notification_outbox` (full
+  body) accepts the kind and gives no recipient once the account is closed.
+- **Paying by link.** New service commands `api.get_invoice_by_link`,
+  `api.save_invoice_billing_by_link` and `api.start_invoice_payment_by_link`
+  (the website's server only). They reach the same functions as the member's
+  commands: `internal.get_my_invoice`, `internal.save_my_invoice_billing` and
+  `internal.start_invoice_payment` gain `p_link_hash` (old signatures dropped;
+  the member's `api` commands keep their arguments and grants and pass null).
+  With a hash (service role only, else 42501), new
+  `internal.customer_invoice_for_caller` finds the invoice whose link it is, of
+  an account that can still use the site, until 30 days after the invoice's due
+  date (anything else is not found), and that account acts with every rule of
+  the member's Pay now. The read is the member's read; Pay now also answers
+  `owner_id` for the server's Ozow request.
+- **The receipt.** `internal.get_payment_receipt` (full body) adds
+  `customer_invoice_number` (from the payment's snapshot), null for a checkout.
+
+ORDER: **apply-first** (apply, then merge): the release calls the new commands
+and the deploy gate checks them. The live website leaves the new outbox kind
+unclaimed until the release is deployed, and its receipt reader ignores the
+extra field. Read-only preflight:
+`../preflight/20261126053701_invoice_pay_link.check.sql` (expect "invoice
+payment link: update not applied"); rollback:
+`../rollback/20261126053701_invoice_pay_link.down.sql` (refused once an invoice
+email was queued; deploy a website without the payment link first).
+
+## Keep-for periods for the newer personal-data tables, 26 November 2026
+
+`20261126053631_keep_for_periods.sql` was applied on 26 November 2026 at 20:15
+UTC (see the applied register). Launch checklist item 51 (roadmap M7.4). No
+table, column, trigger, command or grant changes; six existing function bodies
+are replaced, all used by the daily retention sweep (`api.run_retention`,
+service only).
+
+- **Payment records: 7 years.** `internal.retention_tax_year_due` keeps payment,
+  invoice and payout records 7 years (was 5) from the end of the tax year (1
+  March to the end of February). Everything `internal.retention_commerce` dates
+  by it follows. The cooling-off tick and the Terms version are stored in each
+  payment's snapshot, so they are kept with it.
+- **Privacy request proofs: 3 years** after the request closed (was 5;
+  `internal.retention_privacy_requests`).
+- **`internal.retention_operations`**: contact-form messages 12 months after
+  they were resolved (open ones are kept); owner administrator invitations 12
+  months after they were revoked, or 12 months after the claimant's account was
+  erased (a claimed invitation is the owner's approval the staff role commands
+  require); runtime switch and sign-up mode change logs 5 years.
+- **`internal.retention_staff_records`**: decided appeals 2 years after the
+  decision, once the decision appealed is gone (while it stands, its appeal
+  stops a second one); released content holds 2 years after release, never while
+  an appeal against them waits; staff role change proposals 5 years after they
+  were decided or expired; evidence case claim events 2 years; raised slot
+  limits 2 years after they ended (`internal.individual_slot_limit_guard` now
+  lets the sweep delete them). A closed report (2 years, unchanged) is not
+  deleted while an appeal against a warning it gave waits.
+- **`internal.retention_verification`**: reasons for returning an ID 12 months
+  after the return, unless a legal hold or fraud hold keeps them. The five-year
+  sweep of closed accounts also deletes them by case: a kept return used to stop
+  that sweep from deleting its case (the foreign key restricts) and failed the
+  whole retention run.
+
+Not changed here: account closures (they date the identity periods; deleted with
+the Auth user), suspensions and bans, business check notes and partner records
+(separate checklist items). ORDER: apply first, then merge (safe either way:
+nothing is old enough to be deleted yet). The website release states 7 years for
+payment records, 3 years for privacy request records and 12 months for
+contact-form messages. Read-only preflight:
+`../preflight/20261126053631_keep_for_periods.check.sql` (expect one summary row
+reading "update not applied" with every count 0); rollback:
+`../rollback/20261126053631_keep_for_periods.down.sql` (deleted records stay
+deleted). Behaviour test: `scripts/test-foundation-keep-for-periods.mjs`.
+
+## Video length checked by the database, 26 November 2026
+
+`20261126001956_video_length_checked.sql` was applied on 26 November 2026 at
+18:31 UTC (see the applied register). Launch checklist item 39 (roadmap M4.4
+part B). One new column, two new commands, one new trigger and one replaced
+trigger body; no command, argument, result or grant changes.
+
+- **The length is stored.** `private.media_objects.duration_ms` holds a video's
+  length in whole milliseconds, as the upload server read it from the file (null
+  for pictures and for videos stored before this update). Once set it never
+  changes (`internal.media_object_transition_guard`).
+- **`api.complete_frontend_video_upload`** (service_role only) completes a
+  content-bound video upload like `api.complete_frontend_media_upload` and
+  stores the length. It refuses a length of 121 s or more, no length, or a
+  picture. Called again for a ready video it is an idempotent replay.
+- **Checked at submit.** `internal.guard_video_length_submission`, a trigger on
+  `private.posts` like the posting terms guard, refuses every move into
+  `pending_moderation` (submit, resubmit, reactivation, an edit's submission)
+  while the post has a video whose stored length is longer than its kind allows
+  (events 60 s, everything else 120 s; whole seconds decide) with 22023
+  `video_too_long` (hint `<seconds>/<limit>`). A video with no stored length
+  passes: videos stored before this update are not checked. Approval and the
+  rest of the lifecycle are unchanged.
+- **Staff see it.** `api.get_frontend_staff_video_lengths` (staff with
+  `queue:view`) returns the stored length of each video of up to 50 posts
+  waiting for review whose review claim the caller holds, the same rule as the
+  queue's review data.
+- **Storage** already grows with paid slots (`internal.media_storage_allowance`:
+  (2 x package slots + 10) x 100 MB); the behaviour test proves that 100 slots
+  hold 100 two-minute videos. Unchanged.
+
+ORDER: apply first, then merge. The live website calls neither new command and
+parses nothing this adds. Until the new website is deployed, a video it uploads
+has no stored length and is not checked. Posts already waiting for review when
+the update is applied are not checked either: staff check the preflight's
+"events: N" posts by hand (an event's video at most 1 minute). It refuses with
+55000 unless the guard has its reviewed body (or this update's). Read-only
+preflight: `../preflight/20261126001956_video_length_checked.check.sql` (expect
+one summary row reading "update not applied"); rollback:
+`../rollback/20261126001956_video_length_checked.down.sql` (undo the website
+first; the stored lengths are lost). Behaviour test:
+`scripts/test-foundation-video-length.mjs`.
+
+## Staff access follow-ups, 26 November 2026
+
+`20261126001811_staff_access_follow_ups.sql` was applied on 26 November 2026 at
+16:50 UTC (see the applied register). Launch checklist item 56, batch F.
+
+- **An invitation for someone who already has an authenticator app.** An owner
+  admin invitation was claimed only when an authenticator app was added or
+  verified (the trigger on `auth.mfa_factors`), so a person invited after
+  setting one up never became an admin. Both paths now use one helper,
+  `internal.claim_owner_admin_invitation_for(uuid)` (no API role may run it),
+  and a new trigger on `private.owner_admin_invitations` runs it when the owner
+  adds an invitation: the person becomes an admin at once when their account
+  already has a verified authenticator app. The checks are unchanged: a
+  confirmed account that can sign in, an unclaimed and unrevoked invitation for
+  its email (only the account that signed up with it, once one has), and no
+  earlier staff role, which an invitation never reactivates.
+- **A new two-step check after every claim.** A claimed role sets
+  `frontend_mfa_not_before` to the moment of the claim, as every other role
+  grant does (`internal.apply_frontend_staff_role`), on both paths: the person's
+  sessions pass no staff command until they check their authenticator app again
+  (this covers an older session when a second app is enrolled).
+- **The update claims no waiting invitation itself**: making someone an admin is
+  the owner's step. The preflight counts waiting invitations whose account
+  already has an authenticator app. If that is above 0 at apply time, ask the
+  owner. For each one the owner approves, add it again in the owner's SQL
+  session, which fires the new trigger, keeping who signed up with it:
+
+  ```sql
+  with d as (delete from private.owner_admin_invitations where lower(email)=lower('<email>') and claimed_at is null and revoked_at is null returning email, signed_up_at, signed_up_by) insert into private.owner_admin_invitations(email, signed_up_at, signed_up_by) select email, signed_up_at, signed_up_by from d returning email;
+  ```
+
+  Revoke each one the owner does not approve (both snippets compare addresses
+  ignoring capitals and show the address they changed; none shown means no
+  match):
+  `update private.owner_admin_invitations set revoked_at = now() where lower(email) = lower('<email>') and claimed_at is null and revoked_at is null returning email;`.
+
+- **An invitation refused while the person was restricted** (banned, suspended,
+  closed or unable to sign in when it was added or their app was checked) stays
+  waiting. Once the restriction ends, add it again the same way.
+- **Claims take the per-person lock.** The helper first takes
+  `internal.lock_evidence_subject` (the lock of ban approval, account closure,
+  erasure orders and staff role changes), then reads whether the account can
+  sign in, then locks the staff roles table, in the order staff role changes
+  use. An invitation claimed at the moment a ban is approved, the account is
+  closed or an erasure is ordered waits and then sees it.
+  `internal.order_account_erasure` already took that lock before its staff check
+  and is unchanged. That this never leaves a banned admin also relies on
+  `20261125174942_end_admin_role_before_restriction.sql` (pull request #377,
+  applied before this update): when the claim comes first, the ban approval
+  waits for it and then refuses to restrict the new admin.
+- **No closure of a staff account through the service command.**
+  `internal.close_account_evidence` (behind the service-only
+  `api.close_account_evidence`, which nothing in the website or workers calls,
+  and `internal.close_account_now`) refuses an account with an active staff
+  role: PT409 "end the staff roles of this account first" (detail
+  `staff_account`), the check `internal.order_account_erasure` makes, under the
+  same lock. Members closing their own account and staff erasure orders already
+  refused such accounts.
+
+Expand only: two replaced bodies (`internal.claim_owner_admin_invitation()`,
+`internal.close_account_evidence(uuid)`), one new helper, one new trigger
+function (`internal.claim_new_owner_admin_invitation()`) and its trigger; no
+command, argument, result or grant changes. ORDER: **apply-first** (apply, then
+merge); no website code depends on it. The same pull request adds
+`/api/foundation/staff` to the proxy's staff check (`src/proxy-handler.ts`,
+`src/lib/foundation/page-access.ts`), as for `/api/admin`. Read-only preflight:
+`../preflight/20261126001811_staff_access_follow_ups.check.sql`; rollback:
+`../rollback/20261126001811_staff_access_follow_ups.down.sql` (removes the
+trigger, its function and the helper, and puts the two earlier bodies back).
+Behaviour checks: `scripts/test-foundation-staff-access-follow-ups.mjs`.
+
 ## Lifecycle rule follow-ups, 25 November 2026
 
 `20261125225855_lifecycle_rule_follow_ups.sql` was applied on 26 November 2026
@@ -8614,6 +8855,52 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   reminders waiting: 0 (of which the owner's ID is not reviewed: 0)"; production
   fingerprint after the last of the five stacked updates (fingerprint.sql, 06:02
   UTC) matched the full replay (except the known schema grant difference)
+
+- `20261126001811_staff_access_follow_ups.sql`: applied 2026-11-26 16:50 UTC;
+  apply-first, owner-approved, before pull request #385 was merged; Supabase SQL
+  editor (browser), file from raw GitHub at e8bc1688, update sha256 starting
+  d3900178bc952443; preflight before "staff access follow-ups: update not
+  applied; active admins: 3; admin invitations waiting: 0 (account already has
+  an authenticator app: 0); closed accounts with a staff role: 0" with no
+  problem rows, after "staff access follow-ups: already applied; active admins:
+  3; admin invitations waiting: 0 (account already has an authenticator app: 0);
+  closed accounts with a staff role: 0"; production fingerprint after the last
+  of the two stacked updates (fingerprint.sql, 18:33 UTC) matched the full
+  replay (except the known schema grant difference)
+
+- `20261126001956_video_length_checked.sql`: applied 2026-11-26 18:31 UTC;
+  apply-first, owner-approved, after pull request #385 deployed and before pull
+  request #386 was merged; Supabase SQL editor (browser), file from raw GitHub
+  at 6703262f, update sha256 starting 921862a35b6ab6da; preflight before "video
+  length check: update not applied; videos stored: 1; posts waiting with a
+  video: 0 (events: 0)" with no problem rows, after "video length check: already
+  applied; videos stored: 1; posts waiting with a video: 0 (events: 0)";
+  production fingerprint after the last of the two stacked updates
+  (fingerprint.sql, 18:33 UTC) matched the full replay (except the known schema
+  grant difference)
+
+- `20261126053631_keep_for_periods.sql`: applied 2026-11-26 20:15 UTC;
+  apply-first, owner-approved, before pull request #392 was merged; Supabase SQL
+  editor (browser), file from raw GitHub at a06dadd3, update sha256 starting
+  c43721a8d16441dc; preflight before "keep-for periods: update not applied;
+  contact messages: 0; admin invitations: 0; change logs: 0; appeals and holds:
+  0; closed reports: 0; role changes: 0; claim events: 0; slot limits: 0; ID
+  return reasons: 0; privacy request proofs: 0" with no problem rows, after
+  "keep-for periods: already applied; contact messages: 0; admin invitations: 0;
+  change logs: 0; appeals and holds: 0; closed reports: 0; role changes: 0;
+  claim events: 0; slot limits: 0; ID return reasons: 0; privacy request proofs:
+  0"; production fingerprint after it (fingerprint.sql, 20:18 UTC) matched the
+  full replay (except the known schema grant difference)
+
+- `20261126053701_invoice_pay_link.sql`: applied 2026-11-26 20:30 UTC;
+  apply-first, owner-approved, before pull request #394 was merged; Supabase SQL
+  editor (browser), file from raw GitHub at 1d30293c, update sha256 starting
+  cd1e79ba0ef2af6d; preflight before "invoice payment link: update not applied;
+  unpaid invoices: 0" with no problem rows, after "invoice payment link: already
+  applied; unpaid invoices: 0; invoices with a link: 0; invoice emails: 0";
+  production fingerprint after it and 20261126053631_keep_for_periods.sql
+  (fingerprint.sql, 20:31 UTC) matched the full replay (except the known schema
+  grant difference)
 
 - `20261126062428_catalogue_filters_in_database.sql`: pending; apply-first
 

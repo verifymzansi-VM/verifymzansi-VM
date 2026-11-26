@@ -230,6 +230,25 @@
       ]
     },
     {
+      "id": "LIM-APP-pay-invoice",
+      "title": "Request body cap for /api/pay-invoice",
+      "value": 4096,
+      "unit": "bytes",
+      "category": "size",
+      "enforcedAt": [
+        {
+          "file": "src/app/api/pay-invoice/route.ts",
+          "contains": "maxBytes: 4096"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "src/__tests__/limits/route-body-limits.test.ts"
+        }
+      ]
+    },
+    {
       "id": "LIM-APP-billing-package-add-invoice",
       "title": "Request body cap for /api/billing/package-add-invoice",
       "value": 4096,
@@ -478,7 +497,7 @@
     },
     {
       "id": "LIM-APP-event-video-length",
-      "title": "Event videos: at most 1 minute (checked by the browser only; the server applies the 2-minute limit)",
+      "title": "Event videos: at most 1 minute (checked by the browser, and by the database when the event is submitted)",
       "value": 60,
       "unit": "seconds",
       "category": "cap",
@@ -486,12 +505,21 @@
         {
           "file": "src/lib/media/video-length.ts",
           "contains": "export const MAX_EVENT_VIDEO_SECONDS = 60;"
+        },
+        {
+          "file": "database/foundation/current/functions/internal/guard_video_length_submission.sql",
+          "symbol": "internal.guard_video_length_submission",
+          "contains": "limit_seconds:=case when new.kind='event' then 60 else 120 end;"
         }
       ],
       "tests": [
         {
           "kind": "behaviour",
           "file": "src/lib/media/video-length.test.ts"
+        },
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-video-length.mjs"
         }
       ]
     },
@@ -1131,7 +1159,7 @@
     },
     {
       "id": "LIM-APP-video-length",
-      "title": "Post videos: at most 2 minutes (checked by the browser and again by the server on upload)",
+      "title": "Post videos: at most 2 minutes (checked by the browser, by the server on upload, and stored and bounded by the database)",
       "value": 120,
       "unit": "seconds",
       "category": "cap",
@@ -1142,13 +1170,32 @@
         },
         {
           "file": "src/lib/foundation/media-upload.ts",
-          "contains": "videoLengthProblem(await readVideoBytesSeconds(bytes), MAX_VIDEO_SECONDS)"
+          "contains": "const problem = videoLengthProblem(seconds, MAX_VIDEO_SECONDS);"
+        },
+        {
+          "file": "database/foundation/current/functions/internal/complete_frontend_video_upload.sql",
+          "symbol": "internal.complete_frontend_video_upload",
+          "contains": "if p_duration_ms is null or p_duration_ms not between 1 and 120999 then"
+        },
+        {
+          "file": "database/foundation/current/tables/private/media_objects.sql",
+          "symbol": "private.media_objects (media_objects_duration_ms_check)",
+          "contains": "constraint media_objects_duration_ms_check CHECK (duration_ms IS NULL OR kind = 'video'::text AND duration_ms >= 1 AND duration_ms <= 120999)"
+        },
+        {
+          "file": "database/foundation/current/functions/internal/guard_video_length_submission.sql",
+          "symbol": "internal.guard_video_length_submission",
+          "contains": "limit_seconds:=case when new.kind='event' then 60 else 120 end;"
         }
       ],
       "tests": [
         {
           "kind": "behaviour",
           "file": "src/lib/media/video-length.test.ts"
+        },
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-video-length.mjs"
         }
       ]
     },
@@ -1711,13 +1758,13 @@
     {
       "id": "LIM-F-claim_supported_notification_outbox",
       "title": "internal.claim_supported_notification_outbox: supported mail kinds required",
-      "value": "1 to 27",
+      "value": "1 to 28",
       "category": "cap",
       "enforcedAt": [
         {
           "file": "database/foundation/current/functions/internal/claim_supported_notification_outbox.sql",
           "symbol": "internal.claim_supported_notification_outbox",
-          "contains": "if p_supported_kinds is null or cardinality(p_supported_kinds) not between 1 and 27 or coalesce(array_ndims(p_supported_kinds),0)<>1"
+          "contains": "if p_supported_kinds is null or cardinality(p_supported_kinds) not between 1 and 28 or coalesce(array_ndims(p_supported_kinds),0)<>1"
         }
       ],
       "tests": [
@@ -4836,6 +4883,25 @@
         {
           "kind": "behaviour",
           "file": "scripts/test-foundation-copy-a-post.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-SQL-staff-video-lengths-posts",
+      "title": "Staff video lengths: 1 to 50 posts per read",
+      "value": "50",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_frontend_staff_video_lengths.sql",
+          "symbol": "internal.get_frontend_staff_video_lengths",
+          "contains": "if p_posts is null or cardinality(p_posts) not between 1 and 50 or array_ndims(p_posts)<>1"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-video-length.mjs"
         }
       ]
     },

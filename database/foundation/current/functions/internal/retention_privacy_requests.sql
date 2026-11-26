@@ -32,7 +32,8 @@ begin
       -- Never while it explains an erasure that has not run (a rejection).
       and not exists (select 1 from private.account_erasure_requests l join private.account_erasures e on e.user_id = l.user_id
         where l.request_id = x.id and e.erased_at is null)
-      and coalesce(x.completed_at, x.minimised_at) < statement_timestamp() - interval '5 years'
+      -- The minimised proof of a closed request: 3 years.
+      and coalesce(x.completed_at, x.minimised_at) < statement_timestamp() - interval '3 years'
     order by x.minimised_at limit p_limit for update skip locked);
   get diagnostics purged = row_count;
   return jsonb_build_object('minimised', minimised, 'purged', purged);

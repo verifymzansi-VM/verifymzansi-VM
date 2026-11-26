@@ -800,6 +800,7 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         Args: { p_email: string; p_days: number; p_reason: string; p_request_id: string };
         Returns: Json;
       };
+      get_frontend_staff_video_lengths: { Args: { p_posts: string[] }; Returns: Json };
     };
   };
 };
@@ -1040,6 +1041,39 @@ export type FoundationRuntimeServiceDatabase = {
       purge_post_engagement: { Args: Record<never, never>; Returns: Json };
       claim_lost_email_alert: { Args: { p_limit: number }; Returns: Json };
       complete_lost_email_alert: { Args: { p_claim: string; p_sent: boolean }; Returns: boolean };
+      prepare_invoice_email: {
+        Args: { p_invoice_id: string; p_token_hash: string };
+        Returns: Json;
+      };
+      get_invoice_by_link: { Args: { p_token_hash: string }; Returns: Json };
+      save_invoice_billing_by_link: {
+        Args: {
+          p_token_hash: string;
+          p_revision: number;
+          p_buyer_name: string;
+          p_buyer_address: string;
+          p_buyer_registration_number: string | null;
+        };
+        Returns: Json;
+      };
+      start_invoice_payment_by_link: {
+        Args: {
+          p_token_hash: string;
+          p_expected_total_cents: number;
+          p_cooling_off_consent: boolean;
+        };
+        Returns: Json;
+      };
+      complete_frontend_video_upload: {
+        Args: {
+          p_object_id: string;
+          p_size: number;
+          p_sha256: string;
+          p_mime: string;
+          p_duration_ms: number;
+        };
+        Returns: Json;
+      };
     };
   };
 };

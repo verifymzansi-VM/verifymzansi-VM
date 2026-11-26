@@ -7,30 +7,10 @@ CREATE OR REPLACE FUNCTION internal.claim_owner_admin_invitation()
  SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$
-declare invitation private.owner_admin_invitations; account_email text;
 begin
   if new.factor_type <> 'totp' or new.status <> 'verified' then return new; end if;
-  select lower(u.email) into account_email from auth.users u
-    join private.current_account_access a on a.id=u.id
-    where u.id=new.user_id and u.email_confirmed_at is not null and u.is_anonymous is false;
-  if not found then return new; end if;
-  -- An invitation already signed up by an account is claimed only by that
-  -- account, never by a later one after it is erased
-  -- (20261120040242_signup_mode_member_invitations.sql).
-  select * into invitation from private.owner_admin_invitations i
-    where i.email=account_email and i.claimed_at is null and i.revoked_at is null
-      and (i.signed_up_at is null or i.signed_up_by=new.user_id) for update;
-  if not found then return new; end if;
-  -- Serialise with the first-administrator bootstrap and ordinary role grants.
-  lock table private.staff_roles in share row exclusive mode;
-  if exists(select 1 from private.staff_roles r where r.user_id=new.user_id) then
-    return new; -- A prior/revoked assignment is never reactivated by an invitation.
-  end if;
-  insert into private.staff_roles(user_id,role) values(new.user_id,'admin');
-  update private.owner_admin_invitations set claimed_by=new.user_id,claimed_at=now()
-    where email=invitation.email;
+  perform internal.claim_owner_admin_invitation_for(new.user_id);
   return new;
-end;
-$function$;
+end$function$;
 alter function internal.claim_owner_admin_invitation() owner to postgres;
 revoke all on function internal.claim_owner_admin_invitation() from public;
