@@ -35,6 +35,9 @@ begin
   get diagnostics queue_events=row_count;
   delete from private.reports where id in(select r.id from private.reports r
     where r.status<>'open' and r.resolved_at<statement_timestamp()-interval '2 years'
+      -- Never while an appeal against a warning it gave still waits.
+      and not exists(select 1 from private.frontend_report_action_receipts c join private.frontend_appeals a on a.action_id=c.id
+        where c.report_id=r.id and a.status='submitted')
     order by r.resolved_at limit p_limit for update skip locked);
   get diagnostics reports=row_count;
 

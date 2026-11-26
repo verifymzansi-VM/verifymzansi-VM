@@ -27,6 +27,7 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { VideoWithPoster } from "@/components/ui/video-with-poster";
 import { formatZAR, formatRelativeTime } from "@/lib/utils/format";
+import { formatVideoLength, formatVideoLimit } from "@/lib/media/video-length";
 import { normalizeMediaUrl, normalizeVideoUrl } from "@/lib/utils/media-url";
 import { cn } from "@/lib/utils";
 import { getContentEditChanges, type ContentEditChange } from "@/lib/content-edit-diff";
@@ -99,6 +100,8 @@ export interface ModerationItem {
   /** Owner's other recent listings, for duplicate hints. */
   owner_recent_titles?: string[];
   owner_photo_urls?: string[];
+  /** Each video's stored length and the post kind's limit (claimed posts only). */
+  video_lengths?: { limitSeconds: number; videos: Array<{ seconds: number | null }> };
   /** Copy a post: the post this one was copied from (claimed posts only). */
   copy_facts?: {
     copied_from: { id: string; title: string | null; status: string };
@@ -236,6 +239,7 @@ function getChangeSummary(item: ModerationItem) {
     "owner_id",
     "status",
     "targetId",
+    "video_lengths",
   ].forEach((field) => {
     delete proposedFields[field];
   });
@@ -732,6 +736,7 @@ function BusinessModerationPreview({ item }: ModerationPreviewPanelProps) {
               </div>
             </div>
           )}
+          <VideoLengthNote lengths={item.video_lengths} />
         </div>
 
         <div className="space-y-3">
@@ -983,6 +988,27 @@ function QualitySummary({ score, issues }: ReturnType<typeof scoreListingQuality
   );
 }
 
+/** Each video's stored length next to the post kind's limit. */
+function VideoLengthNote({ lengths }: { lengths: ModerationItem["video_lengths"] }) {
+  if (!lengths || lengths.videos.length === 0) return null;
+  return (
+    <div className="space-y-0.5" data-testid="video-length-note">
+      {lengths.videos.map((video, i) => (
+        <p key={i} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Clock3 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <span>
+            {lengths.videos.length > 1 ? `Video ${i + 1} length: ` : "Video length: "}
+            <span className="font-medium text-foreground">
+              {video.seconds === null ? "not recorded" : formatVideoLength(video.seconds)}
+            </span>
+            {` (limit ${formatVideoLimit(lengths.limitSeconds)})`}
+          </span>
+        </p>
+      ))}
+    </div>
+  );
+}
+
 /** Copy a post: where the post was copied from. */
 function CopyFactsNotice({ facts }: { facts: NonNullable<ModerationItem["copy_facts"]> }) {
   const source = facts.copied_from;
@@ -1215,6 +1241,8 @@ export function ModerationPreviewPanel({ item }: ModerationPreviewPanelProps) {
             <p className="text-sm text-muted-foreground">No media</p>
           </div>
         )}
+
+        <VideoLengthNote lengths={item.video_lengths} />
 
         {/* ── Title & Badges ───────────────────────── */}
         <div className="space-y-2">

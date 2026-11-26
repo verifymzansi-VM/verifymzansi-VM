@@ -7,6 +7,8 @@ CREATE OR REPLACE FUNCTION internal.sticker_renewal_reminder_key(p_check uuid, p
  STABLE
  SET search_path TO 'pg_catalog'
 AS $function$
+  -- The 30 days match internal.queue_sticker_renewal_reminders, which picks
+  -- the candidates; change both together.
   select 'sticker_renewal_reminder:'||c.id||':'||floor(extract(epoch from c.expires_at))::bigint
   from private.frontend_business_checks c
   join private.posts b on b.id=c.business_id and b.owner_id=c.owner_id and b.kind='business'
@@ -17,7 +19,9 @@ AS $function$
       and (x.kind=c.kind or (c.kind='cipc' and x.kind='cipc_link'))
       and (x.status in('pending','info_requested')
         or ((x.status='approved' or x.revoked_at is not null) and (x.decided_at,x.id)>(c.decided_at,c.id))))
-    and exists(select 1 from private.current_account_access a where a.id=c.owner_id);
+    and exists(select 1 from private.current_account_access a where a.id=c.owner_id)
+    -- Renewing needs the owner's reviewed ID.
+    and internal.frontend_business_identity_reviewed(c.owner_id);
 $function$;
 alter function internal.sticker_renewal_reminder_key(uuid,uuid) owner to postgres;
 revoke all on function internal.sticker_renewal_reminder_key(uuid,uuid) from public;
