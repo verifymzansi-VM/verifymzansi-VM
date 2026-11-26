@@ -80,6 +80,59 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Staff refund follow-ups, 25 November 2026
+
+`20261125194727_part_refund_follow_ups.sql` is pending (see the applied
+register). Launch checklist item 56, batch A: the Low findings of the reviews of
+`20261125133916_staff_part_refunds.sql`. Full definitions of four internal
+functions; no API command, argument, grant or table changes.
+
+- **What was refunded.** `internal.payment_refunded_before_cents` counts a
+  reversed slot unless an applied refund record that ended the paid days covers
+  it, so a slot reversed after a keep-running part refund is no longer
+  under-reported.
+- **Repeats.** In `internal.record_staff_refund`, "everything left"
+  (`p_amount_cents` null) never returns an earlier part refund that kept the
+  slot running as a repeat (by request id or by reference); and the same request
+  id with a corrected bank reference or Ozow refund id is refused (PT409
+  `refund_request_reused`) instead of returning the old record.
+- **Activate first.** A part refund that keeps the slot running is refused while
+  the payment waits for "Activate what was paid for" (PT409
+  `refund_activate_first`), so activation never creates the partner commission
+  after the money went back. If it cannot be activated, staff record a refund
+  that ends the slot.
+- **The staff list read.** `api.get_staff_refunds_left` gives 0 left at payment
+  level once a slot was reversed (a whole-payment refund is refused then), and
+  adds `notice_ends_on` (the end of 20 South African business days' notice given
+  today) and, per slot, `paid_days` (the plan's own term; null for slots added
+  to a package, which are priced for the days left, so the website uses the
+  grant's dates) and `lost_days` (free lost days added while the slot ran; a
+  waiting renewal that was only moved gained none). The section 14 hint counts
+  unused paid days from the notice end, and the forms warn when lost days or
+  money were already given for a failure. `api.get_lost_days_preview` adds
+  `refunded_cents` per term (applied keep-running part refunds of the slot, or
+  of a whole payment that paid for that slot only). Warnings only: nothing is
+  refused for giving both.
+
+ORDER: **website-first** (merge and deploy, then apply): the website before this
+pull request reads both staff reads with a strict parser and would refuse the
+new fields; this pull request's website reads them as optional. Read-only
+preflight: `../preflight/20261125194727_part_refund_follow_ups.check.sql`
+(expect "update not applied" and "of them on payments not activated: 0");
+rollback: `../rollback/20261125194727_part_refund_follow_ups.down.sql` (the
+update writes no rows; the rollback can run at any time). Roll the database back
+**before** reverting the website: the website before this pull request refuses
+the new result fields. The rollback brings back the under-count of
+`internal.payment_refunded_before_cents` (a slot reversed after a keep-running
+part refund is not counted as refunded) and the other gaps this update closed.
+
+Notes on the rollback of `20261125133916_staff_part_refunds.sql` (that file is
+applied and is not edited): its header does not mention the `request_id` column
+and index it drops; and it counts part refunds before it locks
+`private.payment_refund_requests`, so a part refund recorded at that moment
+could slip past its refusal. A later rollback that needs it must lock the table
+first (`lock table private.payment_refund_requests in share mode`), then count.
+
 ## No account restriction for an admin, 25 November 2026
 
 `20261125174942_end_admin_role_before_restriction.sql` is **pending** (see the
@@ -8311,5 +8364,7 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   grant difference)
 
 - `20261125174942_end_admin_role_before_restriction.sql`: pending
+
+- `20261125194727_part_refund_follow_ups.sql`: pending; website-first
 
 <!-- applied-register:end -->

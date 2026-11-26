@@ -98,7 +98,17 @@ const term = {
   renewals: z.number().int().min(0).max(1000),
 };
 const previewResult = z.strictObject({
-  items: z.array(z.strictObject({ ...term, ends_at: timestamp })).max(1000),
+  items: z
+    .array(
+      z.strictObject({
+        ...term,
+        ends_at: timestamp,
+        // Optional: added by 20261125194727_part_refund_follow_ups.sql (the
+        // website is deployed before it is applied).
+        refunded_cents: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
+      })
+    )
+    .max(1000),
 });
 const addResult = z.strictObject({
   request_id: z.uuid(),
@@ -128,6 +138,7 @@ export async function previewLostDays(
       slots: item.slots,
       renewals: item.renewals,
       endsAt: item.ends_at,
+      ...(item.refunded_cents ? { refundedCents: item.refunded_cents } : {}),
     })),
   };
 }

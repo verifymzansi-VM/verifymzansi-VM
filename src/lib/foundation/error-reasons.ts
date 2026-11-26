@@ -226,6 +226,7 @@ export const FOUNDATION_ERROR_REASONS = {
   programme_unavailable: ["PT404"],
   reason_required: ["22023"],
   recent_sign_in_required: ["42501"],
+  refund_activate_first: ["PT409"],
   refund_amount_invalid: ["22023"],
   refund_approver_same: ["42501"],
   refund_asked_on_unexpected: ["22023"],
