@@ -169,6 +169,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 105. Small lifecycle rules (item 40) (and the group 105 part of 1 row elsewhere) | approved by owner 2026-11-25 (answer: 'Approve with the rewording', the pictures with the sticker email reworded) | Owners of a post with an open report see that it can be hidden now and deleted once staff have looked at the report. Business owners get one email 30 days before a CIPC registered or Seen sticker ends, linking to the business's verification page, and the Seen step there offers the booking form from 60 days before the sticker ends. Free events cannot start more than 12 months ahead (the form already said so). |
 | 106. Removing an admin needs approval; appeal pages off the old backend (item 20, part 1) (and the group 106 part of 1 row elsewhere) | approved by owner 2026-11-25 (answer: 'Approve them') | Nothing for members or visitors. Admins: removing another admin now waits for a different admin's approval on Staff roles, and its header line says so. |
 | 107. Change a verified phone number or place (item 20, part 2) (no file rows of its own: the group 107 part of 4 rows elsewhere) | approved by owner 2026-11-25 (answer: 'Approve them') | Members: 'Change number' on My profile opens the phone step to verify a new number by SMS code (at most every 15 days, after the ID review); province and city can be changed on My profile at most every 15 days. |
+| 111. Showroom cards with a video and photos show the chosen frame (item 56) (no file rows: data only, `src/lib/showroom/feed.ts`) | approved by owner 2026-11-26 (answer: 'Yes to everything', for the before and after pictures) | Home and area showrooms: a post with both a video and photos plays its video over the frame the owner chose, as on the 27 October cards; before, it showed the first photo there. With no chosen frame it keeps the first photo. Posts without a video look as they do today. |
 
 Questions for the owner:
 
@@ -4434,6 +4435,25 @@ Pictures (synthetic data, local preview, not published):
 `screenshots/item20-phone-place/` (desktop 1280 and phone 375).
 
 Decision: approved by owner 2026-11-25 (answer: 'Approve them'), for the pictures.
+
+### 111. Showroom cards with a video and photos show the chosen frame (item 56)
+
+Launch checklist item 56, follow-up to group 103. Returns the 27 October
+behaviour (`0b562f42`, `carousel-item-transforms.ts`: the video's chosen frame
+first, then the first photo) to the big showroom carousel on the home page and
+the three area pages. Group 103 used the chosen frame only when a post had no
+photo, so a post with a video and photos showed its first photo under the
+video. Now, when a post has a video, the chosen frame comes first and the first
+photo only when there is none. The carousel itself is unchanged.
+
+Rows: none; the change is in `src/lib/showroom/feed.ts` (outside the checked
+scope) and its unit test.
+
+Pictures (synthetic data, local preview, not published; no live post has both a
+video and photos): `screenshots/item56c-showroom/` (Tourism & Events, phone 375
+and desktop 1280, before and after).
+
+Decision: approved by owner 2026-11-26 (answer: 'Yes to everything').
 
 <!-- frontend-ledger:end -->
 
