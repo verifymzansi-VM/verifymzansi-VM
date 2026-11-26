@@ -13,8 +13,8 @@
 -- - "posts with an open report": posts with any open report (public or a
 --   staff duplicate flag);
 -- - "of which the owner may delete after the update": those with no open
---   public report, or past the clean-up's waiting time
---   (internal.post_report_deferred);
+--   public report that is under 7 days old or still within the clean-up's
+--   waiting time (internal.post_report_deferred);
 -- - "reminders waiting": sticker renewal reminders not yet sent;
 -- - "of which the owner's ID is not reviewed": those the email job will finish
 --   as skipped once the update is applied.
@@ -27,7 +27,7 @@ with bodies as (
       'absent') as body
   from (values
     ('internal.delete_post(uuid,integer)',
-      'ba5e05f4803ab918135a4aa6dbf05ba1', 'eb15dab657d7512cc0f4d5f8036fa6db'),
+      'ba5e05f4803ab918135a4aa6dbf05ba1', '009322bbbd81a75ceaa3ec8fe3f4fef3'),
     ('internal.sticker_renewal_reminder_key(uuid,uuid)',
       'f0296fa207968b44d2249cbe31f02f1c', '122a9d4ca00a7b25bf47909b88d43901')
   ) v(sig, reviewed, updated)
@@ -37,8 +37,8 @@ state as (
 ),
 reported as (
   select p.id,
-    exists(select 1 from private.reports r where r.post_id = p.id and r.status = 'open' and r.report_origin = 'public')
-      and internal.post_report_deferred(p) as held
+    exists(select 1 from private.reports r where r.post_id = p.id and r.status = 'open' and r.report_origin = 'public'
+      and (internal.post_report_deferred(p) or r.created_at > clock_timestamp() - interval '7 days')) as held
   from private.posts p
   where exists(select 1 from private.reports r where r.post_id = p.id and r.status = 'open')
 ),

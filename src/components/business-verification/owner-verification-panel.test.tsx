@@ -169,7 +169,7 @@ describe("Seen renewal", () => {
     try {
       render(<OwnerVerificationPanel businessId="b1" />);
       expect(
-        await screen.findByText(new RegExp(`renew by ${shown("Africa/Johannesburg")}$`))
+        await screen.findByText((text) => text.endsWith(`renew by ${shown("Africa/Johannesburg")}`))
       ).toBeInTheDocument();
     } finally {
       if (zone === undefined) delete process.env.TZ;

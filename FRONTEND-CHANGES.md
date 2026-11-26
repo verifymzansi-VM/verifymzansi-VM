@@ -168,7 +168,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 103. Showroom video posts show their chosen frame and logo (no file rows: data only, `src/lib/showroom/feed.ts`) | approved by owner 2026-11-25 (answer: 'Approve them', for the before and after pictures) | Home and area showrooms: a video post's card plays its video over the frame the owner chose, and a post with a logo shows it in the card, as in the chosen version; before, a video-only post showed the generic shop artwork with no video and the title's first letter instead of a logo. Posts with neither look as they do today. |
 | 105. Small lifecycle rules (item 40) (and the group 105 part of 1 row elsewhere) | approved by owner 2026-11-25 (answer: 'Approve with the rewording', the pictures with the sticker email reworded) | Owners of a post with an open report see that it can be hidden now and deleted once staff have looked at the report. Business owners get one email 30 days before a CIPC registered or Seen sticker ends, linking to the business's verification page, and the Seen step there offers the booking form from 60 days before the sticker ends. Free events cannot start more than 12 months ahead (the form already said so). |
 | 106. Removing an admin needs approval; appeal pages off the old backend (item 20, part 1) (and the group 106 part of 1 row elsewhere) | approved by owner 2026-11-25 (answer: 'Approve them') | Nothing for members or visitors. Admins: removing another admin now waits for a different admin's approval on Staff roles, and its header line says so. |
-| 112. Lifecycle rule follow-ups (item 56, batch D) | awaiting owner (no file rows: the group 112 part of 2 existing rows; text outside the checked scope in `src/lib/foundation/restored-post-route.ts`) | Business verification page: dates are shown in South African time, so an owner abroad sees the same 'renew by' date as the reminder email (no change in South Africa). Saving a free event that starts more than 12 months ahead says 'Events can start at most 12 months ahead.' instead of the general message (the form already blocks this). On My posts, a report from the public stops the owner deleting the post only while the scheduled clean-up would still wait for staff, and a staff duplicate flag no longer stops it; the message is unchanged. |
+| 112. Lifecycle rule follow-ups (item 56, batch D) | awaiting owner (no file rows: the group 112 part of 2 existing rows; text outside the checked scope in `src/lib/foundation/restored-post-route.ts`) | Business verification page: dates are shown in South African time, so an owner abroad sees the same 'renew by' date as the reminder email (no change in South Africa). Saving a free event that starts more than 12 months ahead says 'Events can start at most 12 months ahead.' instead of the general message (the form already blocks this). On My posts, while a report from the public is open, the owner can delete the post only once the report is 7 days old and the post's clean-up waiting time has passed; a staff duplicate flag no longer stops it; the message is unchanged. |
 
 Questions for the owner:
 
@@ -3144,7 +3144,7 @@ and one byte over, so the limits register can mark it proven: the profile photo
 
 | File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `src/components/business-verification/owner-verification-panel.test.tsx` | test | Group 76: a test that a 5 MB CIPC PDF is read and one byte more is refused before anything is uploaded. Group 105: tests that the Seen booking form shows from 60 days before the sticker ends, and not earlier. Group 112: a test that the 'renew by' date is shown in South African time for a browser elsewhere. | Nothing (not part of a page) | keep | awaiting owner; group 105 part approved by owner 2026-11-25 (answer: 'Approve with the rewording', the pictures with the sticker email reworded); group 112 part awaiting owner | 2026-11-26 | 6256614f7dc1 |
+| `src/components/business-verification/owner-verification-panel.test.tsx` | test | Group 76: a test that a 5 MB CIPC PDF is read and one byte more is refused before anything is uploaded. Group 105: tests that the Seen booking form shows from 60 days before the sticker ends, and not earlier. Group 112: a test that the 'renew by' date is shown in South African time for a browser elsewhere. | Nothing (not part of a page) | keep | awaiting owner; group 105 part approved by owner 2026-11-25 (answer: 'Approve with the rewording', the pictures with the sticker email reworded); group 112 part awaiting owner | 2026-11-26 | ea0e0db6e8ec |
 
 Decision: awaiting owner.
 
@@ -4423,9 +4423,10 @@ scope: `src/lib/foundation/restored-post-route.ts`.
 - My posts, deleting a reported post: the message ('Someone reported this post.
   You can hide it now, and delete it once our team has looked at the report.')
   is unchanged, but it now shows only for a report from the public, and only
-  while the scheduled clean-up would still wait for staff (up to 67 days after
-  the post's last change, or 7 days after its deletion date). A staff
-  duplicate-event flag no longer stops the owner deleting.
+  until both of these have passed: 7 days from the report, and the scheduled
+  clean-up's waiting time (67 days after the post's last change, or 7 days
+  after its deletion date). A staff duplicate-event flag no longer stops the
+  owner deleting.
 
 Pictures: none (the wording above is the whole change; the date looks the same
 in South Africa).

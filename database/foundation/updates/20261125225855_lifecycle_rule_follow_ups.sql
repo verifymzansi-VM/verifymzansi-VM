@@ -1,15 +1,17 @@
 -- Follow-ups to the small lifecycle rules (launch checklist item 56, batch D;
 -- 20261125150215_small_lifecycle_rules.sql, item 40).
 --
--- 1. A visitor's report holds an owner's deletion only as long as the
---    scheduled clean-up waits. internal.delete_post (full body) refused while
---    any report on the post was open, with no end, so a report nobody looked at
---    could keep a paid slot or a free event place taken until staff acted. It
+-- 1. A visitor's report holds an owner's deletion for a limited time.
+--    internal.delete_post (full body) refused while any report on the post was
+--    open, with no end, so a report nobody looked at could keep a paid slot or
+--    a free event place taken until staff acted. It
 --    now refuses (same PT409, detail post_report_open) only while an open
---    report from the public exists and internal.post_report_deferred(post)
---    holds: the clean-up's own rule, which stops waiting 7 days after the post
---    would otherwise be deleted (60 days after its last change when it has no
---    deletion date). A staff duplicate-event flag (report_origin 'staff')
+--    report from the public exists and either that report is less than 7 days
+--    old or internal.post_report_deferred(post) holds: the clean-up's own
+--    rule, which stops waiting 7 days after the post would otherwise be deleted
+--    (67 days after its last change when it has no deletion date). The 7 days
+--    from the report give staff time to look even when the post itself has
+--    not changed for months. A staff duplicate-event flag (report_origin 'staff')
 --    never stops the deletion: it names a pair of posts, and the website's
 --    message speaks of someone reporting the post. The scheduled clean-up is
 --    unchanged.
@@ -17,7 +19,8 @@
 --    renewing needs. internal.sticker_renewal_reminder_key (full body) also
 --    requires internal.frontend_business_identity_reviewed(owner). The email
 --    job compares the queued key with the current one, so a reminder queued
---    before the review lapsed is finished as skipped without a send. Its
+--    before the review lapsed is finished as skipped without a send, and is
+--    not sent again for that sticker end (its key is used). Its
 --    30-day period stays the one internal.queue_sticker_renewal_reminders
 --    uses to pick candidates (both read "interval '30 days'"; the behaviour
 --    test checks they agree).
@@ -42,7 +45,7 @@ begin
   loop
     if shape not in (
         'internal.delete_post(uuid,integer) ba5e05f4803ab918135a4aa6dbf05ba1',
-        'internal.delete_post(uuid,integer) eb15dab657d7512cc0f4d5f8036fa6db',
+        'internal.delete_post(uuid,integer) 009322bbbd81a75ceaa3ec8fe3f4fef3',
         'internal.sticker_renewal_reminder_key(uuid,uuid) f0296fa207968b44d2249cbe31f02f1c',
         'internal.sticker_renewal_reminder_key(uuid,uuid) 122a9d4ca00a7b25bf47909b88d43901') then
       raise exception 'lifecycle rule follow-ups precondition: % is not a reviewed body', shape
@@ -73,11 +76,11 @@ begin
     raise exception 'staff visibility hold requires independent release' using errcode = 'PT423', detail = 'staff_visibility_hold';
   end if;
   -- A post with an open report from the public waits until staff have looked
-  -- at it, for as long as the scheduled clean-up waits
-  -- (internal.post_report_deferred). A staff duplicate flag does not stop it.
-  -- The owner can still hide it.
-  if exists (select 1 from private.reports r where r.post_id = post.id and r.status = 'open' and r.report_origin = 'public')
-    and internal.post_report_deferred(post) then
+  -- at it: for at least 7 days after the report, and for as long as the
+  -- scheduled clean-up waits (internal.post_report_deferred). A staff duplicate
+  -- flag does not stop it. The owner can still hide it.
+  if exists (select 1 from private.reports r where r.post_id = post.id and r.status = 'open' and r.report_origin = 'public'
+      and (internal.post_report_deferred(post) or r.created_at > clock_timestamp() - interval '7 days')) then
     raise exception 'a reported post cannot be deleted until staff have looked at the report'
       using errcode = 'PT409', detail = 'post_report_open';
   end if;

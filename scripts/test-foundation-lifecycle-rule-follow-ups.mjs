@@ -17,9 +17,11 @@
 // clean-up's waiting time both stopped the owner's deletion and that an owner
 // without a full ID review got a sticker reminder; applies the update and
 // proves apply -> rollback -> apply; then: the owner's deletion waits for an
-// open public report only while internal.post_report_deferred holds (60 + 7
-// days after the last change, or 7 days after a deletion date), never for a
-// staff duplicate flag (the scheduled clean-up still waits for it); a sticker
+// open public report for 7 days after the report (also on a live post
+// unchanged for 70 days, and on a paused post whose edit copy changed
+// recently), then only while internal.post_report_deferred holds (60 + 7 days
+// after the last change, or 7 days after a deletion date), never for a staff
+// duplicate flag (the scheduled clean-up still waits for it); a sticker
 // reminder needs a full ID review, when queued and again before it is sent;
 // a CIPC sticker gets none while a linked profile (cipc_link) is waiting or
 // newer, but does after a rejected renewal; the reminder's key and its queue
@@ -32,6 +34,7 @@
 // Needs a local Docker daemon; it takes no connection settings at all.
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { lifecycleFixtures } from "./lib/foundation-lifecycle-fixtures.mjs";
 import { assertReadOnlyPreflight, executeGrants } from "./lib/foundation-sql-checks.mjs";
 import { applySteps } from "./lib/foundation-sql-lint.mjs";
 import {
@@ -50,24 +53,38 @@ const REVIEWED = {
   [KEY]: "f0296fa207968b44d2249cbe31f02f1c",
 };
 const UPDATED = {
-  [DELETE]: "eb15dab657d7512cc0f4d5f8036fa6db",
+  [DELETE]: "009322bbbd81a75ceaa3ec8fe3f4fef3",
   [KEY]: "122a9d4ca00a7b25bf47909b88d43901",
 };
 const LABEL = "lifecycle rule follow-ups";
-const summary = (state) =>
-  new RegExp(
-    `^lifecycle rule follow-ups: ${state}; posts with an open report: \\d+ \\(of which the owner may delete after the update: \\d+\\); reminders waiting: \\d+ \\(of which the owner's ID is not reviewed: \\d+\\)$`
-  );
-const NOT_APPLIED = summary("update not applied");
-const ALREADY_APPLIED = summary("already applied");
-const DAY_MS = 86_400_000;
+const NOT_APPLIED =
+  /^lifecycle rule follow-ups: update not applied; posts with an open report: \d+ \(of which the owner may delete after the update: \d+\); reminders waiting: \d+ \(of which the owner's ID is not reviewed: \d+\)$/;
+const ALREADY_APPLIED =
+  /^lifecycle rule follow-ups: already applied; posts with an open report: \d+ \(of which the owner may delete after the update: \d+\); reminders waiting: \d+ \(of which the owner's ID is not reviewed: \d+\)$/;
 
 await runTwoAdminUpdateCheck(
   { update: UPDATE, label: "lrf", title: "Lifecycle rule follow-ups" },
   async ({ database, check, kit, world, admin }) => {
-    const { q, json, fails, member, service, steps, index, preflight } = kit;
-    const replica = (sql) =>
-      q(`set session_replication_role=replica;\n${sql}\nset session_replication_role=origin;`);
+    const { q, json, fails, member, steps, index, preflight } = kit;
+    const {
+      replica,
+      sticker,
+      sweep,
+      reminders,
+      claim,
+      claimFor,
+      complete,
+      keyOf,
+      window,
+      createEventSql,
+      revision,
+      moveSql,
+      startOf,
+      report,
+      exists,
+      deleteSql,
+      actionDeleteSql,
+    } = lifecycleFixtures(kit);
     const bodies = (expected) => {
       for (const [signature, md5] of Object.entries(expected))
         assert.equal(functionBodyMd5(kit, signature), md5, signature);
@@ -76,19 +93,7 @@ await runTwoAdminUpdateCheck(
     const reviewed = (label) => world.reviewedId(label, admin);
     /** A member whose accepted fact has no reviewed ID photo and selfie behind it. */
     const factOnly = (label) => world.verified(label, admin);
-
-    // ------------------------------------------------------------ stickers
-    /** An approved sticker check of `kind` on `business`, ending `days` from now; its id. */
-    const sticker = (owner, business, kind, days) => {
-      const id = randomUUID();
-      replica(`insert into private.evidence_cases(id,subject_id,kind,status) values('${id}','${owner.id}','business','decided');
-        insert into private.frontend_business_checks(id,business_id,owner_id,kind,status,seen_method,available_slots,
-          screenshots_consent_at,decided_at,expires_at)
-        values('${id}','${business}','${owner.id}','${kind}','approved',
-          ${kind === "seen" ? "'video',array['Monday morning'],now()" : "null,null,null"},
-          now()-interval '335 days',now()+make_interval(secs=>${days}*86400));`);
-      return id;
-    };
+    const businessOf = (owner) => world.post(owner, "business", "business");
     /** A later check of `kind` on `business` with `status` (decided now unless pending). */
     const laterCheck = (owner, business, kind, status) => {
       const id = randomUUID();
@@ -100,43 +105,6 @@ await runTwoAdminUpdateCheck(
           ${status === "approved" ? "now()+interval '365 days'" : "null"});`);
       return id;
     };
-    const businessOf = (owner) => world.post(owner, "business", "business");
-    const sweep = () => json(service("select api.run_slot_renewals(100);"));
-    const reminders = (id) =>
-      json(`select coalesce(jsonb_agg(dedupe_key order by created_at, id),'[]') from private.outbox_events
-        where kind='sticker_renewal_reminder' and subject_id='${id}';`);
-    const keyOf = (id) =>
-      `sticker_renewal_reminder:${id}:${q(
-        `select floor(extract(epoch from expires_at))::bigint from private.frontend_business_checks where id='${id}';`
-      )}`;
-    const claimAll = () =>
-      json(
-        service(
-          "select api.claim_supported_notification_outbox(array['sticker_renewal_reminder'],50);"
-        )
-      );
-    const claimFor = (id) => {
-      const jobs = claimAll();
-      const job = jobs.find((j) => j.subject_id === id);
-      assert.ok(job, JSON.stringify(jobs));
-      return job;
-    };
-    const complete = (job, error = null) =>
-      q(
-        service(
-          `select api.complete_notification_outbox('${job.id}','${job.claim_token}',true,${
-            error ? `'${error}'` : "null"
-          });`
-        )
-      );
-
-    // ------------------------------------------------------------ reports
-    /** An open public report about `post`, as the report flow writes it; its id. */
-    const report = (owner, post) =>
-      q(`insert into private.reports(post_id,subject_account_id,category,severity,description,
-          reporter_ip_hmac,frontend_reason)
-        values('${post}','${owner.id}','scam','standard','A synthetic report description.',
-          '${"B".repeat(42)}${(Math.random() * 10) | 0}','fake_listing') returning id;`);
     /** An open staff duplicate flag on the pair (x, y), as flag_duplicate_events
      * writes it: about the pair's first post (firstOf). */
     const staffFlag = (x, y, staffMember) =>
@@ -155,49 +123,20 @@ await runTwoAdminUpdateCheck(
     const lastChanged = (post, days) =>
       replica(`update private.posts set content_updated_at=now()-make_interval(secs=>${days}*86400),
           status_changed_at=now()-make_interval(secs=>${days}*86400) where id='${post}';`);
-    const exists = (id) => q(`select count(*) from private.posts where id='${id}';`) === "1";
-    const revision = (id) => q(`select revision from private.posts where id='${id}';`);
-    const deleteSql = (owner, id) =>
-      member(owner, `select api.delete_post('${id}',${revision(id)});`);
-    const actionDeleteSql = (owner, id) =>
-      member(
-        owner,
-        `select api.execute_my_frontend_post_action('${randomUUID()}','${id}',${revision(id)},'delete','listing','market');`
+    /** Makes the report `days` old. */
+    const reportAged = (id, days) =>
+      replica(
+        `update private.reports set created_at=now()-make_interval(secs=>${days}*86400) where id='${id}';`
       );
+    /** Puts the post live, as a moderator's approval does. */
+    const goLive = (post) =>
+      replica(`update private.posts set status='live',published_at=now(),status_changed_at=now(),
+          visible_until=now()+interval '30 days' where id='${post}';`);
     const refusedDelete = (owner, id) => {
       fails(deleteSql(owner, id), "PT409", /DETAIL:\s+post_report_open/);
       assert.equal(exists(id), true);
     };
-
-    // ------------------------------------------------------------ events
-    const at = (days) =>
-      new Date(Math.floor((Date.now() + days * DAY_MS) / 1000) * 1000).toISOString();
-    const window = (startDays, lengthDays = 1) => ({
-      starts_at: at(startDays),
-      ends_at: at(startDays + lengthDays),
-      timezone: "Africa/Johannesburg",
-    });
-    const activity = q(
-      "select coalesce((select a.key from private.category_activities a join private.categories c on c.key=a.category_key where a.category_key='events' and c.activity_required order by a.key limit 1),'')"
-    );
-    const createEvent = (person, w) =>
-      json(
-        member(
-          person,
-          `select api.create_core_draft('event','tourism_events','events','${JSON.stringify(w)}'::jsonb,${
-            activity ? `'${activity}'` : "null"
-          });`
-        )
-      ).id;
-    const moveSql = (person, id, w) =>
-      member(
-        person,
-        `select api.save_business_event_context('${id}',${revision(id)},'${JSON.stringify({ event_window: w })}'::jsonb);`
-      );
-    const startOf = (id) =>
-      Date.parse(
-        json(`select to_jsonb(starts_at) from private.event_details where post_id='${id}';`)
-      );
+    const createEvent = (person, w) => json(createEventSql(person, w)).id;
 
     // ------------------------------------------------------------ before
     const thabo = reviewed("lrf-thabo");
@@ -210,6 +149,7 @@ await runTwoAdminUpdateCheck(
     const unreviewed = factOnly("lrf-unreviewed");
     const unreviewedSticker = sticker(unreviewed, businessOf(unreviewed), "cipc", 20);
     let flagged;
+    let agedReport;
     await check(
       "before the update: the reviewed bodies, and the preflight reads not applied",
       () => {
@@ -231,13 +171,13 @@ await runTwoAdminUpdateCheck(
       const owner = flagged === flaggedPair[0] ? thabo : neighbour;
       refusedDelete(owner, flagged);
       // A public report stops it after the clean-up would have stopped waiting.
-      report(thabo, agedPost);
+      agedReport = report(thabo, agedPost);
       lastChanged(agedPost, 68);
       assert.equal(deferred(agedPost), false);
       refusedDelete(thabo, agedPost);
       assert.match(
         preflight()[0][1],
-        /posts with an open report: 2 \(of which the owner may delete after the update: 2\)/
+        /posts with an open report: 2 \(of which the owner may delete after the update: 1\)/
       );
     });
     await check("before the update: an owner without a full ID review gets a reminder", () => {
@@ -277,14 +217,23 @@ await runTwoAdminUpdateCheck(
       q(actionDeleteSql(first === a ? thabo : neighbour, first));
       assert.equal(exists(first), false);
     });
-    await check("a public report holds deletion only while the clean-up would wait", () => {
-      // Past the waiting time (68 days since the last change): deleted.
+    await check("a public report holds deletion for 7 days, then while the clean-up waits", () => {
+      // A long-unchanged post (68 days) with a fresh report: refused until
+      // the report is 7 days old, then deleted.
+      assert.equal(deferred(agedPost), false);
+      refusedDelete(thabo, agedPost);
+      reportAged(agedReport, 6);
+      refusedDelete(thabo, agedPost);
+      reportAged(agedReport, 8);
       q(deleteSql(thabo, agedPost));
       assert.equal(exists(agedPost), false);
-      // A fresh report on a fresh post: refused, through both commands.
-      const post = world.post(thabo, "listing", "market");
-      report(thabo, post);
-      for (const sql of [deleteSql(thabo, post), actionDeleteSql(thabo, post)]) {
+      // A live post unchanged for 70 days with a fresh report: refused, through
+      // both commands; with the report 8 days old, deleted.
+      const old = world.post(thabo, "listing", "market");
+      goLive(old);
+      lastChanged(old, 70);
+      const oldReport = report(thabo, old);
+      for (const sql of [deleteSql(thabo, old), actionDeleteSql(thabo, old)]) {
         const refusal = fails(sql, "PT409");
         assert.match(
           refusal,
@@ -292,10 +241,18 @@ await runTwoAdminUpdateCheck(
         );
         assert.match(refusal, /DETAIL:\s+post_report_open/);
       }
-      // 66 days after the last change it still waits; 68 days, it does not.
+      reportAged(oldReport, 8);
+      q(deleteSql(thabo, old));
+      assert.equal(exists(old), false);
+      // A recently changed post with an 8-day-old report waits for the
+      // clean-up: 66 days after the last change it still waits; with a
+      // deletion date, until 7 days after it.
+      const post = world.post(thabo, "listing", "market");
+      reportAged(report(thabo, post), 8);
+      assert.equal(deferred(post), true);
+      refusedDelete(thabo, post);
       lastChanged(post, 66);
       refusedDelete(thabo, post);
-      // With a deletion date, until 7 days after it.
       replica(`update private.posts set deletes_at=now()-interval '6 days' where id='${post}';`);
       refusedDelete(thabo, post);
       replica(`update private.posts set deletes_at=now()-interval '8 days' where id='${post}';`);
@@ -308,12 +265,36 @@ await runTwoAdminUpdateCheck(
       staffFlag(c, d, admin);
       const first = firstOf(c, d);
       const owner = first === c ? thabo : neighbour;
-      report(owner, first);
-      refusedDelete(owner, first);
+      const both = report(owner, first);
       lastChanged(first, 68);
+      refusedDelete(owner, first);
+      reportAged(both, 8);
       q(deleteSql(owner, first));
       assert.equal(exists(first), false);
     });
+    await check(
+      "a paused post whose edit copy changed recently waits 7 days after a report",
+      () => {
+        // The edit copy's recent change does not count (the clean-up reads the
+        // post itself); the 7 days from the report hold it.
+        const paused = world.post(thabo, "listing", "market");
+        goLive(paused);
+        const edit = json(
+          member(thabo, `select api.create_post_edit('${paused}',${revision(paused)});`)
+        ).id;
+        replica(`update private.posts set status='paused',status_changed_at=now()-interval '70 days',
+          content_updated_at=now()-interval '70 days' where id='${paused}';
+        update private.posts set content_updated_at=now() where id='${edit}';`);
+        const id = report(thabo, paused);
+        assert.equal(deferred(paused), false);
+        refusedDelete(thabo, paused);
+        assert.equal(exists(edit), true);
+        reportAged(id, 8);
+        q(deleteSql(thabo, paused));
+        assert.equal(exists(paused), false);
+        assert.equal(exists(edit), false, "the edit copy goes with it");
+      }
+    );
 
     // ------------------------------------------------------------ rule 2
     await check("a queued reminder is not sent while the owner's ID is not reviewed", () => {
@@ -346,6 +327,12 @@ await runTwoAdminUpdateCheck(
         const skipped = claimFor(sizweSticker);
         assert.equal(skipped.recipient, null);
         assert.equal(complete(skipped, "skipped"), "t");
+        // Reviewed again before the end: that end is never reminded again.
+        replica(
+          `update private.accepted_identity_facts set revoked_at=null where owner_id='${sizwe.id}';`
+        );
+        assert.equal(sweep().sticker_renewal_reminders, 0);
+        assert.deepEqual(reminders(sizweSticker), [keyOf(sizweSticker)]);
       }
     );
     await check("a linked profile stops a CIPC reminder; a rejected renewal does not", () => {
@@ -372,7 +359,7 @@ await runTwoAdminUpdateCheck(
       assert.deepEqual(reminders(ayoSeen), [keyOf(ayoSeen)]);
       assert.deepEqual(reminders(nandiCipc), [keyOf(nandiCipc)]);
       // One email job run claims both.
-      const jobs = claimAll();
+      const jobs = claim();
       for (const id of [ayoSeen, nandiCipc]) {
         const job = jobs.find((j) => j.subject_id === id);
         assert.ok(job, JSON.stringify(jobs));

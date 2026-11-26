@@ -23,7 +23,7 @@ begin
     from (values ('internal.delete_post(uuid,integer)'),('internal.sticker_renewal_reminder_key(uuid,uuid)')) v(sig)
   loop
     if shape not in (
-        'internal.delete_post(uuid,integer) eb15dab657d7512cc0f4d5f8036fa6db',
+        'internal.delete_post(uuid,integer) 009322bbbd81a75ceaa3ec8fe3f4fef3',
         'internal.sticker_renewal_reminder_key(uuid,uuid) 122a9d4ca00a7b25bf47909b88d43901') then
       raise exception 'rollback precondition: % is not this update''s body', shape using errcode='55000';
     end if;

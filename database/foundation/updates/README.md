@@ -87,23 +87,30 @@ register). Launch checklist item 56, batch D: the Low findings of the reviews of
 `20261125150215_small_lifecycle_rules.sql` (item 40). Full definitions of two
 internal functions; no API command, argument, result or grant changes.
 
-- **A report holds deletion only as long as the clean-up waits.**
-  `internal.delete_post` refuses (PT409, detail `post_report_open`) only while
-  an open report from the public exists and `internal.post_report_deferred`
-  holds, the scheduled clean-up's own rule: it stops waiting 7 days after the
-  post would otherwise be deleted (60 days after its last change when it has no
-  deletion date). Before, any open report refused with no end, so a report
-  nobody looked at could keep a paid slot or a free event place taken. A staff
-  duplicate-event flag no longer stops the owner's deletion (it names a pair of
-  posts, and the website says someone reported the post). The scheduled clean-up
-  is unchanged: it still waits for any open report, staff flags included.
+- **A report holds deletion for a limited time.** `internal.delete_post` refuses
+  (PT409, detail `post_report_open`) only while an open report from the public
+  exists and either that report is less than 7 days old or
+  `internal.post_report_deferred` holds, the scheduled clean-up's own rule: it
+  stops waiting 7 days after the post would otherwise be deleted (67 days after
+  its last change when it has no deletion date). So an owner can delete a
+  reported post only once the report is 7 days old and the clean-up's waiting
+  time has passed. The 7 days from the report matter for a post that has not
+  changed for months (the clean-up's clock reads the post itself, not its edit
+  copy), so staff always have time to look. Before, any open report refused with
+  no end, so a report nobody looked at could keep a paid slot or a free event
+  place taken. A staff duplicate-event flag no longer stops the owner's deletion
+  (it names a pair of posts, and the website says someone reported the post).
+  The scheduled clean-up is unchanged: it still waits for any open report, staff
+  flags included.
 - **The sticker reminder needs a reviewed ID.**
   `internal.sticker_renewal_reminder_key` also requires
   `internal.frontend_business_identity_reviewed(owner)`, which renewing needs.
   The email job compares the queued key with the current one, so a reminder
-  queued before the review lapsed is finished as skipped without a send. Its 30
-  days stay the period `internal.queue_sticker_renewal_reminders` uses to pick
-  candidates; the behaviour test checks both read the same interval.
+  queued before the review lapsed is finished as skipped without a send, and it
+  is not sent again for that sticker end (its key is already used), even if the
+  review is accepted again before the end. Its 30 days stay the period
+  `internal.queue_sticker_renewal_reminders` uses to pick candidates; the
+  behaviour test checks both read the same interval.
 
 ORDER: apply first, then merge (either order is safe: the website part only adds
 the "Events can start at most 12 months ahead." message and shows the business

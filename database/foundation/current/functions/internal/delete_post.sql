@@ -22,11 +22,11 @@ begin
     raise exception 'staff visibility hold requires independent release' using errcode = 'PT423', detail = 'staff_visibility_hold';
   end if;
   -- A post with an open report from the public waits until staff have looked
-  -- at it, for as long as the scheduled clean-up waits
-  -- (internal.post_report_deferred). A staff duplicate flag does not stop it.
-  -- The owner can still hide it.
-  if exists (select 1 from private.reports r where r.post_id = post.id and r.status = 'open' and r.report_origin = 'public')
-    and internal.post_report_deferred(post) then
+  -- at it: for at least 7 days after the report, and for as long as the
+  -- scheduled clean-up waits (internal.post_report_deferred). A staff duplicate
+  -- flag does not stop it. The owner can still hide it.
+  if exists (select 1 from private.reports r where r.post_id = post.id and r.status = 'open' and r.report_origin = 'public'
+      and (internal.post_report_deferred(post) or r.created_at > clock_timestamp() - interval '7 days')) then
     raise exception 'a reported post cannot be deleted until staff have looked at the report'
       using errcode = 'PT409', detail = 'post_report_open';
   end if;
