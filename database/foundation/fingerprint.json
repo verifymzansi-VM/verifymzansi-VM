@@ -19,13 +19,13 @@
     ],
     "notYetCompared": [],
     "howToCompare": "In the Supabase SQL editor (read-only), run `set search_path to \"$user\", public;` first, so pg_get_indexdef prints `extensions.gin_trgm_ops` as the replay does, then run database/foundation/fingerprint.sql unchanged and compare each row with categories below.",
-    "matchedThroughUpdate": "20261126001956_video_length_checked.sql",
+    "matchedThroughUpdate": "20261126053631_keep_for_periods.sql",
     "matchedFingerprints": {
       "column_grants": "5e5623672e80b927048d8553487d5442",
       "columns": "381e610f94547ef93e5833a318a3f3de",
       "constraints": "f2e5c1afdd99f6e2e2fe13a97e12c874",
       "event_triggers": "821f7d069c595c075754fad9309136ac",
-      "function_bodies": "c4a342bee3cd26a38b02501996b0a0d0",
+      "function_bodies": "0d661e99b0193ca3b5ac9bd456dcd478",
       "function_grants": "c4357fe50c367951eb54bf6fd6262bf0",
       "function_metadata": "a6547f6c1ea9096696c825b9648499be",
       "indexes": "edf5e53767ac7a22ac6aa6a3d7e1f52e",
@@ -33,9 +33,7 @@
       "row_level_security": "833c95cfe0709cc6ab0ed86504463fef",
       "triggers": "534926ff5fd0890045de1f0a6122bcd6"
     },
-    "pendingApplication": [
-      "20261126053631_keep_for_periods.sql"
-    ]
+    "pendingApplication": []
   },
   "knownDifferences": [
     "Reference data is not fingerprinted. candidate.sql seeds posting-terms version posting-v2, which production does not hold: production has posting-v1 and posting-v3 (current since 20261109173012_posting_terms_v3.sql), and posting-v4 once 20261112122001_publish_posting_terms_v4.sql is applied (current from 20261112173841_switch_posting_terms_v4.sql).",

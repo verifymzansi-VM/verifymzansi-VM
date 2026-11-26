@@ -82,10 +82,11 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Keep-for periods for the newer personal-data tables, 26 November 2026
 
-`20261126053631_keep_for_periods.sql` is pending (see the applied register).
-Launch checklist item 51 (roadmap M7.4). No table, column, trigger, command or
-grant changes; six existing function bodies are replaced, all used by the daily
-retention sweep (`api.run_retention`, service only).
+`20261126053631_keep_for_periods.sql` was applied on 26 November 2026 at 20:15
+UTC (see the applied register). Launch checklist item 51 (roadmap M7.4). No
+table, column, trigger, command or grant changes; six existing function bodies
+are replaced, all used by the daily retention sweep (`api.run_retention`,
+service only).
 
 - **Payment records: 7 years.** `internal.retention_tax_year_due` keeps payment,
   invoice and payout records 7 years (was 5) from the end of the tax year (1
@@ -8796,6 +8797,17 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   (fingerprint.sql, 18:33 UTC) matched the full replay (except the known schema
   grant difference)
 
-- `20261126053631_keep_for_periods.sql`: pending; apply-first
+- `20261126053631_keep_for_periods.sql`: applied 2026-11-26 20:15 UTC;
+  apply-first, owner-approved, before pull request #392 was merged; Supabase SQL
+  editor (browser), file from raw GitHub at a06dadd3, update sha256 starting
+  c43721a8d16441dc; preflight before "keep-for periods: update not applied;
+  contact messages: 0; admin invitations: 0; change logs: 0; appeals and holds:
+  0; closed reports: 0; role changes: 0; claim events: 0; slot limits: 0; ID
+  return reasons: 0; privacy request proofs: 0" with no problem rows, after
+  "keep-for periods: already applied; contact messages: 0; admin invitations: 0;
+  change logs: 0; appeals and holds: 0; closed reports: 0; role changes: 0;
+  claim events: 0; slot limits: 0; ID return reasons: 0; privacy request proofs:
+  0"; production fingerprint after it (fingerprint.sql, 20:18 UTC) matched the
+  full replay (except the known schema grant difference)
 
 <!-- applied-register:end -->
