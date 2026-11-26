@@ -1,6 +1,14 @@
 "use client";
 
-import { useState, useEffect, useLayoutEffect, useCallback, useRef, type ReactNode } from "react";
+import {
+  useState,
+  useEffect,
+  useLayoutEffect,
+  useCallback,
+  useRef,
+  type ComponentProps,
+  type ReactNode,
+} from "react";
 import Image from "next/image";
 import { Volume2, VolumeX, Play, Pause, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -176,6 +184,37 @@ function SmartFitBackdrop({
       />
       <div className="absolute inset-0 bg-black/10" />
     </>
+  );
+}
+
+const IMAGE_RETRY_DELAY_MS = 1000;
+
+/**
+ * A card picture that is asked for once more, after a short pause, before the
+ * caller's onError shows the stand-in: a passing server error would otherwise
+ * keep the stand-in until a refresh. Error responses are never cached, so
+ * mounting the image again fetches it again. One retry only, so no loop.
+ */
+function RetryOnceImage({ alt, onError, ...props }: ComponentProps<typeof Image>) {
+  const [attempt, setAttempt] = useState<"first" | "waiting" | "retry">("first");
+
+  useEffect(() => {
+    if (attempt !== "waiting") return;
+    const timer = setTimeout(() => setAttempt("retry"), IMAGE_RETRY_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [attempt]);
+
+  if (attempt === "waiting") return null;
+
+  return (
+    <Image
+      {...props}
+      alt={alt}
+      onError={(event) => {
+        if (attempt === "first") setAttempt("waiting");
+        else onError?.(event);
+      }}
+    />
   );
 }
 
@@ -546,7 +585,7 @@ function ImageCardPlayer({
   if (!normalizedSrc || hasError) return <MediaFallback fallback={fallback} />;
 
   const image = (
-    <Image
+    <RetryOnceImage
       src={normalizedSrc}
       alt={alt}
       fill
@@ -981,7 +1020,7 @@ function VideoCardPlayerInner({
           ) : (
             <SmartFitStaticBackdrop />
           )}
-          <Image
+          <RetryOnceImage
             src={normalizedSrc}
             alt={alt}
             fill
@@ -1001,7 +1040,7 @@ function VideoCardPlayerInner({
 
     return (
       <>
-        <Image
+        <RetryOnceImage
           src={normalizedSrc}
           alt={alt}
           fill
@@ -1030,7 +1069,7 @@ function VideoCardPlayerInner({
         ) : null}
 
         {hasUsablePoster ? (
-          <Image
+          <RetryOnceImage
             src={normalizedPoster!}
             alt={alt || "Video cover"}
             fill
@@ -1152,7 +1191,7 @@ function VideoCardPlayerInner({
       ) : null}
 
       {hasUsablePoster ? (
-        <Image
+        <RetryOnceImage
           src={normalizedPoster!}
           alt={alt || "Video cover"}
           fill
@@ -1424,7 +1463,7 @@ function HoverVideoPlayer({
           data-media-fit={usesSmartFit ? "smart" : "cover"}
         >
           <SmartFitBackdrop src={backgroundMediaSrc} sizes={sizes} priority={priority} />
-          <Image
+          <RetryOnceImage
             src={normalizedPoster}
             alt={alt}
             fill
@@ -1443,7 +1482,7 @@ function HoverVideoPlayer({
     }
 
     return (
-      <Image
+      <RetryOnceImage
         src={normalizedPoster}
         alt={alt}
         fill
@@ -1471,7 +1510,7 @@ function HoverVideoPlayer({
       ) : null}
 
       {hasUsablePoster ? (
-        <Image
+        <RetryOnceImage
           src={normalizedPoster!}
           alt={alt || "Video cover"}
           fill
@@ -1769,7 +1808,7 @@ function FeedVideoPlayer({
     }
 
     return (
-      <Image
+      <RetryOnceImage
         src={normalizedPoster}
         alt={alt}
         fill
@@ -1799,7 +1838,7 @@ function FeedVideoPlayer({
 
       {/* Keep the decoded frame visible when paused; the poster is for loading. */}
       {hasUsablePoster ? (
-        <Image
+        <RetryOnceImage
           src={normalizedPoster!}
           alt={alt || "Video cover"}
           fill

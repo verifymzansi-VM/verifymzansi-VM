@@ -1,13 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 
-const { mockSend } = vi.hoisted(() => ({
+const { mockSend, s3Configs } = vi.hoisted(() => ({
   mockSend: vi.fn(),
+  s3Configs: [] as Array<Record<string, unknown>>,
 }));
 
 vi.mock("@aws-sdk/client-s3", () => ({
   S3Client: class {
     send = mockSend;
+    constructor(config: Record<string, unknown>) {
+      s3Configs.push(config);
+    }
   },
   GetObjectCommand: class {
     constructor(public input: Record<string, unknown>) {}
@@ -26,6 +30,7 @@ vi.mock("@/lib/utils/rate-limit", () => ({
   getClientIp: vi.fn().mockReturnValue("127.0.0.1"),
 }));
 
+import { FetchHttpHandler } from "@smithy/fetch-http-handler";
 import { GET } from "@/app/api/media/serve/[...key]/route";
 
 function createRequest(headers: Record<string, string> = {}) {
@@ -104,6 +109,15 @@ describe("GET /api/media/serve/[...key]", () => {
 
     expect(res.status).toBe(400);
     expect(res.headers.get("Cache-Control")).toBe("private, no-store");
+  });
+
+  it("reads R2 through the fetch-based handler, not the Node http layer", async () => {
+    mockSend.mockRejectedValue(Object.assign(new Error("missing"), { name: "NoSuchKey" }));
+    await GET(createRequest(), {
+      params: Promise.resolve({ key: ["media", "listing", "abc", "1730000-photo.jpg"] }),
+    });
+
+    expect(s3Configs.at(-1)?.requestHandler).toBeInstanceOf(FetchHttpHandler);
   });
 
   it("forces SVG downloads and adds defensive CSP", async () => {

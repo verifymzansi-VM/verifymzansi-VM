@@ -305,4 +305,28 @@ describe("PosterCardShell", () => {
     expect(screen.getByText("Public preview")).toBeInTheDocument();
     expect(screen.getAllByText("Fallback listing")).toHaveLength(2);
   });
+
+  it("keeps the fallback caption above the Play button on video cards with playback controls", () => {
+    const { container, rerender } = render(
+      <PosterCardShell
+        href="/tourism-events/fest"
+        title="Fest"
+        mediaUrl="https://example.com/clip.mp4"
+        mediaFallbackUrl="/images/fallbacks/hero-listing.svg"
+        showPlaybackControl
+      />
+    );
+    const caption = () => container.querySelector("[data-fallback-caption]");
+    expect(caption()).toHaveClass("pb-20");
+
+    rerender(
+      <PosterCardShell
+        href="/listing/photo"
+        title="Photo"
+        mediaUrl="https://example.com/photo.jpg"
+        mediaFallbackUrl="/images/fallbacks/hero-listing.svg"
+      />
+    );
+    expect(caption()).toHaveClass("pb-4");
+  });
 });

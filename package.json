@@ -157,6 +157,7 @@
     "@radix-ui/react-tabs": "^1.1.21",
     "@radix-ui/react-toast": "^1.2.23",
     "@sentry/nextjs": "10.75.2",
+    "@smithy/fetch-http-handler": "5.8.0",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.117.2",
     "blurhash": "^2.0.5",
