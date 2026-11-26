@@ -1,23 +1,36 @@
 -- Generated from the replay of database/foundation by `pnpm db:foundation:snapshot`.
 -- Do not edit; change the schema with a reviewed file in database/foundation/updates/.
 
-CREATE OR REPLACE FUNCTION internal.start_invoice_payment(p_invoice_number text, p_expected_total_cents bigint, p_cooling_off_consent boolean)
+CREATE OR REPLACE FUNCTION internal.start_invoice_payment(p_invoice_number text, p_expected_total_cents bigint, p_cooling_off_consent boolean, p_link_hash text)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$
-declare actor uuid := internal.price_draft_actor(); inv private.customer_invoices; plan private.plan_versions;
+declare actor uuid; caller private.customer_invoices; inv private.customer_invoices; plan private.plan_versions;
   latest private.payments; other private.payments; pay private.payments; fingerprint text; counted jsonb;
   attempts integer; consent jsonb := internal.customer_invoice_consent(); is_package boolean; add_package uuid;
+  -- Through a payment link (20261126053701) the website's server also needs the
+  -- invoice's account, to open the Ozow request as it does for the member.
+  link_owner jsonb := '{}'::jsonb;
 begin
+  if p_link_hash is null then
+    actor := internal.price_draft_actor();
+  end if;
   if p_expected_total_cents is null then
     raise exception 'invoice total required' using errcode='22023';
   end if;
   if p_cooling_off_consent is distinct from true then
     raise exception 'cooling-off consent required before payment' using errcode='22023', detail='invoice_consent_required';
   end if;
-  inv := internal.lock_my_issued_invoice(actor, p_invoice_number);
+  -- The member's own invoice, or the one a payment link names (its account
+  -- acts, with every rule below).
+  caller := internal.customer_invoice_for_caller(p_invoice_number, p_link_hash);
+  actor := caller.account_id;
+  if p_link_hash is not null then
+    link_owner := jsonb_build_object('owner_id', actor);
+  end if;
+  inv := internal.lock_my_issued_invoice(actor, caller.invoice_number);
   if exists(select 1 from private.invoice_transfers t where t.customer_invoice_id = inv.id
       and internal.invoice_transfer_waiting(t)) then
     raise exception 'your bank transfer to this invoice is being checked; you do not need to pay again'
@@ -86,10 +99,10 @@ begin
     if latest.status = 'pending' and latest.checkout_url is not null
         and latest.checkout_expires_at > pg_catalog.clock_timestamp() then
       -- Its Ozow page is still open: the customer continues there.
-      perform internal.price_draft_actor();
+      if p_link_hash is null then perform internal.price_draft_actor(); end if;
       return jsonb_build_object('payment_id', latest.id, 'merchant_reference', latest.merchant_reference,
         'amount_cents', latest.amount_cents::text, 'currency', latest.currency, 'status', latest.status,
-        'slots', inv.slots, 'reused', true);
+        'slots', inv.slots, 'reused', true) || link_owner;
     end if;
     if internal.customer_invoice_attempt_live(latest) then
       raise exception 'your last payment of this invoice is still being checked; try again in a few minutes'
@@ -159,10 +172,10 @@ begin
   end if;
   if latest.id is not null then
     -- An attempt never sent to Ozow: the website sends it now.
-    perform internal.price_draft_actor();
+    if p_link_hash is null then perform internal.price_draft_actor(); end if;
     return jsonb_build_object('payment_id', latest.id, 'merchant_reference', latest.merchant_reference,
       'amount_cents', latest.amount_cents::text, 'currency', latest.currency, 'status', latest.status,
-      'slots', inv.slots, 'reused', true);
+      'slots', inv.slots, 'reused', true) || link_owner;
   end if;
   if is_package then
     -- One payment line holding every slot of the package (as the package
@@ -208,12 +221,15 @@ begin
       select pay.id, n, plan.id, inv.unit_price_cents from pg_catalog.generate_series(1, inv.slots) n;
   end if;
   insert into private.customer_invoice_payments (payment_id, invoice_id, attempt) values (pay.id, inv.id, attempts + 1);
-  perform internal.price_draft_actor(); -- final live owner/session check after all waits
+  if p_link_hash is null then
+    perform internal.price_draft_actor(); -- final live owner/session check after all waits
+  end if;
   return jsonb_build_object('payment_id', pay.id, 'merchant_reference', pay.merchant_reference,
     'amount_cents', pay.amount_cents::text, 'currency', pay.currency, 'status', pay.status,
-    'slots', inv.slots, 'reused', false);
+    'slots', inv.slots, 'reused', false) || link_owner;
 end;
 $function$;
-alter function internal.start_invoice_payment(text,bigint,boolean) owner to postgres;
-revoke all on function internal.start_invoice_payment(text,bigint,boolean) from public;
-grant execute on function internal.start_invoice_payment(text,bigint,boolean) to authenticated;
+alter function internal.start_invoice_payment(text,bigint,boolean,text) owner to postgres;
+revoke all on function internal.start_invoice_payment(text,bigint,boolean,text) from public;
+grant execute on function internal.start_invoice_payment(text,bigint,boolean,text) to authenticated;
+grant execute on function internal.start_invoice_payment(text,bigint,boolean,text) to service_role;

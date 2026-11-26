@@ -28,16 +28,21 @@ export interface InvoicePayPanelProps {
   /** The most one online (Ozow) payment may be, in cents; null when unknown
    * (the database still refuses Pay now above it). */
   onlineMaxCents?: number | null;
+  /** The invoice email's payment link token: the payer is not signed in, so
+   * the panel posts to the payment link route instead of the member's. */
+  linkToken?: string;
 }
 
 const field =
   "mt-1 block w-full rounded-xl border border-input bg-background px-3 py-2.5 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-sm";
 
-async function post(body: Record<string, unknown>) {
-  const res = await fetch("/api/billing/invoices", {
+async function post(body: Record<string, unknown>, linkToken?: string) {
+  // Through a payment link, the token names the invoice (never its number).
+  const { invoiceNumber: _number, ...rest } = body;
+  const res = await fetch(linkToken ? "/api/pay-invoice" : "/api/billing/invoices", {
     method: "POST",
     headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify(body),
+    body: JSON.stringify(linkToken ? { ...rest, token: linkToken } : body),
   });
   const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   return { ok: res.ok, status: res.status, data };
@@ -59,6 +64,7 @@ export function InvoicePayPanel({
   transferWaiting = false,
   transferExpired = false,
   onlineMaxCents = null,
+  linkToken,
 }: InvoicePayPanelProps) {
   // Above the most Ozow accepts in one payment, only a bank transfer pays it.
   const bankTransferOnly = aboveOnlineLimit(totalCents, onlineMaxCents);
@@ -83,14 +89,17 @@ export function InvoicePayPanel({
     setError(null);
     const values = new FormData(form);
     try {
-      const result = await post({
-        action: "billing",
-        invoiceNumber,
-        revision,
-        buyerName: String(values.get("buyerName") ?? ""),
-        buyerAddress: String(values.get("buyerAddress") ?? ""),
-        buyerRegistrationNumber: String(values.get("buyerRegistrationNumber") ?? "") || null,
-      });
+      const result = await post(
+        {
+          action: "billing",
+          invoiceNumber,
+          revision,
+          buyerName: String(values.get("buyerName") ?? ""),
+          buyerAddress: String(values.get("buyerAddress") ?? ""),
+          buyerRegistrationNumber: String(values.get("buyerRegistrationNumber") ?? "") || null,
+        },
+        linkToken
+      );
       if (result.ok) {
         setEditing(false);
         router.refresh();
@@ -109,12 +118,10 @@ export function InvoicePayPanel({
     setPaying(true);
     setError(null);
     try {
-      const result = await post({
-        action: "pay",
-        invoiceNumber,
-        expectedTotalCents: totalCents,
-        coolingOffConsent: true,
-      });
+      const result = await post(
+        { action: "pay", invoiceNumber, expectedTotalCents: totalCents, coolingOffConsent: true },
+        linkToken
+      );
       if (result.ok && typeof result.data.checkoutUrl === "string") {
         window.location.assign(result.data.checkoutUrl);
         return;
