@@ -15,7 +15,12 @@ import {
   paragraph,
   sanitizeAppUrl,
 } from "@/lib/services/email-template";
-import { buildPaymentReceiptEmail, type PaymentReceipt } from "./payment-receipt-email";
+import {
+  buildInvoiceEmail,
+  buildPaymentReceiptEmail,
+  type InvoiceEmail,
+  type PaymentReceipt,
+} from "./payment-receipt-email";
 
 const log = createLogger("Email");
 
@@ -147,6 +152,11 @@ const platformNotices = {
   // nothing is sent. Wording awaiting the owner's approval
   // (FRONTEND-CHANGES.md group 105).
   sticker_renewal_reminder: ["Your VerifyMzansi sticker needs renewing soon", null],
+  // A customer invoice with its payment link (update
+  // 20261126053701_invoice_pay_link.sql), built in ./payment-receipt-email.ts;
+  // without the invoice and its link nothing is sent. Wording awaiting the
+  // owner's approval.
+  invoice_issued: ["Your invoice from VerifyMzansi", null],
 } as const;
 export type PlatformNoticeKind = keyof typeof platformNotices;
 /** The renewal reminder's second paragraph (awaiting the owner's approval). */
@@ -210,6 +220,8 @@ export type PostLifecycleDetails = {
   stickerKind?: "cipc" | "seen" | null;
   stickerEndsAt?: string | null;
   stickerBusinessId?: string | null;
+  /** invoice_issued: the invoice and its payment link. */
+  invoice?: InvoiceEmail;
 };
 function deletionTime(iso: string | null | undefined): string | null {
   const ms = iso ? Date.parse(iso) : Number.NaN;
@@ -286,6 +298,8 @@ export async function sendPlatformNotice(
     throw new Error("Account warning details unavailable");
   if (kind === "payment_completed" && details?.receipt)
     return sendEmail({ to, idempotencyKey, ...buildPaymentReceiptEmail(details.receipt) });
+  if (kind === "invoice_issued" && details?.invoice)
+    return sendEmail({ to, idempotencyKey, ...buildInvoiceEmail(details.invoice) });
   const [subject, fallbackIntro] = platformNotices[kind];
   const intro = postLifecycleIntro(kind, details) ?? fallbackIntro;
   if (intro === null) throw new Error("Notice details unavailable");

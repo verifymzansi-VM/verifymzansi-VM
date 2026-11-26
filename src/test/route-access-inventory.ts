@@ -198,6 +198,7 @@ export const ROUTE_ACCESS: Record<string, Partial<Record<RouteMethod, RouteAcces
   "api/organisations/search": { GET: "public" },
   "api/otp/send": { POST: "signed-in" },
   "api/otp/verify": { POST: "signed-in" },
+  "api/pay-invoice": { POST: "public" },
   "api/post-templates": { GET: "signed-in", POST: "signed-in" },
   "api/post-templates/[id]": { PATCH: "signed-in", DELETE: "signed-in" },
   "api/profile/avatar": { POST: "signed-in" },
@@ -277,6 +278,8 @@ export const PUBLIC_ROUTE_REASONS: Record<string, string> = {
   "api/organisations/affiliations GET":
     "Public affiliation badges for the given business ids (at most 100), rate limited",
   "api/organisations/search GET": "Public organisation directory search, rate limited",
+  "api/pay-invoice POST":
+    "Saves billing details and pays an emailed invoice from its payment link, without sign-in; rate limited",
   "api/promotions GET": "Public directory of live promotions",
   "api/promotions/[id] GET": "Live promotion detail; the owner view (?owner=1) needs a session",
   "api/reports POST": "Reports a post; behind Turnstile and a rate limit, sign-in optional",

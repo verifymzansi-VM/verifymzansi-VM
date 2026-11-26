@@ -80,6 +80,46 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Invoice payment link, 26 November 2026
+
+`20261126053701_invoice_pay_link.sql` is pending (see the applied register).
+Launch checklist items 38 and 34 (inventory A28): a customer invoice is emailed
+with a link that lets its payer see and pay it without signing in, and the
+receipt names the invoice it paid.
+
+- **The link.** `private.customer_invoices.pay_link_hash` keeps the SHA-256
+  (hex) of the invoice's current link, unique where set. The website's email job
+  makes the link (32 random bytes) just before it sends, and stores its hash
+  with the new service command `api.prepare_invoice_email` (only while the
+  invoice is unpaid); each sending replaces the hash, so the latest email holds
+  the live link.
+- **The email.** `internal.notify_invoice_issued` (full body) also queues an
+  outbox row of the new kind `invoice_issued`, one per invoice, for every way
+  staff issue an invoice; `internal.claim_supported_notification_outbox` (full
+  body) accepts the kind.
+- **Paying by link.** New service commands `api.get_invoice_by_link`,
+  `api.save_invoice_billing_by_link` and `api.start_invoice_payment_by_link`
+  (the website's server only). They reach the same functions as the member's
+  commands: `internal.get_my_invoice`, `internal.save_my_invoice_billing` and
+  `internal.start_invoice_payment` gain `p_link_hash` (old signatures dropped;
+  the member's `api` commands keep their arguments and grants and pass null).
+  With a hash, new `internal.customer_invoice_for_caller` finds the invoice
+  whose link it is, of an account that can still use the site (anything else is
+  not found), and that account acts with every rule of the member's Pay now. The
+  read leaves out the invoice's and payments' ids; Pay now also answers
+  `owner_id` for the server's Ozow request.
+- **The receipt.** `internal.get_payment_receipt` (full body) adds
+  `customer_invoice_number` (from the payment's snapshot), null for a checkout.
+
+ORDER: **apply-first** (apply, then merge): the release calls the new commands
+and the deploy gate checks them. The live website leaves the new outbox kind
+unclaimed until the release is deployed, and its receipt reader ignores the
+extra field. Read-only preflight:
+`../preflight/20261126053701_invoice_pay_link.check.sql` (expect "invoice
+payment link: update not applied"); rollback:
+`../rollback/20261126053701_invoice_pay_link.down.sql` (refused once an invoice
+email was queued; deploy a website without the payment link first).
+
 ## Staff refund follow-ups, 25 November 2026
 
 `20261125194727_part_refund_follow_ups.sql` is pending (see the applied
@@ -171,9 +211,9 @@ guard watches only staff roles.
 - **Trade-off.** A hacked admin can now only be stopped by two other admins or
   the owner's SQL session (owner accepted 26 Nov).
 
-Expand only: no command, argument or grant changes. ORDER: either order is
-safe (the website words the new refusal); released apply-first on 26 November
-2026. Read-only preflight:
+Expand only: no command, argument or grant changes. ORDER: either order is safe
+(the website words the new refusal); released apply-first on 26 November 2026.
+Read-only preflight:
 `../preflight/20261125174942_end_admin_role_before_restriction.check.sql`;
 rollback:
 `../rollback/20261125174942_end_admin_role_before_restriction.down.sql` (puts
@@ -8366,5 +8406,7 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
 - `20261125174942_end_admin_role_before_restriction.sql`: pending
 
 - `20261125194727_part_refund_follow_ups.sql`: pending; website-first
+
+- `20261126053701_invoice_pay_link.sql`: pending
 
 <!-- applied-register:end -->

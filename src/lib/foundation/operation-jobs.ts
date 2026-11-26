@@ -22,6 +22,7 @@ import {
 import { createLogger } from "../utils/logger";
 import { hasDatabaseMessage } from "./error-reasons";
 import { paymentNoLongerComplete, readPaymentReceipt } from "./payment-receipt";
+import { createFoundationInviteToken, hashFoundationInviteToken } from "./organisations";
 
 const log = createLogger("FoundationOperationJobs");
 const kind = z.enum([
@@ -52,6 +53,7 @@ const kind = z.enum([
   "staff_appeal",
   "staff_report",
   "sticker_renewal_reminder",
+  "invoice_issued",
 ]);
 type Kind = z.infer<typeof kind>;
 // Emails to staff about a new privacy request, appeal or report, with its
@@ -73,6 +75,8 @@ const otherKinds = kind.options.filter((k) => !paymentKinds.includes(k));
 // such a database the job drops them one update at a time until the claim is
 // accepted, and keeps that list.
 const laterKinds: ReadonlyArray<ReadonlySet<Kind>> = [
+  // 20261126053701_invoice_pay_link.sql
+  new Set<Kind>(["invoice_issued"]),
   // 20261125150215_small_lifecycle_rules.sql
   new Set<Kind>(["sticker_renewal_reminder"]),
   // 20261125131322_lost_email_alert_staff_deadlines.sql
@@ -240,6 +244,15 @@ const jobSchema = z
   );
 type Job = z.infer<typeof jobSchema>;
 // Enough of an unreadable message to alert staff about it.
+// What api.prepare_invoice_email answers (20261126053701_invoice_pay_link.sql).
+const invoiceEmailRead = z.object({
+  invoice_number: z.string().regex(/^VM-\d{4}-\d{6}$/),
+  status: z.enum(["issued", "paid", "void"]),
+  owner_id: z.uuid(),
+  description: z.string().min(3).max(200),
+  total_cents: z.number().int().positive(),
+  due_on: z.iso.date(),
+});
 const jobIdentity = z.object({
   id: z.uuid(),
   kind: z.string().regex(/^[a-z_]{1,80}$/),
@@ -464,7 +477,7 @@ export async function runFoundationOperationJobs(
     };
     // An expired lease may already belong to another run: never send or acknowledge it.
     if (leaseLeft <= 0) return giveUp();
-    const giveBack = async (reason: "deferred" | "receipt_unavailable") => {
+    const giveBack = async (reason: "deferred" | "receipt_unavailable" | "invoice_unavailable") => {
       const back = await call("complete_notification_outbox", {
         p_id: job.id,
         p_claim: job.claim_token,
@@ -504,18 +517,52 @@ export async function runFoundationOperationJobs(
       }
       if (!receiptWithdrawn && tooLate()) return giveBack("deferred");
     }
+    // The invoice email gets a new payment link each time it is sent: only the
+    // link's hash goes to the database, replacing the earlier one, so the
+    // latest email holds the live link. A paid or cancelled invoice is not
+    // sent. Each link has its own email key: a retry is a new email.
+    let invoiceDetails: PostLifecycleDetails | undefined;
+    let invoiceKey = "";
+    let invoiceSettled = false;
+    if (job.recipient && job.kind === "invoice_issued" && job.subject_id) {
+      const linkToken = createFoundationInviteToken();
+      const hash = await hashFoundationInviteToken(linkToken);
+      const read = await call(
+        "prepare_invoice_email",
+        { p_invoice_id: job.subject_id, p_token_hash: hash },
+        claimSignal
+      );
+      const invoice = invoiceEmailRead.safeParse(read.data);
+      if (read.error || !invoice.success || invoice.data.owner_id !== job.owner_id) {
+        fail("outbox:invoice");
+        return giveBack("invoice_unavailable");
+      }
+      if (invoice.data.status === "issued") {
+        invoiceDetails = {
+          invoice: {
+            invoiceNumber: invoice.data.invoice_number,
+            item: invoice.data.description,
+            totalCents: invoice.data.total_cents,
+            dueOn: invoice.data.due_on,
+            linkToken,
+          },
+        };
+        invoiceKey = `/${hash.slice(0, 16)}`;
+        if (tooLate()) return giveBack("deferred");
+      } else invoiceSettled = true;
+    }
     // Nothing to send: no recipient, or a receipt no longer due. The message
     // is finished as handled, recorded as skipped so the member's email
     // history does not list it as sent (a database before
     // 20261117123240_skipped_email_status ignores the reason).
-    const skipped = job.recipient === null || receiptWithdrawn;
+    const skipped = job.recipient === null || receiptWithdrawn || invoiceSettled;
     let success = skipped;
     // The provider refused a repeat of an earlier request with the same key:
     // that earlier request may have been delivered.
     let unknown = false;
-    if (job.recipient && !receiptWithdrawn) {
+    if (job.recipient && !skipped) {
       const recipient = job.recipient;
-      const key = `foundation-outbox/${job.id}`;
+      const key = `foundation-outbox/${job.id}${invoiceKey}`;
       try {
         const result = await paced(() =>
           isStaffKind(job.kind)
@@ -561,8 +608,14 @@ export async function runFoundationOperationJobs(
                               trialEndsAt: job.trial_ends_at ?? null,
                               trialFundsPost: job.trial_funds_post ?? null,
                             })
-                          : receiptDetails
-                            ? deliver(recipient, job.kind, key, undefined, receiptDetails)
+                          : (receiptDetails ?? invoiceDetails)
+                            ? deliver(
+                                recipient,
+                                job.kind,
+                                key,
+                                undefined,
+                                receiptDetails ?? invoiceDetails
+                              )
                             : deliver(recipient, job.kind, key)
         );
         success = result.success;

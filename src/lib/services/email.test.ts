@@ -396,6 +396,37 @@ Renew my sticker: https://verifymzansi.com/dashboard/businesses/${business}/veri
     expect(mockSend.mock.calls.length).toBe(sent);
     vi.unstubAllEnvs();
   });
+  it("sends the invoice with its payment link, and nothing without the invoice (items 34, 38)", async () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
+    const linkToken = "B".repeat(43);
+    await sendPlatformNotice(
+      "member@example.invalid",
+      "invoice_issued",
+      "foundation-outbox/invoice/0123456789abcdef",
+      undefined,
+      {
+        invoice: {
+          invoiceNumber: "VM-2026-000012",
+          item: "3 × Individual slot — 90 days",
+          totalCents: 62100,
+          dueOn: "2026-12-03",
+          linkToken,
+        },
+      }
+    );
+    const [message, options] = mockSend.mock.calls.at(-1)!;
+    expect(message.subject).toBe("Invoice VM-2026-000012 from VerifyMzansi");
+    expect(message.text).toContain(
+      `View and pay invoice: https://verifymzansi.com/pay-invoice?token=${linkToken}`
+    );
+    expect(options.idempotencyKey).toBe("foundation-outbox/invoice/0123456789abcdef");
+    const sent = mockSend.mock.calls.length;
+    await expect(
+      sendPlatformNotice("member@example.invalid", "invoice_issued", "outbox/x")
+    ).rejects.toThrow("Notice details unavailable");
+    expect(mockSend.mock.calls.length).toBe(sent);
+    vi.unstubAllEnvs();
+  });
   it("passes durable job keys to Resend for repeatable notices", async () => {
     await sendModerationNoticeEmail({
       email: "user@example.com",

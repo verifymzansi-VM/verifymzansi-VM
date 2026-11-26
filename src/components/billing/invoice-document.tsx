@@ -56,7 +56,8 @@ export function InvoiceDocument({
   headingLevel: Heading = "h2",
   onlineMaxCents = null,
 }: {
-  invoice: CustomerInvoice;
+  /** Also the invoice a payment link shows, which has no ids. */
+  invoice: Omit<CustomerInvoice, "invoice_id" | "payment_id" | "latest_attempt">;
   sellerAddress: string | null;
   bank: InvoiceBankDetails | null;
   className?: string;
