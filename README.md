@@ -188,11 +188,8 @@ not depend on manually exporting `SUPABASE_ACCESS_TOKEN` and
 `SUPABASE_DB_PASSWORD` into your terminal first.
 
 ```bash
-pnpm supabase:cli -- migration list
+pnpm supabase:cli -- projects list
 ```
-
-The old `supabase:migration:list` and `supabase:db:push` aliases were removed
-with the retired `supabase/migrations/` tree.
 
 ### Backups
 
@@ -222,7 +219,7 @@ fails for new actionable findings.
 To use a different env file, pass it through the generic wrapper:
 
 ```bash
-pnpm supabase:cli -- --env-file=.env.local migration list
+pnpm supabase:cli -- --env-file=.env.local projects list
 ```
 
 ### Browser tests

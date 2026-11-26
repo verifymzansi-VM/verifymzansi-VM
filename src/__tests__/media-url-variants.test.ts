@@ -1,11 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  normalizeMediaUrl,
-  extractMediaStorageKey,
-  getMediaCdnUrl,
-  getVariantUrl,
-  getResponsiveImageUrls,
-} from "@/lib/utils/media-url";
+import { normalizeMediaUrl, extractMediaStorageKey, getMediaCdnUrl } from "@/lib/utils/media-url";
 
 describe("media-url variant helpers", () => {
   describe("getMediaCdnUrl", () => {
@@ -22,54 +16,6 @@ describe("media-url variant helpers", () => {
     it("returns the original URL when key cannot be extracted", () => {
       const url = getMediaCdnUrl("https://example.com/unrelated.jpg");
       expect(url).toBe("https://example.com/unrelated.jpg");
-    });
-  });
-
-  describe("getVariantUrl", () => {
-    it("returns proxy path for original variant", () => {
-      const url = getVariantUrl("/api/media/serve/media/listing/abc.jpg", "original");
-      expect(url).toBe("/api/media/serve/media/listing/abc.jpg");
-    });
-
-    it("returns an R2 WebP proxy URL for the thumb variant", () => {
-      const url = getVariantUrl("/api/media/serve/media/listing/abc.jpg", "thumb");
-      expect(url).toBe("/api/media/serve/media/listing/abc.w400.webp");
-    });
-
-    it("returns an R2 WebP proxy URL for the card variant", () => {
-      const url = getVariantUrl("media/listing/abc.jpg", "card");
-      expect(url).toBe("/api/media/serve/media/listing/abc.w800.webp");
-    });
-
-    it("returns an R2 WebP proxy URL for the full variant", () => {
-      const url = getVariantUrl("media/listing/abc.jpg", "full");
-      expect(url).toBe("/api/media/serve/media/listing/abc.w1600.webp");
-    });
-
-    it("returns the direct CDN URL for video files regardless of variant", () => {
-      const url = getVariantUrl("/api/media/serve/media/listing/clip.mp4", "thumb");
-      expect(url).toBe("https://media.verifymzansi.com/media/listing/clip.mp4");
-    });
-
-    it("falls back to original URL for unrecognised input", () => {
-      const url = getVariantUrl("https://example.com/foo.jpg", "card");
-      expect(url).toBe("https://example.com/foo.jpg");
-    });
-
-    it("does not double-rewrite an existing variant", () => {
-      expect(getVariantUrl("media/listing/abc.w400.webp", "card")).toBe(
-        "/api/media/serve/media/listing/abc.w400.webp"
-      );
-    });
-  });
-
-  describe("getResponsiveImageUrls", () => {
-    it("returns all four variant URLs", () => {
-      const urls = getResponsiveImageUrls("/api/media/serve/media/listing/abc.jpg");
-      expect(urls.thumb).toBe("/api/media/serve/media/listing/abc.w400.webp");
-      expect(urls.card).toBe("/api/media/serve/media/listing/abc.w800.webp");
-      expect(urls.full).toBe("/api/media/serve/media/listing/abc.w1600.webp");
-      expect(urls.original).toBe("/api/media/serve/media/listing/abc.jpg");
     });
   });
 

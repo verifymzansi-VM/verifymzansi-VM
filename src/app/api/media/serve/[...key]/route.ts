@@ -27,7 +27,7 @@ const logger = createLogger("MediaServe");
  * through application servers.
  *
  * URL pattern:  /api/media/serve/<key…>
- * Example:      /api/media/serve/media/listing/abc123/17200000-xyz.jpg
+ * Example:      /api/media/serve/media/<uuid>
  */
 
 // ── R2 Binding types (matches @cloudflare/workers-types) ────────────────

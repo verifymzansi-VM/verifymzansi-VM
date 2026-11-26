@@ -105,8 +105,8 @@ export function extractMediaStorageKey(url: string): string | null {
  * Rewrite a media URL for delivery:
  * - Videos → direct R2 custom-domain URL (edge-cached, native Range support,
  *   no Worker hop).
- * - Images → media proxy for responsive variants, ETag/304 caching, and
- *   legacy fallback to the original object.
+ * - Images → media proxy for responsive copies and ETag/304 caching (a missing
+ *   `media/<uuid>.w<N>.webp` copy falls back to the photo).
  *
  * Returns the original string unchanged if it doesn't match any known pattern.
  */
@@ -146,17 +146,6 @@ export function normalizeMediaUrls(urls: string[]): string[] {
   return urls.map(normalizeMediaUrl);
 }
 
-// ── Responsive variant helpers ───────────────────────────────
-
-export type ImageVariant = "thumb" | "card" | "full" | "original";
-
-/** R2 image sizes generated at upload time. */
-const VARIANT_WIDTHS: Record<Exclude<ImageVariant, "original">, number> = {
-  thumb: 400,
-  card: 800,
-  full: 1600,
-};
-
 /**
  * Return the CDN-addressable URL for a media storage key.
  * This URL can be used with Cloudflare Image Resizing or as a direct
@@ -167,38 +156,4 @@ export function getMediaCdnUrl(keyOrUrl: string): string {
   const key = extractMediaStorageKey(keyOrUrl);
   if (!key) return keyOrUrl;
   return `https://${MEDIA_BASE.replace(/^https?:\/\//, "")}/${key}`;
-}
-
-/**
- * Build a URL for a pre-generated R2 WebP variant. The media serve route
- * falls back to the original for older or smaller images without that size.
- *
- * @param url     - Any media URL or storage key
- * @param variant - Size preset: "thumb" (400w), "card" (800w), "full" (1600w), "original"
- */
-export function getVariantUrl(url: string, variant: ImageVariant = "original"): string {
-  if (variant === "original") return normalizeMediaUrl(url);
-
-  const key = extractMediaStorageKey(url);
-  if (!key) return url;
-
-  // Video files don't have image variants
-  if (isVideoUrl(url)) return normalizeMediaUrl(url);
-
-  if (/\.w\d+\.webp$/.test(key)) return normalizeMediaUrl(url);
-  const dot = key.lastIndexOf(".");
-  if (dot <= 0) return normalizeMediaUrl(url);
-  return `${PROXY_PREFIX}${key.slice(0, dot)}.w${VARIANT_WIDTHS[variant]}.webp`;
-}
-
-/**
- * Return all available variant URLs for responsive image usage.
- */
-export function getResponsiveImageUrls(url: string): Record<ImageVariant, string> {
-  return {
-    thumb: getVariantUrl(url, "thumb"),
-    card: getVariantUrl(url, "card"),
-    full: getVariantUrl(url, "full"),
-    original: normalizeMediaUrl(url),
-  };
 }
