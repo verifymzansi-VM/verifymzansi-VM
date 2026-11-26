@@ -800,6 +800,7 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         Args: { p_email: string; p_days: number; p_reason: string; p_request_id: string };
         Returns: Json;
       };
+      get_frontend_staff_video_lengths: { Args: { p_posts: string[] }; Returns: Json };
     };
   };
 };
@@ -1060,6 +1061,16 @@ export type FoundationRuntimeServiceDatabase = {
           p_token_hash: string;
           p_expected_total_cents: number;
           p_cooling_off_consent: boolean;
+        };
+        Returns: Json;
+      };
+      complete_frontend_video_upload: {
+        Args: {
+          p_object_id: string;
+          p_size: number;
+          p_sha256: string;
+          p_mime: string;
+          p_duration_ms: number;
         };
         Returns: Json;
       };
