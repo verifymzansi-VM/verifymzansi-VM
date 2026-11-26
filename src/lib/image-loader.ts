@@ -4,11 +4,12 @@
  * Cloudflare does not support the default Next.js `/_next/image` endpoint,
  * so we use a custom loader instead of setting `images.unoptimized: true`.
  *
- * Media proxy paths ask for a pre-generated WebP variant key; the media route
- * serves the original file when that variant does not exist. Nothing is
- * resized on the fly: the zone has no Cloudflare Image Resizing, so this
- * loader never builds `/cdn-cgi/image/` URLs. Other images keep their source
- * URL, with width/quality query parameters added.
+ * Media proxy paths for media/<uuid> photos ask for a pre-generated WebP copy;
+ * the media route serves the photo when that copy does not exist. Other proxy
+ * paths keep their URL. Nothing is resized on the fly: the zone has no
+ * Cloudflare Image Resizing, so this loader never builds `/cdn-cgi/image/`
+ * URLs. Other images keep their source URL, with width/quality query
+ * parameters added.
  */
 
 interface ImageLoaderParams {
@@ -50,27 +51,8 @@ function isImageSource(src: string): boolean {
  */
 const CF_RESIZING_ENABLED = process.env.NEXT_PUBLIC_CF_IMAGE_RESIZING === "true";
 
-/**
- * Pre-generated variant widths (must match VARIANT_WIDTHS in
- * src/lib/media/variant-keys.ts). Cloudflare Image Resizing is not
- * enabled on the zone, so responsive delivery relies on variants generated
- * at upload time. The loader maps a requested width to the nearest variant
- * key; the serve route falls back to the original when the variant object
- * does not exist (photos uploaded before the copies were made, copies that
- * failed, and widths not smaller than the original).
- */
-const VARIANT_WIDTHS = [400, 800, 1600] as const;
-
 /** A photo or video key made by the live backend's upload: `media/<uuid>`. */
 const LIVE_MEDIA_KEY = /^media\/[0-9a-f-]{36}$/;
-
-/** Pick the smallest variant width that is >= the requested width. */
-function nearestVariantWidth(requestedWidth: number): number {
-  for (const w of VARIANT_WIDTHS) {
-    if (w >= requestedWidth) return w;
-  }
-  return VARIANT_WIDTHS[VARIANT_WIDTHS.length - 1];
-}
 
 /**
  * Live-backend photos get only the 800 px copy at upload now (each copy uses
@@ -84,35 +66,24 @@ function liveMediaVariantWidth(requestedWidth: number): number {
 }
 
 /**
- * Rewrite a media proxy path to its pre-generated variant key for the
- * requested width. `/api/media/serve/media/x.jpg` @ 640 →
- * `/api/media/serve/media/x.w800.webp`. Returns the original path unchanged
- * when it is already a variant key or not a resizable image.
+ * Rewrite a photo's media proxy path to its copy for the requested width:
+ * `/api/media/serve/media/<uuid>` @ 640 → `/api/media/serve/media/<uuid>.w800.webp`
+ * (src/lib/media/photo-variants.ts). The serve route falls back to the photo
+ * only for `media/<uuid>.w<N>.webp`, so every other path is returned unchanged.
  */
 function toVariantProxyPath(path: string, requestedWidth: number): string {
-  // Already a variant key — don't double-rewrite.
-  if (/\.w\d+\.webp$/.test(path)) return path;
   const servePrefix = "/api/media/serve/";
-  if (!path.startsWith(servePrefix)) return path;
-  const key = path.slice(servePrefix.length);
-  // Keys made by the live backend (`media/<uuid>`) have no extension; their
-  // copies are `media/<uuid>.w<width>.webp` (src/lib/media/photo-variants.ts).
-  if (LIVE_MEDIA_KEY.test(key)) {
-    return `${servePrefix}${key}.w${liveMediaVariantWidth(requestedWidth)}.webp`;
-  }
-  if (!isImageSource(path)) return path;
-  const dot = key.lastIndexOf(".");
-  if (dot <= 0) return path;
-  const stem = key.slice(0, dot);
-  const width = nearestVariantWidth(requestedWidth);
-  return `${servePrefix}${stem}.w${width}.webp`;
+  const key = path.startsWith(servePrefix) ? path.slice(servePrefix.length) : "";
+  if (!LIVE_MEDIA_KEY.test(key)) return path;
+  return `${servePrefix}${key}.w${liveMediaVariantWidth(requestedWidth)}.webp`;
 }
 
 export default function cloudflareImageLoader({ src, width, quality }: ImageLoaderParams): string {
   const resolvedQuality = quality || 75;
 
-  // The media proxy can always serve a pre-generated variant, falling back to
-  // its original when that variant is absent. Keep this path independent of
+  // For media/<uuid> photos the media proxy serves a pre-generated copy,
+  // falling back to the photo when that copy is absent; other proxy paths are
+  // returned unchanged. Keep this path independent of
   // Cloudflare Image Resizing so SSR preloads match hydrated image URLs.
   if (src.startsWith("/api/media/serve/")) {
     return toVariantProxyPath(src, width);

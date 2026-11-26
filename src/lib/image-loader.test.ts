@@ -30,35 +30,6 @@ describe("cloudflareImageLoader", () => {
     expect(result).toBe("/images/hero.jpg?w=1024&q=75");
   });
 
-  it("maps media proxy images to pre-generated variants even when Cloudflare resizing is disabled", async () => {
-    vi.stubEnv("NEXT_PUBLIC_CF_IMAGE_RESIZING", "false");
-    const { default: loader } = await import("./image-loader");
-    // 512 requested → nearest variant >= 512 is 800
-    const result = loader({ src: "/api/media/serve/media/listing/hero.jpg", width: 512 });
-    expect(result).toBe("/api/media/serve/media/listing/hero.w800.webp");
-  });
-
-  it("maps small requests to the 400w variant", async () => {
-    vi.stubEnv("NEXT_PUBLIC_CF_IMAGE_RESIZING", "true");
-    const { default: loader } = await import("./image-loader");
-    const result = loader({ src: "/api/media/serve/media/listing/hero.jpg", width: 320 });
-    expect(result).toBe("/api/media/serve/media/listing/hero.w400.webp");
-  });
-
-  it("caps large requests at the 1600w variant", async () => {
-    vi.stubEnv("NEXT_PUBLIC_CF_IMAGE_RESIZING", "true");
-    const { default: loader } = await import("./image-loader");
-    const result = loader({ src: "/api/media/serve/media/listing/hero.jpg", width: 2400 });
-    expect(result).toBe("/api/media/serve/media/listing/hero.w1600.webp");
-  });
-
-  it("does not double-rewrite an existing variant key", async () => {
-    vi.stubEnv("NEXT_PUBLIC_CF_IMAGE_RESIZING", "true");
-    const { default: loader } = await import("./image-loader");
-    const result = loader({ src: "/api/media/serve/media/listing/hero.w800.webp", width: 512 });
-    expect(result).toBe("/api/media/serve/media/listing/hero.w800.webp");
-  });
-
   it.each([
     [128, 800],
     [320, 800],
@@ -81,9 +52,14 @@ describe("cloudflareImageLoader", () => {
     }
   );
 
-  it("leaves other extensionless media proxy paths unchanged", async () => {
+  it("leaves media proxy paths other than a media/<uuid> key unchanged", async () => {
     vi.stubEnv("NEXT_PUBLIC_CF_IMAGE_RESIZING", "true");
     const { default: loader } = await import("./image-loader");
+    for (const key of ["media/listing/hero.jpg", "media/listing/hero.w800.webp"]) {
+      expect(loader({ src: `/api/media/serve/${key}`, width: 512 })).toBe(
+        `/api/media/serve/${key}`
+      );
+    }
     expect(loader({ src: "/api/media/serve/media/listing/clip", width: 400 })).toBe(
       "/api/media/serve/media/listing/clip"
     );
@@ -97,14 +73,6 @@ describe("cloudflareImageLoader", () => {
     const { default: loader } = await import("./image-loader");
     const result = loader({ src: "/api/media/serve/media/listing/clip.mp4", width: 512 });
     expect(result).toBe("/api/media/serve/media/listing/clip.mp4");
-  });
-
-  it("maps absolute same-origin media proxy URLs without Cloudflare resizing", async () => {
-    vi.stubEnv("NEXT_PUBLIC_CF_IMAGE_RESIZING", "false");
-    const { default: loader } = await import("./image-loader");
-    expect(
-      loader({ src: "https://verifymzansi.com/api/media/serve/media/listing/hero.jpg", width: 320 })
-    ).toBe("/api/media/serve/media/listing/hero.w400.webp");
   });
 
   // The zone has no Cloudflare Image Resizing: a /cdn-cgi/image/ path on this

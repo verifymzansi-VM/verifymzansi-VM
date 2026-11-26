@@ -178,6 +178,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 113. Video length checked by the database (item 39) (no file rows of its own: the group 113 part of 2 rows elsewhere) | approved by owner 2026-11-26 | Nothing for members or visitors, except a clear message when a post's video is too long for it (events: 1 minute, other posts: 2 minutes). Staff: the review panel shows each video's length and the limit. |
 | 120. Post viewer: one message for an empty section (item 81) | approved by owner 2026-11-26 | Post viewer, after switching to a section with no posts (for example Mzansi Business while it has none): only 'Nothing here yet' shows; the 'You’re all caught up' end card no longer shows on top of it, and the up and down arrows are hidden there (they did nothing and covered the message on phones). Sections with posts still end with the end card. |
 | 951. Keep-for periods: payment records 7 years (item 51) (no file rows of its own: the group 951 part of 2 rows elsewhere) | approved by owner 2026-11-26 | Privacy Policy: payment records are kept for 7 years after the end of the tax year (was 5), as company and tax law require; the record of a data-rights request is kept for 3 years (was 5); contact-form messages are deleted 12 months after they are resolved (new). Delete account dialog: payment records and invoices are kept for 7 years (was 5). |
+| 116. Media copy URLs only for uploaded photo keys (item 78) (no file rows of its own: the group 116 part of 2 rows elsewhere) | approved by owner 2026-11-26 | Nothing. Photos and video posters use the same URLs as before; only addresses of the retired backend's file-extension keys, which no current post has, are no longer rewritten. |
 
 Questions for the owner:
 
@@ -2541,8 +2542,8 @@ tip's words) and two browser checks (`e2e/foundation/video-mode.spec.ts`,
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `src/components/ui/video-seek-bar.tsx` | visual | M10.7: one seek bar for every player: the browser's slider in a 24 px tall strip. On a touchscreen a mostly sideways drag follows the finger anywhere on the bar and keeps the page still; a tap seeks when the finger lifts; an up or down swipe is left to the page (the slider's own jump on touch down is ignored), and nothing is held from the page while the length is unknown. Arrow keys move 5 s. | Seek bars: the same thin track, with a 24 px tall area to grab; scrolling past a video on a phone no longer jumps it; Left and Right move 5 seconds; a gold focus ring for keyboard users; screen readers hear '0:12 of 0:45'. | keep | approved by owner 2026-11-20 | 2026-11-19 | 2ded6d1ad879 |
 | `src/components/ui/video-seek-bar.test.tsx` | test | M10.7: the hit area is at least 24 px, the bar states position and length and has a focus ring; a vertical swipe neither seeks nor blocks the page, a sideways drag and a tap seek (clamped to the ends), nothing is blocked before the length is known, and arrow key presses move 5 s while Home and End stay the browser's. | Nothing (not part of a page) | keep | approved by owner 2026-11-20 | 2026-11-19 | 13bb27a9e5d1 |
-| `src/components/ui/profile-video-player.tsx` | visual | M10.7: uses the shared seek bar (margins keep the track and buttons where they were) and time label; reads the video's length on mount when its metadata loaded before the page was interactive. | Post pages and the desktop viewer: the seek bar is easier to grab (24 px tall area, same look and place); the time label shows the real length instead of '0:00'. | keep | approved by owner 2026-11-20 | 2026-11-19 | c6ced844c961 |
-| `src/components/ui/profile-video-player.test.tsx` | test | M10.7: the label reads '0:12 / 0:45', the bar is at least 24 px and seeks, and the length is read from a video that loaded before the player mounted. | Nothing (not part of a page) | keep | approved by owner 2026-11-20 | 2026-11-19 | b34c01f0b385 |
+| `src/components/ui/profile-video-player.tsx` | visual | M10.7: uses the shared seek bar (margins keep the track and buttons where they were) and time label; reads the video's length on mount when its metadata loaded before the page was interactive. Group 116: the native poster uses the poster's own media URL (`normalizeMediaUrl`); the removed `getVariantUrl` gave that same URL for every `media/<uuid>` poster. | Post pages and the desktop viewer: the seek bar is easier to grab (24 px tall area, same look and place); the time label shows the real length instead of '0:00'. Group 116: nothing (same poster URL). | keep | approved by owner 2026-11-20; group 116 part approved by owner 2026-11-26 | 2026-11-19 | cff6ff16f6d5 |
+| `src/components/ui/profile-video-player.test.tsx` | test | M10.7: the label reads '0:12 / 0:45', the bar is at least 24 px and seeks, and the length is read from a video that loaded before the player mounted. Group 116: the poster test uses a real `media/<uuid>` key and expects its media proxy URL. | Nothing (not part of a page) | keep | approved by owner 2026-11-20; group 116 part approved by owner 2026-11-26 | 2026-11-19 | 3feb360c99a8 |
 | `src/components/video-mode/video-mode-seek.tsx` | visual | M10.7: new seek bar and time for the video on screen in Video mode; it follows the active video element through the page, so retries and swipes need no extra wiring. | Video mode: a thin gold seek bar with '0:12 / 0:45' under the post's buttons, while a video is on screen. | keep | approved by owner 2026-11-20 | 2026-11-19 | e223e23b152c |
 | `src/components/video-mode/video-mode-seek.test.tsx` | test | M10.7: shows and seeks the active video's time, follows a video that appears later, and ignores other videos. | Nothing (not part of a page) | keep | approved by owner 2026-11-20 | 2026-11-19 | bbc11a3e2209 |
 | `src/components/video-mode/video-mode-viewer.tsx` | wording-behaviour | M10.7: a seek bar with the time and length sits under the post's actions while a video is on screen; moving a finger or pointer along the seek bar counts as activity, so the controls do not step aside (after 6 s) in the middle of a drag. Group 57 (row A16): the province picked in the viewer is no longer also saved in a cookie: only the removed 'province first' showroom read it. | Video mode: under the Details, call, share and More buttons, a thin gold seek bar with '0:12 / 0:45' beside it, shown and hidden with the other controls (see `video-mode-seek.tsx`); the post details sit about 36 px higher to make room; the controls stay on screen while the seek bar is being dragged. Group 57: nothing (the province filter works as before). | keep | approved by owner 2026-11-20; group 57 part awaiting owner | 2026-11-19 | 443d570e66ec |
@@ -4719,6 +4720,19 @@ closed data-rights request 3 years (was 5). The website says the same:
 
 Pictures (local preview, not published): `screenshots/item51-keep-for/`
 (desktop 1280 and phone 375).
+
+Decision: approved by owner 2026-11-26.
+
+### 116. Media copy URLs only for uploaded photo keys (item 78)
+
+Launch checklist item 78 (old backend leftovers); nothing changes on screen.
+The media serve route now falls back to the photo only for a missing
+`media/<uuid>.w<N>.webp` copy, so the image loader builds copy URLs only for
+`media/<uuid>` keys, and the unused `getVariantUrl` and
+`getResponsiveImageUrls` helpers are removed (both in files outside the
+checked scope). Every uploaded photo and poster is stored as `media/<uuid>`,
+so their URLs are unchanged. File rows: the group 116 part of the
+`src/components/ui/profile-video-player.tsx` and its test rows in group M10.7.
 
 Decision: approved by owner 2026-11-26.
 
