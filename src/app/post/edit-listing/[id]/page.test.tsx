@@ -9,7 +9,7 @@ import {
 import EditListingPage from "./page";
 import { useParams, useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
-import type * as HiddenFeatures from "@/lib/hidden-features";
+import { forgetPackageRunning } from "@/components/post-templates/save-template-button";
 
 // The member accepted the current posting terms before (the edit form shows
 // no tick), unless a test serves them as not accepted yet.
@@ -23,14 +23,6 @@ const { listingCardSpy } = vi.hoisted(() => ({
 }));
 const { listingDetailPreviewSpy } = vi.hoisted(() => ({
   listingDetailPreviewSpy: vi.fn(),
-}));
-
-// Not about post templates: SHOW_POST_TEMPLATES is pinned off so the form
-// makes no template read and these tests count only the save requests
-// (src/components/post-templates/save-template-button.test.tsx covers it).
-vi.mock("@/lib/hidden-features", async (importOriginal) => ({
-  ...(await importOriginal<typeof HiddenFeatures>()),
-  SHOW_POST_TEMPLATES: false,
 }));
 
 vi.mock("next/navigation", () => ({
@@ -159,6 +151,8 @@ describe("EditListingPage", () => {
   let fetchMock: Mock;
   let termsLoaded: () => Promise<void>;
   let serveAcceptedAt: (value: string | null) => void;
+  let templatesRead: Mock;
+  let terms: Mock;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -196,6 +190,7 @@ describe("EditListingPage", () => {
 
     ({
       api: fetchMock,
+      terms,
       termsLoaded,
       serveAcceptedAt,
     } = installFoundationPostFetch(
@@ -205,6 +200,19 @@ describe("EditListingPage", () => {
       }),
       ALREADY_ACCEPTED
     ));
+    // "Save as template" asks whether a Multi-listing package runs: answered
+    // here (none), apart from the save requests these tests count
+    // (src/components/post-templates/save-template-button.test.tsx covers it).
+    forgetPackageRunning();
+    templatesRead = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ package_running: false, templates: [] }),
+    }));
+    const routed = global.fetch;
+    global.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      String(input) === "/api/post-templates" ? templatesRead() : routed(input, init)
+    ) as unknown as typeof fetch;
     global.URL.createObjectURL = vi.fn(() => "blob:new-logo-preview");
     global.URL.revokeObjectURL = vi.fn();
   });
@@ -213,6 +221,9 @@ describe("EditListingPage", () => {
     render(<EditListingPage />);
     await termsLoaded();
     await waitFor(() => expect(screen.getByDisplayValue("Used iPhone 15")).toBeInTheDocument());
+    // Without a running package there is no "Save as template".
+    await waitFor(() => expect(templatesRead).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("button", { name: "Save as template" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText(POSTING_TERMS_TICK)).toBeNull();
   });
 
@@ -233,6 +244,35 @@ describe("EditListingPage", () => {
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/dashboard/listings"));
     expectTermsAcceptedBeforeSave("/api/listings/listing-1");
   });
+
+  it.each([
+    [
+      "refused",
+      () => terms.mockResolvedValueOnce({ ok: false, status: 503, json: async () => ({}) }),
+      "The posting terms could not be accepted. Refresh this form and try again.",
+    ],
+  ])(
+    "when accepting the terms is %s, says so and uploads and saves nothing",
+    async (_case, failAcceptance, message) => {
+      serveAcceptedAt(null);
+      render(<EditListingPage />);
+      await termsLoaded();
+      await waitFor(() => expect(screen.getByDisplayValue("Used iPhone 15")).toBeInTheDocument());
+      // A new logo waits to be uploaded.
+      fireEvent.click(screen.getByRole("button", { name: "Listing logo (optional)" }));
+      fireEvent.click(screen.getByLabelText(POSTING_TERMS_TICK));
+      failAcceptance();
+      fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+      expect(await screen.findByText(message)).toBeInTheDocument();
+      expect(terms).toHaveBeenCalledWith(
+        "/api/foundation/posting-terms",
+        expect.objectContaining({ method: "POST" })
+      );
+      // No upload and no save request.
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(mockPush).not.toHaveBeenCalled();
+    }
+  );
 
   it("does not claim a saved update was submitted without server confirmation", async () => {
     render(<EditListingPage />);

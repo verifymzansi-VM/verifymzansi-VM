@@ -1,4 +1,3 @@
-import { randomInt } from "node:crypto";
 import { expect, test, type BrowserContext, type Page, type Request } from "@playwright/test";
 import { E2E_FIXTURE } from "../../scripts/lib/foundation-e2e-target.mjs";
 import { endedWithTest } from "./support/route-teardown";
@@ -7,6 +6,7 @@ import {
   queryTestCopy,
   readTestCopy,
   readTestSms,
+  unusedPhoneNumber,
 } from "./support/test-copy";
 import { registerConfirmedMember, syntheticIdNumber } from "./support/verified-member";
 
@@ -138,7 +138,7 @@ test.describe("verification wizard with the camera", () => {
   }) => {
     test.setTimeout(150_000);
     const member = await registerConfirmedMember("camera");
-    const phone = `+2774${randomInt(1_000_000, 10_000_000)}`;
+    const phone = unusedPhoneNumber("+2774");
     const { outside, reply } = await guard(context);
     const session = await browserSessionCookies(readTestCopy(), member);
     await context.addCookies(session.cookies.map((cookie) => ({ ...cookie, url: APP_ORIGIN })));

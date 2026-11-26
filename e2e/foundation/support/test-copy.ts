@@ -4,6 +4,7 @@
 // fixture (module import), and the gateway key, post ids and authenticator
 // secrets are read from the copy itself (local CLI status and the copy's own
 // database container).
+import { randomInt } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { createServerClient } from "@supabase/ssr";
@@ -47,6 +48,26 @@ const UUID = /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/;
 /** Read-only catalogue/count query over the copy's own database container. */
 export function queryTestCopy(statement: string): string {
   return psql(openFixture(), statement);
+}
+
+/**
+ * A synthetic mobile number starting `prefix` that no account in the copy has
+ * verified, tried or had banned. The copy keeps the members of earlier runs,
+ * so a number is checked before it is used; the phone step then never meets
+ * "number in use" by chance.
+ */
+export function unusedPhoneNumber(prefix: string): string {
+  if (!/^\+27[6-8]\d$/.test(prefix)) throw new Error("Unexpected phone prefix");
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const phone = `${prefix}${randomInt(1_000_000, 10_000_000)}`;
+    const uses = queryTestCopy(
+      `select (select count(*) from private.verification_phone_proofs where phone = '${phone}')` +
+        ` + (select count(*) from private.verification_phone_challenges where phone = '${phone}')` +
+        ` + (select count(*) from private.banned_phone_numbers where phone = '${phone}');`
+    ).trim();
+    if (uses === "0") return phone;
+  }
+  throw new Error("No unused synthetic phone number found");
 }
 
 /** The copy's gateway key and seeded posts, read from the running copy. */

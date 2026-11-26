@@ -111,7 +111,6 @@ function postManager(listings: unknown[], businesses: unknown[] = [], promotions
     sponsoredIds: new Set(),
     slotUsage: [],
     planAdmins: [],
-    tiers: { MZANSI_MARKET: "starter", MZANSI_BUSINESS: "starter", PROMOTIONS_EVENTS: "starter" },
   } as unknown as Awaited<ReturnType<typeof readRestoredPostManager>>);
 }
 

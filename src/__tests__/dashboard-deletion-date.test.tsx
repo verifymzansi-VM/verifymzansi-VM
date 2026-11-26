@@ -44,9 +44,6 @@ vi.mock("@/components/ui/tabs", () => ({
   TabsContent: ({ children }: PropsWithChildren<{ value: string }>) => <div>{children}</div>,
 }));
 vi.mock("@/components/dashboard/area-filter", () => ({ AreaFilter: () => null }));
-vi.mock("@/components/listings/boost-button", () => ({ BoostButton: () => null }));
-vi.mock("@/components/listings/featured-button", () => ({ FeaturedButton: () => null }));
-vi.mock("@/components/listings/urgent-button", () => ({ UrgentButton: () => null }));
 vi.mock("@/components/listings/resubmit-button", () => ({ ResubmitButton: () => null }));
 vi.mock("@/components/listings/delete-post-button", () => ({ DeletePostButton: () => null }));
 vi.mock("@/components/listings/post-account-button", () => ({ PostAccountButton: () => null }));
@@ -114,7 +111,6 @@ it("shows 'Will be deleted on' with the date for posts that have a deletion date
     sponsoredIds: new Set(),
     slotUsage: [],
     planAdmins: [],
-    tiers: { MZANSI_MARKET: "starter", MZANSI_BUSINESS: "starter", PROMOTIONS_EVENTS: "starter" },
   } as unknown as Awaited<ReturnType<typeof readRestoredPostManager>>);
   render(await ListingsPage({ searchParams: Promise.resolve({}) }));
   expect(screen.getByText("Sold bicycle")).toBeInTheDocument();

@@ -506,6 +506,9 @@ export default function EditBusinessPage() {
         return;
       }
 
+      // The terms first: if accepting fails, nothing has been uploaded.
+      if (needsTerms) await acceptTerms();
+
       // Upload all new media in parallel
       const [logoUrls, [coverUrls, galleryUrls, mallPhotoUrls], videoUrl, thumbUrls] =
         await settleMediaUploads([
@@ -680,7 +683,6 @@ export default function EditBusinessPage() {
         focal_y: focalPoint.y,
       };
 
-      if (needsTerms) await acceptTerms();
       const res = await fetch(`/api/businesses/${businessId}`, {
         method: "PATCH",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),

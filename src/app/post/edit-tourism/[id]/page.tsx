@@ -396,6 +396,9 @@ export default function EditPromotionPage() {
         return `${fallback} (HTTP ${response.status})`;
       };
 
+      // The terms first: if accepting fails, nothing has been uploaded.
+      if (needsTerms) await acceptTerms();
+
       // Upload new photos and videos in parallel
       const [newImageUrls, newVideoUrls] = await settleMediaUploads([
         // Photos via server proxy
@@ -545,7 +548,6 @@ export default function EditPromotionPage() {
         },
       };
 
-      if (needsTerms) await acceptTerms();
       const res = await fetch(`/api/promotions/${promotionId}`, {
         method: "PUT",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
