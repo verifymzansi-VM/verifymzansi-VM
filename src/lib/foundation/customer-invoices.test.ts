@@ -462,6 +462,35 @@ describe("the invoice payment link", () => {
     });
   });
 
+  it("words a refused Ozow request (the account's package or another payment) the same neutral way", async () => {
+    const neutral =
+      "This invoice can't be paid online right now. Please contact the business that sent it, or VerifyMzansi support.";
+    for (const refusal of [
+      new FoundationBillingError(409, "Your Multi-listing package is busy.", "package_busy"),
+      new FoundationBillingError(409, "Your package runs.", "package_active"),
+      new FoundationBillingError(409, "Your package ended.", "package_ended"),
+      new FoundationBillingError(409, "Pay the package invoice first.", "package_invoice_unpaid"),
+    ]) {
+      vi.mocked(openFoundationInvoiceCheckout).mockRejectedValueOnce(refusal);
+      await expect(
+        startInvoicePaymentByLink(
+          { token, expectedTotalCents: 62100, coolingOffConsent: true },
+          "https://verifymzansi.com",
+          linkService(ok({ ...quote, owner_id: owner })).service
+        )
+      ).rejects.toMatchObject({ status: 409, message: neutral, code: "invoice_refused" });
+    }
+    // An outage stays an outage.
+    vi.mocked(openFoundationInvoiceCheckout).mockRejectedValueOnce(new FoundationBillingError(503));
+    await expect(
+      startInvoicePaymentByLink(
+        { token, expectedTotalCents: 62100, coolingOffConsent: true },
+        "https://verifymzansi.com",
+        linkService(ok({ ...quote, owner_id: owner })).service
+      )
+    ).rejects.toBeInstanceOf(FoundationBillingError);
+  });
+
   it("words every refusal about the account the same neutral way, and the invoice's own state as for the member", async () => {
     const neutral =
       "This invoice can't be paid online right now. Please contact the business that sent it, or VerifyMzansi support.";

@@ -551,14 +551,22 @@ export async function startInvoicePaymentByLink(
       "The payment could not be started. Please try again in a few minutes.",
       "invoice_response_invalid"
     );
-  const { checkoutUrl } = await openFoundationInvoiceCheckout(
-    quote,
-    ownerId,
-    appUrl,
-    service,
-    INVOICE_LINK_PATH
-  );
-  return { checkoutUrl };
+  try {
+    const { checkoutUrl } = await openFoundationInvoiceCheckout(
+      quote,
+      ownerId,
+      appUrl,
+      service,
+      INVOICE_LINK_PATH
+    );
+    return { checkoutUrl };
+  } catch (error) {
+    // Opening the Ozow request is refused for the account's own reasons (its
+    // package, another payment): the link payer reads the same neutral words.
+    if (error instanceof FoundationBillingError && error.status < 500)
+      throw new FoundationInvoiceError(409, LINK_ACCOUNT_REFUSAL, "invoice_refused");
+    throw error;
+  }
 }
 
 // ---------------------------------------------------------------- staff
