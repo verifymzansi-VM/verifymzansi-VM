@@ -39,11 +39,15 @@ const BODIES = {
   [CLOSE]: ["ae0f20403df41b820bad1c96d93a0be1", "1b447b3fe8805138814c3cdb0ceb6daa"],
 };
 const LABEL = "staff access follow-ups";
-const counts = (waiting, withApp) =>
-  `active admins: \\d+; admin invitations waiting: ${waiting} \\(account already has an authenticator app: ${withApp}\\); closed accounts with a staff role: 0`;
-const summary = (state, waiting, withApp) =>
-  new RegExp(`^${LABEL}: ${state}; ${counts(waiting, withApp)}$`);
-const ANY = "\\d+";
+const COUNTS = String.raw`active admins: \d+; admin invitations waiting: (\d+) \(account already has an authenticator app: (\d+)\); closed accounts with a staff role: 0`;
+const NOT_APPLIED = new RegExp(`^${LABEL}: update not applied; ${COUNTS}$`);
+const APPLIED = new RegExp(`^${LABEL}: already applied; ${COUNTS}$`);
+/** Asserts the preflight summary matches `pattern` with these waiting counts. */
+const assertSummary = (detail, pattern, waiting, withApp) => {
+  const match = pattern.exec(detail);
+  assert.ok(match, detail);
+  assert.deepEqual([Number(match[1]), Number(match[2])], [waiting, withApp], detail);
+};
 
 const SETUP = { update: UPDATE, label: "staffaccess", title: "Staff access follow-ups" };
 await runTwoAdminUpdateCheck(SETUP, async (run) => {
@@ -101,7 +105,7 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
       rows.map((r) => r[0]),
       ["summary"]
     );
-    assert.match(rows[0][1], summary("update not applied", 1, 1));
+    assertSummary(rows[0][1], NOT_APPLIED, 1, 1);
     assertReadOnlyPreflight(database, kit.preflightSql);
   });
   await check("a premature rollback and a drifted body are refused", () => {
@@ -111,19 +115,19 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
   // ------------------------------------------------------------- apply
   await applyAndProveRollback(kit, database, check, {
     label: LABEL,
-    applied: summary("already applied", ANY, ANY),
-    notApplied: summary("update not applied", ANY, ANY),
+    applied: APPLIED,
+    notApplied: NOT_APPLIED,
   });
 
   // ------------------------------------------------------------- after
   await check("the update claims nothing itself; adding the invitation again does", () => {
     assertBodies(1);
     assert.equal(role(early), "member");
-    assert.match(preflight()[0][1], summary("already applied", 1, 1));
+    assertSummary(preflight()[0][1], APPLIED, 1, 1);
     reinvite(early);
     assert.equal(role(early), "admin");
     assert.equal(claimedBy(early), early.id);
-    assert.match(preflight()[0][1], summary("already applied", 0, 0));
+    assertSummary(preflight()[0][1], APPLIED, 0, 0);
   });
 
   await check(
