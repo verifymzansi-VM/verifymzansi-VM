@@ -427,6 +427,14 @@ export async function seedTestCopy({ root = process.cwd(), status, sql, log = ()
   log("Admin: verifying an authenticator app claims the owner-setup invitation.");
   factors.admin = await enrolTotp(api, session.admin.token, "admin");
   session.admin = { ...session.admin, ...(await signIn(api, people.admin, factors.admin)) };
+  // The claim asks for a new two-step check, as every role grant does, so the
+  // admin checks the authenticator again before any staff command.
+  const recheck = await verifyTotp(api, session.admin.token, factors.admin);
+  session.admin = {
+    ...session.admin,
+    token: recheck.access_token,
+    refreshToken: recheck.refresh_token,
+  };
   assert.equal(
     sql(
       `select string_agg(role,',') from private.staff_roles where user_id=${quote(session.admin.id)};`
