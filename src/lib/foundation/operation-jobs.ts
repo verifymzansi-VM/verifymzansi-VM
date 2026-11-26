@@ -262,10 +262,13 @@ type StaffDelivery = (
   details: StaffDeadlineDetails
 ) => SendResult;
 // What api.claim_lost_email_alert returns: an alert (its id, how many lost
-// messages it reports and the oldest of them), or no claim.
+// messages it reports, how many of those are payment messages and the oldest
+// of them), or no claim. `payments` is missing before update 20261125212548
+// and null for an alert made before it.
 const lostAlertSchema = z.object({
   claim: z.uuid().nullable(),
   total: z.number().int().min(0),
+  payments: z.number().int().min(0).nullish(),
   items: z
     .array(
       z.object({
@@ -609,11 +612,11 @@ export async function runFoundationOperationJobs(
     );
     const alert = lostAlertSchema.safeParse(claimed.data);
     if (claimed.error || !alert.success) return fail("lost_email_alert");
-    const { claim: token, total, items } = alert.data;
+    const { claim: token, total, payments, items } = alert.data;
     if (!token) return;
     let sent = false;
     try {
-      const result = await paced(() => lostEmailAlert({ claim: token, total, items }));
+      const result = await paced(() => lostEmailAlert({ claim: token, total, payments, items }));
       // A refused repeat of the alert's own request means it was probably sent.
       sent = result.success || result.outcomeUnknown === true;
     } catch {

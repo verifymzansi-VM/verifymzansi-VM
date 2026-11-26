@@ -5012,7 +5012,7 @@
     },
     {
       "id": "LIM-F-queue_staff_deadline_emails",
-      "title": "internal.queue_staff_deadline_emails: at most 30 staff deadline emails in any 24 hours, all staff and kinds together",
+      "title": "internal.queue_staff_deadline_emails: at most 30 staff appeal and report emails in any 24 hours, all staff together (privacy requests are outside it: a member's first request in 24 hours is emailed)",
       "value": "30 in 24 hours",
       "category": "rate",
       "enforcedAt": [
@@ -5026,6 +5026,10 @@
         {
           "kind": "behaviour",
           "file": "scripts/test-foundation-lost-email-alert.mjs"
+        },
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-email-alert-follow-ups.mjs"
         }
       ]
     },
@@ -10091,6 +10095,63 @@
       ]
     },
     {
+      "id": "LIM-SQL-phone-release-reason",
+      "title": "Releasing a blocked phone number: a reason of 10 to 500 characters on one line",
+      "value": "10 to 500",
+      "category": "length",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/propose_phone_number_release.sql",
+          "symbol": "internal.propose_phone_number_release",
+          "contains": "reason_text:=internal.privacy_text(p_reason,10,500);"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-release-one-phone-number.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-SQL-phone-release-waiting",
+      "title": "Releasing a blocked phone number: a request waits at most 7 days for its approval",
+      "value": "7 days",
+      "category": "expiry",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/review_phone_number_release.sql",
+          "symbol": "internal.review_phone_number_release",
+          "contains": "count(*) filter(where n.release_proposed_at=p_proposed_at and p_proposed_at>now_at-interval '7 days'),"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-release-one-phone-number.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-SQL-phone-release-list",
+      "title": "Released phone numbers: the staff list shows the latest 50",
+      "value": "50",
+      "category": "cap",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_phone_number_releases.sql",
+          "symbol": "internal.get_phone_number_releases",
+          "contains": "order by latest.released_at desc,latest.phone limit 50) r"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-release-one-phone-number.mjs"
+        }
+      ]
+    },
+    {
       "id": "LIM-SQL-package-add-days-left",
       "title": "Adding slots to a package: at most term_days - 1 whole days left are priced (179 for a 180-day package)",
       "value": "term_days - 1",
@@ -10125,6 +10186,25 @@
         {
           "kind": "behaviour",
           "file": "scripts/test-foundation-staff-part-refunds.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-SQL-s14-notice-business-days",
+      "title": "Section 14 unused-days hint: counted from the end of 20 South African business days' notice given today",
+      "value": "20 business days",
+      "category": "range",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_staff_refunds_left.sql",
+          "symbol": "internal.get_staff_refunds_left",
+          "contains": "while counted < 20 loop"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-part-refund-follow-ups.mjs"
         }
       ]
     },
@@ -14222,6 +14302,25 @@
           "file": "database/foundation/current/tables/private/identity_checks.sql",
           "symbol": "private.identity_checks (identity_checks_ask_reason_check)",
           "contains": "constraint identity_checks_ask_reason_check CHECK (char_length(ask_reason) >= 20 AND char_length(ask_reason) <= 2000)"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "register",
+          "file": "scripts/limits-sql.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-T-banned_phone_numbers_release_reason_check",
+      "title": "private.banned_phone_numbers: release_reason IS NULL OR length(release_reason) >= 10 AND length(release_reason) <= 500",
+      "value": ">= 10, <= 500",
+      "category": "length",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/tables/private/banned_phone_numbers.sql",
+          "symbol": "private.banned_phone_numbers (banned_phone_numbers_release_reason_check)",
+          "contains": "constraint banned_phone_numbers_release_reason_check CHECK (release_reason IS NULL OR length(release_reason) >= 10 AND length(release_reason) <= 500)"
         }
       ],
       "tests": [

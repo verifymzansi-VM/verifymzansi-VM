@@ -6600,6 +6600,72 @@
         "service_role": false
       },
       "authority": "Current payment view capability; for up to 50 listed payments, the amount refunded and left to refund (per payment and per slot), each slot's paid start and end, until when Ozow refunds it, and whether it is the account's first purchase with the last day to ask. No contact or identity details."
+    },
+    {
+      "name": "propose_phone_number_release",
+      "updates": ["updates/20261125213005_release_one_phone_number.sql"],
+      "arguments": [
+        {
+          "name": "p_phone",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current account:restore capability (admins and governors) and recent authenticator proof: asks to release one phone number (+27 and 9 digits) that a running ban blocks now, with a reason of 10 to 500 characters; one waiting request per number for 7 days (the same request again answers reused); never by a staff member who verified that number or whose own ban blocks it. The ID ban is unchanged; nothing is sent to anyone."
+    },
+    {
+      "name": "review_phone_number_release",
+      "updates": ["updates/20261125213005_release_one_phone_number.sql"],
+      "arguments": [
+        {
+          "name": "p_phone",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_proposed_at",
+          "sqlType": "timestamp with time zone",
+          "optional": false
+        },
+        {
+          "name": "p_approve",
+          "sqlType": "boolean",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current account:restore capability (admins and governors) and recent authenticator proof: decides the waiting release of one blocked phone number that the staff member saw (p_proposed_at is its request time). Rejection: anyone with the capability, the proposer included. Approval: only a staff member who proposed none of its rows, while the request is under 7 days old, covers every ban row of the number and its proposer still holds the capability; it marks that request's rows released and revokes the active proof of that number still held by an account of the banned person, so whoever else holds it can verify it. Never by a staff member who, or an account sharing an accepted identity with whom, verified that number or is banned with it. The ID ban is unchanged; the banned person can never retake the number."
+    },
+    {
+      "name": "get_phone_number_releases",
+      "updates": ["updates/20261125213005_release_one_phone_number.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current account:restore capability (admins and governors) and recent authenticator proof: the release requests that can be decided (one waiting request covering every ban row of the number) and the latest 50 released numbers, each with the full number, the reason, the times and the short public names of the staff who asked and approved, and whether the caller asked or may not decide; only numbers someone asked to release, never the whole blocked list, the banned person or their accounts. Records nothing."
     }
   ]
 }
