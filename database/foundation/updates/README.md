@@ -82,8 +82,8 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Members change their verified place, 25 November 2026
 
-`20261125161326_change_verified_place.sql` is pending (see the applied
-register). Launch checklist item 20, part 2.
+`20261125161326_change_verified_place.sql` was applied on 26 November 2026 at
+02:01 UTC (see the applied register). Launch checklist item 20, part 2.
 
 - New table `private.verification_locality_changes` (from and to province and
   city, and the time), row level security on, no grants. It belongs to the
@@ -8255,6 +8255,13 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   (fingerprint.sql) matched the full replay (except the known schema grant
   difference)
 
-- `20261125161326_change_verified_place.sql`: pending
+- `20261125161326_change_verified_place.sql`: applied 2026-11-26 02:01 UTC;
+  apply-first, owner-approved, before pull request #376 was merged; Supabase SQL
+  editor (browser), file from raw GitHub at f8578cd7, update sha256 starting
+  81a4568c156240c7; preflight before "verified place: update not applied;
+  members with a place: 3" with no problem rows, after "verified place: already
+  applied; members with a place: 3; place changes: 0"; production fingerprint
+  after it (fingerprint.sql) matched the full replay (except the known schema
+  grant difference)
 
 <!-- applied-register:end -->
