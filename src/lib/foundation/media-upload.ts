@@ -222,7 +222,8 @@ async function uploadCheckedMedia(
     !scanForMalware(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength), file.type).safe
   )
     throw new FoundationMediaError(400);
-  let durationMs: number | null = null;
+  // A video's length in whole milliseconds; its upload completes with it.
+  let videoMs = 0;
   if (kind === "video") {
     // Every video on the platform is at most 2 minutes (whole seconds, so the
     // phone's rounding passes). The event limit (1 minute) needs the post's
@@ -231,17 +232,14 @@ async function uploadCheckedMedia(
     // checks each post kind's limit at submit.
     const seconds = await readVideoBytesSeconds(bytes);
     const problem = videoLengthProblem(seconds, MAX_VIDEO_SECONDS);
-    if (problem || seconds === null) {
+    if (problem) {
       log.info("Video refused at upload", {
         reason: problem === UNREADABLE_VIDEO_LENGTH_MESSAGE ? "length_unreadable" : "too_long",
       });
-      throw new FoundationMediaError(
-        400,
-        "video_length",
-        problem ?? UNREADABLE_VIDEO_LENGTH_MESSAGE
-      );
+      throw new FoundationMediaError(400, "video_length", problem);
     }
-    durationMs = videoDurationMs(seconds);
+    // videoLengthProblem refuses an unreadable length, so seconds is a number.
+    videoMs = videoDurationMs(seconds!);
   }
   if (isReencodableImageType(file.type)) {
     usage.allowance = await openImagesAllowance();
@@ -336,13 +334,13 @@ async function uploadCheckedMedia(
   // Videos complete with the length read above (the database checks each
   // post kind's limit at submit); pictures with their dimensions.
   const completed =
-    kind === "video" && durationMs !== null
+    kind === "video"
       ? await service.rpc("complete_frontend_video_upload", {
           p_object_id: reserved.object_id,
           p_size: bytes.length,
           p_sha256: digest,
           p_mime: file.type,
-          p_duration_ms: durationMs,
+          p_duration_ms: videoMs,
         })
       : await service.rpc("complete_frontend_media_upload", {
           p_object_id: reserved.object_id,

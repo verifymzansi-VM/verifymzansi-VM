@@ -165,7 +165,6 @@ async function readStaffVideoLengths(api: FoundationAuthenticatedApi, postIds: s
     );
     if (result.error) throw new Error(result.error.code ?? "read failed");
     for (const row of staffVideoLengths.parse(result.data)) {
-      if (!postIds.includes(row.post_id)) continue;
       const seconds = row.duration_ms === null ? null : Math.floor(row.duration_ms / 1000);
       lengths.set(row.post_id, [...(lengths.get(row.post_id) ?? []), { seconds }]);
     }
@@ -217,7 +216,8 @@ export async function readStaffModerationQueue(api: FoundationAuthenticatedApi, 
     const found = lengths.get(item.id);
     if (found)
       item.video_lengths = {
-        limitSeconds: videoLimitSeconds(item.itemType.startsWith("Event") ? "event" : "other"),
+        // contentType "promotion" is the row's kind "event" (restoredContentType).
+        limitSeconds: videoLimitSeconds(item.contentType === "promotion" ? "event" : "other"),
         videos: found,
       };
   }

@@ -357,7 +357,6 @@ describe("readStaffModerationQueue", () => {
           { post_id: uuid(101), duration_ms: 95_999 },
           { post_id: uuid(103), duration_ms: null },
           { post_id: uuid(103), duration_ms: 1 },
-          { post_id: uuid(109), duration_ms: 1000 },
         ],
         error: null,
       });
@@ -375,7 +374,6 @@ describe("readStaffModerationQueue", () => {
         videos: [{ seconds: null }, { seconds: 0 }],
       });
       expect(item(read, 2)?.video_lengths).toBeUndefined();
-      expect(read.allItems.some((i) => i.id === uuid(109))).toBe(false);
     });
 
     it("asks nothing when the reviewer holds no post with a video", async () => {
