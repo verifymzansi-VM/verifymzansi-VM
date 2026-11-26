@@ -123,6 +123,13 @@ it("does not send an unready staff account into the admin area", async () => {
     redirectUrl: "/staff/two-step",
   });
   privateResponse(api);
+  // The staff routes under /api/foundation/staff give the same answer.
+  const foundationApi = await checkFoundationPageAccess(
+    request("/api/foundation/staff/partners"),
+    false
+  );
+  expect(foundationApi.status).toBe(403);
+  expect((await foundationApi.json()).code).toBe("mfa_required");
   expect(
     (await checkFoundationPageAccess(request("/staff/two-step"), false)).headers.get(
       "x-middleware-next"
@@ -146,6 +153,9 @@ it("refuses an ordinary account access to staff setup and admin APIs", async () 
     (await checkFoundationPageAccess(request("/staff/two-step"), false)).headers.get("location")
   ).toBe("https://verifymzansi.com/dashboard");
   expect((await checkFoundationPageAccess(request("/api/admin"), false)).status).toBe(403);
+  expect(
+    (await checkFoundationPageAccess(request("/api/foundation/staff/costs"), false)).status
+  ).toBe(403);
 });
 it.each([
   [new FoundationSessionError(401), 401],

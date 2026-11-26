@@ -10,6 +10,12 @@ AS $function$
 declare closure private.account_closures; scheduled integer; trial_fingerprints integer;
 begin
   perform internal.lock_evidence_subject(p_user_id);
+  -- 20261126001811: never an account with an active staff role (the same
+  -- check as internal.order_account_erasure), under the per-person lock an
+  -- admin invitation claim also takes.
+  if exists (select 1 from private.staff_roles s where s.user_id = p_user_id and s.revoked_at is null) then
+    raise exception 'end the staff roles of this account first' using errcode = 'PT409', detail = 'staff_account';
+  end if;
   perform e.id from private.evidence_cases e where e.subject_id=p_user_id order by e.id for update;
   insert into private.account_closures (user_id, closed_at, evidence_delete_after)
   values (p_user_id, statement_timestamp(), statement_timestamp() + interval '90 days')
@@ -35,8 +41,7 @@ begin
   return jsonb_build_object('closed_at', closure.closed_at,
     'evidence_delete_after', closure.evidence_delete_after, 'scheduled', scheduled,
     'trial_fingerprints_detached', trial_fingerprints);
-end;
-$function$;
+end$function$;
 alter function internal.close_account_evidence(uuid) owner to postgres;
 revoke all on function internal.close_account_evidence(uuid) from public;
 grant execute on function internal.close_account_evidence(uuid) to service_role;
