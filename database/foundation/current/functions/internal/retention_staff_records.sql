@@ -9,6 +9,7 @@ CREATE OR REPLACE FUNCTION internal.retention_staff_records(p_limit integer)
 AS $function$
 declare access_log integer; decisions integer; moderation integer; queue_events integer; reports integer;
   restriction_cases integer:=0; fraud_holds integer; roles integer; holds integer; candidate record; due uuid[];
+  appeals integer; content_holds integer; role_changes integer; claim_events integer; slot_limits integer;
 begin
   delete from private.evidence_access_log where id in(select l.id from private.evidence_access_log l
     where l.accessed_at<statement_timestamp()-interval '2 years' order by l.accessed_at limit p_limit);
@@ -64,9 +65,33 @@ begin
   delete from private.legal_holds where id in(select h.id from private.legal_holds h
     where h.released_at<statement_timestamp()-interval '5 years' order by h.released_at limit p_limit for update skip locked);
   get diagnostics holds=row_count;
+  -- Decided appeals and released content holds: 2 years, like reports.
+  delete from private.frontend_appeals where id in(select a.id from private.frontend_appeals a
+    where a.resolved_at<statement_timestamp()-interval '2 years' order by a.resolved_at limit p_limit for update skip locked);
+  get diagnostics appeals=row_count;
+  delete from private.frontend_content_holds where id in(select h.id from private.frontend_content_holds h
+    where h.released_at<statement_timestamp()-interval '2 years' order by h.released_at limit p_limit for update skip locked);
+  get diagnostics content_holds=row_count;
+  -- Staff role change proposals: 5 years after they were decided or
+  -- expired, like staff roles.
+  delete from private.frontend_staff_role_changes where id in(select c.id from private.frontend_staff_role_changes c
+    where coalesce(c.decided_at,c.expires_at)<statement_timestamp()-interval '5 years'
+    order by c.created_at limit p_limit for update skip locked);
+  get diagnostics role_changes=row_count;
+  -- Evidence case claims: 2 years, like queue claims.
+  delete from private.frontend_evidence_claim_events where id in(select e.id from private.frontend_evidence_claim_events e
+    where e.created_at<statement_timestamp()-interval '2 years' order by e.created_at limit p_limit);
+  get diagnostics claim_events=row_count;
+  -- Raised slot limits: 2 years after they ended or were ended early.
+  delete from private.individual_slot_limits where id in(select l.id from private.individual_slot_limits l
+    where coalesce(l.revoked_at,l.ends_at)<statement_timestamp()-interval '2 years'
+    order by l.ends_at limit p_limit for update skip locked);
+  get diagnostics slot_limits=row_count;
   return jsonb_build_object('evidence_access_log',access_log,'decisions',decisions,'moderation_log',moderation,
     'queue_claim_events',queue_events,'reports',reports,'restriction_cases',restriction_cases,
-    'fraud_holds',fraud_holds,'staff_roles',roles,'legal_holds',holds);
+    'fraud_holds',fraud_holds,'staff_roles',roles,'legal_holds',holds,'appeals',appeals,
+    'content_holds',content_holds,'staff_role_changes',role_changes,'evidence_claim_events',claim_events,
+    'slot_limits',slot_limits);
 end;
 $function$;
 alter function internal.retention_staff_records(integer) owner to postgres;

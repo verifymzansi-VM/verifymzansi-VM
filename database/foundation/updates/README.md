@@ -80,6 +80,46 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Keep-for periods for the newer personal-data tables, 26 November 2026
+
+`20261126042049_keep_for_periods.sql` is pending (see the applied register).
+Launch checklist item 51 (roadmap M7.4). No table, column, trigger, command or
+grant changes; six existing function bodies are replaced, all used by the daily
+retention sweep (`api.run_retention`, service only).
+
+- **Payment records: 7 years.** `internal.retention_tax_year_due` keeps payment,
+  invoice and payout records 7 years (was 5) from the end of the tax year (1
+  March to the end of February). Everything `internal.retention_commerce` dates
+  by it follows. The cooling-off tick and the Terms version are stored in each
+  payment's snapshot, so they are kept with it.
+- **Privacy request proofs: 3 years** after the request closed (was 5;
+  `internal.retention_privacy_requests`).
+- **`internal.retention_operations`**: contact-form messages 12 months after
+  they were resolved (open ones are kept); owner administrator invitations 12
+  months after they were revoked, or 12 months after the claimant's account was
+  erased (a claimed invitation is the owner's approval the staff role commands
+  require); runtime switch and sign-up mode change logs 5 years.
+- **`internal.retention_staff_records`**: decided appeals and released content
+  holds 2 years; staff role change proposals 5 years after they were decided or
+  expired; evidence case claim events 2 years; raised slot limits 2 years after
+  they ended (`internal.individual_slot_limit_guard` now lets the sweep delete
+  them).
+- **`internal.retention_verification`**: reasons for returning an ID 12 months
+  after the return, unless a legal hold or fraud hold keeps them. The five-year
+  sweep of closed accounts also deletes them by case: a kept return used to stop
+  that sweep from deleting its case (the foreign key restricts) and failed the
+  whole retention run.
+
+Not changed here: account closures (they date the identity periods; deleted with
+the Auth user), suspensions and bans, business check notes and partner records
+(separate checklist items). ORDER: apply first, then merge (safe either way:
+nothing is old enough to be deleted yet). The website release states 7 years for
+payment records and 3 years for privacy request records. Read-only preflight:
+`../preflight/20261126042049_keep_for_periods.check.sql` (expect one summary row
+reading "update not applied" with every count 0); rollback:
+`../rollback/20261126042049_keep_for_periods.down.sql` (deleted records stay
+deleted). Behaviour test: `scripts/test-foundation-keep-for-periods.mjs`.
+
 ## Members change their verified place, 25 November 2026
 
 `20261125161326_change_verified_place.sql` was applied on 26 November 2026 at
@@ -8263,5 +8303,7 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   applied; members with a place: 3; place changes: 0"; production fingerprint
   after it (fingerprint.sql) matched the full replay (except the known schema
   grant difference)
+
+- `20261126042049_keep_for_periods.sql`: pending; apply-first
 
 <!-- applied-register:end -->
