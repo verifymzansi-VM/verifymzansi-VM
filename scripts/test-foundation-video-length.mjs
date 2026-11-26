@@ -141,18 +141,17 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
       oldDraft = draft("listing", videoObject());
     }
   );
-  await check("preflight: read only, summary only, before the update", () => {
-    const rows = preflight();
-    assert.deepEqual(
-      rows.map((r) => r[0]),
-      ["summary"]
-    );
-    assert.match(rows[0][1], NOT_APPLIED);
-    assertReadOnlyPreflight(database, kit.preflightSql);
-  });
-  await check("a premature rollback and a drifted body are refused", () => {
-    assertDriftRefused(kit, { label: LABEL, signatures: [GUARD], rows: 2 });
-  });
+  await check(
+    "preflight: one read-only summary row before the update; early rollback and drift refused",
+    () => {
+      const [summary, ...problems] = preflight();
+      assert.deepEqual(problems, []);
+      assert.equal(summary[0], "summary");
+      assert.match(summary[1], NOT_APPLIED);
+      assertReadOnlyPreflight(database, kit.preflightSql);
+      assertDriftRefused(kit, { label: LABEL, signatures: [GUARD], rows: 2 });
+    }
+  );
 
   // ------------------------------------------------------------- apply
   await applyAndProveRollback(kit, database, check, {
