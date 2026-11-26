@@ -9,7 +9,6 @@ import {
 import EditListingPage from "./page";
 import { useParams, useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
-import type * as HiddenFeatures from "@/lib/hidden-features";
 
 // The member accepted the current posting terms before (the edit form shows
 // no tick), unless a test serves them as not accepted yet.
@@ -25,12 +24,9 @@ const { listingDetailPreviewSpy } = vi.hoisted(() => ({
   listingDetailPreviewSpy: vi.fn(),
 }));
 
-// Not about post templates: SHOW_POST_TEMPLATES is pinned off so the form
-// makes no template read and these tests count only the save requests
-// (src/components/post-templates/save-template-button.test.tsx covers it).
-vi.mock("@/lib/hidden-features", async (importOriginal) => ({
-  ...(await importOriginal<typeof HiddenFeatures>()),
-  SHOW_POST_TEMPLATES: false,
+// The one allowance read the page makes (media limits and Save as template).
+const { entitlements } = vi.hoisted(() => ({
+  entitlements: { maxPhotos: 5, maxVideos: 1, videoAllowed: true, packageRunning: false },
 }));
 
 vi.mock("next/navigation", () => ({
@@ -60,9 +56,7 @@ vi.mock("@/components/layout/page-header", () => ({
 }));
 
 vi.mock("@/components/billing/plan-gate", () => ({
-  usePlanMaxPhotos: () => 5,
-  usePlanMaxVideos: () => 1,
-  usePlanVideoAllowed: () => true,
+  usePlanEntitlements: () => entitlements,
 }));
 
 vi.mock("@/components/listings/listing-detail-content", () => ({
@@ -162,6 +156,7 @@ describe("EditListingPage", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    entitlements.packageRunning = false;
     vi.spyOn(window, "confirm").mockReturnValue(true);
     mockMaybeSingle.mockResolvedValue({
       data: {
@@ -214,6 +209,20 @@ describe("EditListingPage", () => {
     await termsLoaded();
     await waitFor(() => expect(screen.getByDisplayValue("Used iPhone 15")).toBeInTheDocument());
     expect(screen.queryByLabelText(POSTING_TERMS_TICK)).toBeNull();
+  });
+
+  it("Save as template follows the allowance and sends no request of its own", async () => {
+    const { unmount } = render(<EditListingPage />);
+    await termsLoaded();
+    await waitFor(() => expect(screen.getByDisplayValue("Used iPhone 15")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "Save as template" })).toBeNull();
+    unmount();
+
+    entitlements.packageRunning = true;
+    render(<EditListingPage />);
+    expect(await screen.findByRole("button", { name: "Save as template" })).toBeInTheDocument();
+    // Only the posting-terms reads reach the network; the page sends no template read.
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("asks for the current terms when not accepted yet, and accepts them before saving", async () => {

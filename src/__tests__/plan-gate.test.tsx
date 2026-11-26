@@ -25,7 +25,7 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-const { PlanGate, usePlanMaxPhotos } = await import("@/components/billing/plan-gate");
+const { PlanGate, usePlanEntitlements, usePlanMaxPhotos } = await import("@/components/billing/plan-gate");
 
 const OWNER = "11111111-1111-4111-8111-111111111111";
 
@@ -201,5 +201,35 @@ describe("usePlanMaxPhotos", () => {
     fetchPostingAllowance.mockRejectedValue(new Error("failed"));
     render(<MaxPhotos />);
     expect(await screen.findByText("0 photos")).toBeInTheDocument();
+  });
+});
+
+describe("usePlanEntitlements", () => {
+  function Entitlements() {
+    const { maxPhotos, packageRunning } = usePlanEntitlements("MZANSI_MARKET");
+    return (
+      <p>
+        {maxPhotos} photos, package {packageRunning ? "running" : "not running"}
+      </p>
+    );
+  }
+
+  beforeEach(() => vi.clearAllMocks());
+
+  it("reads the package from the same single allowance read", async () => {
+    fetchPostingAllowance.mockResolvedValue(allowance({ max_photos: 50, package_running: true }));
+    render(<Entitlements />);
+    expect(await screen.findByText("50 photos, package running")).toBeInTheDocument();
+    expect(fetchPostingAllowance).toHaveBeenCalledOnce();
+  });
+
+  it("treats a missing or false package_running as no package", async () => {
+    fetchPostingAllowance.mockResolvedValue(allowance({ max_photos: 7 }));
+    const { unmount } = render(<Entitlements />);
+    expect(await screen.findByText("7 photos, package not running")).toBeInTheDocument();
+    unmount();
+    fetchPostingAllowance.mockResolvedValue(allowance({ max_photos: 8, package_running: false }));
+    render(<Entitlements />);
+    expect(await screen.findByText("8 photos, package not running")).toBeInTheDocument();
   });
 });

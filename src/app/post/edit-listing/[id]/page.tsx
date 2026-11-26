@@ -25,11 +25,7 @@ import { CategoryPicker } from "@/components/listings/category-picker";
 import { MediaUpload } from "@/components/ui/media-upload";
 import { UploadProgressPanel, type UploadSlotStatus } from "@/components/ui/upload-progress-panel";
 import { FocalPointPicker, type FocalPoint } from "@/components/ui/focal-point-picker";
-import {
-  usePlanMaxPhotos,
-  usePlanMaxVideos,
-  usePlanVideoAllowed,
-} from "@/components/billing/plan-gate";
+import { usePlanEntitlements } from "@/components/billing/plan-gate";
 import { LocationSelector } from "@/components/ui/location-selector";
 import type { ListingCategory, ListingCondition } from "@/types/enums";
 import { mapListingCategory } from "@/lib/utils/enum-compat";
@@ -114,9 +110,9 @@ export default function EditListingPage() {
   // Only while the member has not accepted the current posting terms.
   const [termsAccepted, setTermsAccepted] = useState(false);
   const { toast } = useToast();
-  const maxPhotos = usePlanMaxPhotos("MZANSI_MARKET");
-  const maxVideos = usePlanMaxVideos("MZANSI_MARKET");
-  const videoAllowed = usePlanVideoAllowed("MZANSI_MARKET");
+  // One allowance read for the media limits and Save as template.
+  const { maxPhotos, maxVideos, videoAllowed, packageRunning } =
+    usePlanEntitlements("MZANSI_MARKET");
   const previewLogoUrl = useMemo(
     () => (newLogoFile.length > 0 ? URL.createObjectURL(newLogoFile[0]) : null),
     [newLogoFile]
@@ -647,6 +643,7 @@ export default function EditListingPage() {
                   {/* Post templates (SHOW_POST_TEMPLATES, running package only). */}
                   <SaveTemplateButton
                     defaultName={title}
+                    packageRunning={packageRunning}
                     data={() =>
                       templateDataFromForm({
                         category,

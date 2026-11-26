@@ -26,6 +26,9 @@ export const postingAllowanceSchema = z
       shortDays: z.literal(7),
       longDays: z.literal(30),
     }),
+    // Multi-listing package running (20261126202833). Optional until that
+    // update is applied; a missing key means no package.
+    package_running: z.boolean().optional(),
   })
   .refine((value) => value.creation_remaining <= Math.max(0, value.capacity - value.used));
 export type PostingAllowance = z.infer<typeof postingAllowanceSchema>;
