@@ -448,7 +448,7 @@ export function invoiceRouteRefusal(error: unknown): FoundationRefusal | null {
  * key; nothing here takes an invoice number, an account or an amount from the
  * browser.
  */
-export const invoiceLinkToken = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
+const invoiceLinkToken = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
 
 /** The invoice as its payment link shows it: without the invoice's or its
  * payments' ids. */

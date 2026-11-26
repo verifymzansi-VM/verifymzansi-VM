@@ -1,10 +1,8 @@
 import type { Metadata } from "next";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
-import { InvoiceDocument } from "@/components/billing/invoice-document";
-import { InvoicePayPanel } from "@/components/billing/invoice-pay-panel";
+import { InvoiceWithPayPanel } from "@/components/billing/invoice-with-pay-panel";
 import { readInvoiceByLink } from "@/lib/foundation/customer-invoices";
-import { invoiceBankDetails, invoiceSellerAddress } from "@/lib/billing/invoice-settings";
 import { readOnlinePaymentMaxCents } from "@/lib/foundation/payment-limits";
 
 export const metadata: Metadata = {
@@ -60,28 +58,11 @@ export default async function PayInvoicePage({
       <main id="main-content" className="flex-1 scroll-mt-24 bg-background">
         {invoice && typeof token === "string" ? (
           <div className="container-page py-6 sm:py-10">
-            <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] print:block">
-              <InvoiceDocument
-                headingLevel="h1"
-                invoice={invoice}
-                sellerAddress={invoiceSellerAddress()}
-                bank={invoice.status === "issued" ? invoiceBankDetails() : null}
-                onlineMaxCents={onlineMaxCents}
-                payHere
-              />
-              <InvoicePayPanel
-                invoiceNumber={invoice.invoice_number}
-                status={invoice.status}
-                revision={invoice.revision}
-                totalCents={invoice.total_cents}
-                buyer={invoice.buyer}
-                consentWording={invoice.consent.wording}
-                checkoutOpen={invoice.latest_attempt?.checkout_open === true}
-                transferWaiting={invoice.transfer_waiting}
-                onlineMaxCents={onlineMaxCents}
-                linkToken={token}
-              />
-            </div>
+            <InvoiceWithPayPanel
+              invoice={invoice}
+              onlineMaxCents={onlineMaxCents}
+              linkToken={token}
+            />
           </div>
         ) : message ? (
           <div className="container-page max-w-2xl space-y-3 py-10 sm:py-16">

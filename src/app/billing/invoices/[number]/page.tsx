@@ -2,8 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
-import { InvoiceDocument } from "@/components/billing/invoice-document";
-import { InvoicePayPanel } from "@/components/billing/invoice-pay-panel";
+import { InvoiceWithPayPanel } from "@/components/billing/invoice-with-pay-panel";
 import {
   FoundationServerSessionError,
   readFoundationServerSession,
@@ -13,7 +12,6 @@ import {
   readMyInvoice,
   readMyInvoiceTransferExpiry,
 } from "@/lib/foundation/customer-invoices";
-import { invoiceBankDetails, invoiceSellerAddress } from "@/lib/billing/invoice-settings";
 import { readOnlinePaymentMaxCents } from "@/lib/foundation/payment-limits";
 
 export const metadata = { title: "Invoice", robots: { index: false } };
@@ -58,27 +56,11 @@ export default async function InvoicePage({ params }: { params: Promise<{ number
               { label: "Invoices", href: "/billing/invoices" },
             ]}
           />
-          <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] print:block">
-            <InvoiceDocument
-              headingLevel="h1"
-              invoice={invoice}
-              sellerAddress={invoiceSellerAddress()}
-              bank={invoice.status === "issued" ? invoiceBankDetails() : null}
-              onlineMaxCents={onlineMaxCents}
-            />
-            <InvoicePayPanel
-              invoiceNumber={invoice.invoice_number}
-              status={invoice.status}
-              revision={invoice.revision}
-              totalCents={invoice.total_cents}
-              buyer={invoice.buyer}
-              consentWording={invoice.consent.wording}
-              checkoutOpen={invoice.latest_attempt?.checkout_open === true}
-              transferWaiting={invoice.transfer_waiting}
-              transferExpired={transferExpiredAt !== null}
-              onlineMaxCents={onlineMaxCents}
-            />
-          </div>
+          <InvoiceWithPayPanel
+            invoice={invoice}
+            onlineMaxCents={onlineMaxCents}
+            transferExpired={transferExpiredAt !== null}
+          />
         </div>
       </main>
       <Footer />
