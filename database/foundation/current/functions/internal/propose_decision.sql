@@ -20,6 +20,12 @@ begin
   actor:=internal.staff_actor('decision:propose');
   if c.subject_id = actor then raise exception 'self-review is not allowed' using errcode = '42501'; end if;
   if c.version <> p_expected_version then raise exception 'case changed since review' using errcode = 'PT409'; end if;
+  -- 20261125174942: an account is never restricted while it holds an active
+  -- admin role; that role ends first, with another admin's approval.
+  if p_action = 'restrict_account' and exists(select 1 from private.staff_roles s
+      where s.user_id = c.subject_id and s.role = 'admin' and s.revoked_at is null) then
+    raise exception 'End this person''s admin role first' using errcode = 'PT409', detail = 'subject_is_admin';
+  end if;
   insert into private.decisions (case_id, action, payload, case_version, reviewed_snapshot, proposed_by)
   values (c.id, p_action, coalesce(p_payload, '{}'), c.version, internal.evidence_case_snapshot(c.id), actor) returning * into d;
   return jsonb_build_object('decision_id', d.id, 'case_version', d.case_version);

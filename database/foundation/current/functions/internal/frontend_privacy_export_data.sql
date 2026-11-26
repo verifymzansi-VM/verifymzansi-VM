@@ -74,6 +74,8 @@ begin
       from private.evidence_artifacts where owner_id=$1 order by created_at,id$q$),
     ('phone_verification',$q$select phone,verified_at,contact_changed_at,revoked_at from private.verification_phone_proofs where owner_id=$1 order by verified_at,id$q$),
     ('locality_verification',$q$select province_id,city_id,assurance,confirmed_at from private.verification_localities where owner_id=$1$q$),
+    ('locality_changes',$q$select from_province_id,from_city_id,to_province_id,to_city_id,changed_at
+      from private.verification_locality_changes where owner_id=$1 order by changed_at,id$q$),
     ('enquiries_sent',$q$select id,post_id,message,created_at from private.enquiries where sender_account_id=$1 order by created_at,id$q$),
     ('enquiries_received',$q$select id,post_id,message,status,created_at from private.enquiries where owner_id=$1 order by created_at,id$q$),
     ('post_likes',$q$select l.post_id,l.created_at from (select post_id,created_at,id from private.post_likes

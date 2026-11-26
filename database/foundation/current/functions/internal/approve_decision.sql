@@ -23,6 +23,12 @@ begin
     or internal.evidence_case_snapshot(c.id) is distinct from d.reviewed_snapshot then
     raise exception 'case changed after proposal' using errcode = 'PT409';
   end if;
+  -- 20261125174942: checked again at approval, in case the person became an
+  -- admin after the proposal.
+  if d.action = 'restrict_account' and exists(select 1 from private.staff_roles s
+      where s.user_id = c.subject_id and s.role = 'admin' and s.revoked_at is null) then
+    raise exception 'End this person''s admin role first' using errcode = 'PT409', detail = 'subject_is_admin';
+  end if;
   update private.decisions set status = 'approved', approved_by = actor, approved_at = statement_timestamp()
   where id = d.id;
   update private.evidence_cases set status = 'decided', version = version + 1, claimed_by = null, claim_expires_at = null,claim_nonce=null

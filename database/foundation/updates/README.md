@@ -133,6 +133,80 @@ and index it drops; and it counts part refunds before it locks
 could slip past its refusal. A later rollback that needs it must lock the table
 first (`lock table private.payment_refund_requests in share mode`), then count.
 
+## No account restriction for an admin, 25 November 2026
+
+`20261125174942_end_admin_role_before_restriction.sql` is **pending** (see the
+applied register). Launch checklist item 20, part 3. Until now two governors
+could ban an admin (an identity ban, or a report ban a moderator proposed and a
+governor approved), and one governor alone could put an admin under 72-hour
+emergency containment, again and again. A restriction removes account access, so
+`internal.staff_actor` then refused the admin, even the last one: the last-admin
+guard watches only staff roles.
+
+- **The rule.** A ban, suspension or emergency containment is refused with PT409
+  "End this person's admin role first" (detail `subject_is_admin`) while the
+  person holds an active admin role (`private.staff_roles` role `admin`,
+  `revoked_at` null). Removing an admin goes through the existing role change
+  (with `20261125150338_admin_removal_needs_approval.sql`, a different admin
+  approves it); then the person can be restricted like anyone else. Erasure
+  already refuses staff accounts (`internal.order_account_erasure`).
+- **Every path is covered** by three full bodies (api wrappers, arguments,
+  results and grants unchanged): `internal.propose_decision`
+  (`api.propose_decision` with `restrict_account`, and
+  `api.propose_verified_identity_ban`, which calls it);
+  `internal.propose_frontend_report_restriction`
+  (`api.execute_frontend_report_action_v2` `suspend` and `ban`, including the
+  emergency containment it applies at once); and `internal.approve_decision`
+  (`api.approve_decision` and `api.decide_frontend_governance`), checked again
+  in case the person became an admin after the proposal. Approval is the only
+  way a proposal takes effect (`internal.frontend_report_restriction_effect`,
+  `internal.bind_native_restriction_for_review` and
+  `internal.verification_decision_effect` run on it). Each check runs after the
+  subject's lock, which staff role changes also take.
+- **Governors and moderators are not protected**: a moderator can still be
+  contained at once, and a governor's or moderator's role can be ended at once
+  by an admin. Restrictions already in place are unchanged; the preflight counts
+  admins who cannot sign in and restriction proposals about an admin (approving
+  one is refused from the update on).
+- **Trade-off.** A hacked admin can now only be stopped by two other admins or
+  the owner's SQL session (owner accepted 26 Nov).
+
+Expand only: no command, argument or grant changes. ORDER: either order is
+safe (the website words the new refusal); released apply-first on 26 November
+2026. Read-only preflight:
+`../preflight/20261125174942_end_admin_role_before_restriction.check.sql`;
+rollback:
+`../rollback/20261125174942_end_admin_role_before_restriction.down.sql` (puts
+the three earlier bodies back).
+
+## Members change their verified place, 25 November 2026
+
+`20261125161326_change_verified_place.sql` was applied on 26 November 2026 at
+02:01 UTC (see the applied register). Launch checklist item 20, part 2.
+
+- New table `private.verification_locality_changes` (from and to province and
+  city, and the time), row level security on, no grants. It belongs to the
+  member's place row (on delete cascade), so account erasure and the retention
+  sweep, which delete that row, delete its history too.
+- `internal.confirm_verification_locality` (full body): a different valid place
+  replaces the member's place and is recorded, at most once every 15 days (PT409
+  `location_change_cooldown`, the next allowed time as the hint). The same place
+  answers "reused" as before; the first place is not a change.
+- `internal.frontend_privacy_export_data` (full body) adds the dataset
+  `locality_changes`.
+- A verified phone number already changes through a new SMS code at most every
+  15 days, with an accepted ID review (`create_verification_phone_challenge`,
+  `finalize_verification_phone`); this update does not change that. The website
+  now offers it from My profile.
+
+Expand only; no command, argument or grant is removed. ORDER: apply first, then
+merge. Read-only preflight:
+`../preflight/20261125161326_change_verified_place.check.sql` (expect "update
+not applied" and the number of members with a place); rollback:
+`../rollback/20261125161326_change_verified_place.down.sql` (refused once any
+member changed their place). Behaviour test:
+`scripts/test-foundation-change-verified-place.mjs`.
+
 ## Removing an admin needs another admin's approval, 25 November 2026
 
 `20261125150338_admin_removal_needs_approval.sql` was applied on 25 November
@@ -8279,6 +8353,17 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   after "already applied" with the same counts; production fingerprint after it
   (fingerprint.sql) matched the full replay (except the known schema grant
   difference)
+
+- `20261125161326_change_verified_place.sql`: applied 2026-11-26 02:01 UTC;
+  apply-first, owner-approved, before pull request #376 was merged; Supabase SQL
+  editor (browser), file from raw GitHub at f8578cd7, update sha256 starting
+  81a4568c156240c7; preflight before "verified place: update not applied;
+  members with a place: 3" with no problem rows, after "verified place: already
+  applied; members with a place: 3; place changes: 0"; production fingerprint
+  after it (fingerprint.sql) matched the full replay (except the known schema
+  grant difference)
+
+- `20261125174942_end_admin_role_before_restriction.sql`: pending
 
 - `20261125194727_part_refund_follow_ups.sql`: pending; website-first
 
