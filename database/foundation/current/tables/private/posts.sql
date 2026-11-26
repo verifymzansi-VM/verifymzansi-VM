@@ -73,4 +73,5 @@ CREATE TRIGGER post_lifecycle_clock BEFORE INSERT OR UPDATE OF status ON private
 CREATE TRIGGER post_status_clock BEFORE UPDATE OF status ON private.posts FOR EACH ROW EXECUTE FUNCTION internal.post_status_clock();
 CREATE TRIGGER posting_terms_submission_guard BEFORE INSERT OR UPDATE OF status ON private.posts FOR EACH ROW EXECUTE FUNCTION internal.guard_posting_terms_submission();
 CREATE TRIGGER posts_release_activation BEFORE DELETE ON private.posts FOR EACH ROW EXECUTE FUNCTION internal.release_activation_on_post_delete();
+CREATE TRIGGER video_length_submission_guard BEFORE INSERT OR UPDATE OF status ON private.posts FOR EACH ROW EXECUTE FUNCTION internal.guard_video_length_submission();
 revoke all on private.posts from public;

@@ -35,6 +35,7 @@
     },
     "pendingApplication": [
       "20261126001811_staff_access_follow_ups.sql",
+      "20261126001956_video_length_checked.sql",
       "20261126125203_close_unused_commands.sql"
     ]
   },
@@ -42,7 +43,7 @@
     "Reference data is not fingerprinted. candidate.sql seeds posting-terms version posting-v2, which production does not hold: production has posting-v1 and posting-v3 (current since 20261109173012_posting_terms_v3.sql), and posting-v4 once 20261112122001_publish_posting_terms_v4.sql is applied (current from 20261112173841_switch_posting_terms_v4.sql).",
     "schema_grants: production has 8 items (d397fed9c8bd9d4fc50ebdd777899d93) and the replay 7 (categories below). The extra production item is `internal supabase_auth_admin:USAGE`, which Supabase grants when the Auth \"Before user created\" hook is switched on; no repository file creates it (see replay/hosted-auth-hook-grants.sql)."
   ],
-  "updateCount": 126,
+  "updateCount": 127,
   "lastUpdate": "20261126125203_close_unused_commands.sql",
   "categories": {
     "column_grants": {
@@ -50,28 +51,28 @@
       "fingerprint": "5e5623672e80b927048d8553487d5442"
     },
     "columns": {
-      "items": 1546,
-      "fingerprint": "3ee2af8145e2989c4f59db8f0f5e3664"
+      "items": 1547,
+      "fingerprint": "381e610f94547ef93e5833a318a3f3de"
     },
     "constraints": {
-      "items": 1348,
-      "fingerprint": "a31fe8cd63efdd3075cdae1f37cca10b"
+      "items": 1349,
+      "fingerprint": "f2e5c1afdd99f6e2e2fe13a97e12c874"
     },
     "event_triggers": {
       "items": 1,
       "fingerprint": "821f7d069c595c075754fad9309136ac"
     },
     "function_bodies": {
-      "items": 1206,
-      "fingerprint": "81b4a8df53edfcf2cf7e3d582c5f9c23"
+      "items": 1211,
+      "fingerprint": "550c3436414b5c6324250da1368f722b"
     },
     "function_grants": {
-      "items": 862,
-      "fingerprint": "6bd6a83eca590794a911e17af0c4197d"
+      "items": 866,
+      "fingerprint": "079abd9a109ca592935ca37b608b068d"
     },
     "function_metadata": {
-      "items": 1206,
-      "fingerprint": "423fc7f5c31b45f71a5b5ed61ae9fe77"
+      "items": 1211,
+      "fingerprint": "f349d269adef32a432804a3b91e1d31f"
     },
     "indexes": {
       "items": 619,
@@ -90,8 +91,8 @@
       "fingerprint": "a68294e7a9bcf7c20492a72f7c724252"
     },
     "triggers": {
-      "items": 156,
-      "fingerprint": "bb9c832dc17932c5f3b3cd7764d257d6"
+      "items": 157,
+      "fingerprint": "534926ff5fd0890045de1f0a6122bcd6"
     }
   }
 }

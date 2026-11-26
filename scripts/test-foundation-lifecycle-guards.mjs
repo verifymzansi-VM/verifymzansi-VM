@@ -26,7 +26,8 @@
 // Needs a local Docker daemon; it takes no connection settings at all. The
 // Hide action and most hold releases are mirrored by vmtest.hide/release
 // (same rows and lock order; the real staff commands need report and claim
-// fixtures); one release goes through the real staff command. Plan slots are
+// fixtures); one release runs internal.release_frontend_content_hold, which
+// staff reach through an appeal (api.resolve_frontend_appeal). Plan slots are
 // staff-granted entitlements, published posts get their approval snapshot
 // directly (moderation has its own suites), and the time a rule waits for is
 // simulated by moving a post's clock columns back. The only stand-in is

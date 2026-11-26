@@ -124,6 +124,19 @@ it("preserves the native verification refusal and performs no blind command retr
   expect(await response.json()).toMatchObject({ code: "verification_required" });
   expect(rpc.mock.calls.filter((c) => c[0] === "consume_frontend_post_command")).toHaveLength(1);
 });
+it("tells the seller the video's length and the limit when the database refuses it", async () => {
+  rpc.mockImplementation(async (name) =>
+    name === "resolve_my_frontend_media"
+      ? resolved()
+      : { data: null, error: { code: "22023", details: "video_too_long", hint: "90/60" } }
+  );
+  const response = await handleRestoredPostMutation(request(body()), "listings");
+  expect(response.status).toBe(422);
+  expect(await response.json()).toMatchObject({
+    error: "Your video is 1 min 30 s; the limit is 1 minute",
+    reason: "video_length",
+  });
+});
 it("explains the 12-month event limit and keeps the general message for other refusals", async () => {
   const refuse = (error: { code: string; details?: string }) =>
     rpc.mockImplementation(async (name) =>

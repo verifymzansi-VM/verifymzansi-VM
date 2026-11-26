@@ -27,39 +27,40 @@
 --    address. Nothing else in it changes.
 --
 -- It refuses (55000) when only some of the eleven dropped functions exist, or
--- when they all exist but the role review is not the reviewed version. Running
+-- when the role review is neither the reviewed body nor this update's. Running
 -- it again once applied changes nothing. No other object changes.
 --
--- ORDER: apply first, then merge right away in the same sitting. The website
--- release reads the role review without the email address; the release before
--- it expects the address, so the staff role review page shows "Role management
--- could not be loaded" between the apply and the deploy. No website release calls
--- the dropped commands, so either order is safe for them.
+-- ORDER: website first. Merge the pull request and let its release deploy,
+-- then apply (a contract step). The release calls none of the eight commands,
+-- and the deploy preflight probes only the commands in the release's runtime
+-- manifest, so it passes while production still has them (it reports the
+-- update as pending, "database behind by 1"). The release reads the role
+-- review without the email address, so between the deploy and the apply the
+-- staff roles page shows "Role management could not be loaded". After the
+-- apply, a revert of this pull request cannot deploy (the earlier release's
+-- probe needs the dropped commands); fix forward.
 -- Read-only preflight: ../preflight/20261126125203_close_unused_commands.check.sql.
 begin;
 -- Never wait more than 5 seconds for anything this update needs.
 set local lock_timeout='5s';
 
 do $$
-declare present integer; review text;
+declare present integer; body text;
 begin
-  select (to_regprocedure('api.execute_frontend_report_action(uuid,integer,text,uuid,text,text,integer,boolean)') is not null)::integer
-    + (to_regprocedure('api.get_my_frontend_posting_allowance(text)') is not null)::integer
-    + (to_regprocedure('api.get_frontend_report_queue(text)') is not null)::integer
-    + (to_regprocedure('api.list_my_frontend_notifications(integer,boolean,timestamptz)') is not null)::integer
-    + (to_regprocedure('api.get_frontend_seen_queue(text)') is not null)::integer
-    + (to_regprocedure('api.get_my_frontend_business_checks(uuid)') is not null)::integer
-    + (to_regprocedure('api.release_frontend_content_hold(uuid,integer,text)') is not null)::integer
-    + (to_regprocedure('api.open_identity_disclosure(text,text,text,text,text,boolean)') is not null)::integer
-    + (to_regprocedure('internal.get_my_frontend_posting_allowance(text)') is not null)::integer
-    + (to_regprocedure('internal.list_my_frontend_notifications(integer,boolean,timestamptz)') is not null)::integer
-    + (to_regprocedure('internal.open_identity_disclosure(text,text,text,text,text,boolean)') is not null)::integer
-  into present;
-  select md5(replace(prosrc, E'\r\n', E'\n')) into review from pg_proc
-    where oid = to_regprocedure('internal.get_frontend_staff_role_review(integer,text)');
-  if present not in (0, 11) or (present = 11 and review is distinct from 'f2d542319179e14457c863d7392e7dd3') then
-    raise exception 'close unused commands precondition: % of 11 functions exist, role review md5 %',
-      present, coalesce(review, 'missing') using errcode='55000';
+  select count(to_regprocedure(sig)) into present from unnest(array[
+    'api.execute_frontend_report_action(uuid,integer,text,uuid,text,text,integer,boolean)',
+    'api.get_my_frontend_posting_allowance(text)','api.get_frontend_report_queue(text)',
+    'api.list_my_frontend_notifications(integer,boolean,timestamptz)','api.get_frontend_seen_queue(text)',
+    'api.get_my_frontend_business_checks(uuid)','api.release_frontend_content_hold(uuid,integer,text)',
+    'api.open_identity_disclosure(text,text,text,text,text,boolean)',
+    'internal.get_my_frontend_posting_allowance(text)',
+    'internal.list_my_frontend_notifications(integer,boolean,timestamptz)',
+    'internal.open_identity_disclosure(text,text,text,text,text,boolean)']) sig;
+  select md5(replace(p.prosrc,E'\r\n',E'\n')) into body from pg_proc p
+    where p.oid=to_regprocedure('internal.get_frontend_staff_role_review(integer,text)');
+  if present not in (0,11) or body is null or body not in('f2d542319179e14457c863d7392e7dd3','6e80f5cf89c78c9032bd42c3f2632ef4') then
+    raise exception 'close unused commands precondition: % of 11 functions exist, role review body %',present,coalesce(body,'absent')
+      using errcode='55000';
   end if;
 end$$;
 

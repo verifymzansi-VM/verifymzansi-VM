@@ -85,7 +85,16 @@ async function readNativeStaffRoles(actorId: string, page: number, filter?: Role
       created_at: r.decided_at,
     })),
     people: new Map<string, Person>(
-      dto.people.map((r) => [r.user_id, { name: r.display_name || `${r.user_id.slice(0, 8)}…` }])
+      // The short name with the start of the account number, so two people
+      // with the same short name can be told apart.
+      dto.people.map((r) => [
+        r.user_id,
+        {
+          name: r.display_name
+            ? `${r.display_name} (${r.user_id.slice(0, 8)})`
+            : `${r.user_id.slice(0, 8)}…`,
+        },
+      ])
     ),
   };
 }
