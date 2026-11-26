@@ -2367,7 +2367,10 @@ try {
     scalar(
       `select (p.deletes_at=e.ends_at)::text from private.posts p join private.event_details e on e.post_id=p.id where p.id='${id}';`
     );
-  await check("hold release: the staff release command restores a hidden event", () => {
+  // Staff release a hold through an appeal (api.resolve_frontend_appeal); the
+  // release itself runs here directly, as the database owner with the staff
+  // member's claims.
+  await check("hold release: releasing the hold restores a hidden event", () => {
     const releaser = json(`select vmtest.staff('releaser','admin');`);
     const event = post(bea, "event", "live");
     const cover = scalar(
@@ -2385,7 +2388,7 @@ try {
     const released = json(
       staffMember(
         releaser,
-        `select api.release_frontend_content_hold('${hold}',${version},'Synthetic review found no problem');`
+        `reset role; select internal.release_frontend_content_hold('${hold}',${version},'Synthetic review found no problem');`
       )
     );
     assert.equal(released.status, "released");

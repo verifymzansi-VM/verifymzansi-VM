@@ -80,6 +80,48 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Close unused commands; short names in the staff role review, 26 November 2026
+
+`20261126125203_close_unused_commands.sql` is pending (see the applied
+register). Launch checklist item 47. Contract step: eight member and staff
+commands that the website replaced in earlier, applied updates are removed, and
+the staff role review shows staff by their short name.
+
+- **Removed commands** (each with its `../contract-steps.json` entry naming the
+  replacement and the applied expand update):
+  `api.execute_frontend_report_action` (now `_v2`),
+  `api.get_my_frontend_posting_allowance` (now `_v2`),
+  `api.get_frontend_report_queue` (now `get_frontend_report_review_queue`),
+  `api.list_my_frontend_notifications` (now `list_my_frontend_notices`),
+  `api.get_frontend_seen_queue` (now `get_frontend_business_review_queue`),
+  `api.get_my_frontend_business_checks` (now
+  `get_my_frontend_business_review_state`), `api.release_frontend_content_hold`
+  (now `resolve_frontend_appeal`) and `api.open_identity_disclosure` (now
+  `open_authority_request`).
+- **Their internal functions.** The three that nothing else calls are dropped
+  (`get_my_frontend_posting_allowance`, `list_my_frontend_notifications`,
+  `open_identity_disclosure`). The other five stay, because the SECURITY DEFINER
+  function behind each replacement calls them, but lose their execute grant to
+  `authenticated`: no API command calls them as the caller any more.
+- **Staff role review.** `internal.get_frontend_staff_role_review` (full body,
+  otherwise unchanged) returns each person as `user_id` and `display_name`, the
+  short name from `internal.profile_public_name` ("Thando D."), no longer the
+  full name and the email address.
+- **Kept on purpose.** The organisation and payment commands, the staff erasure
+  commands `api.fulfil_account_deletion` and `api.get_account_erasure` (for the
+  staff erasure screen, checklist item 14), the 22 earlier baseline commands the
+  website does not call (each still checks the caller's authority in SQL; owner
+  decision 26 November) and the four internal grants the owner kept on 11
+  November (listed in the A2 replay check).
+
+ORDER: **apply first, then merge straight after.** No website release calls the
+removed commands. The website release reads the role review without the email
+address; the release before it expects the address, so the staff role review
+page shows "Role management could not be loaded" between the apply and the
+deploy. Read-only preflight:
+`../preflight/20261126125203_close_unused_commands.check.sql`. No rollback file:
+nothing calls the removed commands, and a code rollback does not need them.
+
 ## Lifecycle rule follow-ups, 25 November 2026
 
 `20261125225855_lifecycle_rule_follow_ups.sql` was applied on 26 November 2026
@@ -8614,5 +8656,7 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   reminders waiting: 0 (of which the owner's ID is not reviewed: 0)"; production
   fingerprint after the last of the five stacked updates (fingerprint.sql, 06:02
   UTC) matched the full replay (except the known schema grant difference)
+
+- `20261126125203_close_unused_commands.sql`: pending; apply-first
 
 <!-- applied-register:end -->

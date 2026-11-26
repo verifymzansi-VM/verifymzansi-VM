@@ -4061,25 +4061,6 @@
       ]
     },
     {
-      "id": "LIM-F-list_my_frontend_notifications",
-      "title": "internal.list_my_frontend_notifications: invalid notification query",
-      "value": "1 to 50",
-      "category": "batch",
-      "enforcedAt": [
-        {
-          "file": "database/foundation/current/functions/internal/list_my_frontend_notifications.sql",
-          "symbol": "internal.list_my_frontend_notifications",
-          "contains": "if p_limit is null or p_limit not between 1 and 50 or p_unread is null then raise exception 'invalid notification query' using errcode='22023'; end if;"
-        }
-      ],
-      "tests": [
-        {
-          "kind": "behaviour",
-          "file": "scripts/limits-sql-bounds.test.mjs"
-        }
-      ]
-    },
-    {
       "id": "LIM-F-list_my_frontend_posts",
       "title": "internal.list_my_frontend_posts: bounded owner post query required",
       "value": "1 to 100",

@@ -39,6 +39,70 @@
       "expandUpdate": "20261117144001_sample_post_hide_list.sql",
       "expandPullRequest": 105,
       "reason": "Removed by 20261118033538_remove_sample_post_hide_list.sql. The showrooms and the sample pages that read the hide-list are removed from the website in the same pull request, so nothing in src/ or workers/ calls the read; no replacement."
+    },
+    {
+      "command": "execute_frontend_report_action",
+      "change": "remove",
+      "expandUpdate": "20261105043010_native_report_content_holds.sql",
+      "expandPullRequest": 92,
+      "replacement": "execute_frontend_report_action_v2",
+      "reason": "Removed by 20261126125203_close_unused_commands.sql. Staff report actions use api.execute_frontend_report_action_v2 (content holds, account restrictions, appeals) since pull request 92; nothing in src/ or workers/ calls the earlier command."
+    },
+    {
+      "command": "get_my_frontend_posting_allowance",
+      "change": "remove",
+      "expandUpdate": "20261105053049_restored_creation_allowance.sql",
+      "expandPullRequest": 92,
+      "replacement": "get_my_frontend_posting_allowance_v2",
+      "reason": "Removed by 20261126125203_close_unused_commands.sql. The posting allowance is read with api.get_my_frontend_posting_allowance_v2 (creation allowance shown apart from slots) since pull request 92; nothing in src/ or workers/ calls the earlier command."
+    },
+    {
+      "command": "get_frontend_report_queue",
+      "change": "remove",
+      "expandUpdate": "20261105043010_native_report_content_holds.sql",
+      "expandPullRequest": 92,
+      "replacement": "get_frontend_report_review_queue",
+      "reason": "Removed by 20261126125203_close_unused_commands.sql. The staff report queue reads api.get_frontend_report_review_queue since pull request 92; nothing in src/ or workers/ calls the earlier command."
+    },
+    {
+      "command": "list_my_frontend_notifications",
+      "change": "remove",
+      "expandUpdate": "20261105035413_native_report_warning_delivery.sql",
+      "expandPullRequest": 92,
+      "replacement": "list_my_frontend_notices",
+      "reason": "Removed by 20261126125203_close_unused_commands.sql. The member notices list reads api.list_my_frontend_notices (with dismissals) since pull request 92; nothing in src/ or workers/ calls the earlier command."
+    },
+    {
+      "command": "get_frontend_seen_queue",
+      "change": "remove",
+      "expandUpdate": "20261105150107_restored_cipc_review.sql",
+      "expandPullRequest": 92,
+      "replacement": "get_frontend_business_review_queue",
+      "reason": "Removed by 20261126125203_close_unused_commands.sql. The staff business review queue (seen requests and CIPC checks) reads api.get_frontend_business_review_queue since pull request 92; nothing in src/ or workers/ calls the earlier command."
+    },
+    {
+      "command": "get_my_frontend_business_checks",
+      "change": "remove",
+      "expandUpdate": "20261105150107_restored_cipc_review.sql",
+      "expandPullRequest": 92,
+      "replacement": "get_my_frontend_business_review_state",
+      "reason": "Removed by 20261126125203_close_unused_commands.sql. The owner business verification panel reads api.get_my_frontend_business_review_state since pull request 92; nothing in src/ or workers/ calls the earlier command."
+    },
+    {
+      "command": "release_frontend_content_hold",
+      "change": "remove",
+      "expandUpdate": "20261105053509_restored_member_appeals.sql",
+      "expandPullRequest": 92,
+      "replacement": "resolve_frontend_appeal",
+      "reason": "Removed by 20261126125203_close_unused_commands.sql. Staff release a content hold through api.resolve_frontend_appeal since pull request 92; nothing in src/ or workers/ calls the earlier command."
+    },
+    {
+      "command": "open_identity_disclosure",
+      "change": "remove",
+      "expandUpdate": "20261122013616_authority_request_types.sql",
+      "expandPullRequest": 346,
+      "replacement": "open_authority_request",
+      "reason": "Removed by 20261126125203_close_unused_commands.sql. Staff open an identity record for an authority request with api.open_authority_request since pull request 346; nothing in src/ or workers/ calls the earlier command."
     }
   ]
 }

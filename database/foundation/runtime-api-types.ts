@@ -382,7 +382,6 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         };
         Returns: Json;
       };
-      get_my_frontend_business_checks: { Args: { p_business: string }; Returns: Json };
       get_public_frontend_business_seen: { Args: { p_post_ids: string[] }; Returns: Json };
       get_public_frontend_business_cipc: { Args: { p_post_ids: string[] }; Returns: Json };
       request_frontend_business_seen: {
@@ -399,7 +398,6 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         Args: { p_business: string; p_case: string };
         Returns: Json;
       };
-      get_frontend_seen_queue: { Args: { p_tab: string }; Returns: Json };
       get_frontend_seen_case: { Args: { p_case: string }; Returns: Json };
       reserve_frontend_seen_photo: {
         Args: { p_case: string; p_digest: string; p_lat?: number; p_lng?: number; p_mime?: string };
@@ -541,10 +539,6 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         };
         Returns: Json;
       };
-      release_frontend_content_hold: {
-        Args: { p_hold: string; p_expected_version: number; p_reason: string };
-        Returns: Json;
-      };
       lift_frontend_account_restriction: {
         Args: { p_restriction: string; p_expected_version: number; p_reason: string };
         Returns: Json;
@@ -553,20 +547,6 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         Args: { p_limit?: number; p_unread?: boolean; p_before?: string };
         Returns: Json;
       };
-      execute_frontend_report_action: {
-        Args: {
-          p_report: string;
-          p_expected_revision: number;
-          p_claim_generation: string;
-          p_claim_nonce: string;
-          p_action: string;
-          p_reason: string;
-          p_duration_days?: number;
-          p_emergency?: boolean;
-        };
-        Returns: Json;
-      };
-      get_frontend_report_queue: { Args: { p_area?: string }; Returns: Json };
       get_frontend_area_activity: { Args: { p_area?: string; p_limit?: number }; Returns: Json };
       get_frontend_staff_audit_page: { Args: { p_request?: Json }; Returns: Json };
       get_frontend_feature_flags: { Args: Record<PropertyKey, never>; Returns: Json };
@@ -650,7 +630,6 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         Args: { p_area?: string; p_limit?: number };
         Returns: Json;
       };
-      get_my_frontend_posting_allowance: { Args: { p_area: string }; Returns: Json };
       get_my_frontend_posting_allowance_v2: { Args: { p_area: string }; Returns: Json };
       execute_my_frontend_post_action: {
         Args: {
@@ -692,10 +671,6 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         Returns: Json;
       };
       get_my_frontend_verification_uploads: { Args: Record<PropertyKey, never>; Returns: Json };
-      list_my_frontend_notifications: {
-        Args: { p_limit?: number; p_unread?: boolean; p_before?: string };
-        Returns: Json;
-      };
       dismiss_my_notifications: { Args: { p_ids?: string[] }; Returns: Json };
       list_my_frontend_enquiries: {
         Args: {
@@ -727,17 +702,6 @@ export type FoundationRuntimeAuthenticatedDatabase = {
           p_first_name?: string;
           p_last_name?: string;
           p_with_id?: boolean;
-        };
-        Returns: Json;
-      };
-      open_identity_disclosure: {
-        Args: {
-          p_request_type: string;
-          p_reference: string;
-          p_reason: string;
-          p_lookup_kind: string;
-          p_lookup_value: string;
-          p_attested: boolean;
         };
         Returns: Json;
       };

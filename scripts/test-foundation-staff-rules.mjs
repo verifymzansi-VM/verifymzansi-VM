@@ -831,11 +831,13 @@ try {
         true
       );
       assert.equal(count(`private.frontend_content_holds where post_id='${event}'`), 1);
-      // The reviewer who hid it cannot restore it.
+      // The reviewer who hid it cannot restore it. Staff release a hold through
+      // an appeal; the release itself is checked here directly, as the database
+      // owner with the reviewer's claims.
       fails(
         staff(
           governor,
-          `select api.release_frontend_content_hold('${hold}',1,'Self restoration');`
+          `reset role; select internal.release_frontend_content_hold('${hold}',1,'Self restoration');`
         ),
         "42501",
         /independent restoration reviewer required/

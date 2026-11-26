@@ -30,7 +30,7 @@ begin
     'staff',coalesce((select jsonb_agg(to_jsonb(s) order by granted_at desc,user_id) from staff s),'[]'::jsonb),
     'pending',coalesce((select jsonb_agg(to_jsonb(p) order by created_at,id) from pending p),'[]'::jsonb),
     'history',coalesce((select jsonb_agg(to_jsonb(h) order by decided_at desc,id desc) from history h),'[]'::jsonb),
-    'people',coalesce((select jsonb_agg(jsonb_build_object('user_id',u.id,'email',u.email,'display_name',p.display_name))
+    'people',coalesce((select jsonb_agg(jsonb_build_object('user_id',u.id,'display_name',internal.profile_public_name(p.display_name)))
       from involved i join auth.users u on u.id=i.user_id and u.deleted_at is null left join private.profiles p on p.account_id=u.id),'[]'::jsonb)
   ) into result;
   perform internal.staff_actor('role:review');return result;

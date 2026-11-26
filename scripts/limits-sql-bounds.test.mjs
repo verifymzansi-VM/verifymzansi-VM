@@ -390,14 +390,6 @@ const ROWS = [
     over: [0, 51],
     error: /invalid notification query/,
   },
-  {
-    id: "LIM-F-list_my_frontend_notifications",
-    as: "member",
-    sql: (n) => `select api.list_my_frontend_notifications(${n},false,null)`,
-    at: [1, 50],
-    over: [0, 51],
-    error: /invalid notification query/,
-  },
   ...[
     ["LIM-F-list_my_frontend_posts", "list_my_frontend_posts"],
     ["LIM-F-list_my_frontend_posts_v2", "list_my_frontend_posts_v2"],
@@ -1017,7 +1009,7 @@ const ROWS = [
     id: "LIM-F-execute_frontend_report_action",
     as: "staff",
     sql: (n) =>
-      `select api.execute_frontend_report_action(${uuid()},1,'1',${uuid()},'warn',${text(n)})`,
+      `select api.execute_frontend_report_action_v2(${uuid()},1,'1',${uuid()},'warn',${text(n)})`,
     at: [10],
     then: /report unavailable/,
     over: [9],

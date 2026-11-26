@@ -49,7 +49,6 @@ const ROLE_FILTERS = ["moderator", "governance_controller", "admin"] as const;
 
 interface Person {
   name: string;
-  email: string | null;
 }
 
 type RoleFilter = (typeof ROLE_FILTERS)[number];
@@ -86,13 +85,7 @@ async function readNativeStaffRoles(actorId: string, page: number, filter?: Role
       created_at: r.decided_at,
     })),
     people: new Map<string, Person>(
-      dto.people.map((r) => [
-        r.user_id,
-        {
-          name: r.display_name || r.email || `${r.user_id.slice(0, 8)}…`,
-          email: r.email,
-        },
-      ])
+      dto.people.map((r) => [r.user_id, { name: r.display_name || `${r.user_id.slice(0, 8)}…` }])
     ),
   };
 }
@@ -135,9 +128,7 @@ export default async function GovernanceRolesPage({
     return qs ? `/admin/governance/roles?${qs}` : "/admin/governance/roles";
   };
   const person = (id: string | null): Person =>
-    id
-      ? (people.get(id) ?? { name: `${id.slice(0, 8)}…`, email: null })
-      : { name: "Former staff member", email: null };
+    id ? (people.get(id) ?? { name: `${id.slice(0, 8)}…` }) : { name: "Former staff member" };
 
   return (
     <div className="space-y-6">
@@ -242,9 +233,6 @@ export default async function GovernanceRolesPage({
                   >
                     <div className="min-w-0">
                       <p className="font-medium">{who.name}</p>
-                      {who.email && who.email !== who.name && (
-                        <p className="truncate text-sm text-muted-foreground">{who.email}</p>
-                      )}
                       <p className="text-xs text-muted-foreground">
                         Since {formatSaLongDate(s.granted_at)}
                       </p>
