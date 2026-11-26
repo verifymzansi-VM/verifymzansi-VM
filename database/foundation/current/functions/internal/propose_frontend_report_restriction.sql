@@ -33,6 +33,10 @@ begin
   end if;
   if r.status<>'open' or r.revision<>p_expected_revision or internal.current_report_proposal(r.active_proposal_id)
     or exists(select 1 from private.account_closures c where c.user_id=subject) or not exists(select 1 from auth.users u where u.id=subject and u.deleted_at is null) then raise exception 'report or subject changed' using errcode='PT409';end if;
+  -- 20261125174942: no suspension, ban or emergency containment of an active
+  -- admin; their admin role ends first, with another admin's approval.
+  if exists(select 1 from private.staff_roles s where s.user_id=subject and s.role='admin' and s.revoked_at is null)
+    then raise exception 'End this person''s admin role first' using errcode='PT409',detail='subject_is_admin';end if;
   select * into q from private.queue_claims where report_id=r.id for update;
   perform internal.assert_queue_claim(q,actor,p_generation,p_nonce);
   if p_action='ban' then
