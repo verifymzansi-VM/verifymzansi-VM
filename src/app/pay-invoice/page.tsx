@@ -67,6 +67,7 @@ export default async function PayInvoicePage({
                 sellerAddress={invoiceSellerAddress()}
                 bank={invoice.status === "issued" ? invoiceBankDetails() : null}
                 onlineMaxCents={onlineMaxCents}
+                payHere
               />
               <InvoicePayPanel
                 invoiceNumber={invoice.invoice_number}
