@@ -33,6 +33,8 @@
 --    after release, never while an appeal against them waits; staff role
 --    change proposals 5 years after they were decided or expired; evidence
 --    case claim events 2 years; raised slot limits 2 years after they ended.
+--    A closed report (2 years, unchanged) is not deleted while an appeal
+--    against a warning it gave waits.
 -- 5. internal.retention_verification (adds one count): reasons for returning
 --    an ID go 12 months after the return, unless a legal hold on the account
 --    or a fraud hold on the case keeps them. This runs before the five-year
@@ -74,7 +76,7 @@ begin
         'internal.retention_operations(integer) c435cece42784f1bcf61a3b47ea32944',
         'internal.retention_operations(integer) a76b7c5b983c43c687d0abf47965f6f6',
         'internal.retention_staff_records(integer) 63218a3ffaab86d4ead4788f13ed5103',
-        'internal.retention_staff_records(integer) 94c034a1b8e5812a357fca776bc0f2a8',
+        'internal.retention_staff_records(integer) 6e425b22b04938c1e1da5e37f3bda361',
         'internal.retention_verification(integer) 6a7db601e6af1cfcc55f697f7d841dd2',
         'internal.retention_verification(integer) 56e4f71f0ad4ecb994e79ea9b0d695b8',
         'internal.individual_slot_limit_guard() 556e2de64a5eb7ca998744fa0abb5c84',
@@ -239,6 +241,9 @@ begin
   get diagnostics queue_events=row_count;
   delete from private.reports where id in(select r.id from private.reports r
     where r.status<>'open' and r.resolved_at<statement_timestamp()-interval '2 years'
+      -- Never while an appeal against a warning it gave still waits.
+      and not exists(select 1 from private.frontend_report_action_receipts c join private.frontend_appeals a on a.action_id=c.id
+        where c.report_id=r.id and a.status='submitted')
     order by r.resolved_at limit p_limit for update skip locked);
   get diagnostics reports=row_count;
 

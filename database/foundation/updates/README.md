@@ -105,7 +105,8 @@ retention sweep (`api.run_retention`, service only).
   an appeal against them waits; staff role change proposals 5 years after they
   were decided or expired; evidence case claim events 2 years; raised slot
   limits 2 years after they ended (`internal.individual_slot_limit_guard` now
-  lets the sweep delete them).
+  lets the sweep delete them). A closed report (2 years, unchanged) is not
+  deleted while an appeal against a warning it gave waits.
 - **`internal.retention_verification`**: reasons for returning an ID 12 months
   after the return, unless a legal hold or fraud hold keeps them. The five-year
   sweep of closed accounts also deletes them by case: a kept return used to stop

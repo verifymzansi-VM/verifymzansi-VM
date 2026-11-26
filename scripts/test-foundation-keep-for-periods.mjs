@@ -51,7 +51,7 @@ const BODIES = {
   ],
   "internal.retention_staff_records(integer)": [
     "63218a3ffaab86d4ead4788f13ed5103",
-    "94c034a1b8e5812a357fca776bc0f2a8",
+    "6e425b22b04938c1e1da5e37f3bda361",
   ],
   "internal.retention_verification(integer)": [
     "6a7db601e6af1cfcc55f697f7d841dd2",
@@ -63,7 +63,7 @@ const BODIES = {
   ],
 };
 const ZEROS =
-  "contact messages: 0; admin invitations: 0; change logs: 0; appeals and holds: 0; role changes: 0; claim events: 0; slot limits: 0; ID return reasons: 0; privacy request proofs: 0";
+  "contact messages: 0; admin invitations: 0; change logs: 0; appeals and holds: 0; closed reports: 0; role changes: 0; claim events: 0; slot limits: 0; ID return reasons: 0; privacy request proofs: 0";
 const NOT_APPLIED = new RegExp(`^keep-for periods: update not applied; ${ZEROS}$`);
 const APPLIED = new RegExp(`^keep-for periods: already applied; ${ZEROS}$`);
 
@@ -376,6 +376,31 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
     assert.ok(!exists("frontend_content_holds", `id='${awaitedHold}'`));
     sweep();
     assert.ok(!exists("frontend_appeals", `id='${awaiting}'`));
+  });
+
+  await check("a closed report stays while an appeal against its warning waits", () => {
+    const member = world.user("keep-warned");
+    const report = randomUUID();
+    const receipt = randomUUID();
+    asOwner(`insert into private.reports(id,subject_account_id,category,description,reporter_ip_hmac,status,resolved_by,resolution_note,resolved_at,created_at)
+        values('${report}','${member.id}','scam','A synthetic report about this account.','${"w".repeat(43)}','resolved',
+          '${admin.id}','Warned the member.',${ago("2 years 1 day")},${ago("2 years 2 days")});
+      insert into private.frontend_report_action_receipts(id,report_id,expected_revision,claim_generation,claim_nonce_digest,actor_id,action,reason,emergency,status,acknowledged_until,created_at)
+        values('${receipt}','${report}',1,1,'${"a".repeat(64)}','${admin.id}','warn','Please describe the item honestly.',false,'applied',${ago("2 years 1 day")},${ago("2 years 1 day")});
+      insert into private.frontend_account_warnings(receipt_id,account_id) values('${receipt}','${member.id}');`);
+    const waiting = randomUUID();
+    asOwner(`insert into private.frontend_appeals(id,action_id,appellant_id,kind,reason,status,created_at)
+      values('${waiting}','${receipt}','${member.id}','warning','I did not break the rules in this post.','submitted',${ago("2 years")});`);
+    sweep();
+    assert.ok(exists("reports", `id='${report}'`), "kept while the appeal waits");
+    assert.ok(exists("frontend_appeals", `id='${waiting}'`));
+    // Decided 2 years ago: the report goes with its warning, then the appeal.
+    asOwner(`update private.frontend_appeals set status='dismissed',reviewer_id='${admin.id}',
+        reviewer_rationale='Checked the post again.',resolved_at=${ago("2 years 1 day")} where id='${waiting}';`);
+    sweep();
+    assert.ok(!exists("reports", `id='${report}'`));
+    assert.ok(!exists("frontend_account_warnings", `receipt_id='${receipt}'`));
+    assert.ok(!exists("frontend_appeals", `id='${waiting}'`));
   });
 
   await check(
