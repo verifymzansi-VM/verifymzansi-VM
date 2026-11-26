@@ -406,3 +406,104 @@ describe("part refunds and the first purchase (20261125133916_staff_part_refunds
     });
   });
 });
+
+describe("refund follow-ups (20261125194727_part_refund_follow_ups.sql)", () => {
+  const left = (overrides = {}) => ({
+    payment_id: base.id,
+    refunded_cents: 0,
+    left_cents: 13800,
+    ozow_refund_until: null,
+    first_purchase: false,
+    first_purchase_ask_until: null,
+    lines: [],
+    ...overrides,
+  });
+  const partRefund = (form: HTMLElement) => {
+    fireEvent.change(within(form).getByLabelText("Reason"), {
+      target: { value: "our_failure_after_fix_offered" },
+    });
+    fireEvent.change(within(form).getByLabelText("Amount to refund (rand)"), {
+      target: { value: "30" },
+    });
+    fireEvent.change(within(form).getByLabelText("Ozow refund reference"), {
+      target: { value: "OZ-PART-1" },
+    });
+    fireEvent.change(within(form).getByLabelText("Reason (audited)"), {
+      target: { value: "Lost days refunded after the fix" },
+    });
+    fireEvent.submit(form);
+  };
+  const body = (n: number) => JSON.parse(fetch.mock.calls[n][1].body);
+
+  it("sends the same request id after a lost answer, also from a reopened form", async () => {
+    fetch.mockRejectedValueOnce(new Error("network"));
+    render(<PaymentsPanel canRefund payments={[base]} refundsLeft={[left()]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Record refund" }));
+    partRefund(screen.getByRole("form", { name: "Refund of this payment" }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
+    fireEvent.click(screen.getByRole("button", { name: "Record refund" }));
+    partRefund(screen.getByRole("form", { name: "Refund of this payment" }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    expect(body(1).requestId).toBe(body(0).requestId);
+    // Recorded: the next refund of the payment gets a new id.
+    await waitFor(() => expect(screen.queryByRole("form")).toBeNull());
+    fireEvent.click(screen.getByRole("button", { name: "Record refund" }));
+    partRefund(screen.getByRole("form", { name: "Refund of this payment" }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
+    expect(body(2).requestId).not.toBe(body(0).requestId);
+  });
+
+  it("warns on a chargeback when money was already refunded", () => {
+    render(
+      <PaymentsPanel
+        canRefund
+        payments={[base]}
+        refundsLeft={[left({ refunded_cents: 3000, left_cents: 10800 })]}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Record chargeback" }));
+    const form = screen.getByRole("form", { name: "Chargeback of this payment" });
+    expect(within(form).getByRole("note")).toHaveTextContent(
+      "Already returned R30 on this payment. A chargeback returns the full amount again"
+    );
+    expect(within(form).queryByLabelText("Amount to refund (rand)")).toBeNull();
+  });
+
+  it("counts unused paid days from the notice end and warns about lost days", () => {
+    const slot = line(1);
+    render(
+      <PaymentsPanel
+        canRefund
+        payments={[{ ...base, amount_cents: 6900, lines: [slot] }]}
+        refundsLeft={[
+          left({
+            left_cents: 6900,
+            notice_ends_on: "2026-12-16",
+            lines: [
+              {
+                line_id: slot.id,
+                left_cents: 6900,
+                starts_at: "2026-11-13T08:00:00Z",
+                ends_at: "2026-12-16T08:00:00Z",
+                paid_days: 30,
+                lost_days: 3,
+              },
+            ],
+          }),
+        ]}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Record refund" }));
+    const form = screen.getByRole("form", { name: "Refund of this payment" });
+    fireEvent.change(within(form).getByLabelText("Reason"), {
+      target: { value: "s14_cancellation" },
+    });
+    expect(within(form).getByText(/Unused paid days after the 20 business days/)).toHaveTextContent(
+      /0 of 30 \(paid until 13 Dec 2026; the 3 days added for lost days are free/
+    );
+    expect(within(form).getByRole("note")).toHaveTextContent(
+      "3 days already added to this slot for lost days. Give money or days for one failure, not both."
+    );
+  });
+});

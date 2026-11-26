@@ -10,7 +10,7 @@ export class FoundationStaffCommandError extends Error {
     super(message);
   }
 }
-import { isStaffSecondFactorRefusal } from "./error-reasons";
+import { hasDatabaseReason, isStaffSecondFactorRefusal } from "./error-reasons";
 export async function settleStaffCommand<T>(
   result: PromiseLike<{ data: unknown; error: { code?: string; message?: string } | null }>,
   schema: z.ZodType<T>
@@ -27,6 +27,13 @@ export async function settleStaffCommand<T>(
         mfa
       );
     }
+    // A ban, suspension or emergency containment of a person who holds an
+    // active admin role (20261125174942_end_admin_role_before_restriction.sql).
+    if (error.code === "PT409" && hasDatabaseReason(error, "subject_is_admin"))
+      throw new FoundationStaffCommandError(
+        409,
+        "End this person's admin role first. Another admin must approve that, then try again."
+      );
     // Approving a post that no plan or free week can fund any more.
     if (error.code === "PT402")
       throw new FoundationStaffCommandError(
