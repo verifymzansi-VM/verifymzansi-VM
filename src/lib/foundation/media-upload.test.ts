@@ -74,15 +74,15 @@ it("stores and attests scrubbed bytes, rather than the original MP4 location", a
   expect(stored.length).toBe(bytes.length);
   expect(new TextDecoder().decode(bytes)).toContain("PRIVATE GPS");
   expect(new TextDecoder().decode(stored)).not.toContain("PRIVATE GPS");
-  expect(attest).toHaveBeenCalledWith(
-    "complete_frontend_media_upload",
-    expect.objectContaining({
-      p_object_id: objectId,
-      p_size: stored.length,
-      p_sha256: createHash("sha256").update(stored).digest("hex"),
-      p_mime: "video/mp4",
-    })
-  );
+  // A video completes with the length read from the file (30 s), which the
+  // database stores and checks against each post kind's limit at submit.
+  expect(attest).toHaveBeenCalledWith("complete_frontend_video_upload", {
+    p_object_id: objectId,
+    p_size: stored.length,
+    p_sha256: createHash("sha256").update(stored).digest("hex"),
+    p_mime: "video/mp4",
+    p_duration_ms: 30_000,
+  });
 });
 it("refuses WebM (stored videos are MP4 only) before reserving quota or storing any bytes", async () => {
   const bytes = new Uint8Array(readFileSync("src/lib/utils/__fixtures__/chrome-vp9.webm"));
@@ -362,10 +362,14 @@ describe("video length and stored size at upload (M4.4)", () => {
       },
       error: null,
     }));
-  const send = (bytes: Uint8Array, rpc: ReturnType<typeof videoIntent>) =>
+  const send = (
+    bytes: Uint8Array,
+    rpc: ReturnType<typeof videoIntent>,
+    attest: ReturnType<typeof vi.fn> = attested()
+  ) =>
     uploadFoundationMedia(
       { rpc } as unknown as FoundationAuthenticatedApi,
-      { rpc: attested() } as unknown as FoundationServiceApi,
+      { rpc: attest } as unknown as FoundationServiceApi,
       new File([bytes.slice().buffer], "clip.mp4", { type: "video/mp4" }),
       vi.fn(async (input: { key: string }) => ({
         key: input.key,
@@ -391,13 +395,32 @@ describe("video length and stored size at upload (M4.4)", () => {
     expect(rpc).not.toHaveBeenCalled();
   });
 
-  it("stores a 119 s video", async () => {
+  it("stores a 119 s video with its length", async () => {
     const rpc = videoIntent();
-    await expect(send(syntheticMp4(119), rpc)).resolves.toMatchObject({ kind: "video" });
+    const attest = attested();
+    await expect(send(syntheticMp4(119), rpc, attest)).resolves.toMatchObject({ kind: "video" });
     expect(rpc).toHaveBeenCalledWith(
       "reserve_frontend_media_upload",
       expect.objectContaining({ p_kind: "video" })
     );
+    expect(attest).toHaveBeenCalledWith(
+      "complete_frontend_video_upload",
+      expect.objectContaining({ p_duration_ms: 119_000 })
+    );
+  });
+
+  it("passes a refused video completion on as a refusal", async () => {
+    const attest = vi.fn().mockResolvedValue({
+      data: null,
+      error: {
+        code: "22023",
+        details: "video_length_invalid",
+        message: "video length outside the limit",
+      },
+    });
+    await expect(send(syntheticMp4(60), videoIntent(), attest)).rejects.toMatchObject({
+      status: 400,
+    });
   });
 
   it("refuses a video whose length cannot be read (no movie header; fragmented; forged sample table)", async () => {

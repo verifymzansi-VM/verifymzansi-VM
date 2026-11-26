@@ -80,6 +80,120 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Video length checked by the database, 26 November 2026
+
+`20261126001956_video_length_checked.sql` is pending (see the applied register).
+Launch checklist item 39 (roadmap M4.4 part B). One new column, two new
+commands, one new trigger and one replaced trigger body; no command, argument,
+result or grant changes.
+
+- **The length is stored.** `private.media_objects.duration_ms` holds a video's
+  length in whole milliseconds, as the upload server read it from the file (null
+  for pictures and for videos stored before this update). Once set it never
+  changes (`internal.media_object_transition_guard`).
+- **`api.complete_frontend_video_upload`** (service_role only) completes a
+  content-bound video upload like `api.complete_frontend_media_upload` and
+  stores the length. It refuses a length of 121 s or more, no length, or a
+  picture. Called again for a ready video it is an idempotent replay.
+- **Checked at submit.** `internal.guard_video_length_submission`, a trigger on
+  `private.posts` like the posting terms guard, refuses every move into
+  `pending_moderation` (submit, resubmit, reactivation, an edit's submission)
+  while the post has a video whose stored length is longer than its kind allows
+  (events 60 s, everything else 120 s; whole seconds decide) with 22023
+  `video_too_long` (hint `<seconds>/<limit>`). A video with no stored length
+  passes: videos stored before this update are not checked. Approval and the
+  rest of the lifecycle are unchanged.
+- **Staff see it.** `api.get_frontend_staff_video_lengths` (staff with
+  `queue:view`) returns the stored length of each video of up to 50 posts
+  waiting for review whose review claim the caller holds, the same rule as the
+  queue's review data.
+- **Storage** already grows with paid slots (`internal.media_storage_allowance`:
+  (2 x package slots + 10) x 100 MB); the behaviour test proves that 100 slots
+  hold 100 two-minute videos. Unchanged.
+
+ORDER: apply first, then merge. The live website calls neither new command and
+parses nothing this adds. Until the new website is deployed, a video it uploads
+has no stored length and is not checked. Posts already waiting for review when
+the update is applied are not checked either: staff check the preflight's
+"events: N" posts by hand (an event's video at most 1 minute). It refuses with
+55000 unless the guard has its reviewed body (or this update's). Read-only
+preflight: `../preflight/20261126001956_video_length_checked.check.sql` (expect
+one summary row reading "update not applied"); rollback:
+`../rollback/20261126001956_video_length_checked.down.sql` (undo the website
+first; the stored lengths are lost). Behaviour test:
+`scripts/test-foundation-video-length.mjs`.
+
+## Staff access follow-ups, 26 November 2026
+
+`20261126001811_staff_access_follow_ups.sql` is **pending** (see the applied
+register). Launch checklist item 56, batch F.
+
+- **An invitation for someone who already has an authenticator app.** An owner
+  admin invitation was claimed only when an authenticator app was added or
+  verified (the trigger on `auth.mfa_factors`), so a person invited after
+  setting one up never became an admin. Both paths now use one helper,
+  `internal.claim_owner_admin_invitation_for(uuid)` (no API role may run it),
+  and a new trigger on `private.owner_admin_invitations` runs it when the owner
+  adds an invitation: the person becomes an admin at once when their account
+  already has a verified authenticator app. The checks are unchanged: a
+  confirmed account that can sign in, an unclaimed and unrevoked invitation for
+  its email (only the account that signed up with it, once one has), and no
+  earlier staff role, which an invitation never reactivates.
+- **A new two-step check after every claim.** A claimed role sets
+  `frontend_mfa_not_before` to the moment of the claim, as every other role
+  grant does (`internal.apply_frontend_staff_role`), on both paths: the person's
+  sessions pass no staff command until they check their authenticator app again
+  (this covers an older session when a second app is enrolled).
+- **The update claims no waiting invitation itself**: making someone an admin is
+  the owner's step. The preflight counts waiting invitations whose account
+  already has an authenticator app. If that is above 0 at apply time, ask the
+  owner. For each one the owner approves, add it again in the owner's SQL
+  session, which fires the new trigger, keeping who signed up with it:
+
+  ```sql
+  with d as (delete from private.owner_admin_invitations where lower(email)=lower('<email>') and claimed_at is null and revoked_at is null returning email, signed_up_at, signed_up_by) insert into private.owner_admin_invitations(email, signed_up_at, signed_up_by) select email, signed_up_at, signed_up_by from d returning email;
+  ```
+
+  Revoke each one the owner does not approve (both snippets compare addresses
+  ignoring capitals and show the address they changed; none shown means no
+  match):
+  `update private.owner_admin_invitations set revoked_at = now() where lower(email) = lower('<email>') and claimed_at is null and revoked_at is null returning email;`.
+
+- **An invitation refused while the person was restricted** (banned, suspended,
+  closed or unable to sign in when it was added or their app was checked) stays
+  waiting. Once the restriction ends, add it again the same way.
+- **Claims take the per-person lock.** The helper first takes
+  `internal.lock_evidence_subject` (the lock of ban approval, account closure,
+  erasure orders and staff role changes), then reads whether the account can
+  sign in, then locks the staff roles table, in the order staff role changes
+  use. An invitation claimed at the moment a ban is approved, the account is
+  closed or an erasure is ordered waits and then sees it.
+  `internal.order_account_erasure` already took that lock before its staff check
+  and is unchanged. That this never leaves a banned admin also relies on
+  `20261125174942_end_admin_role_before_restriction.sql` (pull request #377,
+  applied before this update): when the claim comes first, the ban approval
+  waits for it and then refuses to restrict the new admin.
+- **No closure of a staff account through the service command.**
+  `internal.close_account_evidence` (behind the service-only
+  `api.close_account_evidence`, which nothing in the website or workers calls,
+  and `internal.close_account_now`) refuses an account with an active staff
+  role: PT409 "end the staff roles of this account first" (detail
+  `staff_account`), the check `internal.order_account_erasure` makes, under the
+  same lock. Members closing their own account and staff erasure orders already
+  refused such accounts.
+
+Expand only: two replaced bodies (`internal.claim_owner_admin_invitation()`,
+`internal.close_account_evidence(uuid)`), one new helper, one new trigger
+function (`internal.claim_new_owner_admin_invitation()`) and its trigger; no
+command, argument, result or grant changes. ORDER: **apply-first** (apply, then
+merge); no website code depends on it. The same pull request adds
+`/api/foundation/staff` to the proxy's staff check (`src/proxy-handler.ts`,
+`src/lib/foundation/page-access.ts`), as for `/api/admin`. Read-only preflight:
+`../preflight/20261126001811_staff_access_follow_ups.check.sql`; rollback:
+`../rollback/20261126001811_staff_access_follow_ups.down.sql` (removes the
+trigger, its function and the helper, and puts the two earlier bodies back).
+Behaviour checks: `scripts/test-foundation-staff-access-follow-ups.mjs`.
+
 ## Lifecycle rule follow-ups, 25 November 2026
 
 `20261125225855_lifecycle_rule_follow_ups.sql` was applied on 26 November 2026
@@ -8614,5 +8728,9 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   reminders waiting: 0 (of which the owner's ID is not reviewed: 0)"; production
   fingerprint after the last of the five stacked updates (fingerprint.sql, 06:02
   UTC) matched the full replay (except the known schema grant difference)
+
+- `20261126001811_staff_access_follow_ups.sql`: pending
+
+- `20261126001956_video_length_checked.sql`: pending; apply-first
 
 <!-- applied-register:end -->
