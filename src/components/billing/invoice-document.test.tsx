@@ -123,6 +123,24 @@ describe("the customer invoice document", () => {
     expect(screen.getByTestId("invoice-status")).toHaveTextContent("Paid");
   });
 
+  it("on the payment link page says Pay now is on this page, but prints the usual words", () => {
+    const { rerender } = render(
+      <InvoiceDocument invoice={FIXTURE_INVOICE} sellerAddress={null} bank={null} />
+    );
+    const doc = screen.getByRole("article");
+    expect(doc).toHaveTextContent(
+      "Pay online with Ozow, straight from your bank: sign in at verifymzansi.com, open this invoice under Invoices and choose Pay now. Your slots start"
+    );
+    expect(doc).not.toHaveTextContent("on this page");
+    rerender(
+      <InvoiceDocument invoice={FIXTURE_INVOICE} sellerAddress={null} bank={null} payHere />
+    );
+    const here = screen.getByText(/on this page/);
+    expect(here).toHaveTextContent("choose Pay now on this page.");
+    expect(here).toHaveClass("print:hidden");
+    expect(screen.getByText(/sign in at verifymzansi.com/)).toHaveClass("hidden", "print:inline");
+  });
+
   it("labels its status from the invoice and its payment", () => {
     const today = new Date("2026-11-20T10:00:00Z");
     expect(invoiceStatusLabel(FIXTURE_INVOICE, today).label).toBe("Unpaid");

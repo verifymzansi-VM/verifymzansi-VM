@@ -6,7 +6,7 @@ CREATE OR REPLACE FUNCTION api.start_invoice_payment(p_invoice_number text, p_ex
  LANGUAGE sql
  SET search_path TO 'pg_catalog'
 AS $function$
-  select internal.start_invoice_payment(p_invoice_number, p_expected_total_cents, p_cooling_off_consent);
+  select internal.start_invoice_payment(p_invoice_number, p_expected_total_cents, p_cooling_off_consent, null);
 $function$;
 alter function api.start_invoice_payment(text,bigint,boolean) owner to postgres;
 revoke all on function api.start_invoice_payment(text,bigint,boolean) from public;

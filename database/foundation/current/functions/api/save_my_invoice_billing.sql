@@ -7,7 +7,7 @@ CREATE OR REPLACE FUNCTION api.save_my_invoice_billing(p_invoice_number text, p_
  SET search_path TO 'pg_catalog'
 AS $function$
   select internal.save_my_invoice_billing(p_invoice_number, p_revision, p_buyer_name, p_buyer_address,
-    p_buyer_registration_number);
+    p_buyer_registration_number, null);
 $function$;
 alter function api.save_my_invoice_billing(text,integer,text,text,text) owner to postgres;
 revoke all on function api.save_my_invoice_billing(text,integer,text,text,text) from public;

@@ -21,6 +21,7 @@ import { POST as appeals } from "@/app/api/appeals/route";
 import { POST as billingInvoices } from "@/app/api/billing/invoices/route";
 import { POST as packageAddInvoice } from "@/app/api/billing/package-add-invoice/route";
 import { POST as packageInvoice } from "@/app/api/billing/package-invoice/route";
+import { POST as payInvoice } from "@/app/api/pay-invoice/route";
 import { POST as cspReport } from "@/app/api/csp-report/route";
 import { POST as dsarSubmit } from "@/app/api/dsar/submit/route";
 import { POST as engagementLike } from "@/app/api/engagement/like/route";
@@ -206,6 +207,7 @@ const ROUTES: Array<[string, number, Route]> = [
   ["LIM-APP-billing-invoices", 4096, billingInvoices],
   ["LIM-APP-billing-package-add-invoice", 4096, packageAddInvoice],
   ["LIM-APP-billing-package-invoice", 4096, packageInvoice],
+  ["LIM-APP-pay-invoice", 4096, payInvoice],
   ["LIM-APP-csp-report-body", 10240, cspReport],
   ["LIM-APP-dsar-submit", 15000, dsarSubmit],
   ["LIM-APP-engagement-like", 2048, engagementLike],

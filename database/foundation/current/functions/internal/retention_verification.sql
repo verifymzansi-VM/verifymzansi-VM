@@ -10,6 +10,7 @@ AS $function$
 declare candidate record; numbers integer:=0; challenges integer; proofs integer; localities integer;
   acceptances integer; signup_acceptances integer; choice_events integer; histories integer:=0; cases uuid[];
   attempt_names integer; checks integer; ask_reasons integer; disclosures integer; mode_events integer; overdue integer;
+  return_reasons integer;
 begin
   -- The encrypted ID number goes with the selfie: once the selfie is deleted
   -- or due, unless its identity record is kept (internal.identity_record_kept).
@@ -115,6 +116,17 @@ begin
     order by x.closed_at limit p_limit);
   get diagnostics choice_events=row_count;
 
+  -- Reasons for returning an ID: 12 months after the return, unless a hold
+  -- keeps them. Before the five-year sweep below: a kept return would stop
+  -- its case from being deleted (the foreign key restricts).
+  delete from private.verification_return_requests where id in(select r.id from private.verification_return_requests r
+    join private.evidence_cases c on c.id=r.case_id
+    where r.created_at<statement_timestamp()-interval '12 months'
+      and not internal.evidence_fraud_held(r.case_id)
+      and not exists(select 1 from private.legal_holds h where h.subject_id=c.subject_id and h.released_at is null)
+    order by r.created_at limit p_limit for update of r skip locked);
+  get diagnostics return_reasons=row_count;
+
   -- Five years after closure: the verification history of the account, once
   -- every file is deleted, no ban still depends on it and the partner holds
   -- no copy of its checks.
@@ -157,6 +169,7 @@ begin
     delete from private.evidence_fraud_holds where case_id=any(cases);
     delete from private.verification_identity_submissions where owner_id=candidate.user_id;
     delete from private.evidence_artifacts where owner_id=candidate.user_id;
+    delete from private.verification_return_requests where case_id=any(cases);
     delete from private.evidence_cases c where c.id=any(cases) and not exists(select 1 from private.decisions d where d.case_id=c.id);
     delete from private.verification_phone_proofs where owner_id=candidate.user_id;
     delete from private.verification_phone_challenges where owner_id=candidate.user_id;
@@ -209,7 +222,7 @@ begin
     'closed_account_signup_terms',signup_acceptances,'closed_account_communication_choices',choice_events,
     'closed_account_verification_histories',histories,'failed_attempt_names',attempt_names,
     'identity_checks',checks,'closed_account_ask_reasons',ask_reasons,'identity_disclosures',disclosures,
-    'identity_check_mode_events',mode_events,'overdue_partner_deletions',overdue);
+    'identity_check_mode_events',mode_events,'overdue_partner_deletions',overdue,'return_reasons',return_reasons);
 end;
 $function$;
 alter function internal.retention_verification(integer) owner to postgres;

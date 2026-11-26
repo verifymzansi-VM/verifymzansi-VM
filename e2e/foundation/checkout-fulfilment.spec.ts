@@ -28,6 +28,7 @@ import {
 import {
   registerUnreviewedMember,
   registerVerifiedMember,
+  reviewStaffIdentity,
   type VerifiedMember,
 } from "./support/verified-member";
 
@@ -43,7 +44,9 @@ import {
 // payment shows the restored Continue and Cancel controls, and Cancel works; a
 // bank attempt cancelled at the provider, whose notice has not arrived, shows
 // as not paid instead of "Payment pending"; a failed first attempt to open the
-// payment page can be retried later (M3.1); the receipt email arrives. Paid
+// payment page can be retried later (M3.1); the receipt email arrives; a staff
+// invoice is emailed with a payment link, paid from it without signing in, and
+// its receipt names it (items 34 and 38). Paid
 // add-ons (Urgent, Boost, Featured) were removed from the website (item 37).
 //
 // The tests share one member and run in order; a failure skips the rest.
@@ -983,6 +986,144 @@ test.describe("checkout to fulfilment", () => {
     expect(mail.text).not.toContain("/billing");
     expect(mail.text).not.toContain(member.lastName);
     expect(mail.text).not.toContain(member.id);
+  });
+
+  test("an invoice is emailed, paid from its link without signing in, and its receipt names it (items 34, 38)", async ({
+    browser,
+    request,
+  }) => {
+    test.setTimeout(240_000);
+    const mark = readOutboundAttempts().length;
+    // Staff issue the invoice through the production command: the copy's
+    // moderator, reviewed once per copy, may issue invoices for this test only
+    // (a staff_capabilities row, removed afterwards; staff-bank-transfer.spec.ts).
+    const customer = await registerVerifiedMember("invoicepayer");
+    const staffId = queryTestCopy(
+      "select id from auth.users where email = 'moderator@verifymzansi.test';"
+    );
+    await reviewStaffIdentity(copy, "moderator", staffId);
+    const granted =
+      queryTestCopy(
+        "insert into private.staff_capabilities(role, capability, requires_recent_mfa) " +
+          "values ('moderator', 'payments:refund', true) on conflict do nothing returning capability;"
+      ) === "payments:refund";
+    let number = "";
+    try {
+      const staff = await signIn(copy, "moderator");
+      const issued = await call(
+        copy,
+        "issue_staff_invoice",
+        {
+          p_account_email: customer.email,
+          p_term_days: 30,
+          p_slots: 1,
+          p_due_days: 7,
+          p_reason: "Invoice requested by email (browser test)",
+          p_request_id: randomUUID(),
+        },
+        staff.token
+      );
+      number = issued.invoice_number;
+      expect(number).toMatch(/^VM-\d{4}-\d{6}$/);
+    } finally {
+      if (granted)
+        queryTestCopy(
+          "delete from private.staff_capabilities where role = 'moderator' and capability = 'payments:refund';"
+        );
+    }
+    const invoiceId = queryTestCopy(
+      `select id from private.customer_invoices where invoice_number = '${number}';`
+    );
+
+    // The invoice email goes out with a payment link; only its hash is stored.
+    const outboxId = queryTestCopy(
+      `select id from private.outbox_events where kind = 'invoice_issued' and subject_id = '${invoiceId}';`
+    );
+    expect(outboxId).toMatch(UUID);
+    for (let run = 0; run < 20 && !outboxState(outboxId).processed; run++)
+      expect((await runOpsJob(request)).retrying).toBe(0);
+    expect(outboxState(outboxId)).toEqual({ processed: true, attempts: 1, error: null });
+    const hash = queryTestCopy(
+      `select pay_link_hash from private.customer_invoices where id = '${invoiceId}';`
+    );
+    expect(hash).toMatch(/^[0-9a-f]{64}$/);
+    const mail = await caughtMailFor(
+      customer.email,
+      `foundation-outbox/${outboxId}/${hash.slice(0, 16)}`
+    );
+    expect(mail.subject).toBe(`Invoice ${number} from VerifyMzansi`);
+    expect(mail.text).toContain(`Invoice number: ${number}`);
+    expect(mail.text).not.toContain(customer.lastName);
+    const link = /View and pay invoice: (\S+)/.exec(mail.text)?.[1] ?? "";
+    expect(new URL(link).pathname).toBe("/pay-invoice");
+    const token = new URL(link).searchParams.get("token") ?? "";
+    expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(
+      queryTestCopy(
+        `select count(*) from private.customer_invoices where pay_link_hash = '${token}';`
+      )
+    ).toBe("0");
+
+    // A browser with no session opens the link, adds billing details and pays.
+    const context = await browser.newContext({ serviceWorkers: "block" });
+    try {
+      const { outside, failures, reply } = await guard(context);
+      const page = await context.newPage();
+      await page.goto(`/pay-invoice?token=${token}`);
+      await expect(page.getByTestId("invoice-number")).toHaveText(number);
+      await page.getByLabel("Business or full name").fill("Invoice Payer Trading");
+      await page.getByLabel("Address").fill("1 Example Road, Durban");
+      await page.getByRole("button", { name: "Save details" }).click();
+      await expect(page.getByRole("button", { name: "Change billing details" })).toBeVisible();
+      await page.getByRole("checkbox").check();
+      await page.getByRole("button", { name: "Pay now" }).click();
+      await page.waitForURL((url) => url.origin === MOCK_PAYMENT_ORIGIN);
+      await expect(page.getByRole("heading", { name: "Mock Ozow test payment" })).toBeVisible();
+      expect(new URL(page.url()).searchParams.get("returnUrl")).toBe(
+        `${APP_ORIGIN}/pay-invoice?ozow=back`
+      );
+      expect(page.url()).not.toContain(token);
+      const paid = reply("/api/pay-invoice").at(-1)!;
+      expect(paid).toMatchObject({ status: 200 });
+      expect(Object.keys(paid.body as object).sort()).toEqual(["checkoutUrl", "success"]);
+      await page.getByRole("button", { name: "Pay with the test bank" }).click();
+      await page.waitForURL(`${APP_ORIGIN}/pay-invoice?ozow=back`);
+      await expect(page.getByRole("heading", { name: "Thank you" })).toBeVisible();
+      await expect
+        .poll(() =>
+          queryTestCopy(`select status from private.customer_invoices where id = '${invoiceId}';`)
+        )
+        .toBe("paid");
+      // The payment is the invoice account's, for the invoice total.
+      expect(
+        queryTestCopy(
+          "select p.owner_id = i.account_id and p.amount_cents = i.total_cents from private.customer_invoices i " +
+            `join private.payments p on p.id = i.payment_id where i.id = '${invoiceId}';`
+        )
+      ).toBe("t");
+      // The link now shows the paid invoice, with nothing left to pay.
+      await page.goto(`/pay-invoice?token=${token}`);
+      await expect(page.getByTestId("invoice-number")).toHaveText(number);
+      await expect(page.getByRole("button", { name: "Pay now" })).toHaveCount(0);
+      expect(failures).toEqual([]);
+      expect(outside).toEqual([]);
+    } finally {
+      await context.close();
+    }
+
+    // The receipt names the invoice it paid.
+    const paymentId = queryTestCopy(
+      `select payment_id from private.customer_invoices where id = '${invoiceId}';`
+    );
+    const receiptId = queryTestCopy(
+      `select id from private.outbox_events where kind = 'payment_completed' and subject_id = '${paymentId}';`
+    );
+    for (let run = 0; run < 20 && !outboxState(receiptId).processed; run++)
+      expect((await runOpsJob(request)).retrying).toBe(0);
+    const receipt = await caughtMailFor(customer.email, `foundation-outbox/${receiptId}`);
+    expect(receipt.subject).toBe("Payment received");
+    expect(receipt.text).toContain(`Invoice paid: ${number}`);
+    expectNoOutboundSince(mark);
   });
 
   test("the member deletes the post, which frees the plan's slot", async ({ context, page }) => {
