@@ -123,22 +123,20 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
       "true"
     );
   });
-  await check("preflight: read only, summary only, before the update", () => {
-    const rows = preflight();
-    assert.deepEqual(
-      rows.map((r) => r[0]),
-      ["summary"]
-    );
-    assert.match(rows[0][1], NOT_APPLIED);
-    assertReadOnlyPreflight(database, kit.preflightSql);
-  });
-  await check("a premature rollback and drifted bodies are refused", () => {
-    assertDriftRefused(kit, {
-      label: "keep-for periods",
-      signatures: Object.keys(BODIES),
-      rows: 2,
-    });
-  });
+  await check(
+    "preflight (read only, one summary row); a premature rollback and drift refused",
+    () => {
+      const [summary, ...problems] = preflight();
+      assert.deepEqual(problems, []);
+      assert.match(summary[1], NOT_APPLIED);
+      assertReadOnlyPreflight(database, kit.preflightSql);
+      assertDriftRefused(kit, {
+        label: "keep-for periods",
+        signatures: Object.keys(BODIES),
+        rows: 2,
+      });
+    }
+  );
 
   // ------------------------------------------------------------- apply
   await applyAndProveRollback(kit, database, check, {
