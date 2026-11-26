@@ -8,9 +8,11 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertTriangle, Clock } from "lucide-react";
 import { LiftRestrictionButton } from "./lift-restriction-button";
+import { PhoneReleasesCard } from "./phone-releases-card";
 import { redirect } from "next/navigation";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
 import { readFrontendEnforcement } from "@/lib/foundation/enforcement";
+import { readPhoneReleases, type PhoneReleases } from "@/lib/foundation/phone-releases";
 import { FoundationStaffCommandError } from "@/lib/foundation/staff-command";
 import { staffVerifyHref } from "@/lib/auth/staff-mfa-links";
 
@@ -24,9 +26,17 @@ const PAGE_SIZE = 50;
 export default async function GovernanceEnforcementPage() {
   const { user } = await requireStaff("enforcement:execute");
   let data;
+  // Blocked phone numbers load on their own: a failure there leaves the rest.
+  let releases: PhoneReleases | null = null;
   try {
     const { api } = await readFoundationServerSession();
-    data = await readFrontendEnforcement(api, user.id);
+    [data, releases] = await Promise.all([
+      readFrontendEnforcement(api, user.id),
+      readPhoneReleases(api, user.id).catch(() => {
+        createLogger("GovernanceEnforcement").error("Phone releases read failed");
+        return null;
+      }),
+    ]);
   } catch (error) {
     if (error instanceof FoundationStaffCommandError && error.mfaRequired)
       redirect(staffVerifyHref("/staff/two-step", "/admin/governance/enforcement"));
@@ -141,6 +151,8 @@ export default async function GovernanceEnforcementPage() {
           )}
         </CardContent>
       </Card>
+
+      <PhoneReleasesCard data={releases} />
 
       <Card>
         <CardHeader>

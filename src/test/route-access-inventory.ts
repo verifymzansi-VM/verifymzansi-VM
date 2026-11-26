@@ -63,6 +63,7 @@ export const ROUTE_ACCESS: Record<string, Partial<Record<RouteMethod, RouteAcces
   "api/admin/identity-check-settings": { POST: "staff" },
   "api/admin/governance/appeal": { POST: "staff" },
   "api/admin/governance/decide": { POST: "staff" },
+  "api/admin/governance/phone-releases": { POST: "staff" },
   "api/admin/governance/restrictions/lift": { POST: "staff" },
   "api/admin/governance/roles": { POST: "staff" },
   "api/admin/authority-requests": { POST: "staff" },

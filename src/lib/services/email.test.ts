@@ -779,6 +779,16 @@ Renew my sticker: https://verifymzansi.com/dashboard/businesses/${business}/veri
       expect(mockSend.mock.calls[1][0].text).toBe(payload.text);
     });
 
+    it("counts every lost payment email in the subject, not only the listed ones", async () => {
+      await sendLostEmailAlert({ ...lostAlert, total: 60, payments: 52 });
+      expect(mockSend.mock.calls[0][0].subject).toContain("(52 payment)");
+      await sendLostEmailAlert({ ...lostAlert, payments: 0 });
+      expect(mockSend.mock.calls[1][0].subject).not.toContain("payment");
+      // An alert made before the database counted them: the listed ones.
+      await sendLostEmailAlert({ ...lostAlert, payments: null });
+      expect(mockSend.mock.calls[2][0].subject).toContain("(1 payment)");
+    });
+
     it("says how many more lost emails are not listed, in singular or plural", async () => {
       await sendLostEmailAlert({ ...lostAlert, total: 4 });
       expect(mockSend.mock.calls[0][0].text).toContain("2 more are not listed here.");
