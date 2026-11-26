@@ -1,4 +1,5 @@
 import reference from "../domains/taxonomy/reference.json";
+import { formatSaLongDate } from "../utils/format";
 export class LocalityInputError extends Error {
   override name = "LocalityInputError";
 }
@@ -24,4 +25,12 @@ export function resolveRestoredProvince(province: string): string | null {
       [row.id, row.code, row.label].some((v) => normalize(v) === normalize(province))
     )?.id ?? null
   );
+}
+/** The refusal for a second place change within 15 days; `hint` is the
+ * database's next allowed time (location_change_cooldown). */
+export function locationCooldownMessage(hint: string | null | undefined) {
+  const allowedFrom = new Date(hint ?? "");
+  return Number.isNaN(allowedFrom.getTime())
+    ? "You can change your province and city once every 15 days."
+    : `You can change your province and city again after ${formatSaLongDate(allowedFrom)}.`;
 }

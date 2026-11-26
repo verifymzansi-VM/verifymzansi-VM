@@ -96,6 +96,23 @@ it("keeps stale/MFA refusals and contradictory acknowledgements visible without 
   expect((await handleRestoredReportAction(request())).status).toBe(503);
   expect(rpc).toHaveBeenCalledTimes(3);
 });
+it("tells staff to end an admin role before restricting that person", async () => {
+  rpc.mockResolvedValueOnce({
+    data: null,
+    error: {
+      code: "PT409",
+      message: "End this person's admin role first",
+      details: "subject_is_admin",
+    },
+  });
+  const response = await handleRestoredReportAction(
+    request({ ...body(), action: "ban", reason: "Synthetic ban of an admin" })
+  );
+  expect(response.status).toBe(409);
+  expect(await response.json()).toMatchObject({
+    error: "End this person's admin role first. Another admin must approve that, then try again.",
+  });
+});
 it("requires and forwards the represented content revision before hiding", async () => {
   expect((await handleRestoredReportAction(request({ ...body(), action: "hide" }))).status).toBe(
     422

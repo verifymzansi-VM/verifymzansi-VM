@@ -8,7 +8,12 @@ import {
   dashboardVerificationSteps,
   type FoundationOwnerDashboard,
 } from "./owner-dashboard";
-import { resolveRestoredLocality, LocalityInputError } from "./restored-locality";
+import {
+  resolveRestoredLocality,
+  LocalityInputError,
+  locationCooldownMessage,
+} from "./restored-locality";
+import { hasDatabaseReason } from "./error-reasons";
 import { summarizeVerification } from "../account/verification-summary";
 import { createLogger } from "../utils/logger";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
@@ -119,6 +124,8 @@ export function handleRestoredVerification(request: NextRequest, mutate = false)
         });
         if (error) {
           if (error.code === "42501") throw new FoundationAccountContextError("forbidden");
+          if (hasDatabaseReason(error, "location_change_cooldown"))
+            throw new VerificationRefusal(409, locationCooldownMessage(error.hint));
           if (error.code === "PT409")
             throw new VerificationRefusal(
               403,

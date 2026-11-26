@@ -139,6 +139,197 @@ every command in the runtime manifest). Read-only preflight:
 commands, helpers and columns and puts the three earlier bodies back; numbers
 released meanwhile are blocked again while their ban runs).
 
+## Lost-email alert and staff deadline email follow-ups, 25 November 2026
+
+`20261125212548_email_alert_follow_ups.sql` is pending (see the applied
+register). Launch checklist item 56, batch B: the Low findings of the reviews of
+`20261125131322_lost_email_alert_staff_deadlines.sql`. Full definitions of three
+internal functions and one new column; no API command, argument or grant
+changes.
+
+- **Old alerts.** `internal.claim_lost_email_alert` deletes alerts sent over 400
+  days ago on every run, also while nothing is lost (before, only when a new
+  alert was made).
+- **Payment count.** New column `private.lost_email_alerts.payments`: how many
+  of all the lost emails an alert reports are payment emails, listed or not. The
+  claim returns it as `payments` (the same number when the alert is offered
+  again; null for an alert made before this update). The email's subject counts
+  payments from it; the website falls back to the listed ones without it.
+- **Authenticator app.** Staff without a verified authenticator app (who cannot
+  open any staff page) get no deadline email: the trigger leaves them out and
+  `internal.staff_email_due`, the email job's check before each send, skips
+  them.
+- **Appeals.** An appeal is not emailed to whoever took, approved or reported
+  the decision appealed against (they may not decide it), at queuing and before
+  each send.
+- **The cap.** Privacy requests have a legal deadline, so they are outside the
+  cap and do not count: each is emailed to staff who can act on it (a verified
+  authenticator app), except that only a member's first request in any 24 hours
+  is emailed (a member may file 5 an hour; later ones are only in the staff
+  queue). A request staff recorded for someone without an account is always
+  emailed. Appeals and reports keep the shared cap of 30 in any 24 hours, now
+  counting only themselves. At repeatable read or serializable the count could
+  pass the cap, so an appeal or report then queues no email (every website and
+  job call runs at read committed).
+
+Not changed: giving an alert back
+(`api.complete_lost_email_alert(p_claim, false)`) does not check who holds it.
+The alert's id is both the claim and the email's key and stays the same when the
+alert is offered again, so holders cannot be told apart without a new token in
+the API. It is safe: the hold lasts 5 minutes while a run ends within a minute,
+and the email key stops a second delivery. Privacy notices that can never be
+sent (their address changed) are already counted on the staff operations page
+("can never be sent", last 30 days).
+
+ORDER: apply first, then merge. Read-only preflight:
+`../preflight/20261125212548_email_alert_follow_ups.check.sql` (expect "update
+not applied"; it counts lost emails only once their lease has ended, alerts due
+for deletion, staff without an authenticator app and today's staff emails);
+rollback: `../rollback/20261125212548_email_alert_follow_ups.down.sql` (puts the
+three earlier bodies back and drops the column; queued emails and alerts stay;
+afterwards privacy request emails count towards the cap again, so appeals and
+reports can go without email for up to 24 hours).
+
+Notes on the applied `20261125131322` files, which cannot be edited:
+
+- Its preflight counts an email at its 8th attempt that is still within its
+  lease as lost; the alert reports it only once the lease has ended. The
+  preflight above uses the alert's rule.
+- Its rollback deletes the staff deadline emails before it drops the three
+  triggers, so a privacy request, appeal or report submitted in between queues
+  emails that stay. Run it while no submissions are expected (or check for staff
+  emails afterwards and delete them by hand).
+- Its check for unsent alerts takes no lock, so an email job run can make a new
+  alert just after the check. Pause the operations jobs Worker's schedule before
+  running it.
+
+## Staff refund follow-ups, 25 November 2026
+
+`20261125194727_part_refund_follow_ups.sql` is pending (see the applied
+register). Launch checklist item 56, batch A: the Low findings of the reviews of
+`20261125133916_staff_part_refunds.sql`. Full definitions of four internal
+functions; no API command, argument, grant or table changes.
+
+- **What was refunded.** `internal.payment_refunded_before_cents` counts a
+  reversed slot unless an applied refund record that ended the paid days covers
+  it, so a slot reversed after a keep-running part refund is no longer
+  under-reported.
+- **Repeats.** In `internal.record_staff_refund`, "everything left"
+  (`p_amount_cents` null) never returns an earlier part refund that kept the
+  slot running as a repeat (by request id or by reference); and the same request
+  id with a corrected bank reference or Ozow refund id is refused (PT409
+  `refund_request_reused`) instead of returning the old record.
+- **Activate first.** A part refund that keeps the slot running is refused while
+  the payment waits for "Activate what was paid for" (PT409
+  `refund_activate_first`), so activation never creates the partner commission
+  after the money went back. If it cannot be activated, staff record a refund
+  that ends the slot.
+- **The staff list read.** `api.get_staff_refunds_left` gives 0 left at payment
+  level once a slot was reversed (a whole-payment refund is refused then), and
+  adds `notice_ends_on` (the end of 20 South African business days' notice given
+  today) and, per slot, `paid_days` (the plan's own term; null for slots added
+  to a package, which are priced for the days left, so the website uses the
+  grant's dates) and `lost_days` (free lost days added while the slot ran; a
+  waiting renewal that was only moved gained none). The section 14 hint counts
+  unused paid days from the notice end, and the forms warn when lost days or
+  money were already given for a failure. `api.get_lost_days_preview` adds
+  `refunded_cents` per term (applied keep-running part refunds of the slot, or
+  of a whole payment that paid for that slot only). Warnings only: nothing is
+  refused for giving both.
+
+ORDER: **website-first** (merge and deploy, then apply): the website before this
+pull request reads both staff reads with a strict parser and would refuse the
+new fields; this pull request's website reads them as optional. Read-only
+preflight: `../preflight/20261125194727_part_refund_follow_ups.check.sql`
+(expect "update not applied" and "of them on payments not activated: 0");
+rollback: `../rollback/20261125194727_part_refund_follow_ups.down.sql` (the
+update writes no rows; the rollback can run at any time). Roll the database back
+**before** reverting the website: the website before this pull request refuses
+the new result fields. The rollback brings back the under-count of
+`internal.payment_refunded_before_cents` (a slot reversed after a keep-running
+part refund is not counted as refunded) and the other gaps this update closed.
+
+Notes on the rollback of `20261125133916_staff_part_refunds.sql` (that file is
+applied and is not edited): its header does not mention the `request_id` column
+and index it drops; and it counts part refunds before it locks
+`private.payment_refund_requests`, so a part refund recorded at that moment
+could slip past its refusal. A later rollback that needs it must lock the table
+first (`lock table private.payment_refund_requests in share mode`), then count.
+
+## No account restriction for an admin, 25 November 2026
+
+`20261125174942_end_admin_role_before_restriction.sql` is **pending** (see the
+applied register). Launch checklist item 20, part 3. Until now two governors
+could ban an admin (an identity ban, or a report ban a moderator proposed and a
+governor approved), and one governor alone could put an admin under 72-hour
+emergency containment, again and again. A restriction removes account access, so
+`internal.staff_actor` then refused the admin, even the last one: the last-admin
+guard watches only staff roles.
+
+- **The rule.** A ban, suspension or emergency containment is refused with PT409
+  "End this person's admin role first" (detail `subject_is_admin`) while the
+  person holds an active admin role (`private.staff_roles` role `admin`,
+  `revoked_at` null). Removing an admin goes through the existing role change
+  (with `20261125150338_admin_removal_needs_approval.sql`, a different admin
+  approves it); then the person can be restricted like anyone else. Erasure
+  already refuses staff accounts (`internal.order_account_erasure`).
+- **Every path is covered** by three full bodies (api wrappers, arguments,
+  results and grants unchanged): `internal.propose_decision`
+  (`api.propose_decision` with `restrict_account`, and
+  `api.propose_verified_identity_ban`, which calls it);
+  `internal.propose_frontend_report_restriction`
+  (`api.execute_frontend_report_action_v2` `suspend` and `ban`, including the
+  emergency containment it applies at once); and `internal.approve_decision`
+  (`api.approve_decision` and `api.decide_frontend_governance`), checked again
+  in case the person became an admin after the proposal. Approval is the only
+  way a proposal takes effect (`internal.frontend_report_restriction_effect`,
+  `internal.bind_native_restriction_for_review` and
+  `internal.verification_decision_effect` run on it). Each check runs after the
+  subject's lock, which staff role changes also take.
+- **Governors and moderators are not protected**: a moderator can still be
+  contained at once, and a governor's or moderator's role can be ended at once
+  by an admin. Restrictions already in place are unchanged; the preflight counts
+  admins who cannot sign in and restriction proposals about an admin (approving
+  one is refused from the update on).
+- **Trade-off.** A hacked admin can now only be stopped by two other admins or
+  the owner's SQL session (owner accepted 26 Nov).
+
+Expand only: no command, argument or grant changes. ORDER: either order is
+safe (the website words the new refusal); released apply-first on 26 November
+2026. Read-only preflight:
+`../preflight/20261125174942_end_admin_role_before_restriction.check.sql`;
+rollback:
+`../rollback/20261125174942_end_admin_role_before_restriction.down.sql` (puts
+the three earlier bodies back).
+
+## Members change their verified place, 25 November 2026
+
+`20261125161326_change_verified_place.sql` was applied on 26 November 2026 at
+02:01 UTC (see the applied register). Launch checklist item 20, part 2.
+
+- New table `private.verification_locality_changes` (from and to province and
+  city, and the time), row level security on, no grants. It belongs to the
+  member's place row (on delete cascade), so account erasure and the retention
+  sweep, which delete that row, delete its history too.
+- `internal.confirm_verification_locality` (full body): a different valid place
+  replaces the member's place and is recorded, at most once every 15 days (PT409
+  `location_change_cooldown`, the next allowed time as the hint). The same place
+  answers "reused" as before; the first place is not a change.
+- `internal.frontend_privacy_export_data` (full body) adds the dataset
+  `locality_changes`.
+- A verified phone number already changes through a new SMS code at most every
+  15 days, with an accepted ID review (`create_verification_phone_challenge`,
+  `finalize_verification_phone`); this update does not change that. The website
+  now offers it from My profile.
+
+Expand only; no command, argument or grant is removed. ORDER: apply first, then
+merge. Read-only preflight:
+`../preflight/20261125161326_change_verified_place.check.sql` (expect "update
+not applied" and the number of members with a place); rollback:
+`../rollback/20261125161326_change_verified_place.down.sql` (refused once any
+member changed their place). Behaviour test:
+`scripts/test-foundation-change-verified-place.mjs`.
+
 ## Removing an admin needs another admin's approval, 25 November 2026
 
 `20261125150338_admin_removal_needs_approval.sql` was applied on 25 November
@@ -8285,6 +8476,21 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   after "already applied" with the same counts; production fingerprint after it
   (fingerprint.sql) matched the full replay (except the known schema grant
   difference)
+
+- `20261125161326_change_verified_place.sql`: applied 2026-11-26 02:01 UTC;
+  apply-first, owner-approved, before pull request #376 was merged; Supabase SQL
+  editor (browser), file from raw GitHub at f8578cd7, update sha256 starting
+  81a4568c156240c7; preflight before "verified place: update not applied;
+  members with a place: 3" with no problem rows, after "verified place: already
+  applied; members with a place: 3; place changes: 0"; production fingerprint
+  after it (fingerprint.sql) matched the full replay (except the known schema
+  grant difference)
+
+- `20261125174942_end_admin_role_before_restriction.sql`: pending
+
+- `20261125194727_part_refund_follow_ups.sql`: pending; website-first
+
+- `20261125212548_email_alert_follow_ups.sql`: pending; apply-first
 
 - `20261125213005_release_one_phone_number.sql`: pending
 

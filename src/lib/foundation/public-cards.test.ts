@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { loadFoundationShowroom } from "./public-cards";
+import {
+  FoundationPostsUnavailableError,
+  loadFoundationShowroom,
+  searchFoundationCards,
+  searchFoundationPresentedCards,
+} from "./public-cards";
 import type { FoundationPublicApi } from "./public-api";
 
 const card = (id: string, extra: Record<string, unknown> = {}) => ({
@@ -60,5 +65,18 @@ describe("loadFoundationShowroom", () => {
     await expect(
       loadFoundationShowroom(api(null, { message: "down" }).api, { showroom: "home" })
     ).rejects.toThrow("Showroom could not be loaded");
+  });
+});
+
+describe("card search failures", () => {
+  it("marks a failed database read apart from a refused reply", async () => {
+    for (const search of [searchFoundationCards, searchFoundationPresentedCards]) {
+      const down = search(api(null, { message: "down" }).api, { limit: 7 });
+      await expect(down).rejects.toBeInstanceOf(FoundationPostsUnavailableError);
+      await expect(down).rejects.toThrow("Posts could not be loaded");
+      const refused = search(api({ items: "not a list" }).api, { limit: 7 });
+      await expect(refused).rejects.toThrow();
+      await expect(refused).rejects.not.toBeInstanceOf(FoundationPostsUnavailableError);
+    }
   });
 });
