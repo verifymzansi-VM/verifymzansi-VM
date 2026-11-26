@@ -172,6 +172,9 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 111. Showroom cards with a video and photos show the chosen frame (item 56) (no file rows: data only, `src/lib/showroom/feed.ts`) | approved by owner 2026-11-26 (answer: 'Yes to everything', for the before and after pictures) | Home and area showrooms: a post with both a video and photos plays its video over the frame the owner chose, as on the 27 October cards; before, it showed the first photo there. With no chosen frame it keeps the first photo. Posts without a video look as they do today. |
 | 108. Staff told to end an admin role before restricting that person (item 20, part 3) (no file rows: wording outside the checked scope) | approved by owner 2026-11-25 (answer: 'Approve it') | Staff only: on Reports (Ban, Suspend, emergency containment) and Governance (Approve), an action against a person who holds an admin role is refused with 'End this person's admin role first. Another admin must approve that, then try again.' |
 | 109. Staff refund follow-ups (item 56, batch A) (no file rows of its own: the group 109 part of 8 rows elsewhere) | approved by owner 2026-11-26 (answer: 'Yes to everything') | Members: the 'Payment update' email now reads 'A refund or reversal of a payment has been recorded. Review the current details in Billing.' (was 'A payment reversal has been recorded. …'), also right for a part refund that keeps the slot running. Staff on Payments & refunds: the section 14 hint counts paid days from the end of the 20 business days' notice, without free lost days; the refund forms say when lost days were already added, and Add lost days says when money was already refunded for a failure (warnings only); a chargeback says how much was already returned; a refund form opened again after a lost answer sends the same request, so nothing is refunded twice. |
+| 110. Release one blocked phone number (item 21) (and the group 110 part of 1 row elsewhere) | approved by owner 2026-11-26 (answer: 'Yes to everything') | Nothing for members or visitors. Admins and governors, on Restrictions: a 'Blocked phone numbers' card to ask to free one number a ban blocks (number and reason), the waiting requests (a different staff member approves or rejects; the person who asked can withdraw) and the latest releases. The person's ID ban stays. |
+| 112. Lifecycle rule follow-ups (item 56, batch D) | approved by owner 2026-11-26 (answer: 'Yes to both') (no file rows: the group 112 part of 2 existing rows; text outside the checked scope in `src/lib/foundation/restored-post-route.ts`) | Business verification page: dates are shown in South African time, so an owner abroad sees the same 'renew by' date as the reminder email (no change in South Africa). Saving a free event that starts more than 12 months ahead says 'Events can start at most 12 months ahead.' instead of the general message (the form already blocks this). On My posts, while a report from the public is open, the owner can delete the post only once the report is 7 days old and the post's clean-up waiting time has passed; a staff duplicate flag no longer stops it; the message is unchanged. |
+| 113. Catalogue filters run in the database (item 29) | awaiting owner (no file rows: the group 113 part of 1 existing row; data only in `src/lib/foundation/marketplace-read.ts`, `feed-read.ts` and `post-search.ts`) | No layout change. An organisation's 'Supported businesses' list, Mzansi Business with an organisation filter, a Business text search and Video mode load each list in one database read. Behaviour at more than 480 results: a Business text search pages on to 100 pages, as every other search does, instead of stopping after 480 results. |
 
 Questions for the owner:
 
@@ -848,7 +851,7 @@ None left: the three filter files were put back to `0b562f42` (see "Put back").
 | `src/app/admin/governance/appeals/[id]/appeal-resolve-form.tsx`    | wording-behaviour | Offers only the outcomes the new backend accepts.                                                                                                                                                                       | Staff only: 'Partially overturned' appears only when a suspension can be shortened; new placeholder.                                                                                                                                                                                                                                                                                 | keep     | awaiting owner                                            | 2026-11-08 | fbf5c869e91f |
 | `src/app/admin/governance/appeals/[id]/page.tsx`                   | wording-behaviour | Appeal page reads from the new backend. Retired-backend branch removed.                                                                                                                                                 | Staff only: new 'requires another reviewer' message when the appeal cannot be resolved by this person.                                                                                                                                                                                                                                                                               | keep     | awaiting owner                                            | 2026-11-08 | 65c0f2d9bbad |
 | `src/app/admin/governance/enforcement/lift-restriction-button.tsx` | wording-behaviour | Follows the new backend's limits.                                                                                                                                                                                       | Staff only: the reason is limited to 500 characters; error messages reworded.                                                                                                                                                                                                                                                                                                        | keep     | awaiting owner                                            | 2026-11-08 | 2e653233b0b4 |
-| `src/app/admin/governance/enforcement/page.tsx`                    | wording-behaviour | Enforcement list reads from the new backend. Retired-backend branch removed. Group 54: a restricted member is named by their short name, with the account reference beside it. | Staff only: new 'requires review through its decision' message. Group 54: Staff only: a restricted member shows as 'Thandeka D. · 1a2b3c4d…' (short name and account reference) instead of the full name. | keep     | awaiting owner; group 54 part awaiting owner | 2026-11-19 | 85af71ea50bb |
+| `src/app/admin/governance/enforcement/page.tsx`                    | wording-behaviour | Enforcement list reads from the new backend. Retired-backend branch removed. Group 54: a restricted member is named by their short name, with the account reference beside it. Group 110: adds the 'Blocked phone numbers' card. | Staff only: new 'requires review through its decision' message. Group 54: Staff only: a restricted member shows as 'Thandeka D. · 1a2b3c4d…' (short name and account reference) instead of the full name. Group 110: Staff with account:restore: the 'Blocked phone numbers' card (see group 110). | keep     | awaiting owner; group 54 part awaiting owner; group 110 part approved by owner 2026-11-26 (answer: 'Yes to everything') | 2026-11-19 | d4fd3b202a99 |
 
 ### 4. Rewiring only (no visible change)
 
@@ -914,7 +917,7 @@ None left: the three filter files were put back to `0b562f42` (see "Put back").
 | `src/app/layout.tsx`                                                          | rewiring          | `&amp;` entity in the no-JavaScript notice. M10.3: the 'Launching soon' pop-up is removed (owner decision OD-15). Retired-backend removal: stub browser suite session cookie check removed from the signed-in shell hint. Launching soon pop-up returned to the 27 Oct baseline at owner's request; reverses part of group 12: the pop-up and its switch are back, on, and still left out of Playwright runs. Owner decision 18 November 2026: only the pop-up comes back; the slim be-the-first cards and the slim Every poster ID-reviewed line of group 12 stay. | M10.3: no 'We're launching soon' pop-up over the first page a visitor opens. Launching soon pop-up (returned to the 27 Oct baseline at owner's request; reverses part of group 12): the 'We're launching soon' pop-up shows again over the first page a visitor opens, as in the chosen version. | keep     | awaiting owner; M10.3 part approved by owner 2026-11-12; retired-backend removal part awaiting owner; launching soon pop-up part: returned to the 27 Oct baseline at owner's request; reverses part of group 12 | 2026-11-18 | 0ea8baf43ace |
 | `src/app/listing/[id]/page.tsx`                                               | rewiring          | Foundation listing detail; similar posts from collection read. Retired-backend branch removed. Group 61: the full-screen viewer gets the listing's real like total (was always 0). Group 68: the old client's signed-in check is removed. It only decided whether the poster gets their own number in the page, and that number is never sent (always empty), so the public page reads no session. Group 85: a listing in a storefront passes its business (name, CIPC date, 'See all N cars') to the seller block, the desktop viewer's seller card and the page's structured data. | Nothing (same look and steps) Group 61 (only while the counters are shown): the viewer's like count is the real total. Group 68: Nothing on screen. Group 85 (switch on, listing in a storefront): the seller block shows the business, its stickers and 'See all 18 cars'; the desktop viewer's seller card names the business and opens its page. | keep     | awaiting owner; group 61 part awaiting owner; group 68 part approved by owner 2026-11-20; group 85 part approved by owner 2026-11-21 | 2026-11-21 | 65c981998783 |
 | `src/app/organisation-invite/page.tsx`                                        | rewiring          | Native invite preview. Retired-backend branch removed.                                                                                                                                                                                                                                                                                                                                                                                                                                      | Nothing (same look and steps)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | keep     | awaiting owner                                                                                                                                                                                                                                                                                                              | 2026-11-08 | 126caa3e74c3 |
-| `src/app/organisation/[slug]/page.tsx`                                        | rewiring          | Native organisation page; fixed "Supported by" wording. M9.4: drops `revalidate = 300`, which did nothing (every page renders per request). M10.2: small labels lose their letter-spaced capitals (the design system bans tracked ALL-CAPS labels). Retired-backend removal: retired-backend branch removed.                                                                                                                                                                                | M10.2: the gold label above the organisation's name ('Business Sponsor · ...') in sentence case, normal letter spacing; same size and colour.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | keep     | awaiting owner (earlier change); M9.4 part approved by owner 2026-11-12; M10.2 part approved by owner 2026-11-12; retired-backend removal part awaiting owner                                                                                                                                                               | 2026-11-12 | 9f9f4b13895b |
+| `src/app/organisation/[slug]/page.tsx`                                        | rewiring          | Native organisation page; fixed "Supported by" wording. M9.4: drops `revalidate = 300`, which did nothing (every page renders per request). M10.2: small labels lose their letter-spaced capitals (the design system bans tracked ALL-CAPS labels). Retired-backend removal: retired-backend branch removed. Group 113: the programme filter is sent to the database by its id. | M10.2: the gold label above the organisation's name ('Business Sponsor · ...') in sentence case, normal letter spacing; same size and colour. Group 113: nothing (the list loads in one database read; a programme is matched by its id, not its name). | keep     | awaiting owner (earlier change); M9.4 part approved by owner 2026-11-12; M10.2 part approved by owner 2026-11-12; retired-backend removal part awaiting owner; group 113 part awaiting owner | 2026-11-26 | 0b817c926b9b |
 | `src/app/page.tsx`                                                            | rewiring          | `&amp;` entity in screen-reader heading. M9.4: drops `revalidate = 60`: every page renders per request (the layout reads request headers), so it did nothing. M10.3: adds the slim identity line under the showroom. Live-test fix (group 35): names its canonical address (`/`).                                                                                                                                                                                                           | M10.3: the line 'Every poster ID-reviewed · What we check' under the showroom (see `home-identity-line.tsx`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | keep     | awaiting owner (earlier change); M9.4 part approved by owner 2026-11-12; M10.3 part approved by owner 2026-11-12                                                                                                                                                                                                            | 2026-11-12 | ce6e10155072 |
 | `src/app/post/create-business/page.tsx`                                       | rewiring          | Adds hidden posting transport fields. M4.4a (group 30): the video field states the length rule and checks it again at submit. M10.7 (group 59): the video field's help text adds one tip for viewers who watch without sound. | Nothing (same look and steps) M4.4a (group 30): Business create form: the video field's help text adds 'Up to 2 minutes (events: 1 minute), upright, 1080p, not 4K. Buyers decide in the first 15-30 seconds — put the best part first.'. M10.7 (group 59): after the length guidance, the video field's help text adds 'Many people watch without sound: show key details (price, place, phone number) on screen in the video itself.' | keep     | awaiting owner; M4.4a part awaiting owner; group 59 part approved by owner 2026-11-20 | 2026-11-19 | 414522f77baa |
 | `src/app/post/create-listing/page.tsx` | rewiring | Adds hidden posting transport fields. M4.4a (group 30): the video field states the length rule and checks it again at submit. M10.7 (group 59): the video field's help text adds one tip for viewers who watch without sound. Group 86 (SHOW_POST_COPY): opened with ?copy=<id> the form loads the copy (a server draft), opens on step 3 and saves it with the edit route, then submits it for review; it never reads or writes the form's autosaved draft. Group 87 (SHOW_POST_TEMPLATES): opened with ?template=<id> the form fills in the template's fields once and does not restore an older autosaved draft over it. Group 87 (review): one start step settles the template, else the autosaved draft; a template that replaced a draft offers Undo. Group 87 (delta review): untouched template fields are not autosaved and the Undo offer stays until the first change through the form; the form waits while a template loads; a kept page opened again with a template sets aside the work in it (title, price, photos and video cleared; Undo brings them back). Group 87 (second delta review): the member's area fills in with the template instead of as a later edit; leaving the form closes the Undo message; on a first visit Undo brings back the draft as stored at that moment. Group 87 with group 86: a copy (?copy=<id>) never starts from a template. Group 95: the posting-terms tick is the shared PostingTermsConsent component (same markup and words). | Nothing (same look and steps) M4.4a (group 30): Market create form: the video field's help text adds 'Up to 2 minutes (events: 1 minute), upright, 1080p, not 4K. Buyers decide in the first 15-30 seconds — put the best part first.'. M10.7 (group 59): after the length guidance, the video field's help text adds 'Many people watch without sound: show key details (price, place, phone number) on screen in the video itself.' Group 86 (only when opened on a copy): the note 'Copy of "<title>". Everything except the video is filled in...' under the heading; the copy's photos and logo shown as already uploaded; 'Video not copied. Add this item's own video below if you have one.' above the video; a vehicle or property copy sent without a new photo is refused by the server and the form shows 'Add at least one new photo of this item. Each car or home is a different item.' on the photo step, and can be sent again; in Final check the hint 'Same title as the post you copied...' while the title is unchanged and 'Copies are checked like any new post and count towards your new posts allowance.'; the posting-terms tick only when the current terms are not accepted yet (the acceptance is recorded before the save); no 'Draft saved' line. Group 87 (switch on): after Use on a template, the form opens filled in (category, details, description, location, contact buttons) with the message 'Started from "<name>"'; the poster adds photos, title, price, year and mileage. Group 87: when a template replaced an unfinished post, its message offers Undo, which brings that post back (until the first edit). Group 87: "Loading your template…" while a template loads (at most 5 seconds). Group 95: nothing changes on screen (the tick is drawn by a shared component with the same markup and words). | keep | awaiting owner; M4.4a part awaiting owner; group 59 part approved by owner 2026-11-20; group 86 part approved by owner 2026-11-22; group 87 part approved by owner 2026-11-22; group 95 part approved by owner 2026-11-24 (answer: 'Yes, approve both') | 2026-11-24 | 00ce407a6cd5 |
@@ -3147,7 +3150,7 @@ and one byte over, so the limits register can mark it proven: the profile photo
 
 | File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `src/components/business-verification/owner-verification-panel.test.tsx` | test | Group 76: a test that a 5 MB CIPC PDF is read and one byte more is refused before anything is uploaded. Group 105: tests that the Seen booking form shows from 60 days before the sticker ends, and not earlier. | Nothing (not part of a page) | keep | awaiting owner; group 105 part approved by owner 2026-11-25 (answer: 'Approve with the rewording', the pictures with the sticker email reworded) | 2026-11-21 | 33edae55401c |
+| `src/components/business-verification/owner-verification-panel.test.tsx` | test | Group 76: a test that a 5 MB CIPC PDF is read and one byte more is refused before anything is uploaded. Group 105: tests that the Seen booking form shows from 60 days before the sticker ends, and not earlier. Group 112: a test that the 'renew by' date is shown in South African time for a browser elsewhere. | Nothing (not part of a page) | keep | awaiting owner; group 105 part approved by owner 2026-11-25 (answer: 'Approve with the rewording', the pictures with the sticker email reworded); group 112 part approved by owner 2026-11-26 (answer: 'Yes to both') | 2026-11-26 | ea0e0db6e8ec |
 
 Decision: awaiting owner.
 
@@ -4374,7 +4377,7 @@ Decision: approved by owner 2026-11-25 (answer: 'Approve with the rewording', th
 
 | File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `src/components/business-verification/owner-verification-panel.tsx` | visual | Group 105: the Seen step shows 'renew by' and the existing booking form from 60 days before the Seen sticker ends, as CIPC's renewal does. | Business owners with a Seen sticker ending within 60 days: everything described in group 105. | keep | approved by owner 2026-11-25 (answer: 'Approve with the rewording', the pictures with the sticker email reworded) | 2026-11-25 | d1607e0977cc |
+| `src/components/business-verification/owner-verification-panel.tsx` | visual | Group 105: the Seen step shows 'renew by' and the existing booking form from 60 days before the Seen sticker ends, as CIPC's renewal does. Group 112: every date on the panel is shown in South African time, whatever the browser's time zone. | Business owners with a Seen sticker ending within 60 days: everything described in group 105. Group 112: owners whose browser is set to another time zone may see a date one day different (now the South African date, as in the reminder email); in South Africa nothing changes. | keep | approved by owner 2026-11-25 (answer: 'Approve with the rewording', the pictures with the sticker email reworded); group 112 part approved by owner 2026-11-26 (answer: 'Yes to both') | 2026-11-26 | 99192bec3c77 |
 
 ### 106. Removing an admin needs approval; appeal pages off the old backend (item 20, part 1)
 
@@ -4523,6 +4526,109 @@ Pictures (synthetic data, local preview, not published):
 `screenshots/item56a-refunds/` (desktop 1280 and phone 375).
 
 Decision: approved by owner 2026-11-26 (answer: 'Yes to everything').
+
+### 110. Release one blocked phone number (item 21)
+
+Launch checklist item 21. Database update
+`20261125213005_release_one_phone_number.sql` (pending, apply first): commands
+`api.propose_phone_number_release`, `api.review_phone_number_release` and
+`api.get_phone_number_releases` (account:restore: admins and governors, an
+authenticator code from the last 15 minutes). A ban blocks every phone number
+the banned person verified; staff can now free one number (a number the network
+gave to someone else, or one blocked by mistake) while the ID ban stays. One
+staff member asks, a different one approves. Approval also ends the banned
+account's own hold on that number, so its new holder can verify it.
+
+- Restrictions (`/admin/governance/enforcement`), between 'Active restrictions'
+  and 'Recent enforcement actions': a 'Blocked phone numbers' card. 'Free one
+  number a ban blocks, for example when the network gave it to someone else.
+  The person's ID ban stays. A different staff member approves.'
+- A form: 'Phone number' (082 123 4567, 27821234567 or +27 82 123 4567) and
+  'Why' (10 to 500 characters), with 'Ask to release'. Checked before sending
+  ('Enter a South African number, for example 082 123 4567.', 'Explain why in at
+  least 10 characters.').
+- 'Waiting for approval': each number with who asked ('You' for your own), when,
+  when it expires (7 days) and the reason. Others see 'Approve' and 'Reject'; the
+  person who asked sees 'Waiting for another staff member.' and 'Withdraw'; a
+  staff member who verified that number themselves sees 'You verified this
+  number, so someone else must decide.' and no buttons. 'None.' when empty.
+- 'Released': the latest 50, each with the date, 'asked by Thando D., approved by
+  Lerato M.' and the reason. 'None.' when empty.
+- Refusals in plain words (no running ban blocks the number, a request already
+  waits, nothing waits any more, your own request, a number you verified, the
+  person who asked lost the permission or another ban now lists the number). A
+  stale authenticator code sends staff
+  to verify again and back. If the list cannot be read, the card says so and the
+  rest of the page still works.
+- Members: nothing is shown or sent. Whoever holds the number now can verify it
+  as usual.
+
+Pictures (synthetic data, local preview, not published):
+`screenshots/item21-phone-release/` (desktop 1280 and phone 375).
+
+Decision: approved by owner 2026-11-26 (answer: 'Yes to everything').
+
+| File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `src/app/admin/governance/enforcement/phone-releases-card.tsx` | visual | Group 110: the new 'Blocked phone numbers' card: ask to release a number, approve, reject or withdraw a waiting request, and see the latest releases. | Admins and governors on Restrictions: everything described in group 110. | keep | approved by owner 2026-11-26 (answer: 'Yes to everything') | 2026-11-25 | 9562ebd8e1c9 |
+| `src/app/admin/governance/enforcement/phone-releases-card.test.tsx` | test | Group 110: checks what each staff member may do, the stored number sent, the checks before sending, a refusal, the re-verify redirect and the unreadable list. | Nothing (not part of a page) | keep | approved by owner 2026-11-26 (answer: 'Yes to everything') | 2026-11-25 | d91db81a8f08 |
+
+### 112. Lifecycle rule follow-ups (item 56, batch D)
+
+Launch checklist item 56, batch D: follow-ups to group 105 (item 40). Database
+update `20261125225855_lifecycle_rule_follow_ups.sql` (pending, apply first).
+No new screen; one new message and one date change. Text outside the checked
+scope: `src/lib/foundation/restored-post-route.ts`.
+
+- Business verification page (`/dashboard/businesses/<id>/verification`):
+  every date on the panel ('Checked …', '· renew by …', the Seen line and the
+  message dates) is shown in South African time. Before, it followed the
+  browser's time zone, so an owner abroad could see a 'renew by' date one day
+  off from the reminder email, which says South African time. In South Africa
+  nothing changes.
+- Posting or editing a free event: if the database refuses a start more than 12
+  months ahead (the form already refuses it, so only a stale form gets here),
+  the message under the form reads 'Events can start at most 12 months ahead.'
+  instead of 'Check the category, dates, media and posting allowance before
+  submitting'.
+- My posts, deleting a reported post: the message ('Someone reported this post.
+  You can hide it now, and delete it once our team has looked at the report.')
+  is unchanged, but it now shows only for a report from the public, and only
+  until both of these have passed: 7 days from the report, and the scheduled
+  clean-up's waiting time (67 days after the post's last change, or 7 days
+  after its deletion date). A staff duplicate-event flag no longer stops the
+  owner deleting.
+
+Pictures: none (the wording above is the whole change; the date looks the same
+in South Africa).
+
+Decision: approved by owner 2026-11-26 (answer: 'Yes to both').
+
+### 113. Catalogue filters run in the database (item 29)
+
+Launch checklist item 29. Database update
+`20261126062428_catalogue_filters_in_database.sql` (pending, apply first).
+No layout change. Data only outside the checked scope:
+`src/lib/foundation/marketplace-read.ts`, `feed-read.ts` and `post-search.ts`.
+
+- An organisation's 'Supported businesses' list (`/organisation/<slug>`, with
+  its programme and 'Sponsored only' filters) and Mzansi Business with an
+  organisation filter: one database read per page instead of reading every
+  business. The same businesses, order and count; a business past the first
+  4,800 of an area is no longer missed. A programme is matched by its id, not
+  its name (different only if two programmes of one organisation shared a
+  name).
+- Mzansi Business text search without a category (which also finds stays and
+  tourism places): one database read. Behaviour at more than 480 results: the
+  page links go on to 100 pages, as every other search does, instead of
+  stopping after 480 results ('Showing the first 480 results' becomes the
+  usual 'Showing the first 2,400 results' at that size).
+- Video mode: the list of up to 200 posts for a section loads in one database
+  read. The posts and their order are the same.
+
+Pictures: none (no layout change).
+
+Decision: awaiting owner.
 
 <!-- frontend-ledger:end -->
 

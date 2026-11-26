@@ -124,6 +124,26 @@ it("preserves the native verification refusal and performs no blind command retr
   expect(await response.json()).toMatchObject({ code: "verification_required" });
   expect(rpc.mock.calls.filter((c) => c[0] === "consume_frontend_post_command")).toHaveLength(1);
 });
+it("explains the 12-month event limit and keeps the general message for other refusals", async () => {
+  const refuse = (error: { code: string; details?: string }) =>
+    rpc.mockImplementation(async (name) =>
+      name === "resolve_my_frontend_media" ? resolved() : { data: null, error }
+    );
+  refuse({ code: "22023", details: "event_too_far_ahead" });
+  const far = await handleRestoredPostMutation(request(body()), "listings");
+  expect(far.status).toBe(422);
+  expect(await far.json()).toMatchObject({
+    error: "Events can start at most 12 months ahead.",
+    reason: "event_too_far_ahead",
+  });
+  refuse({ code: "22023", details: "invalid category" });
+  const other = await handleRestoredPostMutation(request(body()), "listings");
+  expect(other.status).toBe(422);
+  expect(await other.json()).toMatchObject({
+    error: "Check the category, dates, media and posting allowance before submitting",
+    reason: "invalid_post",
+  });
+});
 it("validates fields and CSRF before staging a command", async () => {
   expect((await handleRestoredPostMutation(request(body(), false), "listings")).status).toBe(403);
   const invalid = await handleRestoredPostMutation(request(body({ title: "x" })), "listings");
