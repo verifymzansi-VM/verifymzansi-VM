@@ -13,11 +13,8 @@ import { env } from "@/lib/config/env";
  * is already 256 bits of cryptographic randomness so expensive password-
  * stretching (PBKDF2) is unnecessary and causes Cloudflare Workers CPU
  * timeouts. HMAC-SHA256 with a random salt gives a unique-per-file 256-bit
- * key in <1 ms.
- *
- * **v1 (legacy):** PBKDF2-SHA512 with 600 000 iterations.  Retained in the
- * decrypt path so any files encrypted with the old scheme can still be read.
- * The former kyc-encryptor worker (removed) used 100 000 iterations — also supported.
+ * key in <1 ms. Only this format is read: the older PBKDF2 format belonged
+ * to files from a retired storage layout, and nothing writes it any more.
  */
 
 const ALGORITHM = "aes-256-gcm";
@@ -28,35 +25,6 @@ const KEY_LENGTH = 32;
 
 /** Magic byte prepended to v2 ciphertext so we can distinguish formats. */
 const V2_MAGIC = 0x02;
-
-// Legacy PBKDF2 parameters — only used for decrypting old data.
-const LEGACY_ITERATIONS_V1 = 600000;
-const LEGACY_ITERATIONS_WORKER = 100000;
-
-/** Lazy-initialised promisify(crypto.pbkdf2) — avoids importing `util` at
- *  module load which can crash Cloudflare Workers with nodejs_compat v1. */
-let _pbkdf2Async:
-  | ((
-      password: crypto.BinaryLike,
-      salt: crypto.BinaryLike,
-      iterations: number,
-      keylen: number,
-      digest: string
-    ) => Promise<Buffer>)
-  | null = null;
-function pbkdf2Async(
-  password: crypto.BinaryLike,
-  salt: crypto.BinaryLike,
-  iterations: number,
-  keylen: number,
-  digest: string
-): Promise<Buffer> {
-  if (!_pbkdf2Async) {
-    const util = require("util");
-    _pbkdf2Async = util.promisify(crypto.pbkdf2);
-  }
-  return _pbkdf2Async!(password, salt, iterations, keylen, digest);
-}
 
 /**
  * Get or generate encryption key from environment
@@ -93,17 +61,6 @@ function deriveKeyV2(masterKey: Buffer, salt: Buffer): Buffer {
 }
 
 /**
- * Legacy key derivation via PBKDF2 — only for decrypting old v1 data.
- */
-async function deriveKeyLegacy(
-  masterKey: Buffer,
-  salt: Buffer,
-  iterations: number
-): Promise<Buffer> {
-  return pbkdf2Async(masterKey, salt, iterations, KEY_LENGTH, "sha512");
-}
-
-/**
  * Encrypt a buffer (file contents) using AES-256-GCM
  *
  * v2 format: [0x02 magic][64-byte salt][12-byte IV][16-byte tag][ciphertext]
@@ -135,7 +92,7 @@ export async function encryptData(data: Buffer): Promise<Buffer> {
 }
 
 /**
- * Decrypt data encrypted with encryptData (supports both v1 and v2 formats)
+ * Decrypt data encrypted with encryptData (v2 format)
  *
  * @param encryptedData - The encrypted data
  * @returns Decrypted data
@@ -149,21 +106,10 @@ export async function decryptData(encryptedData: Buffer): Promise<Buffer> {
     );
   }
 
-  const isV2 = encryptedData[0] === V2_MAGIC;
-
-  if (isV2) {
-    // ~0.39% of legacy v1 files may have 0x02 as their first random salt
-    // byte. Attempt v2 first; if GCM auth fails, fall back to legacy.
-    try {
-      return decryptV2(encryptedData);
-    } catch {
-      // GCM authentication failure — this is likely a legacy v1 file whose
-      // first salt byte happens to be 0x02. Fall through to legacy path.
-    }
+  if (encryptedData[0] !== V2_MAGIC) {
+    throw new Error("Unsupported encrypted data format");
   }
-
-  // Legacy v1 format — try 600k iterations first, then 100k (worker variant)
-  return decryptLegacy(encryptedData);
+  return decryptV2(encryptedData);
 }
 
 /**
@@ -198,42 +144,6 @@ function decryptV2(encryptedData: Buffer): Buffer {
 }
 
 /**
- * Decrypt legacy v1-format data (PBKDF2 derived key).
- * Tries 600k iterations first (main app), then 100k (former kyc-encryptor worker).
- */
-async function decryptLegacy(encryptedData: Buffer): Promise<Buffer> {
-  const minLength = SALT_LENGTH + IV_LENGTH + TAG_LENGTH + 1;
-  if (encryptedData.length < minLength) {
-    throw new Error(
-      `Encrypted data too short: expected at least ${minLength} bytes, got ${encryptedData.length}`
-    );
-  }
-
-  const masterKey = getEncryptionKey();
-
-  const salt = encryptedData.subarray(0, SALT_LENGTH);
-  const iv = encryptedData.subarray(SALT_LENGTH, SALT_LENGTH + IV_LENGTH);
-  const tag = encryptedData.subarray(SALT_LENGTH + IV_LENGTH, SALT_LENGTH + IV_LENGTH + TAG_LENGTH);
-  const encrypted = encryptedData.subarray(SALT_LENGTH + IV_LENGTH + TAG_LENGTH);
-
-  // Try primary iteration count first (600k — main app v1)
-  try {
-    const key = await deriveKeyLegacy(masterKey, salt, LEGACY_ITERATIONS_V1);
-    const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
-    decipher.setAuthTag(tag);
-    return Buffer.concat([decipher.update(encrypted), decipher.final()]);
-  } catch {
-    // Fall through to worker iteration count
-  }
-
-  // Try the former worker's iteration count (100k — kyc-encryptor worker, removed)
-  const key = await deriveKeyLegacy(masterKey, salt, LEGACY_ITERATIONS_WORKER);
-  const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
-  decipher.setAuthTag(tag);
-  return Buffer.concat([decipher.update(encrypted), decipher.final()]);
-}
-
-/**
  * Encrypt a file for KYC storage
  *
  * @param file - File object or Blob
@@ -243,16 +153,6 @@ export async function encryptFile(file: File | Blob): Promise<Buffer> {
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
   return encryptData(buffer);
-}
-
-/**
- * Decrypt a file from KYC storage
- *
- * @param encryptedBuffer - Encrypted file buffer
- * @returns Decrypted buffer
- */
-export async function decryptFile(encryptedBuffer: Buffer): Promise<Buffer> {
-  return decryptData(encryptedBuffer);
 }
 
 /**

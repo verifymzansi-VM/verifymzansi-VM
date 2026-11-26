@@ -1,11 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
-import {
-  encryptData,
-  decryptData,
-  encryptFile,
-  decryptFile,
-  generateEncryptionKey,
-} from "./encryption";
+import { encryptData, decryptData, encryptFile, generateEncryptionKey } from "./encryption";
 import { _resetEnvCacheForTesting } from "@/lib/config/env";
 
 // A valid 64-char hex key (32 bytes)
@@ -76,15 +70,22 @@ describe("encryption", () => {
 
       await expect(decryptData(encrypted)).rejects.toThrow();
     });
+
+    it("refuses data without the v2 magic byte", async () => {
+      const encrypted = await encryptData(Buffer.from("format check"));
+      encrypted[0] = 0x01;
+
+      await expect(decryptData(encrypted)).rejects.toThrow("Unsupported encrypted data format");
+    });
   });
 
-  describe("encryptFile / decryptFile", () => {
+  describe("encryptFile", () => {
     it("round-trips a file (Blob)", async () => {
       const content = "File content for KYC document testing";
       const blob = new Blob([content], { type: "application/pdf" });
 
       const encrypted = await encryptFile(blob as unknown as File);
-      const decrypted = await decryptFile(encrypted);
+      const decrypted = await decryptData(encrypted);
 
       expect(decrypted.toString()).toBe(content);
     });

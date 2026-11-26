@@ -611,9 +611,8 @@ async function getMediaResponse(
     return NextResponse.json({ error: "Invalid key" }, { status: 400 });
   }
 
-  // Security: only serve known public-bucket prefixes
-  const ALLOWED_PREFIXES = ["media/", "listings/"];
-  if (!ALLOWED_PREFIXES.some((p) => key.startsWith(p))) {
+  // Security: only serve the public bucket's media prefix
+  if (!key.startsWith("media/")) {
     return NextResponse.json({ error: "Invalid key" }, { status: 400 });
   }
 
