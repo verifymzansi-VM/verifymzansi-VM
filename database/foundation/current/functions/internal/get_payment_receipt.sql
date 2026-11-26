@@ -13,6 +13,9 @@ AS $function$
     'slots', case when p.product_kind = 'plan' and jsonb_typeof(p.snapshot->'slots') = 'number'
       then p.snapshot->'slots' else 'null'::jsonb end,
     'invoice_description', i.description, 'invoice_number', i.invoice_number, 'issued_at', i.issued_at,
+    -- The customer invoice (VM-YYYY-NNNNNN) this payment pays, Ozow or bank
+    -- transfer (20261126053701); null for a checkout.
+    'customer_invoice_number', p.snapshot->>'customer_invoice_number',
     'merchant_reference', p.merchant_reference, 'provider_transaction_id', p.provider_transaction_id,
     'status', p.status, 'fulfillment_status', p.fulfillment_status,
     'payment_method', p.provider,

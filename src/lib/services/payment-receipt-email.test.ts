@@ -1,6 +1,11 @@
 /** @vitest-environment node */
 import { describe, expect, it } from "vitest";
-import { buildPaymentReceiptEmail, type PaymentReceipt } from "./payment-receipt-email";
+import {
+  buildInvoiceEmail,
+  buildPaymentReceiptEmail,
+  type InvoiceEmail,
+  type PaymentReceipt,
+} from "./payment-receipt-email";
 
 const receipt: PaymentReceipt = {
   kind: "plan",
@@ -73,5 +78,62 @@ describe("buildPaymentReceiptEmail", () => {
 
   it("gives the same email for the same receipt, so a retry repeats the same request", () => {
     expect(buildPaymentReceiptEmail(receipt, APP)).toEqual(buildPaymentReceiptEmail(receipt, APP));
+  });
+});
+
+describe("the receipt of an invoice payment", () => {
+  it("names the invoice it paid, after the receipt's own number", () => {
+    const email = buildPaymentReceiptEmail(
+      { ...receipt, customerInvoiceNumber: "VM-2026-000012" },
+      APP
+    );
+    expect(email.text).toContain(
+      "Invoice number: INV-20261113-ABCDEF1234\nInvoice paid: VM-2026-000012\nDate paid:"
+    );
+    expect(email.html).toContain("VM-2026-000012");
+    expect(buildPaymentReceiptEmail(receipt, APP).text).not.toContain("Invoice paid");
+  });
+});
+
+describe("buildInvoiceEmail", () => {
+  const invoice: InvoiceEmail = {
+    invoiceNumber: "VM-2026-000012",
+    item: "3 × Individual slot — 90 days",
+    totalCents: 62100,
+    dueOn: "2026-12-03",
+    linkToken: "A".repeat(43),
+  };
+
+  it("writes the invoice's number, line, total, due date and payment link", () => {
+    const email = buildInvoiceEmail(invoice, APP);
+    expect(email.subject).toBe("Invoice VM-2026-000012 from VerifyMzansi");
+    expect(email.text).toBe(
+      [
+        "Invoice VM-2026-000012 from VerifyMzansi",
+        "VerifyMzansi sent you an invoice. You can view and pay it without signing in.",
+        [
+          "Invoice number: VM-2026-000012",
+          "Item: 3 × Individual slot — 90 days",
+          "Amount due: R 621.00",
+          "Due date: 3 December 2026",
+        ].join("\n"),
+        "Anyone with this link can see and pay the invoice, so share it only with the person who pays it. Prefer a bank transfer? The bank details are on the invoice; use the invoice number as your reference.",
+        `View and pay invoice: ${APP}/pay-invoice?token=${"A".repeat(43)}`,
+        "VERIFYMZANSI (PTY) LTD · Registration number 2026/155305/07",
+      ].join("\n\n")
+    );
+  });
+
+  it("shows the same details and link in the HTML version", () => {
+    const { html } = buildInvoiceEmail(invoice, APP);
+    for (const shown of [
+      "VM-2026-000012",
+      "3 × Individual slot — 90 days",
+      "R 621.00",
+      "3 December 2026",
+      `${APP}/pay-invoice?token=${"A".repeat(43)}`,
+    ])
+      expect(html).toContain(shown);
+    expect(html).not.toContain("/billing");
   });
 });

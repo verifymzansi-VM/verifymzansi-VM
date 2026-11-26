@@ -797,12 +797,18 @@ export async function openFoundationInvoiceCheckout(
   quote: unknown,
   ownerId: string,
   appUrl: string,
-  service: FoundationServiceApi
+  service: FoundationServiceApi,
+  returnPath?: typeof INVOICE_LINK_PATH
 ) {
   return openFoundationCheckout(quoteSchema.parse(quote), ownerId, checkoutApp(appUrl), service, {
     continueOpen: true,
+    returnPath,
   });
 }
+
+/** The invoice payment link page (./customer-invoices.ts): its payer is not
+ * signed in, so Ozow sends them back there instead of to the billing pages. */
+export const INVOICE_LINK_PATH = "/pay-invoice";
 
 /** Leases the quoted payment, then reuses its Ozow request or creates one. */
 async function openFoundationCheckout(
@@ -810,7 +816,10 @@ async function openFoundationCheckout(
   ownerId: string,
   app: URL,
   service: FoundationServiceApi,
-  { continueOpen = false }: { continueOpen?: boolean } = {}
+  {
+    continueOpen = false,
+    returnPath,
+  }: { continueOpen?: boolean; returnPath?: typeof INVOICE_LINK_PATH } = {}
 ) {
   const pay = claimSchema.parse(
     await command(service, "claim_checkout_request", {
@@ -868,8 +877,14 @@ async function openFoundationCheckout(
     paymentId: pay.id,
     merchantReference: pay.merchant_reference,
     amountCents: Number(pay.amount_cents),
-    returnUrl: `${app.origin}/billing/success?payment=${pay.id}`,
-    cancelUrl: `${app.origin}/billing/cancel?payment=${pay.id}`,
+    // The payment link's payer comes back to a page that needs no sign-in and
+    // names no payment (the token never goes to Ozow).
+    returnUrl: returnPath
+      ? `${app.origin}${returnPath}?ozow=back`
+      : `${app.origin}/billing/success?payment=${pay.id}`,
+    cancelUrl: returnPath
+      ? `${app.origin}${returnPath}?ozow=cancelled`
+      : `${app.origin}/billing/cancel?payment=${pay.id}`,
     idempotencyKey: pay.idempotency_key,
     correlationId: pay.correlation_id,
     expireAt: pay.checkout_expires_at,

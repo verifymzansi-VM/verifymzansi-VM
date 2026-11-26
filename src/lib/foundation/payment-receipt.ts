@@ -31,6 +31,14 @@ const receiptRow = z.object({
   // The payment's status now: a payment refunded or charged back before its
   // receipt went out is no longer "received".
   status: z.string().max(40).optional(),
+  // The customer invoice the payment paid (VM-YYYY-NNNNNN), Ozow or bank
+  // transfer, from 20261126053701_invoice_pay_link.sql; null for a checkout,
+  // absent before it.
+  customer_invoice_number: z
+    .string()
+    .regex(/^VM-\d{4}-\d{6}$/)
+    .nullable()
+    .optional(),
 });
 
 type Expected = { paymentId: string; ownerId: string | null | undefined };
@@ -86,5 +94,6 @@ export function readPaymentReceipt(data: unknown, expected: Expected): PaymentRe
     item: r.invoice_description ?? r.label,
     amountCents: r.amount_cents,
     bankReference,
+    ...(r.customer_invoice_number ? { customerInvoiceNumber: r.customer_invoice_number } : {}),
   };
 }

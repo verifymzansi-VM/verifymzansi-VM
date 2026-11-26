@@ -1271,8 +1271,9 @@ export default function ProfilePage() {
                             waits until it is settled.
                           </li>
                           <li>
-                            Payment records and invoices are kept for 5 years for tax, as the law
-                            requires. Some other records, such as ID-check history, are kept as our{" "}
+                            Payment records and invoices are kept for 7 years, as company and tax
+                            law require. Some other records, such as ID-check history, are kept as
+                            our{" "}
                             <Link className="underline" href="/privacy#retention">
                               Privacy Policy
                             </Link>{" "}
