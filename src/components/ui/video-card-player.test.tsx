@@ -53,7 +53,7 @@ vi.mock("@/hooks/use-global-mute", () => ({
   useGlobalMute: useGlobalMuteMock,
 }));
 
-const { VideoCardPlayer } = await import("./video-card-player");
+const { RetryOnceImage, VideoCardPlayer } = await import("./video-card-player");
 
 /** Makes exactly the given media queries match (all others do not). */
 function setMatchingMediaQueries(queries: string[]) {
@@ -618,6 +618,26 @@ describe("VideoCardPlayer", () => {
       act(() => vi.advanceTimersByTime(5000));
       expect(screen.queryByAltText("Photo")).toBeNull();
       expect(screen.getByTestId("media-fallback")).toBeInTheDocument();
+    });
+
+    it("gives a new picture its own retry when src changes", () => {
+      const onError = vi.fn();
+      const { rerender } = render(
+        <RetryOnceImage src="https://example.com/a.jpg" alt="Photo" onError={onError} />
+      );
+
+      fireEvent.error(screen.getByAltText("Photo"));
+      act(() => vi.advanceTimersByTime(1000));
+      rerender(<RetryOnceImage src="https://example.com/b.jpg" alt="Photo" onError={onError} />);
+
+      fireEvent.error(screen.getByAltText("Photo"));
+      expect(onError).not.toHaveBeenCalled();
+      expect(screen.queryByAltText("Photo")).toBeNull();
+
+      act(() => vi.advanceTimersByTime(1000));
+      expect(screen.getByAltText("Photo")).toHaveAttribute("src", "https://example.com/b.jpg");
+      fireEvent.error(screen.getByAltText("Photo"));
+      expect(onError).toHaveBeenCalledTimes(1);
     });
 
     it("keeps the showroom Play button usable over the stand-in when a poster fails", () => {

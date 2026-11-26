@@ -292,41 +292,47 @@ describe("PosterCardShell", () => {
     expect(screen.queryByRole("button", { name: /like this card|unlike this card/i })).toBeNull();
   });
 
-  it("renders branded fallback artwork for failed media when provided", () => {
-    render(
+  it("shows the quiet logo placeholder, with no text, when the media fails", () => {
+    const { container } = render(
       <PosterCardShell
         href="/listing/fallback"
         title="Fallback listing"
         mediaUrl="https://example.com/missing.jpg"
-        mediaFallbackUrl="/images/fallbacks/hero-listing.svg"
       />
     );
 
-    expect(screen.getByText("Public preview")).toBeInTheDocument();
-    expect(screen.getAllByText("Fallback listing")).toHaveLength(2);
+    const placeholder = screen
+      .getByTestId("video-player")
+      .querySelector("[data-card-media-placeholder]");
+    expect(placeholder).not.toBeNull();
+    expect(placeholder).toHaveAttribute("aria-hidden", "true");
+    expect(placeholder).toHaveTextContent("");
+    expect(screen.queryByText("Public preview")).toBeNull();
+    expect(screen.getAllByText("Fallback listing")).toHaveLength(1);
+    expect(container.querySelector("[data-fallback-caption]")).toBeNull();
   });
 
-  it("keeps the fallback caption above the Play button on video cards with playback controls", () => {
-    const { container, rerender } = render(
+  it("shows the same placeholder when a card has no media at all", () => {
+    const { container } = render(<PosterCardShell href="/listing/empty" title="Empty listing" />);
+
+    expect(screen.queryByTestId("video-player")).toBeNull();
+    expect(container.querySelector("[data-card-media-placeholder]")).not.toBeNull();
+    expect(screen.queryByText("No photo yet")).toBeNull();
+    expect(screen.getAllByText("Empty listing")).toHaveLength(1);
+  });
+
+  it("keeps the Play control on a video card whose stand-in is the placeholder", () => {
+    render(
       <PosterCardShell
         href="/tourism-events/fest"
         title="Fest"
         mediaUrl="https://example.com/clip.mp4"
-        mediaFallbackUrl="/images/fallbacks/hero-listing.svg"
         showPlaybackControl
       />
     );
-    const caption = () => container.querySelector("[data-fallback-caption]");
-    expect(caption()).toHaveClass("pb-20");
 
-    rerender(
-      <PosterCardShell
-        href="/listing/photo"
-        title="Photo"
-        mediaUrl="https://example.com/photo.jpg"
-        mediaFallbackUrl="/images/fallbacks/hero-listing.svg"
-      />
-    );
-    expect(caption()).toHaveClass("pb-4");
+    const player = screen.getByTestId("video-player");
+    expect(player).toHaveAttribute("data-controls", "yes");
+    expect(player.querySelector("[data-card-media-placeholder]")).not.toBeNull();
   });
 });

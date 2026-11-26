@@ -1,6 +1,5 @@
 "use client";
 
-import { Store } from "lucide-react";
 import { PosterCardShell } from "@/components/listings/poster-card-shell";
 import { useAutoScrollRailItemState } from "@/components/home/auto-scroll-rail";
 import { BUSINESS_TYPE_OPTIONS } from "@/lib/constants/categories";
@@ -78,11 +77,6 @@ export function BusinessPreviewCard({
       mediaHeight={mediaHeight}
       disableNativeDrag
       feedPlaybackActive={isActive && !isRailDragging}
-      fallback={
-        <div className="flex h-full w-full items-center justify-center text-brand-blue/35">
-          <Store className="h-16 w-16" />
-        </div>
-      }
     />
   );
 }

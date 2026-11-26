@@ -195,8 +195,15 @@ const IMAGE_RETRY_DELAY_MS = 1000;
  * keep the stand-in until a refresh. Error responses are never cached, so
  * mounting the image again fetches it again. One retry only, so no loop.
  */
-function RetryOnceImage({ alt, onError, ...props }: ComponentProps<typeof Image>) {
+export function RetryOnceImage({ alt, onError, ...props }: ComponentProps<typeof Image>) {
   const [attempt, setAttempt] = useState<"first" | "waiting" | "retry">("first");
+  // A new picture gets its own retry (React's "adjust state when a prop
+  // changes" pattern: compare during render, no effect).
+  const [attemptSrc, setAttemptSrc] = useState(props.src);
+  if (attemptSrc !== props.src) {
+    setAttemptSrc(props.src);
+    setAttempt("first");
+  }
 
   useEffect(() => {
     if (attempt !== "waiting") return;

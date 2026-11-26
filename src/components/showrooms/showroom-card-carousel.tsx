@@ -49,7 +49,6 @@ export interface CarouselItem {
   focalY?: number | null;
   mediaWidth?: number | null;
   mediaHeight?: number | null;
-  fallbackMediaUrl?: string | null;
 }
 
 export interface ShowroomCardCarouselProps {
@@ -96,18 +95,9 @@ const DESKTOP_SHOWROOM_ITEM_LIMIT = 15;
  */
 const APPEARANCE_DWELL_MS = 1_000;
 const APPEARANCE_VISIBLE_RATIO = 0.5;
-const TYPE_FALLBACK_MEDIA: Record<CarouselItem["type"], string> = {
-  listing: "/images/fallbacks/hero-listing.svg",
-  business: "/images/fallbacks/hero-business.svg",
-  promotion: "/images/fallbacks/hero-shop.svg",
-};
 
 const CARD_W = "showroom-card-frame";
 const SECTION_SPACING = "showroom-viewport";
-function getFallbackMediaUrl(item: CarouselItem): string {
-  return item.fallbackMediaUrl ?? TYPE_FALLBACK_MEDIA[item.type];
-}
-
 function isVideoItem(item: CarouselItem | undefined): boolean {
   if (!item) return false;
   return item.mediaKind ? item.mediaKind === "video" : isVideoUrl(item.mediaUrl);
@@ -1072,11 +1062,11 @@ export function ShowroomCardCarousel({
         {carouselItems.map((item, i) => {
           const offset = signedOffset(i);
           const itemIsVideo = isVideoItem(item);
-          const sideMediaFallback =
-            item.posterUrl ?? (itemIsVideo ? getFallbackMediaUrl(item) : item.mediaUrl);
-          const activeVideoNeedsArtwork = offset === 0 && itemIsVideo && !item.posterUrl;
+          // A video without a cover shows the card's logo placeholder (no media URL).
+          const sideMediaFallback = item.posterUrl ?? (itemIsVideo ? undefined : item.mediaUrl);
+          const activeVideoNeedsCover = offset === 0 && itemIsVideo && !item.posterUrl;
           const cardMediaUrl =
-            offset === 0 && !activeVideoNeedsArtwork ? item.mediaUrl : sideMediaFallback;
+            offset === 0 && !activeVideoNeedsCover ? item.mediaUrl : sideMediaFallback;
 
           return (
             <div
@@ -1118,7 +1108,6 @@ export function ShowroomCardCarousel({
                 mediaUrl={cardMediaUrl}
                 isVideo={itemIsVideo && cardMediaUrl === item.mediaUrl}
                 posterUrl={item.posterUrl}
-                mediaFallbackUrl={getFallbackMediaUrl(item)}
                 logoUrl={item.logoUrl}
                 eyebrow={item.eyebrow}
                 statusLabel={item.statusLabel}
