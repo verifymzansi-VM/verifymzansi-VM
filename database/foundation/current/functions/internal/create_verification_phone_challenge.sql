@@ -26,7 +26,8 @@ begin
       hint=to_char((held.contact_changed_at+interval '15 days') at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS"Z"'); end if;
   if held.id is not null and internal.current_verified_identity(p_owner) is null then
     raise exception 'contact change not eligible' using errcode='PT409', detail='phone_change_identity_required'; end if;
-  if internal.phone_number_banned(p_phone) then
+  -- A released number stays blocked for the banned person's own accounts.
+  if internal.phone_number_banned_for(p_owner, p_phone) then
     raise exception 'phone number unavailable' using errcode='PT409', detail='phone_banned'; end if;
   if exists(select 1 from private.verification_phone_proofs f
       where f.phone=p_phone and f.revoked_at is null and f.owner_id<>p_owner) then

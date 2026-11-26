@@ -4,11 +4,12 @@
  * Cloudflare does not support the default Next.js `/_next/image` endpoint,
  * so we use a custom loader instead of setting `images.unoptimized: true`.
  *
- * Media proxy paths ask for a pre-generated WebP variant key; the media route
- * serves the original file when that variant does not exist. Nothing is
- * resized on the fly: the zone has no Cloudflare Image Resizing, so this
- * loader never builds `/cdn-cgi/image/` URLs. Other images keep their source
- * URL, with width/quality query parameters added.
+ * Media proxy paths for media/<uuid> photos ask for a pre-generated WebP copy;
+ * the media route serves the photo when that copy does not exist. Other proxy
+ * paths keep their URL. Nothing is resized on the fly: the zone has no
+ * Cloudflare Image Resizing, so this loader never builds `/cdn-cgi/image/`
+ * URLs. Other images keep their source URL, with width/quality query
+ * parameters added.
  */
 
 interface ImageLoaderParams {
@@ -80,8 +81,9 @@ function toVariantProxyPath(path: string, requestedWidth: number): string {
 export default function cloudflareImageLoader({ src, width, quality }: ImageLoaderParams): string {
   const resolvedQuality = quality || 75;
 
-  // The media proxy can always serve a pre-generated variant, falling back to
-  // its original when that variant is absent. Keep this path independent of
+  // For media/<uuid> photos the media proxy serves a pre-generated copy,
+  // falling back to the photo when that copy is absent; other proxy paths are
+  // returned unchanged. Keep this path independent of
   // Cloudflare Image Resizing so SSR preloads match hydrated image URLs.
   if (src.startsWith("/api/media/serve/")) {
     return toVariantProxyPath(src, width);

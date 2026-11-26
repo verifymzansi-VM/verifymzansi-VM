@@ -10,9 +10,10 @@
  *     (media.verifymzansi.com) — edge-cached by Cloudflare with native HTTP
  *     Range support and zero Worker hop. Videos have no responsive variants,
  *     so the proxy added latency without adding value.
- *   - Images stay on the local media-proxy route (/api/media/serve/…) which
- *     provides responsive WebP variants (…w400/w800/w1600) with fallback to
- *     the original object for legacy uploads, plus SVG hardening.
+ *   - Images stay on the local media-proxy route (/api/media/serve/…), which
+ *     serves responsive WebP copies of media/<uuid> photos
+ *     (….w400.webp/.w800.webp/.w1600.webp), falling back to the photo when a
+ *     copy is missing, plus SVG hardening.
  */
 
 const MEDIA_BASE = process.env.NEXT_PUBLIC_MEDIA_URL || "https://media.verifymzansi.com";
@@ -63,8 +64,8 @@ function isVideoUrl(url: string): boolean {
  * Returns null if the URL doesn't match any known pattern.
  */
 export function extractMediaStorageKey(url: string): string | null {
-  // Stored raw key (without a URL) from some legacy/seed data paths
-  if (url.startsWith("media/") || url.startsWith("listings/")) {
+  // Stored raw key (without a URL)
+  if (url.startsWith("media/")) {
     return url;
   }
 

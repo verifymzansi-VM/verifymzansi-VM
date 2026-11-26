@@ -106,6 +106,15 @@ describe("GET /api/media/serve/[...key]", () => {
     expect(res.headers.get("Cache-Control")).toBe("private, no-store");
   });
 
+  it("rejects keys outside the media prefix", async () => {
+    const res = await GET(createRequest(), {
+      params: Promise.resolve({ key: ["listings", "old-photo.jpg"] }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
   it("forces SVG downloads and adds defensive CSP", async () => {
     mockSend.mockResolvedValue({
       ContentType: "image/svg+xml",

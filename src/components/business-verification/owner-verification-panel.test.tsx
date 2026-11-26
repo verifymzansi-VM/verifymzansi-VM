@@ -139,6 +139,43 @@ describe("Seen renewal", () => {
     expect(await screen.findByText(/Seen on live video · .* · renew by /)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Book my check" })).toBeInTheDocument();
   });
+  it("shows the renew-by date in South African time, whatever the browser's time zone", async () => {
+    // 22:30 UTC is 00:30 the next day in South Africa.
+    const day = new Date(Date.now() + 25 * 86_400_000);
+    day.setUTCHours(22, 30, 0, 0);
+    const expiresAt = day.toISOString();
+    const shown = (timeZone: string) =>
+      day.toLocaleDateString("en-ZA", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        timeZone,
+      });
+    expect(shown("Africa/Johannesburg")).not.toBe(shown("UTC"));
+    fetchMock = vi.fn(() =>
+      json({
+        ...STATE,
+        stickers: {
+          idReviewed: true,
+          cipc: null,
+          seen: { verifiedAt: "2025-12-20T10:00:00Z", expiresAt, method: "video", city: null },
+        },
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    // A browser outside South Africa (Node applies TZ when it is assigned).
+    const zone = process.env.TZ;
+    process.env.TZ = "UTC";
+    try {
+      render(<OwnerVerificationPanel businessId="b1" />);
+      expect(
+        await screen.findByText((text) => text.endsWith(`renew by ${shown("Africa/Johannesburg")}`))
+      ).toBeInTheDocument();
+    } finally {
+      if (zone === undefined) delete process.env.TZ;
+      else process.env.TZ = zone;
+    }
+  });
   it("shows only the sticker while its end is further away", async () => {
     withSeen(200);
     render(<OwnerVerificationPanel businessId="b1" />);

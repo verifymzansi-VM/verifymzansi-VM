@@ -20,6 +20,10 @@ begin
   if old.sha256 is not null and new.sha256 is distinct from old.sha256 then
     raise exception 'media digest is immutable' using errcode = '23514';
   end if;
+  -- A video's stored length is set once (at or after completion) and kept.
+  if old.duration_ms is not null and new.duration_ms is distinct from old.duration_ms then
+    raise exception 'video length is immutable' using errcode = '23514';
+  end if;
   new.state_changed_at := case when new.state <> old.state then statement_timestamp() else old.state_changed_at end;
   return new;
 end;

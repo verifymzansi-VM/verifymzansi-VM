@@ -172,7 +172,11 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 111. Showroom cards with a video and photos show the chosen frame (item 56) (no file rows: data only, `src/lib/showroom/feed.ts`) | approved by owner 2026-11-26 (answer: 'Yes to everything', for the before and after pictures) | Home and area showrooms: a post with both a video and photos plays its video over the frame the owner chose, as on the 27 October cards; before, it showed the first photo there. With no chosen frame it keeps the first photo. Posts without a video look as they do today. |
 | 108. Staff told to end an admin role before restricting that person (item 20, part 3) (no file rows: wording outside the checked scope) | approved by owner 2026-11-25 (answer: 'Approve it') | Staff only: on Reports (Ban, Suspend, emergency containment) and Governance (Approve), an action against a person who holds an admin role is refused with 'End this person's admin role first. Another admin must approve that, then try again.' |
 | 109. Staff refund follow-ups (item 56, batch A) (no file rows of its own: the group 109 part of 8 rows elsewhere) | approved by owner 2026-11-26 (answer: 'Yes to everything') | Members: the 'Payment update' email now reads 'A refund or reversal of a payment has been recorded. Review the current details in Billing.' (was 'A payment reversal has been recorded. …'), also right for a part refund that keeps the slot running. Staff on Payments & refunds: the section 14 hint counts paid days from the end of the 20 business days' notice, without free lost days; the refund forms say when lost days were already added, and Add lost days says when money was already refunded for a failure (warnings only); a chargeback says how much was already returned; a refund form opened again after a lost answer sends the same request, so nothing is refunded twice. |
-| 116. Media copy URLs only for uploaded photo keys (item 78) (no file rows of its own: the group 116 part of 2 rows elsewhere) | awaiting owner | Nothing. Photos and video posters use the same URLs as before; only addresses of the retired backend's file-extension keys, which no current post has, are no longer rewritten. |
+| 110. Release one blocked phone number (item 21) (and the group 110 part of 1 row elsewhere) | approved by owner 2026-11-26 (answer: 'Yes to everything') | Nothing for members or visitors. Admins and governors, on Restrictions: a 'Blocked phone numbers' card to ask to free one number a ban blocks (number and reason), the waiting requests (a different staff member approves or rejects; the person who asked can withdraw) and the latest releases. The person's ID ban stays. |
+| 112. Lifecycle rule follow-ups (item 56, batch D) | approved by owner 2026-11-26 (answer: 'Yes to both') (no file rows: the group 112 part of 2 existing rows; text outside the checked scope in `src/lib/foundation/restored-post-route.ts`) | Business verification page: dates are shown in South African time, so an owner abroad sees the same 'renew by' date as the reminder email (no change in South Africa). Saving a free event that starts more than 12 months ahead says 'Events can start at most 12 months ahead.' instead of the general message (the form already blocks this). On My posts, while a report from the public is open, the owner can delete the post only once the report is 7 days old and the post's clean-up waiting time has passed; a staff duplicate flag no longer stops it; the message is unchanged. |
+| 113. Video length checked by the database (item 39) (no file rows of its own: the group 113 part of 2 rows elsewhere) | approved by owner 2026-11-26 | Nothing for members or visitors, except a clear message when a post's video is too long for it (events: 1 minute, other posts: 2 minutes). Staff: the review panel shows each video's length and the limit. |
+| 120. Post viewer: one message for an empty section (item 81) | approved by owner 2026-11-26 | Post viewer, after switching to a section with no posts (for example Mzansi Business while it has none): only 'Nothing here yet' shows; the 'You’re all caught up' end card no longer shows on top of it, and the up and down arrows are hidden there (they did nothing and covered the message on phones). Sections with posts still end with the end card. |
+| 116. Media copy URLs only for uploaded photo keys (item 78) (no file rows of its own: the group 116 part of 2 rows elsewhere) | approved by owner 2026-11-26 | Nothing. Photos and video posters use the same URLs as before; only addresses of the retired backend's file-extension keys, which no current post has, are no longer rewritten. |
 
 Questions for the owner:
 
@@ -849,7 +853,7 @@ None left: the three filter files were put back to `0b562f42` (see "Put back").
 | `src/app/admin/governance/appeals/[id]/appeal-resolve-form.tsx`    | wording-behaviour | Offers only the outcomes the new backend accepts.                                                                                                                                                                       | Staff only: 'Partially overturned' appears only when a suspension can be shortened; new placeholder.                                                                                                                                                                                                                                                                                 | keep     | awaiting owner                                            | 2026-11-08 | fbf5c869e91f |
 | `src/app/admin/governance/appeals/[id]/page.tsx`                   | wording-behaviour | Appeal page reads from the new backend. Retired-backend branch removed.                                                                                                                                                 | Staff only: new 'requires another reviewer' message when the appeal cannot be resolved by this person.                                                                                                                                                                                                                                                                               | keep     | awaiting owner                                            | 2026-11-08 | 65c0f2d9bbad |
 | `src/app/admin/governance/enforcement/lift-restriction-button.tsx` | wording-behaviour | Follows the new backend's limits.                                                                                                                                                                                       | Staff only: the reason is limited to 500 characters; error messages reworded.                                                                                                                                                                                                                                                                                                        | keep     | awaiting owner                                            | 2026-11-08 | 2e653233b0b4 |
-| `src/app/admin/governance/enforcement/page.tsx`                    | wording-behaviour | Enforcement list reads from the new backend. Retired-backend branch removed. Group 54: a restricted member is named by their short name, with the account reference beside it. | Staff only: new 'requires review through its decision' message. Group 54: Staff only: a restricted member shows as 'Thandeka D. · 1a2b3c4d…' (short name and account reference) instead of the full name. | keep     | awaiting owner; group 54 part awaiting owner | 2026-11-19 | 85af71ea50bb |
+| `src/app/admin/governance/enforcement/page.tsx`                    | wording-behaviour | Enforcement list reads from the new backend. Retired-backend branch removed. Group 54: a restricted member is named by their short name, with the account reference beside it. Group 110: adds the 'Blocked phone numbers' card. | Staff only: new 'requires review through its decision' message. Group 54: Staff only: a restricted member shows as 'Thandeka D. · 1a2b3c4d…' (short name and account reference) instead of the full name. Group 110: Staff with account:restore: the 'Blocked phone numbers' card (see group 110). | keep     | awaiting owner; group 54 part awaiting owner; group 110 part approved by owner 2026-11-26 (answer: 'Yes to everything') | 2026-11-19 | d4fd3b202a99 |
 
 ### 4. Rewiring only (no visible change)
 
@@ -865,7 +869,7 @@ None left: the three filter files were put back to `0b562f42` (see "Put back").
 | `src/components/admin/evidence-types.ts`                                      | rewiring          | Types: nullable key/size, native evidence fields.                                                                                                                                                                                                                                                                                                                                                                                                                                           | Nothing (same look and steps)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | keep     | awaiting owner                                                                                                                                                                                                                                                                                                              | 2026-11-08 | 297912ffa0ff |
 | `src/components/admin/evidence-viewer.tsx`                                    | rewiring          | Native evidence request body, abortable fetch, retry via effect.                                                                                                                                                                                                                                                                                                                                                                                                                            | Nothing (same look and steps)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | keep     | awaiting owner                                                                                                                                                                                                                                                                                                              | 2026-11-08 | 8a7e80979991 |
 | `src/components/admin/kyc-inline-preview.tsx`                                 | rewiring          | Loads evidence only with a claim scope in foundation mode. Retired-backend branch removed.                                                                                                                                                                                                                                                                                                                                                                                                  | Nothing (same look and steps)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | keep     | awaiting owner                                                                                                                                                                                                                                                                                                              | 2026-11-08 | c0ed76d2695f |
-| `src/components/admin/moderation/moderation-preview-panel.tsx`                | rewiring          | Adds foundation review type; `&amp;` entity. Group 86 (SHOW_POST_COPY): a claimed copy shows where it was copied from. | Nothing (same look and steps) Group 86 (staff, switch on): under the quality summary of a claimed listing, 'Copied from <title> (status)' (a link only when that post is live; 'a post that has since been deleted' once it is gone). | keep     | awaiting owner; group 86 part approved by owner 2026-11-22 | 2026-11-21 | e289685b1501 |
+| `src/components/admin/moderation/moderation-preview-panel.tsx`                | rewiring          | Adds foundation review type; `&amp;` entity. Group 86 (SHOW_POST_COPY): a claimed copy shows where it was copied from. Group 113: shows each video's stored length and the post kind's limit (kept out of the edit's changed fields). | Nothing (same look and steps) Group 86 (staff, switch on): under the quality summary of a claimed listing, 'Copied from <title> (status)' (a link only when that post is live; 'a post that has since been deleted' once it is gone). Group 113 (staff): under the photos and video of a claimed post with a video, 'Video length: 1 min 35 s (limit 2 minutes)' (events: 'limit 1 minute'; 'not recorded' when the length was never stored). | keep     | awaiting owner; group 86 part approved by owner 2026-11-22; group 113 part approved by owner 2026-11-26 | 2026-11-21 | c88581f781f8 |
 | `src/components/admin/role-assign-form.tsx`                                   | rewiring          | Fallback verify URL when none returned.                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Nothing (same look and steps)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | keep     | awaiting owner                                                                                                                                                                                                                                                                                                              | 2026-11-08 | 263370c0eb0c |
 | `src/components/admin/role-change-review-actions.tsx`                         | rewiring          | Network-failure handling; fallback verify URL; error text reworded.                                                                                                                                                                                                                                                                                                                                                                                                                         | Nothing (same look and steps)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | keep     | awaiting owner                                                                                                                                                                                                                                                                                                              | 2026-11-08 | 8bbc9d0bf1ae |
 | `src/components/dashboard/leads-feed.tsx`                                     | rewiring          | Realtime REVALIDATE reloads `/api/leads`; uses `target_href`; uncertain-update message. Retired-backend branch removed.                                                                                                                                                                                                                                                                                                                                                                     | Nothing (same look and steps)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | keep     | awaiting owner                                                                                                                                                                                                                                                                                                              | 2026-11-08 | 54c15412c95d |
@@ -2536,8 +2540,8 @@ tip's words) and two browser checks (`e2e/foundation/video-mode.spec.ts`,
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `src/components/ui/video-seek-bar.tsx` | visual | M10.7: one seek bar for every player: the browser's slider in a 24 px tall strip. On a touchscreen a mostly sideways drag follows the finger anywhere on the bar and keeps the page still; a tap seeks when the finger lifts; an up or down swipe is left to the page (the slider's own jump on touch down is ignored), and nothing is held from the page while the length is unknown. Arrow keys move 5 s. | Seek bars: the same thin track, with a 24 px tall area to grab; scrolling past a video on a phone no longer jumps it; Left and Right move 5 seconds; a gold focus ring for keyboard users; screen readers hear '0:12 of 0:45'. | keep | approved by owner 2026-11-20 | 2026-11-19 | 2ded6d1ad879 |
 | `src/components/ui/video-seek-bar.test.tsx` | test | M10.7: the hit area is at least 24 px, the bar states position and length and has a focus ring; a vertical swipe neither seeks nor blocks the page, a sideways drag and a tap seek (clamped to the ends), nothing is blocked before the length is known, and arrow key presses move 5 s while Home and End stay the browser's. | Nothing (not part of a page) | keep | approved by owner 2026-11-20 | 2026-11-19 | 13bb27a9e5d1 |
-| `src/components/ui/profile-video-player.tsx` | visual | M10.7: uses the shared seek bar (margins keep the track and buttons where they were) and time label; reads the video's length on mount when its metadata loaded before the page was interactive. Group 116: the native poster uses the poster's own media URL (`normalizeMediaUrl`); the removed `getVariantUrl` gave that same URL for every `media/<uuid>` poster. | Post pages and the desktop viewer: the seek bar is easier to grab (24 px tall area, same look and place); the time label shows the real length instead of '0:00'. Group 116: nothing (same poster URL). | keep | approved by owner 2026-11-20 | 2026-11-19 | cff6ff16f6d5 |
-| `src/components/ui/profile-video-player.test.tsx` | test | M10.7: the label reads '0:12 / 0:45', the bar is at least 24 px and seeks, and the length is read from a video that loaded before the player mounted. Group 116: the poster test uses a real `media/<uuid>` key and expects its media proxy URL. | Nothing (not part of a page) | keep | approved by owner 2026-11-20 | 2026-11-19 | 3feb360c99a8 |
+| `src/components/ui/profile-video-player.tsx` | visual | M10.7: uses the shared seek bar (margins keep the track and buttons where they were) and time label; reads the video's length on mount when its metadata loaded before the page was interactive. Group 116: the native poster uses the poster's own media URL (`normalizeMediaUrl`); the removed `getVariantUrl` gave that same URL for every `media/<uuid>` poster. | Post pages and the desktop viewer: the seek bar is easier to grab (24 px tall area, same look and place); the time label shows the real length instead of '0:00'. Group 116: nothing (same poster URL). | keep | approved by owner 2026-11-20; group 116 part approved by owner 2026-11-26 | 2026-11-19 | cff6ff16f6d5 |
+| `src/components/ui/profile-video-player.test.tsx` | test | M10.7: the label reads '0:12 / 0:45', the bar is at least 24 px and seeks, and the length is read from a video that loaded before the player mounted. Group 116: the poster test uses a real `media/<uuid>` key and expects its media proxy URL. | Nothing (not part of a page) | keep | approved by owner 2026-11-20; group 116 part approved by owner 2026-11-26 | 2026-11-19 | 3feb360c99a8 |
 | `src/components/video-mode/video-mode-seek.tsx` | visual | M10.7: new seek bar and time for the video on screen in Video mode; it follows the active video element through the page, so retries and swipes need no extra wiring. | Video mode: a thin gold seek bar with '0:12 / 0:45' under the post's buttons, while a video is on screen. | keep | approved by owner 2026-11-20 | 2026-11-19 | e223e23b152c |
 | `src/components/video-mode/video-mode-seek.test.tsx` | test | M10.7: shows and seeks the active video's time, follows a video that appears later, and ignores other videos. | Nothing (not part of a page) | keep | approved by owner 2026-11-20 | 2026-11-19 | bbc11a3e2209 |
 | `src/components/video-mode/video-mode-viewer.tsx` | wording-behaviour | M10.7: a seek bar with the time and length sits under the post's actions while a video is on screen; moving a finger or pointer along the seek bar counts as activity, so the controls do not step aside (after 6 s) in the middle of a drag. Group 57 (row A16): the province picked in the viewer is no longer also saved in a cookie: only the removed 'province first' showroom read it. | Video mode: under the Details, call, share and More buttons, a thin gold seek bar with '0:12 / 0:45' beside it, shown and hidden with the other controls (see `video-mode-seek.tsx`); the post details sit about 36 px higher to make room; the controls stay on screen while the seek bar is being dragged. Group 57: nothing (the province filter works as before). | keep | approved by owner 2026-11-20; group 57 part awaiting owner | 2026-11-19 | 443d570e66ec |
@@ -3148,7 +3152,7 @@ and one byte over, so the limits register can mark it proven: the profile photo
 
 | File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `src/components/business-verification/owner-verification-panel.test.tsx` | test | Group 76: a test that a 5 MB CIPC PDF is read and one byte more is refused before anything is uploaded. Group 105: tests that the Seen booking form shows from 60 days before the sticker ends, and not earlier. | Nothing (not part of a page) | keep | awaiting owner; group 105 part approved by owner 2026-11-25 (answer: 'Approve with the rewording', the pictures with the sticker email reworded) | 2026-11-21 | 33edae55401c |
+| `src/components/business-verification/owner-verification-panel.test.tsx` | test | Group 76: a test that a 5 MB CIPC PDF is read and one byte more is refused before anything is uploaded. Group 105: tests that the Seen booking form shows from 60 days before the sticker ends, and not earlier. Group 112: a test that the 'renew by' date is shown in South African time for a browser elsewhere. | Nothing (not part of a page) | keep | awaiting owner; group 105 part approved by owner 2026-11-25 (answer: 'Approve with the rewording', the pictures with the sticker email reworded); group 112 part approved by owner 2026-11-26 (answer: 'Yes to both') | 2026-11-26 | ea0e0db6e8ec |
 
 Decision: awaiting owner.
 
@@ -3522,7 +3526,7 @@ Decision: approved by owner 2026-11-22 (after seeing the copy-a-post pictures).
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `src/components/listings/post-more-menu.tsx` | visual | Group 86: the 'More' button and its menu with 'Copy this post'; makes the copy and opens it in the form. | Switch on, running package: the button and menu described in group 86. | keep | approved by owner 2026-11-22 | 2026-11-21 | 98b3f02ffa0b |
 | `src/app/post/create-listing/copy-notes.tsx` | visual | Group 86: the copy's note, the video note and the Final check lines. | Only on a copy: the texts described in group 86. | keep | approved by owner 2026-11-22 | 2026-11-21 | cad9f742c964 |
-| `src/components/admin/moderation/moderation-preview-panel.test.tsx` | test | Group 86: checks the copied-from link for a live source, and no link for one that is not live or was deleted. | Nothing (not part of a page) | keep | approved by owner 2026-11-22 | 2026-11-21 | fc832b857392 |
+| `src/components/admin/moderation/moderation-preview-panel.test.tsx` | test | Group 86: checks the copied-from link for a live source, and no link for one that is not live or was deleted. Group 113: checks the video length line, its 'not recorded' form in a business review, and that nothing shows without lengths. | Nothing (not part of a page) | keep | approved by owner 2026-11-22; group 113 part approved by owner 2026-11-26 | 2026-11-21 | 66259467ebbd |
 
 ### 87. Post templates (item 17b, third part)
 
@@ -4375,7 +4379,7 @@ Decision: approved by owner 2026-11-25 (answer: 'Approve with the rewording', th
 
 | File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `src/components/business-verification/owner-verification-panel.tsx` | visual | Group 105: the Seen step shows 'renew by' and the existing booking form from 60 days before the Seen sticker ends, as CIPC's renewal does. | Business owners with a Seen sticker ending within 60 days: everything described in group 105. | keep | approved by owner 2026-11-25 (answer: 'Approve with the rewording', the pictures with the sticker email reworded) | 2026-11-25 | d1607e0977cc |
+| `src/components/business-verification/owner-verification-panel.tsx` | visual | Group 105: the Seen step shows 'renew by' and the existing booking form from 60 days before the Seen sticker ends, as CIPC's renewal does. Group 112: every date on the panel is shown in South African time, whatever the browser's time zone. | Business owners with a Seen sticker ending within 60 days: everything described in group 105. Group 112: owners whose browser is set to another time zone may see a date one day different (now the South African date, as in the reminder email); in South Africa nothing changes. | keep | approved by owner 2026-11-25 (answer: 'Approve with the rewording', the pictures with the sticker email reworded); group 112 part approved by owner 2026-11-26 (answer: 'Yes to both') | 2026-11-26 | 99192bec3c77 |
 
 ### 106. Removing an admin needs approval; appeal pages off the old backend (item 20, part 1)
 
@@ -4525,6 +4529,127 @@ Pictures (synthetic data, local preview, not published):
 
 Decision: approved by owner 2026-11-26 (answer: 'Yes to everything').
 
+### 110. Release one blocked phone number (item 21)
+
+Launch checklist item 21. Database update
+`20261125213005_release_one_phone_number.sql` (pending, apply first): commands
+`api.propose_phone_number_release`, `api.review_phone_number_release` and
+`api.get_phone_number_releases` (account:restore: admins and governors, an
+authenticator code from the last 15 minutes). A ban blocks every phone number
+the banned person verified; staff can now free one number (a number the network
+gave to someone else, or one blocked by mistake) while the ID ban stays. One
+staff member asks, a different one approves. Approval also ends the banned
+account's own hold on that number, so its new holder can verify it.
+
+- Restrictions (`/admin/governance/enforcement`), between 'Active restrictions'
+  and 'Recent enforcement actions': a 'Blocked phone numbers' card. 'Free one
+  number a ban blocks, for example when the network gave it to someone else.
+  The person's ID ban stays. A different staff member approves.'
+- A form: 'Phone number' (082 123 4567, 27821234567 or +27 82 123 4567) and
+  'Why' (10 to 500 characters), with 'Ask to release'. Checked before sending
+  ('Enter a South African number, for example 082 123 4567.', 'Explain why in at
+  least 10 characters.').
+- 'Waiting for approval': each number with who asked ('You' for your own), when,
+  when it expires (7 days) and the reason. Others see 'Approve' and 'Reject'; the
+  person who asked sees 'Waiting for another staff member.' and 'Withdraw'; a
+  staff member who verified that number themselves sees 'You verified this
+  number, so someone else must decide.' and no buttons. 'None.' when empty.
+- 'Released': the latest 50, each with the date, 'asked by Thando D., approved by
+  Lerato M.' and the reason. 'None.' when empty.
+- Refusals in plain words (no running ban blocks the number, a request already
+  waits, nothing waits any more, your own request, a number you verified, the
+  person who asked lost the permission or another ban now lists the number). A
+  stale authenticator code sends staff
+  to verify again and back. If the list cannot be read, the card says so and the
+  rest of the page still works.
+- Members: nothing is shown or sent. Whoever holds the number now can verify it
+  as usual.
+
+Pictures (synthetic data, local preview, not published):
+`screenshots/item21-phone-release/` (desktop 1280 and phone 375).
+
+Decision: approved by owner 2026-11-26 (answer: 'Yes to everything').
+
+| File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `src/app/admin/governance/enforcement/phone-releases-card.tsx` | visual | Group 110: the new 'Blocked phone numbers' card: ask to release a number, approve, reject or withdraw a waiting request, and see the latest releases. | Admins and governors on Restrictions: everything described in group 110. | keep | approved by owner 2026-11-26 (answer: 'Yes to everything') | 2026-11-25 | 9562ebd8e1c9 |
+| `src/app/admin/governance/enforcement/phone-releases-card.test.tsx` | test | Group 110: checks what each staff member may do, the stored number sent, the checks before sending, a refusal, the re-verify redirect and the unreadable list. | Nothing (not part of a page) | keep | approved by owner 2026-11-26 (answer: 'Yes to everything') | 2026-11-25 | d91db81a8f08 |
+
+### 112. Lifecycle rule follow-ups (item 56, batch D)
+
+Launch checklist item 56, batch D: follow-ups to group 105 (item 40). Database
+update `20261125225855_lifecycle_rule_follow_ups.sql` (pending, apply first).
+No new screen; one new message and one date change. Text outside the checked
+scope: `src/lib/foundation/restored-post-route.ts`.
+
+- Business verification page (`/dashboard/businesses/<id>/verification`):
+  every date on the panel ('Checked …', '· renew by …', the Seen line and the
+  message dates) is shown in South African time. Before, it followed the
+  browser's time zone, so an owner abroad could see a 'renew by' date one day
+  off from the reminder email, which says South African time. In South Africa
+  nothing changes.
+- Posting or editing a free event: if the database refuses a start more than 12
+  months ahead (the form already refuses it, so only a stale form gets here),
+  the message under the form reads 'Events can start at most 12 months ahead.'
+  instead of 'Check the category, dates, media and posting allowance before
+  submitting'.
+- My posts, deleting a reported post: the message ('Someone reported this post.
+  You can hide it now, and delete it once our team has looked at the report.')
+  is unchanged, but it now shows only for a report from the public, and only
+  until both of these have passed: 7 days from the report, and the scheduled
+  clean-up's waiting time (67 days after the post's last change, or 7 days
+  after its deletion date). A staff duplicate-event flag no longer stops the
+  owner deleting.
+
+Pictures: none (the wording above is the whole change; the date looks the same
+in South Africa).
+
+Decision: approved by owner 2026-11-26 (answer: 'Yes to both').
+
+### 113. Video length checked by the database (item 39)
+
+Launch checklist item 39. Database update
+`20261126001956_video_length_checked.sql` (pending, apply first): the upload
+server stores each video's length (read from the file) through the new
+`api.complete_frontend_video_upload`; submitting a post refuses a video longer
+than its kind allows (events 1 minute, everything else 2 minutes; a video
+stored before the update has no length and is not checked); staff read the
+lengths through `api.get_frontend_staff_video_lengths`.
+
+- Content moderation (staff), a claimed post with a video: under the photos
+  and video, 'Video length: 1 min 35 s (limit 2 minutes)'; for an event 'limit
+  1 minute'; 'not recorded' for a video stored before lengths were kept.
+  Also in the business review, under
+  'Business media'.
+- Sellers, when submitting (create, edit, resubmit or reactivate): a refusal
+  in the existing error message, 'Your video is 1 min 30 s; the limit is 1
+  minute'. Nothing else changes on the posting forms.
+
+File rows: the group 113 part of the
+`src/components/admin/moderation/moderation-preview-panel.tsx` and
+`moderation-preview-panel.test.tsx` rows in earlier groups.
+
+Pictures (synthetic data, local preview, not published):
+`screenshots/item39-video-length/` (desktop 1280 and phone 375).
+
+Decision: approved by owner 2026-11-26.
+
+### 120. Post viewer: one message for an empty section (item 81)
+
+Launch checklist item 81, a live bug the owner found. In the post viewer, a
+section with no posts showed two messages on top of each other: 'Nothing here
+yet' and the end card 'You’re all caught up'. The 27 October viewer had the
+same overlap. Behaviour fix only; no new design.
+
+Pictures: `screenshots/item81-viewer-empty/` (375 and 1280, after the fix).
+
+Decision: approved by owner 2026-11-26.
+
+| File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `src/components/immersive/immersive-viewer.tsx` | wording-behaviour | Group 120: an empty section shows only its own 'Nothing here yet' message, without the end card or the up and down arrows. | Post viewer, after switching to a section with no posts (for example Mzansi Business while it has none): only 'Nothing here yet' shows; the 'You’re all caught up' end card no longer shows on top of it, and the up and down arrows are hidden there (they did nothing and covered the message on phones). Sections with posts still end with the end card. | keep | approved by owner 2026-11-26 | 2026-11-26 | e39f6a9b04da |
+| `src/components/immersive/immersive-interactions.test.tsx` | test | Group 120: tests that an empty section shows one message and no arrows, and a section with posts still ends with the end card. | Nothing (not part of a page) | keep | approved by owner 2026-11-26 | 2026-11-26 | 4d9ab7ce8382 |
+
 ### 116. Media copy URLs only for uploaded photo keys (item 78)
 
 Launch checklist item 78 (old backend leftovers); nothing changes on screen.
@@ -4536,7 +4661,7 @@ checked scope). Every uploaded photo and poster is stored as `media/<uuid>`,
 so their URLs are unchanged. File rows: the group 116 part of the
 `src/components/ui/profile-video-player.tsx` and its test rows in group M10.7.
 
-Decision: awaiting owner.
+Decision: approved by owner 2026-11-26.
 
 <!-- frontend-ledger:end -->
 
