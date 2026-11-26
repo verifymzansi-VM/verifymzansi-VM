@@ -142,23 +142,3 @@ function decryptV2(encryptedData: Buffer): Buffer {
 
   return Buffer.concat([decipher.update(encrypted), decipher.final()]);
 }
-
-/**
- * Encrypt a file for KYC storage
- *
- * @param file - File object or Blob
- * @returns Encrypted buffer ready for upload
- */
-export async function encryptFile(file: File | Blob): Promise<Buffer> {
-  const arrayBuffer = await file.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-  return encryptData(buffer);
-}
-
-/**
- * Generate a new encryption key (for initial setup)
- * Run this once and store the result as KYC_ENCRYPTION_KEY env var
- */
-export function generateEncryptionKey(): string {
-  return crypto.randomBytes(KEY_LENGTH).toString("hex");
-}

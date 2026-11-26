@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
-import { encryptData, decryptData, encryptFile, generateEncryptionKey } from "./encryption";
+import { encryptData, decryptData } from "./encryption";
 import { _resetEnvCacheForTesting } from "@/lib/config/env";
 
 // A valid 64-char hex key (32 bytes)
@@ -13,20 +13,6 @@ describe("encryption", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
     _resetEnvCacheForTesting();
-  });
-
-  describe("generateEncryptionKey", () => {
-    it("generates a 64-character hex key", () => {
-      const key = generateEncryptionKey();
-      expect(key).toHaveLength(64);
-      expect(/^[0-9a-f]{64}$/.test(key)).toBe(true);
-    });
-
-    it("generates unique keys", () => {
-      const key1 = generateEncryptionKey();
-      const key2 = generateEncryptionKey();
-      expect(key1).not.toBe(key2);
-    });
   });
 
   describe("encryptData / decryptData", () => {
@@ -76,18 +62,6 @@ describe("encryption", () => {
       encrypted[0] = 0x01;
 
       await expect(decryptData(encrypted)).rejects.toThrow("Unsupported encrypted data format");
-    });
-  });
-
-  describe("encryptFile", () => {
-    it("round-trips a file (Blob)", async () => {
-      const content = "File content for KYC document testing";
-      const blob = new Blob([content], { type: "application/pdf" });
-
-      const encrypted = await encryptFile(blob as unknown as File);
-      const decrypted = await decryptData(encrypted);
-
-      expect(decrypted.toString()).toBe(content);
     });
   });
 

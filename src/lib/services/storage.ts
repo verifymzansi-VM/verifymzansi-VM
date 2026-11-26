@@ -6,7 +6,6 @@ import {
   GetObjectCommand,
   HeadObjectCommand,
 } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { R2Bucket } from "@cloudflare/workers-types";
 import { createLogger } from "@/lib/utils/logger";
 import { isPlaywrightFoundationCopy } from "@/lib/supabase/playwright-mode";
@@ -490,60 +489,6 @@ export async function putImmutableR2Bytes(
 }
 
 /**
- * Resolve the file extension for a storage key. Extensionless filenames
- * (e.g. Android content-picker names like "1000061870") would otherwise make
- * the whole filename the "extension", so fall back to the validated declared
- * MIME type — or "jpg" when no type is available.
- */
-function resolveStorageExtension(filename: string, declaredMimeType?: string): string {
-  const rawExt = filename.includes(".") ? (filename.split(".").pop() ?? "") : "";
-  const sanitized = rawExt.replace(/[^a-zA-Z0-9]/g, "");
-  const plausible = sanitized.length > 0 && sanitized.length <= 5 && !/^\d+$/.test(sanitized);
-  if (plausible) {
-    return sanitized;
-  }
-  return (declaredMimeType ? MIME_TYPE_EXTENSIONS[declaredMimeType] : undefined) ?? "jpg";
-}
-
-/** Canonical file extensions for the MIME types accepted by media uploads. */
-const MIME_TYPE_EXTENSIONS: Record<string, string> = {
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/webp": "webp",
-  "image/gif": "gif",
-  "image/avif": "avif",
-  "image/heic": "heic",
-  "image/heif": "heif",
-  "video/mp4": "mp4",
-  "video/webm": "webm",
-};
-
-/**
- * Generate a unique key for uploaded files.
- */
-export function generateStorageKey(
-  prefix: string,
-  ownerId: string,
-  filename: string,
-  declaredMimeType?: string
-): string {
-  // Sanitize inputs to prevent path traversal in R2 keys.
-  // Only allow UUID-safe characters (alphanumeric, hyphens, underscores, slashes for prefix).
-  const safePrefix = prefix.replace(/[^a-zA-Z0-9/_-]/g, "");
-  const safeOwnerId = ownerId.replace(/[^a-zA-Z0-9-]/g, "");
-  if (!safeOwnerId) {
-    throw new Error("Invalid ownerId for storage key");
-  }
-  if (safePrefix.includes("..")) {
-    throw new Error("Invalid prefix for storage key");
-  }
-  const ext = resolveStorageExtension(filename, declaredMimeType);
-  const timestamp = Date.now();
-  const random = globalThis.crypto.randomUUID().slice(0, 8);
-  return `${safePrefix}/${safeOwnerId}/${timestamp}-${random}.${ext}`;
-}
-
-/**
  * Delete a file from R2.
  * "single-attempt" is for scheduled cleanup that counts its Worker
  * subrequests: exactly one storage request (no SDK retries), the caller's
@@ -738,26 +683,4 @@ export async function getR2ObjectBytes(
     contentType: response.ContentType,
     contentLength: response.ContentLength,
   };
-}
-
-/**
- * Generate a presigned URL for secure download from private R2 bucket.
- */
-export async function generatePresignedDownloadUrl(
-  bucket: string,
-  key: string,
-  expiresIn: number = 3600,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  maxContentLength?: number
-): Promise<string> {
-  // Clamp expiresIn to safe range: 60s–86400s (1 min–24 hours)
-  const safeExpiry = Math.max(60, Math.min(86400, expiresIn));
-  const client = getR2Client();
-
-  const command = new GetObjectCommand({
-    Bucket: bucket,
-    Key: key,
-  });
-
-  return await getSignedUrl(client, command, { expiresIn: safeExpiry });
 }

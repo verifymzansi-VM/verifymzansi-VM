@@ -1,15 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Use vi.hoisted so mock references are available when vi.mock factories run
-const { mockSend, mockGetSignedUrl, mockS3ClientConfigs, mockSendClientConfigs } = vi.hoisted(
-  () => ({
-    mockSend: vi.fn().mockResolvedValue({}),
-    mockGetSignedUrl: vi.fn().mockResolvedValue("https://signed-url.example.com"),
-    mockS3ClientConfigs: [] as unknown[],
-    /** The constructor config of the client behind each send, in call order. */
-    mockSendClientConfigs: [] as unknown[],
-  })
-);
+const { mockSend, mockS3ClientConfigs, mockSendClientConfigs } = vi.hoisted(() => ({
+  mockSend: vi.fn().mockResolvedValue({}),
+  mockS3ClientConfigs: [] as unknown[],
+  /** The constructor config of the client behind each send, in call order. */
+  mockSendClientConfigs: [] as unknown[],
+}));
 
 vi.mock("@aws-sdk/client-s3", () => {
   class MockS3Client {
@@ -43,16 +40,10 @@ vi.mock("@aws-sdk/client-s3", () => {
   };
 });
 
-vi.mock("@aws-sdk/s3-request-presigner", () => ({
-  getSignedUrl: mockGetSignedUrl,
-}));
-
 import {
   uploadToR2,
-  generateStorageKey,
   deleteFromR2,
   deleteManyFromR2,
-  generatePresignedDownloadUrl,
   hasR2WriteAccess,
   getR2ObjectSize,
   getR2ObjectBytes,
@@ -131,42 +122,6 @@ describe("storage service", () => {
       ).toEqual(old);
       expect(put).toHaveBeenCalledTimes(1);
       expect(get).toHaveBeenCalledWith("evidence/fixture/object");
-    });
-  });
-
-  describe("generateStorageKey", () => {
-    it("generates key with correct prefix and seller ID", () => {
-      const key = generateStorageKey("listings", "seller-1", "photo.jpg");
-      expect(key).toMatch(/^listings\/seller-1\/\d+-[a-z0-9]+\.jpg$/);
-    });
-
-    it("extracts file extension correctly", () => {
-      const key = generateStorageKey("kyc", "s2", "document.pdf");
-      expect(key).toMatch(/\.pdf$/);
-    });
-
-    it("falls back to a safe extension for extensionless filenames", () => {
-      // "noext" has no dot — the whole filename must not become the extension
-      const key = generateStorageKey("photos", "s3", "noext");
-      expect(key).toMatch(/\.jpg$/);
-    });
-
-    it("derives the extension from the declared MIME type for extensionless filenames", () => {
-      // Android content-picker files arrive without an extension
-      const key = generateStorageKey("media/listing", "user-1", "1000061870", "image/png");
-      expect(key).toMatch(/^media\/listing\/user-1\/\d+-[a-z0-9]+\.png$/);
-    });
-
-    it("derives the extension from the declared MIME type when the filename extension is numeric", () => {
-      const key = generateStorageKey("media/listing", "user-1", "clip.12345", "video/mp4");
-      expect(key).toMatch(/\.mp4$/);
-    });
-
-    it("generates unique keys each call", () => {
-      const k1 = generateStorageKey("a", "b", "c.png");
-      const k2 = generateStorageKey("a", "b", "c.png");
-      // Different timestamp or random component
-      expect(k1).not.toBe(k2);
     });
   });
 
@@ -349,13 +304,6 @@ describe("storage service", () => {
         requestChecksumCalculation: "WHEN_REQUIRED",
         responseChecksumValidation: "WHEN_REQUIRED",
       });
-    });
-  });
-
-  describe("generatePresignedDownloadUrl", () => {
-    it("returns a signed URL", async () => {
-      const url = await generatePresignedDownloadUrl("bucket", "key");
-      expect(url).toBe("https://signed-url.example.com");
     });
   });
 
