@@ -80,6 +80,49 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Video length checked by the database, 26 November 2026
+
+`20261126001956_video_length_checked.sql` is pending (see the applied register).
+Launch checklist item 39 (roadmap M4.4 part B). One new column, two new
+commands, one new trigger and one replaced trigger body; no command, argument,
+result or grant changes.
+
+- **The length is stored.** `private.media_objects.duration_ms` holds a video's
+  length in whole milliseconds, as the upload server read it from the file (null
+  for pictures and for videos stored before this update). Once set it never
+  changes (`internal.media_object_transition_guard`).
+- **`api.complete_frontend_video_upload`** (service_role only) completes a
+  content-bound video upload like `api.complete_frontend_media_upload` and
+  stores the length. It refuses a length of 121 s or more, no length, or a
+  picture. Called again for a ready video it is an idempotent replay.
+- **Checked at submit.** `internal.guard_video_length_submission`, a trigger on
+  `private.posts` like the posting terms guard, refuses every move into
+  `pending_moderation` (submit, resubmit, reactivation, an edit's submission)
+  while the post has a video whose stored length is longer than its kind allows
+  (events 60 s, everything else 120 s; whole seconds decide) with 22023
+  `video_too_long` (hint `<seconds>/<limit>`). A video with no stored length
+  passes: videos stored before this update are not checked. Approval and the
+  rest of the lifecycle are unchanged.
+- **Staff see it.** `api.get_frontend_staff_video_lengths` (staff with
+  `queue:view`) returns the stored length of each video of up to 50 posts
+  waiting for review whose review claim the caller holds, the same rule as the
+  queue's review data.
+- **Storage** already grows with paid slots (`internal.media_storage_allowance`:
+  (2 x package slots + 10) x 100 MB); the behaviour test proves that 100 slots
+  hold 100 two-minute videos. Unchanged.
+
+ORDER: apply first, then merge. The live website calls neither new command and
+parses nothing this adds. Until the new website is deployed, a video it uploads
+has no stored length and is not checked. Posts already waiting for review when
+the update is applied are not checked either: staff check the preflight's
+"events: N" posts by hand (an event's video at most 1 minute). It refuses with
+55000 unless the guard has its reviewed body (or this update's). Read-only
+preflight: `../preflight/20261126001956_video_length_checked.check.sql` (expect
+one summary row reading "update not applied"); rollback:
+`../rollback/20261126001956_video_length_checked.down.sql` (undo the website
+first; the stored lengths are lost). Behaviour test:
+`scripts/test-foundation-video-length.mjs`.
+
 ## Staff access follow-ups, 26 November 2026
 
 `20261126001811_staff_access_follow_ups.sql` is **pending** (see the applied
@@ -8687,5 +8730,7 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   UTC) matched the full replay (except the known schema grant difference)
 
 - `20261126001811_staff_access_follow_ups.sql`: pending
+
+- `20261126001956_video_length_checked.sql`: pending; apply-first
 
 <!-- applied-register:end -->

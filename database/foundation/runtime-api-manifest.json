@@ -6602,6 +6602,64 @@
       "authority": "Current payment view capability; for up to 50 listed payments, the amount refunded and left to refund (per payment and per slot), each slot's paid start and end, until when Ozow refunds it, and whether it is the account's first purchase with the last day to ask. No contact or identity details."
     },
     {
+      "name": "complete_frontend_video_upload",
+      "updates": ["updates/20261126001956_video_length_checked.sql"],
+      "arguments": [
+        {
+          "name": "p_object_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_size",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_sha256",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_mime",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_duration_ms",
+          "sqlType": "integer",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Trusted upload server only; completes a content-bound video upload exactly like complete_frontend_media_upload (current active owner, exact content receipt, immutable completion metadata) and stores the length it read from the file, 1 to 120999 ms (whole seconds up to 2 minutes); refuses pictures; a repeated call returns the same ready object; the length never changes afterwards."
+    },
+    {
+      "name": "get_frontend_staff_video_lengths",
+      "updates": ["updates/20261126001956_video_length_checked.sql"],
+      "arguments": [
+        {
+          "name": "p_posts",
+          "sqlType": "uuid[]",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current queue view capability and recent authenticator proof; for up to 50 listed posts waiting for review whose review claim the caller holds, each video's stored length (null when not recorded). No owner, contact or identity details."
+    },
+    {
       "name": "propose_phone_number_release",
       "updates": ["updates/20261125213005_release_one_phone_number.sql"],
       "arguments": [

@@ -440,3 +440,40 @@ describe("ModerationPreviewPanel copy facts", () => {
     expect(screen.getByText("a post that has since been deleted")).toBeInTheDocument();
   });
 });
+
+describe("ModerationPreviewPanel video length", () => {
+  it("shows each video's stored length next to the post kind's limit", () => {
+    render(
+      <ModerationPreviewPanel
+        item={{
+          ...baseItem,
+          videos: ["https://media.verifymzansi.com/media/clip.mp4"],
+          video_lengths: { limitSeconds: 120, videos: [{ seconds: 95 }] },
+        }}
+      />
+    );
+    expect(screen.getByTestId("video-length-note")).toHaveTextContent(
+      "Video length: 1 min 35 s (limit 2 minutes)"
+    );
+  });
+
+  it("says when a video's length was not recorded, in a business review too", () => {
+    render(
+      <ModerationPreviewPanel
+        item={{
+          ...baseBusinessItem,
+          cover_video: "https://media.verifymzansi.com/media/promo.mp4",
+          video_lengths: { limitSeconds: 60, videos: [{ seconds: null }] },
+        }}
+      />
+    );
+    expect(screen.getByTestId("video-length-note")).toHaveTextContent(
+      "Video length: not recorded (limit 1 minute)"
+    );
+  });
+
+  it("shows nothing without stored lengths", () => {
+    render(<ModerationPreviewPanel item={baseItem} />);
+    expect(screen.queryByTestId("video-length-note")).toBeNull();
+  });
+});
