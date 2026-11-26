@@ -7,10 +7,12 @@ CREATE OR REPLACE FUNCTION internal.retention_tax_year_due(p_at timestamp with t
  STABLE
  SET search_path TO 'pg_catalog'
 AS $function$
+  -- Payment, invoice and payout records: 7 years from the end of the tax
+  -- year (1 March to the end of February) they belong to (Companies Act s24).
   select p_at is not null and pg_catalog.make_timestamptz(
       extract(year from p_at at time zone 'Africa/Johannesburg')::integer
         + case when extract(month from p_at at time zone 'Africa/Johannesburg')>=3 then 1 else 0 end,
-      3,1,0,0,0,'Africa/Johannesburg') + interval '5 years' <= statement_timestamp();
+      3,1,0,0,0,'Africa/Johannesburg') + interval '7 years' <= statement_timestamp();
 $function$;
 alter function internal.retention_tax_year_due(timestamp with time zone) owner to postgres;
 revoke all on function internal.retention_tax_year_due(timestamp with time zone) from public;

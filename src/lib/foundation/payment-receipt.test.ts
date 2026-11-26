@@ -35,6 +35,17 @@ describe("readPaymentReceipt", () => {
     });
   });
 
+  it("names the customer invoice the payment paid, when it paid one", () => {
+    expect(
+      readPaymentReceipt({ ...row, customer_invoice_number: "VM-2026-000012" }, expected)
+    ).toMatchObject({ customerInvoiceNumber: "VM-2026-000012" });
+    expect(
+      readPaymentReceipt({ ...row, customer_invoice_number: null }, expected)
+    ).not.toHaveProperty("customerInvoiceNumber");
+    // Anything that is not an invoice number reads as no receipt details.
+    expect(readPaymentReceipt({ ...row, customer_invoice_number: "INV-1" }, expected)).toBeNull();
+  });
+
   it("shows the customer's transfer reference for a bank transfer recorded by staff", () => {
     const transfer = {
       ...row,

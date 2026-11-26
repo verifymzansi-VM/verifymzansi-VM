@@ -14,6 +14,10 @@ begin
       return new;
     end if;
   end if;
+  -- The retention sweep deletes a raise 2 years after it ended.
+  if tg_op = 'DELETE' and pg_catalog.current_setting('vm.retention', true) = 'on' then
+    return old;
+  end if;
   -- The audit trail of raised limits: a raise is only ever ended, once.
   if tg_op = 'DELETE' then
     raise exception 'slot limit history is retained' using errcode='23514';

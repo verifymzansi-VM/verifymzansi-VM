@@ -80,12 +80,98 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Invoice payment link, 26 November 2026
+
+`20261126053701_invoice_pay_link.sql` was applied on 26 November 2026 at 20:30
+UTC (see the applied register). Launch checklist items 38 and 34 (inventory
+A28): a customer invoice is emailed with a link that lets its payer see and pay
+it without signing in, and the receipt names the invoice it paid.
+
+- **The link.** `private.customer_invoices.pay_link_hash` keeps the SHA-256
+  (hex) of the invoice's current link, unique where set. The website's email job
+  makes the link (32 random bytes) just before it sends, and stores its hash
+  with the new service command `api.prepare_invoice_email` (only while the
+  invoice is unpaid); each sending replaces the hash, so the latest email holds
+  the live link.
+- **The email.** `internal.notify_invoice_issued` (full body) also queues an
+  outbox row of the new kind `invoice_issued`, one per invoice, for every way
+  staff issue an invoice; `internal.claim_supported_notification_outbox` (full
+  body) accepts the kind and gives no recipient once the account is closed.
+- **Paying by link.** New service commands `api.get_invoice_by_link`,
+  `api.save_invoice_billing_by_link` and `api.start_invoice_payment_by_link`
+  (the website's server only). They reach the same functions as the member's
+  commands: `internal.get_my_invoice`, `internal.save_my_invoice_billing` and
+  `internal.start_invoice_payment` gain `p_link_hash` (old signatures dropped;
+  the member's `api` commands keep their arguments and grants and pass null).
+  With a hash (service role only, else 42501), new
+  `internal.customer_invoice_for_caller` finds the invoice whose link it is, of
+  an account that can still use the site, until 30 days after the invoice's due
+  date (anything else is not found), and that account acts with every rule of
+  the member's Pay now. The read is the member's read; Pay now also answers
+  `owner_id` for the server's Ozow request.
+- **The receipt.** `internal.get_payment_receipt` (full body) adds
+  `customer_invoice_number` (from the payment's snapshot), null for a checkout.
+
+ORDER: **apply-first** (apply, then merge): the release calls the new commands
+and the deploy gate checks them. The live website leaves the new outbox kind
+unclaimed until the release is deployed, and its receipt reader ignores the
+extra field. Read-only preflight:
+`../preflight/20261126053701_invoice_pay_link.check.sql` (expect "invoice
+payment link: update not applied"); rollback:
+`../rollback/20261126053701_invoice_pay_link.down.sql` (refused once an invoice
+email was queued; deploy a website without the payment link first).
+
+## Keep-for periods for the newer personal-data tables, 26 November 2026
+
+`20261126053631_keep_for_periods.sql` was applied on 26 November 2026 at 20:15
+UTC (see the applied register). Launch checklist item 51 (roadmap M7.4). No
+table, column, trigger, command or grant changes; six existing function bodies
+are replaced, all used by the daily retention sweep (`api.run_retention`,
+service only).
+
+- **Payment records: 7 years.** `internal.retention_tax_year_due` keeps payment,
+  invoice and payout records 7 years (was 5) from the end of the tax year (1
+  March to the end of February). Everything `internal.retention_commerce` dates
+  by it follows. The cooling-off tick and the Terms version are stored in each
+  payment's snapshot, so they are kept with it.
+- **Privacy request proofs: 3 years** after the request closed (was 5;
+  `internal.retention_privacy_requests`).
+- **`internal.retention_operations`**: contact-form messages 12 months after
+  they were resolved (open ones are kept); owner administrator invitations 12
+  months after they were revoked, or 12 months after the claimant's account was
+  erased (a claimed invitation is the owner's approval the staff role commands
+  require); runtime switch and sign-up mode change logs 5 years.
+- **`internal.retention_staff_records`**: decided appeals 2 years after the
+  decision, once the decision appealed is gone (while it stands, its appeal
+  stops a second one); released content holds 2 years after release, never while
+  an appeal against them waits; staff role change proposals 5 years after they
+  were decided or expired; evidence case claim events 2 years; raised slot
+  limits 2 years after they ended (`internal.individual_slot_limit_guard` now
+  lets the sweep delete them). A closed report (2 years, unchanged) is not
+  deleted while an appeal against a warning it gave waits.
+- **`internal.retention_verification`**: reasons for returning an ID 12 months
+  after the return, unless a legal hold or fraud hold keeps them. The five-year
+  sweep of closed accounts also deletes them by case: a kept return used to stop
+  that sweep from deleting its case (the foreign key restricts) and failed the
+  whole retention run.
+
+Not changed here: account closures (they date the identity periods; deleted with
+the Auth user), suspensions and bans, business check notes and partner records
+(separate checklist items). ORDER: apply first, then merge (safe either way:
+nothing is old enough to be deleted yet). The website release states 7 years for
+payment records, 3 years for privacy request records and 12 months for
+contact-form messages. Read-only preflight:
+`../preflight/20261126053631_keep_for_periods.check.sql` (expect one summary row
+reading "update not applied" with every count 0); rollback:
+`../rollback/20261126053631_keep_for_periods.down.sql` (deleted records stay
+deleted). Behaviour test: `scripts/test-foundation-keep-for-periods.mjs`.
+
 ## Video length checked by the database, 26 November 2026
 
-`20261126001956_video_length_checked.sql` is pending (see the applied register).
-Launch checklist item 39 (roadmap M4.4 part B). One new column, two new
-commands, one new trigger and one replaced trigger body; no command, argument,
-result or grant changes.
+`20261126001956_video_length_checked.sql` was applied on 26 November 2026 at
+18:31 UTC (see the applied register). Launch checklist item 39 (roadmap M4.4
+part B). One new column, two new commands, one new trigger and one replaced
+trigger body; no command, argument, result or grant changes.
 
 - **The length is stored.** `private.media_objects.duration_ms` holds a video's
   length in whole milliseconds, as the upload server read it from the file (null
@@ -125,8 +211,8 @@ first; the stored lengths are lost). Behaviour test:
 
 ## Staff access follow-ups, 26 November 2026
 
-`20261126001811_staff_access_follow_ups.sql` is **pending** (see the applied
-register). Launch checklist item 56, batch F.
+`20261126001811_staff_access_follow_ups.sql` was applied on 26 November 2026 at
+16:50 UTC (see the applied register). Launch checklist item 56, batch F.
 
 - **An invitation for someone who already has an authenticator app.** An owner
   admin invitation was claimed only when an authenticator app was added or
@@ -456,9 +542,9 @@ the last one: the last-admin guard watches only staff roles.
 - **Trade-off.** A hacked admin can now only be stopped by two other admins or
   the owner's SQL session (owner accepted 26 Nov).
 
-Expand only: no command, argument or grant changes. ORDER: either order is
-safe (the website words the new refusal); released apply-first on 26 November
-2026. Read-only preflight:
+Expand only: no command, argument or grant changes. ORDER: either order is safe
+(the website words the new refusal); released apply-first on 26 November 2026.
+Read-only preflight:
 `../preflight/20261125174942_end_admin_role_before_restriction.check.sql`;
 rollback:
 `../rollback/20261125174942_end_admin_role_before_restriction.down.sql` (puts
@@ -8729,8 +8815,50 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   fingerprint after the last of the five stacked updates (fingerprint.sql, 06:02
   UTC) matched the full replay (except the known schema grant difference)
 
-- `20261126001811_staff_access_follow_ups.sql`: pending
+- `20261126001811_staff_access_follow_ups.sql`: applied 2026-11-26 16:50 UTC;
+  apply-first, owner-approved, before pull request #385 was merged; Supabase SQL
+  editor (browser), file from raw GitHub at e8bc1688, update sha256 starting
+  d3900178bc952443; preflight before "staff access follow-ups: update not
+  applied; active admins: 3; admin invitations waiting: 0 (account already has
+  an authenticator app: 0); closed accounts with a staff role: 0" with no
+  problem rows, after "staff access follow-ups: already applied; active admins:
+  3; admin invitations waiting: 0 (account already has an authenticator app: 0);
+  closed accounts with a staff role: 0"; production fingerprint after the last
+  of the two stacked updates (fingerprint.sql, 18:33 UTC) matched the full
+  replay (except the known schema grant difference)
 
-- `20261126001956_video_length_checked.sql`: pending; apply-first
+- `20261126001956_video_length_checked.sql`: applied 2026-11-26 18:31 UTC;
+  apply-first, owner-approved, after pull request #385 deployed and before pull
+  request #386 was merged; Supabase SQL editor (browser), file from raw GitHub
+  at 6703262f, update sha256 starting 921862a35b6ab6da; preflight before "video
+  length check: update not applied; videos stored: 1; posts waiting with a
+  video: 0 (events: 0)" with no problem rows, after "video length check: already
+  applied; videos stored: 1; posts waiting with a video: 0 (events: 0)";
+  production fingerprint after the last of the two stacked updates
+  (fingerprint.sql, 18:33 UTC) matched the full replay (except the known schema
+  grant difference)
+
+- `20261126053631_keep_for_periods.sql`: applied 2026-11-26 20:15 UTC;
+  apply-first, owner-approved, before pull request #392 was merged; Supabase SQL
+  editor (browser), file from raw GitHub at a06dadd3, update sha256 starting
+  c43721a8d16441dc; preflight before "keep-for periods: update not applied;
+  contact messages: 0; admin invitations: 0; change logs: 0; appeals and holds:
+  0; closed reports: 0; role changes: 0; claim events: 0; slot limits: 0; ID
+  return reasons: 0; privacy request proofs: 0" with no problem rows, after
+  "keep-for periods: already applied; contact messages: 0; admin invitations: 0;
+  change logs: 0; appeals and holds: 0; closed reports: 0; role changes: 0;
+  claim events: 0; slot limits: 0; ID return reasons: 0; privacy request proofs:
+  0"; production fingerprint after it (fingerprint.sql, 20:18 UTC) matched the
+  full replay (except the known schema grant difference)
+
+- `20261126053701_invoice_pay_link.sql`: applied 2026-11-26 20:30 UTC;
+  apply-first, owner-approved, before pull request #394 was merged; Supabase SQL
+  editor (browser), file from raw GitHub at 1d30293c, update sha256 starting
+  cd1e79ba0ef2af6d; preflight before "invoice payment link: update not applied;
+  unpaid invoices: 0" with no problem rows, after "invoice payment link: already
+  applied; unpaid invoices: 0; invoices with a link: 0; invoice emails: 0";
+  production fingerprint after it and 20261126053631_keep_for_periods.sql
+  (fingerprint.sql, 20:31 UTC) matched the full replay (except the known schema
+  grant difference)
 
 <!-- applied-register:end -->

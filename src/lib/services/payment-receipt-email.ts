@@ -16,6 +16,8 @@ export type PaymentReceipt = {
   amountCents: number;
   /** The reference on the member's bank statement. */
   bankReference: string;
+  /** The customer invoice (VM-YYYY-NNNNNN) the payment paid, if any. */
+  customerInvoiceNumber?: string;
 };
 
 const PAYMENT_RECEIPT_SUBJECT = "Payment received";
@@ -36,6 +38,9 @@ export function buildPaymentReceiptEmail(receipt: PaymentReceipt, appUrl?: strin
   const intro = "Thank you. We received your payment. Keep this email as your receipt.";
   const rows: Array<[string, string]> = [
     ["Invoice number", receipt.invoiceNumber],
+    ...(receipt.customerInvoiceNumber
+      ? [["Invoice paid", receipt.customerInvoiceNumber] as [string, string]]
+      : []),
     ["Date paid", paidOn(receipt.paidAt)],
     ["Item", receipt.item],
     ["Amount paid", formatZAR(receipt.amountCents)],
@@ -65,4 +70,57 @@ export function buildPaymentReceiptEmail(receipt: PaymentReceipt, appUrl?: strin
     `${COMPANY_LEGAL_NAME} · Registration number ${COMPANY_REGISTRATION_NUMBER}`,
   ].join("\n\n");
   return { subject: PAYMENT_RECEIPT_SUBJECT, html, text };
+}
+
+/** What the invoice email shows (update 20261126053701), from
+ * api.prepare_invoice_email, and its payment link. Nothing identifies the
+ * member. */
+export type InvoiceEmail = {
+  invoiceNumber: string;
+  /** The invoice line, for example "3 × Individual slot — 90 days". */
+  item: string;
+  totalCents: number;
+  /** South African date, YYYY-MM-DD. */
+  dueOn: string;
+  /** The payment link's token (32 random bytes, base64url): the invoice
+   * without signing in. */
+  linkToken: string;
+};
+
+/** The invoice email: the invoice's number, line, total and due date, and its
+ * payment link. */
+export function buildInvoiceEmail(invoice: InvoiceEmail, appUrl?: string) {
+  const origin = sanitizeAppUrl(appUrl ?? process.env.NEXT_PUBLIC_APP_URL);
+  const subject = `Invoice ${invoice.invoiceNumber} from VerifyMzansi`;
+  const intro = "VerifyMzansi sent you an invoice. You can view and pay it without signing in.";
+  const rows: Array<[string, string]> = [
+    ["Invoice number", invoice.invoiceNumber],
+    ["Item", invoice.item],
+    ["Amount due", formatZAR(invoice.totalCents)],
+    ["Due date", paidOn(`${invoice.dueOn}T12:00:00+02:00`)],
+  ];
+  const note =
+    "Anyone with this link can see and pay the invoice, so share it only with the person who pays it. Prefer a bank transfer? The bank details are on the invoice; use the invoice number as your reference.";
+  const cta = {
+    label: "View and pay invoice",
+    href: `${origin}/pay-invoice?token=${encodeURIComponent(invoice.linkToken)}`,
+  };
+  const html = brandedEmail({
+    tone: "info",
+    eyebrow: "Invoice",
+    title: "Your invoice",
+    intro,
+    bodyHtml: `${detailList(rows)}${paragraph(note)}`,
+    cta,
+    reason: "An invoice was issued to your VerifyMzansi account.",
+  });
+  const text = [
+    subject,
+    intro,
+    rows.map(([label, value]) => `${label}: ${value}`).join("\n"),
+    note,
+    `${cta.label}: ${cta.href}`,
+    `${COMPANY_LEGAL_NAME} · Registration number ${COMPANY_REGISTRATION_NUMBER}`,
+  ].join("\n\n");
+  return { subject, html, text };
 }
