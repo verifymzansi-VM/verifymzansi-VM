@@ -96,17 +96,18 @@ receipt names the invoice it paid.
 - **The email.** `internal.notify_invoice_issued` (full body) also queues an
   outbox row of the new kind `invoice_issued`, one per invoice, for every way
   staff issue an invoice; `internal.claim_supported_notification_outbox` (full
-  body) accepts the kind.
+  body) accepts the kind and gives no recipient once the account is closed.
 - **Paying by link.** New service commands `api.get_invoice_by_link`,
   `api.save_invoice_billing_by_link` and `api.start_invoice_payment_by_link`
   (the website's server only). They reach the same functions as the member's
   commands: `internal.get_my_invoice`, `internal.save_my_invoice_billing` and
   `internal.start_invoice_payment` gain `p_link_hash` (old signatures dropped;
   the member's `api` commands keep their arguments and grants and pass null).
-  With a hash, new `internal.customer_invoice_for_caller` finds the invoice
-  whose link it is, of an account that can still use the site (anything else is
-  not found), and that account acts with every rule of the member's Pay now. The
-  read leaves out the invoice's and payments' ids; Pay now also answers
+  With a hash (service role only, else 42501), new
+  `internal.customer_invoice_for_caller` finds the invoice whose link it is, of
+  an account that can still use the site, until 30 days after the invoice's due
+  date (anything else is not found), and that account acts with every rule of
+  the member's Pay now. The read is the member's read; Pay now also answers
   `owner_id` for the server's Ozow request.
 - **The receipt.** `internal.get_payment_receipt` (full body) adds
   `customer_invoice_number` (from the payment's snapshot), null for a checkout.
@@ -119,6 +120,77 @@ extra field. Read-only preflight:
 payment link: update not applied"); rollback:
 `../rollback/20261126053701_invoice_pay_link.down.sql` (refused once an invoice
 email was queued; deploy a website without the payment link first).
+
+## Staff access follow-ups, 26 November 2026
+
+`20261126001811_staff_access_follow_ups.sql` is **pending** (see the applied
+register). Launch checklist item 56, batch F.
+
+- **An invitation for someone who already has an authenticator app.** An owner
+  admin invitation was claimed only when an authenticator app was added or
+  verified (the trigger on `auth.mfa_factors`), so a person invited after
+  setting one up never became an admin. Both paths now use one helper,
+  `internal.claim_owner_admin_invitation_for(uuid)` (no API role may run it),
+  and a new trigger on `private.owner_admin_invitations` runs it when the owner
+  adds an invitation: the person becomes an admin at once when their account
+  already has a verified authenticator app. The checks are unchanged: a
+  confirmed account that can sign in, an unclaimed and unrevoked invitation for
+  its email (only the account that signed up with it, once one has), and no
+  earlier staff role, which an invitation never reactivates.
+- **A new two-step check after every claim.** A claimed role sets
+  `frontend_mfa_not_before` to the moment of the claim, as every other role
+  grant does (`internal.apply_frontend_staff_role`), on both paths: the person's
+  sessions pass no staff command until they check their authenticator app again
+  (this covers an older session when a second app is enrolled).
+- **The update claims no waiting invitation itself**: making someone an admin is
+  the owner's step. The preflight counts waiting invitations whose account
+  already has an authenticator app. If that is above 0 at apply time, ask the
+  owner. For each one the owner approves, add it again in the owner's SQL
+  session, which fires the new trigger, keeping who signed up with it:
+
+  ```sql
+  with d as (delete from private.owner_admin_invitations where lower(email)=lower('<email>') and claimed_at is null and revoked_at is null returning email, signed_up_at, signed_up_by) insert into private.owner_admin_invitations(email, signed_up_at, signed_up_by) select email, signed_up_at, signed_up_by from d returning email;
+  ```
+
+  Revoke each one the owner does not approve (both snippets compare addresses
+  ignoring capitals and show the address they changed; none shown means no
+  match):
+  `update private.owner_admin_invitations set revoked_at = now() where lower(email) = lower('<email>') and claimed_at is null and revoked_at is null returning email;`.
+
+- **An invitation refused while the person was restricted** (banned, suspended,
+  closed or unable to sign in when it was added or their app was checked) stays
+  waiting. Once the restriction ends, add it again the same way.
+- **Claims take the per-person lock.** The helper first takes
+  `internal.lock_evidence_subject` (the lock of ban approval, account closure,
+  erasure orders and staff role changes), then reads whether the account can
+  sign in, then locks the staff roles table, in the order staff role changes
+  use. An invitation claimed at the moment a ban is approved, the account is
+  closed or an erasure is ordered waits and then sees it.
+  `internal.order_account_erasure` already took that lock before its staff check
+  and is unchanged. That this never leaves a banned admin also relies on
+  `20261125174942_end_admin_role_before_restriction.sql` (pull request #377,
+  applied before this update): when the claim comes first, the ban approval
+  waits for it and then refuses to restrict the new admin.
+- **No closure of a staff account through the service command.**
+  `internal.close_account_evidence` (behind the service-only
+  `api.close_account_evidence`, which nothing in the website or workers calls,
+  and `internal.close_account_now`) refuses an account with an active staff
+  role: PT409 "end the staff roles of this account first" (detail
+  `staff_account`), the check `internal.order_account_erasure` makes, under the
+  same lock. Members closing their own account and staff erasure orders already
+  refused such accounts.
+
+Expand only: two replaced bodies (`internal.claim_owner_admin_invitation()`,
+`internal.close_account_evidence(uuid)`), one new helper, one new trigger
+function (`internal.claim_new_owner_admin_invitation()`) and its trigger; no
+command, argument, result or grant changes. ORDER: **apply-first** (apply, then
+merge); no website code depends on it. The same pull request adds
+`/api/foundation/staff` to the proxy's staff check (`src/proxy-handler.ts`,
+`src/lib/foundation/page-access.ts`), as for `/api/admin`. Read-only preflight:
+`../preflight/20261126001811_staff_access_follow_ups.check.sql`; rollback:
+`../rollback/20261126001811_staff_access_follow_ups.down.sql` (removes the
+trigger, its function and the helper, and puts the two earlier bodies back).
+Behaviour checks: `scripts/test-foundation-staff-access-follow-ups.mjs`.
 
 ## Lifecycle rule follow-ups, 25 November 2026
 
@@ -8654,6 +8726,8 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   reminders waiting: 0 (of which the owner's ID is not reviewed: 0)"; production
   fingerprint after the last of the five stacked updates (fingerprint.sql, 06:02
   UTC) matched the full replay (except the known schema grant difference)
+
+- `20261126001811_staff_access_follow_ups.sql`: pending
 
 - `20261126053701_invoice_pay_link.sql`: pending
 

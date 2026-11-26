@@ -14,7 +14,8 @@
 --    which already tells the member in the app, also queues the invoice email
 --    (one per invoice) for every way staff issue an invoice.
 --    internal.claim_supported_notification_outbox (full body) accepts the kind
---    (28 kinds); it joins no post for it.
+--    (28 kinds), joins no post for it and, as for account notices, gives no
+--    recipient once the account is closed.
 -- 3. New service command api.prepare_invoice_email(p_invoice_id,
 --    p_token_hash): for the email job, just before it sends. On an issued
 --    invoice it stores the new link's hash; it answers the invoice number,
@@ -26,14 +27,16 @@
 --    api.start_invoice_payment keep their arguments and grants and pass null).
 --    With null they are exactly as before: the signed-in member's own
 --    invoice, with the live session checked again after every wait. With a
---    hash, new internal.customer_invoice_for_caller finds the invoice whose
---    link it is, of an account that can still use the site (anything else
---    reads as not found), and its account acts: every rule of the member's
---    Pay now holds unchanged (billing details, the cooling-off box, the
---    expected total, the plan, the ID review, the slot limit, open payments,
---    attempts, a waiting bank transfer). The read leaves out the invoice's and
---    payments' ids; Pay now also answers the account (owner_id), which the
---    website's server needs to open the Ozow request.
+--    hash (only for the service role, else 42501), new
+--    internal.customer_invoice_for_caller finds the invoice whose link it is,
+--    of an account that can still use the site, until 30 days after the
+--    invoice's due date (anything else reads as not found), and its account
+--    acts: every rule of the member's Pay now holds unchanged (billing
+--    details, the cooling-off box, the expected total, the plan, the ID
+--    review, the slot limit, open payments, attempts, a waiting bank
+--    transfer). The read is the member's read; Pay now also answers the
+--    account (owner_id), which the website's server needs to open the Ozow
+--    request.
 -- 5. New service commands api.get_invoice_by_link(p_token_hash),
 --    api.save_invoice_billing_by_link(p_token_hash, p_revision, p_buyer_name,
 --    p_buyer_address, p_buyer_registration_number) and
@@ -69,7 +72,7 @@ begin
         'internal.notify_invoice_issued() 5567380db94629f630d381178b8bc36c',
         'internal.notify_invoice_issued() 57575d30894464764cd952b702dc9c62',
         'internal.claim_supported_notification_outbox(text[],integer) 407d5c969a5cf466602555fedb7b23df',
-        'internal.claim_supported_notification_outbox(text[],integer) c92c5bede77fd5f4df4e60199a43adfd',
+        'internal.claim_supported_notification_outbox(text[],integer) 5956225673e82e882b257114e2b7d13a',
         'internal.get_payment_receipt(uuid) 764707a2ed4f9c87985e88b1afcde37c',
         'internal.get_payment_receipt(uuid) 0826c70e07ee5239d5bfe9c2a6cd9600',
         'api.get_my_invoice(text) 72559cc96149f8eac3cf52588756259f',
@@ -145,7 +148,7 @@ begin
     from due where o.id=due.id returning o.*)
   select coalesce(jsonb_agg(jsonb_build_object('id',o.id,'kind',o.kind,'subject_id',o.subject_id,
     'owner_id',o.owner_id,'claim_token',o.delivery_claim,'locked_until',o.delivery_until,
-    'attempts',o.delivery_attempts,'recipient',case when u.email_confirmed_at is not null and not u.is_anonymous and (o.kind not in('account_warning','content_hidden','account_suspended','account_banned','appeal_decided','business_check_update','verification_returned') or not exists(select 1 from private.account_closures c where c.user_id=u.id))
+    'attempts',o.delivery_attempts,'recipient',case when u.email_confirmed_at is not null and not u.is_anonymous and (o.kind not in('account_warning','content_hidden','account_suspended','account_banned','appeal_decided','business_check_update','verification_returned','invoice_issued') or not exists(select 1 from private.account_closures c where c.user_id=u.id))
       and (o.kind<>'slot_renewal_reminder' or internal.slot_renewal_due(o.subject_id,o.owner_id))
       and (o.kind<>'term_ending_notice' or internal.term_ending_notice_due(o.subject_id,o.owner_id))
       and (o.kind<>'free_credit_reminder' or o.dedupe_key=internal.free_credit_reminder_key(o.subject_id,o.owner_id))
@@ -271,11 +274,16 @@ begin
     select * into inv from private.customer_invoices i
       where i.invoice_number = internal.customer_invoice_number(p_invoice_number) and i.account_id = actor;
   else
+    -- Only the website's server (the service role) acts through a link.
+    if pg_catalog.current_setting('role', true) is distinct from 'service_role' then
+      raise exception 'payment links are for the website''s server' using errcode='42501';
+    end if;
     -- The invoice whose current payment link this is, of an account that can
-    -- still use the site; any other hash, or an erased, closed or blocked
-    -- account, is not found.
+    -- still use the site, until 30 days after its due date; any other hash,
+    -- an erased, closed or blocked account, or an older link, is not found.
     select * into inv from private.customer_invoices i
       where i.pay_link_hash = p_link_hash
+        and i.due_on + 30 >= internal.customer_invoice_day(statement_timestamp())
         and exists(select 1 from private.current_account_access a where a.id = i.account_id);
   end if;
   if not found then
@@ -293,17 +301,12 @@ CREATE OR REPLACE FUNCTION internal.get_my_invoice(p_invoice_number text, p_link
  SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$
-declare inv private.customer_invoices := internal.customer_invoice_for_caller(p_invoice_number, p_link_hash); dto jsonb;
+declare inv private.customer_invoices := internal.customer_invoice_for_caller(p_invoice_number, p_link_hash);
 begin
-  dto := internal.customer_invoice_dto(inv, null);
   if p_link_hash is null then
-    perform internal.price_draft_actor();
-    return dto;
+    perform internal.price_draft_actor(); -- final live owner/session check
   end if;
-  -- Through a payment link: the invoice as its payer needs it, without the
-  -- invoice's or its payments' ids.
-  return dto - 'invoice_id' - 'payment_id' || jsonb_build_object('latest_attempt',
-    case when jsonb_typeof(dto->'latest_attempt') = 'object' then (dto->'latest_attempt') - 'payment_id' else 'null'::jsonb end);
+  return internal.customer_invoice_dto(inv, null);
 end;
 $function$;
 alter function internal.get_my_invoice(text,text) owner to postgres;

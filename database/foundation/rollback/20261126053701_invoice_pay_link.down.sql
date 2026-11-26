@@ -20,7 +20,7 @@ begin
   loop
     if shape not in (
         'internal.notify_invoice_issued() 57575d30894464764cd952b702dc9c62',
-        'internal.claim_supported_notification_outbox(text[],integer) c92c5bede77fd5f4df4e60199a43adfd',
+        'internal.claim_supported_notification_outbox(text[],integer) 5956225673e82e882b257114e2b7d13a',
         'internal.get_payment_receipt(uuid) 0826c70e07ee5239d5bfe9c2a6cd9600',
         'api.get_my_invoice(text) df0d980d68553a2d987292450f7997cc',
         'api.save_my_invoice_billing(text,integer,text,text,text) 0f4ebfbb0a3dc8b068803007ec95bca6',
@@ -28,10 +28,10 @@ begin
         'internal.get_my_invoice(text) absent',
         'internal.save_my_invoice_billing(text,integer,text,text,text) absent',
         'internal.start_invoice_payment(text,bigint,boolean) absent',
-        'internal.get_my_invoice(text,text) 95548dc149e7a4507baa227d8e3c606f',
+        'internal.get_my_invoice(text,text) 9bf1ddcdb3881bbb3d2e2f843da1083d',
         'internal.save_my_invoice_billing(text,integer,text,text,text,text) 32a0aa61c578ecd64030a83b4c24976e',
         'internal.start_invoice_payment(text,bigint,boolean,text) 17f6fcaae211453eec7ad232adbd92ea',
-        'internal.customer_invoice_for_caller(text,text) 0160fb59df73dc72d2a4fa0449c91e5a',
+        'internal.customer_invoice_for_caller(text,text) 30668940c8cb3a35997782cd3455ab30',
         'internal.prepare_invoice_email(uuid,text) 9c2e40f1b2996022919e8fa136af884d',
         'api.prepare_invoice_email(uuid,text) ac97f4b15722956f2396463264460943',
         'api.get_invoice_by_link(text) 7d4fba24f54575ad7a34bf81c2bd968b',

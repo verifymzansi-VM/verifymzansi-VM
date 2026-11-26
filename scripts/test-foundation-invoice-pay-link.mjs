@@ -231,6 +231,21 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
     );
   });
 
+  await check("an invoice email has no recipient once the account is closed", () => {
+    const closed = world.verified("paylink-closed", admin);
+    const owed = issue(closed);
+    q(`set session_replication_role=replica;
+      insert into private.account_closures(user_id,closed_at,evidence_delete_after)
+        values('${closed.id}',now(),now()+interval '90 days');
+      set session_replication_role=origin;`);
+    const [claimed, ...more] = json(
+      service(`select api.claim_supported_notification_outbox(array['invoice_issued'],5);`)
+    );
+    assert.equal(more.length, 0);
+    assert.equal(claimed.subject_id, owed.invoice_id);
+    assert.equal(claimed.recipient, null);
+  });
+
   await check(
     "the email step stores the link's hash on an unpaid invoice and answers the email",
     () => {
@@ -257,19 +272,49 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
     }
   );
 
-  await check("the link read finds only its invoice, without ids, and never a session's", () => {
-    const read = json(readSql(hash));
-    const mine = json(member(thandi, `select api.get_my_invoice('${invoice.invoice_number}');`));
-    assert.equal(read.invoice_id, undefined);
-    assert.equal(read.payment_id, undefined);
-    assert.equal(read.latest_attempt, null);
-    const { invoice_id: _id, payment_id: _payment, ...expected } = mine;
-    assert.deepEqual(read, expected);
-    for (const other of [sha("unknown-link"), "", null, invoice.invoice_number])
-      assert.equal(reason(fails(readSql(other), "PT404")), "invoice_unavailable", String(other));
-    // A member's session does not reach the server's command.
-    fails(member(thandi, `select api.get_invoice_by_link('${hash}');`), "42501");
-  });
+  await check(
+    "the link read finds only its invoice, as the member reads it, and never a session's",
+    () => {
+      const read = json(readSql(hash));
+      const mine = json(member(thandi, `select api.get_my_invoice('${invoice.invoice_number}');`));
+      assert.deepEqual(read, mine);
+      for (const other of [sha("unknown-link"), "", null, invoice.invoice_number])
+        assert.equal(reason(fails(readSql(other), "PT404")), "invoice_unavailable", String(other));
+      // A member's session does not reach the server's command, nor the link
+      // path of the internal functions it may execute.
+      fails(member(thandi, `select api.get_invoice_by_link('${hash}');`), "42501");
+      for (const sql of [
+        `select internal.get_my_invoice(null,'${hash}');`,
+        `select internal.save_my_invoice_billing(null,1,'Fixture Motors (Pty) Ltd',${sqlValue(ADDRESS)},null,'${hash}');`,
+        `select internal.start_invoice_payment(null,${invoice.total_cents},true,'${hash}');`,
+      ])
+        fails(member(thandi, sql), "42501", /payment links are for the website's server/);
+    }
+  );
+
+  await check(
+    "a link works until 30 days after the due date, then reads as unknown; the member is unaffected",
+    () => {
+      const ayanda = world.verified("paylink-ayanda", admin);
+      const owed = issue(ayanda);
+      const link = sha(`link-${owed.invoice_id}-expiry`);
+      json(prepareSql(owed.invoice_id, link));
+      const dueSql = (days) =>
+        q(`set session_replication_role=replica;
+        update private.customer_invoices set due_on=(now() at time zone 'Africa/Johannesburg')::date-${days}
+          where id='${owed.invoice_id}';
+        set session_replication_role=origin;`);
+      dueSql(30);
+      assert.equal(json(readSql(link)).invoice_number, owed.invoice_number);
+      dueSql(31);
+      for (const sql of [readSql(link), billingSql(link, 1), paySql(link, owed.total_cents)])
+        assert.equal(reason(fails(sql, "PT404")), "invoice_unavailable");
+      assert.equal(
+        json(member(ayanda, `select api.get_my_invoice('${owed.invoice_number}');`)).invoice_number,
+        owed.invoice_number
+      );
+    }
+  );
 
   await check(
     "billing details through the link: at the shown revision, then the member sees them",

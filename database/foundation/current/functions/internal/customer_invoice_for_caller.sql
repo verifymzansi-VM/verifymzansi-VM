@@ -14,11 +14,16 @@ begin
     select * into inv from private.customer_invoices i
       where i.invoice_number = internal.customer_invoice_number(p_invoice_number) and i.account_id = actor;
   else
+    -- Only the website's server (the service role) acts through a link.
+    if pg_catalog.current_setting('role', true) is distinct from 'service_role' then
+      raise exception 'payment links are for the website''s server' using errcode='42501';
+    end if;
     -- The invoice whose current payment link this is, of an account that can
-    -- still use the site; any other hash, or an erased, closed or blocked
-    -- account, is not found.
+    -- still use the site, until 30 days after its due date; any other hash,
+    -- an erased, closed or blocked account, or an older link, is not found.
     select * into inv from private.customer_invoices i
       where i.pay_link_hash = p_link_hash
+        and i.due_on + 30 >= internal.customer_invoice_day(statement_timestamp())
         and exists(select 1 from private.current_account_access a where a.id = i.account_id);
   end if;
   if not found then

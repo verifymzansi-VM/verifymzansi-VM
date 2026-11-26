@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
-import PayInvoicePage from "./page";
+import PayInvoicePage, { metadata } from "./page";
 import { readInvoiceByLink } from "@/lib/foundation/customer-invoices";
 import { readOnlinePaymentMaxCents } from "@/lib/foundation/payment-limits";
 import { FIXTURE_INVOICE } from "@/test/customer-invoice";
@@ -26,7 +26,6 @@ vi.mock("@/components/billing/invoice-pay-panel", () => ({
 
 const token = "fixture-payment-link-token".padEnd(43, "x");
 const params = (value: Record<string, string>) => ({ searchParams: Promise.resolve(value) });
-const { invoice_id: _id, payment_id: _payment, ...linkInvoice } = FIXTURE_INVOICE;
 
 describe("the invoice payment link page (items 34, 38)", () => {
   beforeEach(() => {
@@ -34,8 +33,13 @@ describe("the invoice payment link page (items 34, 38)", () => {
     vi.mocked(readOnlinePaymentMaxCents).mockResolvedValue(150_000);
   });
 
+  it("is never indexed and never passes its address (with the token) to other sites", () => {
+    expect(metadata.robots).toEqual({ index: false, follow: false });
+    expect(metadata.referrer).toBe("no-referrer");
+  });
+
   it("shows the invoice and the pay panel, which posts the link's token", async () => {
-    vi.mocked(readInvoiceByLink).mockResolvedValue(linkInvoice as never);
+    vi.mocked(readInvoiceByLink).mockResolvedValue(FIXTURE_INVOICE);
     render(await PayInvoicePage(params({ token })));
     expect(readInvoiceByLink).toHaveBeenCalledWith(token);
     expect(screen.getByRole("heading", { name: "Invoice VM-2026-000001" })).toBeInTheDocument();

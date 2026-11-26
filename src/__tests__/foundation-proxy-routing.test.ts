@@ -21,13 +21,15 @@ it.each([
   ["/staff/two-step", false],
   ["/admin", false],
   ["/api/account", false],
+  ["/api/foundation/staff/costs", false],
+  ["/api/foundation/staff/organisations/abc", false],
 ])("routes %s exclusively through the native account check", async (path, authPage) => {
   const request = new NextRequest("https://verifymzansi.com" + path);
   const response = await routeRequest(request);
   expect(response.status).toBe(202);
   expect(checkFoundationPageAccess).toHaveBeenCalledWith(request, authPage);
 });
-it.each(["/", "/adminevil", "/api/account-extra", "/terms"])(
+it.each(["/", "/adminevil", "/api/account-extra", "/api/foundation/staffevil", "/terms"])(
   "keeps %s public without an account request",
   async (path) => {
     const response = await routeRequest(new NextRequest("https://verifymzansi.com" + path));

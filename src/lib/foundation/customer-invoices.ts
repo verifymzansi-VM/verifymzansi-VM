@@ -450,32 +450,42 @@ export function invoiceRouteRefusal(error: unknown): FoundationRefusal | null {
  */
 const invoiceLinkToken = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
 
-/** The invoice as its payment link shows it: without the invoice's or its
- * payments' ids. */
-export const linkInvoiceSchema = customerInvoiceSchema
-  .omit({ invoice_id: true, payment_id: true })
-  .extend({
-    latest_attempt: z
-      .strictObject({
-        attempt: z.number().int().min(1).max(20),
-        status: paymentStatus,
-        checkout_open: z.boolean(),
-      })
-      .nullable(),
-  });
-export type LinkInvoice = z.infer<typeof linkInvoiceSchema>;
+/** What the payer of a payment link reads when the account behind the invoice
+ * cannot pay it now (its ID review, another open payment, its slot limit or
+ * its package): the same neutral words for each, as hosted payment pages do,
+ * so the link reveals nothing about the account. The invoice's own state
+ * (paid, cancelled, a transfer being checked, a changed total) keeps the
+ * member's words. */
+const LINK_ACCOUNT_REFUSAL =
+  "This invoice can't be paid online right now. Please contact the business that sent it, or VerifyMzansi support.";
+const LINK_WORDING: InvoiceMemberWording = {
+  reasons: new Map([
+    ...MEMBER_REFUSALS,
+    ...(
+      [
+        "invoice_buyer_unverified",
+        "invoice_checkout_open",
+        "slot_limit_reached",
+        "package_active",
+        "package_ended",
+        "packages_not_on_sale",
+      ] as const
+    ).map((reason) => [reason, [409, LINK_ACCOUNT_REFUSAL]] as const),
+  ]),
+  unavailable: INVOICE_WORDING.unavailable,
+};
 
-/** The invoice a payment link names; null for a malformed, unknown or
- * replaced link (or one whose account can no longer use the site). */
+/** The invoice a payment link names; null for a malformed, unknown, replaced
+ * or expired link (or one whose account can no longer use the site). */
 export async function readInvoiceByLink(
   token: string,
   service = createFoundationServiceApi()
-): Promise<LinkInvoice | null> {
+): Promise<CustomerInvoice | null> {
   if (!invoiceLinkToken.safeParse(token).success) return null;
   try {
     return await settleMemberCommand(
       service.rpc("get_invoice_by_link", { p_token_hash: await hashFoundationInviteToken(token) }),
-      linkInvoiceSchema
+      customerInvoiceSchema
     );
   } catch (error) {
     if (error instanceof FoundationInvoiceError && error.status === 404) return null;
@@ -493,7 +503,7 @@ export async function saveInvoiceBillingByLink(
   service = createFoundationServiceApi()
 ) {
   const value = invoiceLinkBillingInput.parse(input);
-  await settleMemberCommand(
+  await settleInvoiceMemberCommand(
     service.rpc("save_invoice_billing_by_link", {
       p_token_hash: await hashFoundationInviteToken(value.token),
       p_revision: value.revision,
@@ -501,7 +511,8 @@ export async function saveInvoiceBillingByLink(
       p_buyer_address: value.buyerAddress,
       p_buyer_registration_number: value.buyerRegistrationNumber?.trim() || null,
     }),
-    customerInvoiceSchema.extend({ repeated: z.boolean() })
+    customerInvoiceSchema.extend({ repeated: z.boolean() }),
+    LINK_WORDING
   );
 }
 
@@ -524,13 +535,14 @@ export async function startInvoicePaymentByLink(
       "Tick the box to confirm that your slots start as soon as you pay.",
       "invoice_refused"
     );
-  const { owner_id: ownerId, ...quote } = await settleMemberCommand(
+  const { owner_id: ownerId, ...quote } = await settleInvoiceMemberCommand(
     service.rpc("start_invoice_payment_by_link", {
       p_token_hash: await hashFoundationInviteToken(value.token),
       p_expected_total_cents: value.expectedTotalCents,
       p_cooling_off_consent: true,
     }),
-    invoiceQuote.extend({ owner_id: z.uuid() })
+    invoiceQuote.extend({ owner_id: z.uuid() }),
+    LINK_WORDING
   );
   // The payment the database answered is an invoice's (its reference).
   if (!/^VM-\d{4}-\d{6}(-\d{1,2})?$/.test(quote.merchant_reference))

@@ -78,7 +78,9 @@ export async function checkFoundationPageAccess(request: NextRequest, authPage: 
       throw new FoundationAccountContextError("unavailable");
     if (authPage) return redirect(account.phone ? "/dashboard" : FOUNDATION_POST_SIGNUP_PATH);
 
-    const staffPath = ["/admin", "/api/admin", "/staff"].some((prefix) => under(path, prefix));
+    const staffPath = ["/admin", "/api/admin", "/api/foundation/staff", "/staff"].some((prefix) =>
+      under(path, prefix)
+    );
     if (staffPath) {
       if (!account.staff) return apiRequest ? refuse(403, "Forbidden") : redirect("/dashboard");
       if (path !== STAFF_MFA_PATH && !account.staff.can_access) {

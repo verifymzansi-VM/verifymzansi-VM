@@ -243,7 +243,6 @@ const jobSchema = z
       typeof job.notice_reason === "string"
   );
 type Job = z.infer<typeof jobSchema>;
-// Enough of an unreadable message to alert staff about it.
 // What api.prepare_invoice_email answers (20261126053701_invoice_pay_link.sql).
 const invoiceEmailRead = z.object({
   invoice_number: z.string().regex(/^VM-\d{4}-\d{6}$/),
@@ -253,6 +252,7 @@ const invoiceEmailRead = z.object({
   total_cents: z.number().int().positive(),
   due_on: z.iso.date(),
 });
+// Enough of an unreadable message to alert staff about it.
 const jobIdentity = z.object({
   id: z.uuid(),
   kind: z.string().regex(/^[a-z_]{1,80}$/),

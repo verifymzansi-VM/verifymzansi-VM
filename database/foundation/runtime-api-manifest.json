@@ -4671,7 +4671,7 @@
         "authenticated": false,
         "service_role": true
       },
-      "authority": "The website's server only, for the payer of an emailed invoice who is not signed in: p_token_hash is the SHA-256 (hex) of the invoice's current payment link (a missing or unknown hash, or an account that is erased, closed or blocked, reads as not found, PT404 invoice_unavailable); that invoice's account then acts exactly as with api.get_my_invoice, and the answer leaves out the invoice's and its payments' ids."
+      "authority": "The website's server only, for the payer of an emailed invoice who is not signed in: p_token_hash is the SHA-256 (hex) of the invoice's current payment link (a missing or unknown hash, a link more than 30 days past the invoice's due date, or an account that is erased, closed or blocked, reads as not found, PT404 invoice_unavailable; any role but the service role is refused, 42501); that invoice's account then acts exactly as with api.get_my_invoice, with the same answer."
     },
     {
       "name": "save_invoice_billing_by_link",
@@ -4710,7 +4710,7 @@
         "authenticated": false,
         "service_role": true
       },
-      "authority": "The website's server only, for the payer of an emailed invoice who is not signed in: p_token_hash is the SHA-256 (hex) of the invoice's current payment link (a missing or unknown hash, or an account that is erased, closed or blocked, reads as not found, PT404 invoice_unavailable); that invoice's account then acts exactly as with api.save_my_invoice_billing (an unpaid invoice, at its current revision)."
+      "authority": "The website's server only, for the payer of an emailed invoice who is not signed in: p_token_hash is the SHA-256 (hex) of the invoice's current payment link (a missing or unknown hash, a link more than 30 days past the invoice's due date, or an account that is erased, closed or blocked, reads as not found, PT404 invoice_unavailable; any role but the service role is refused, 42501); that invoice's account then acts exactly as with api.save_my_invoice_billing (an unpaid invoice, at its current revision)."
     },
     {
       "name": "start_invoice_payment_by_link",
@@ -4739,7 +4739,7 @@
         "authenticated": false,
         "service_role": true
       },
-      "authority": "The website's server only, for the payer of an emailed invoice who is not signed in: p_token_hash is the SHA-256 (hex) of the invoice's current payment link (a missing or unknown hash, or an account that is erased, closed or blocked, reads as not found, PT404 invoice_unavailable); that invoice's account then acts exactly as with api.start_invoice_payment (every rule of the member's Pay now), and the answer adds owner_id, the invoice's account, for the server's Ozow request (claim_checkout_request, complete_checkout_request)."
+      "authority": "The website's server only, for the payer of an emailed invoice who is not signed in: p_token_hash is the SHA-256 (hex) of the invoice's current payment link (a missing or unknown hash, a link more than 30 days past the invoice's due date, or an account that is erased, closed or blocked, reads as not found, PT404 invoice_unavailable; any role but the service role is refused, 42501); that invoice's account then acts exactly as with api.start_invoice_payment (every rule of the member's Pay now), and the answer adds owner_id, the invoice's account, for the server's Ozow request (claim_checkout_request, complete_checkout_request)."
     },
     {
       "name": "prepare_invoice_email",

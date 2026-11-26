@@ -15,9 +15,7 @@ export function InvoiceWithPayPanel({
   transferExpired = false,
   linkToken,
 }: {
-  invoice: Omit<CustomerInvoice, "invoice_id" | "payment_id" | "latest_attempt"> & {
-    latest_attempt: { checkout_open: boolean } | null;
-  };
+  invoice: CustomerInvoice;
   onlineMaxCents: number | null;
   transferExpired?: boolean;
   linkToken?: string;

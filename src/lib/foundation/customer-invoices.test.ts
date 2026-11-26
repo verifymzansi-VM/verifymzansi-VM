@@ -441,10 +441,6 @@ describe("staff invoice commands", () => {
 
 describe("the invoice payment link", () => {
   const token = "fixture-payment-link-token".padEnd(43, "x");
-  const linkInvoice = (() => {
-    const { invoice_id: _id, payment_id: _payment, ...rest } = invoice;
-    return rest;
-  })();
   const linkService = (...answers: unknown[]) => {
     const rpc = vi.fn();
     for (const answer of answers) rpc.mockResolvedValueOnce(answer);
@@ -456,17 +452,58 @@ describe("the invoice payment link", () => {
       (b) => b.toString(16).padStart(2, "0")
     ).join("");
 
-  it("reads the invoice by the link's hash, never the token, and without ids", async () => {
-    const { rpc, service: linked } = linkService(ok(linkInvoice));
+  it("reads the invoice by the link's hash, never the token, as the member reads it", async () => {
+    const { rpc, service: linked } = linkService(ok(invoice));
     await expect(readInvoiceByLink(token, linked)).resolves.toMatchObject({
       invoice_number: "VM-2026-000001",
     });
     expect(rpc).toHaveBeenCalledExactlyOnceWith("get_invoice_by_link", {
       p_token_hash: await sha256(token),
     });
-    // An answer with the ids is not this read's shape.
-    const { service: withIds } = linkService(ok(invoice));
-    await expect(readInvoiceByLink(token, withIds)).rejects.toMatchObject({ status: 503 });
+  });
+
+  it("words every refusal about the account the same neutral way, and the invoice's own state as for the member", async () => {
+    const neutral =
+      "This invoice can't be paid online right now. Please contact the business that sent it, or VerifyMzansi support.";
+    const pay = (answer: unknown) =>
+      startInvoicePaymentByLink(
+        { token, expectedTotalCents: 62100, coolingOffConsent: true },
+        "https://verifymzansi.com",
+        linkService(answer).service
+      );
+    for (const [code, reason] of [
+      ["PT412", "invoice_buyer_unverified"],
+      ["PT409", "invoice_checkout_open"],
+      ["PT429", "slot_limit_reached"],
+      ["PT409", "package_active"],
+      ["PT409", "package_ended"],
+      ["PT403", "packages_not_on_sale"],
+    ])
+      await expect(pay(refused(code, reason))).rejects.toMatchObject({
+        status: 409,
+        message: neutral,
+      });
+    for (const [code, reason, words] of [
+      ["PT409", "invoice_paid", "This invoice is already paid."],
+      ["PT409", "invoice_void", /This invoice was cancelled/],
+      ["PT409", "invoice_transfer_waiting", /bank transfer to this invoice is being checked/],
+      ["PT428", "invoice_amount_mismatch", "The invoice total changed. Reload the page."],
+    ] as const) {
+      const error = await pay(refused(code, reason)).catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(FoundationInvoiceError);
+      expect((error as Error).message).toMatch(words);
+    }
+    // The member's own Pay now keeps the account's words.
+    const { api } = fixture(refused("PT412", "invoice_buyer_unverified"));
+    await expect(
+      startMyInvoicePayment(
+        api,
+        owner,
+        { invoiceNumber: "VM-2026-000001", expectedTotalCents: 62100, coolingOffConsent: true },
+        "https://verifymzansi.com",
+        service
+      )
+    ).rejects.toMatchObject({ message: expect.stringMatching(/Your ID review must be accepted/) });
   });
 
   it("answers null for a malformed token without asking, and for an unknown link", async () => {

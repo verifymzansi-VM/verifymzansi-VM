@@ -57,8 +57,7 @@ export function InvoiceDocument({
   onlineMaxCents = null,
   payHere = false,
 }: {
-  /** Also the invoice a payment link shows, which has no ids. */
-  invoice: Omit<CustomerInvoice, "invoice_id" | "payment_id" | "latest_attempt">;
+  invoice: CustomerInvoice;
   sellerAddress: string | null;
   bank: InvoiceBankDetails | null;
   className?: string;
