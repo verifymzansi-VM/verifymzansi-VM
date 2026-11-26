@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { InvoicePayPanel, type InvoicePayPanelProps } from "./invoice-pay-panel";
 
@@ -68,6 +68,38 @@ describe("paying an invoice", () => {
       buyerName: "Fixture Traders",
       buyerAddress: "1 Example Road",
       buyerRegistrationNumber: null,
+    });
+  });
+
+  it("through a payment link, posts the link's token and never the invoice number", async () => {
+    const linkToken = "fixture-payment-link-token".padEnd(43, "x");
+    render(<InvoicePayPanel {...props} buyer={null} revision={1} linkToken={linkToken} />);
+    fireEvent.change(screen.getByLabelText("Business or full name"), {
+      target: { value: "Fixture Traders" },
+    });
+    fireEvent.change(screen.getByLabelText("Address"), { target: { value: "1 Example Road" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save details" }));
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    expect(fetch.mock.calls[0][0]).toBe("/api/pay-invoice");
+    expect(sent()).toEqual({
+      action: "billing",
+      revision: 1,
+      buyerName: "Fixture Traders",
+      buyerAddress: "1 Example Road",
+      buyerRegistrationNumber: null,
+      token: linkToken,
+    });
+    cleanup();
+    render(<InvoicePayPanel {...props} linkToken={linkToken} />);
+    fireEvent.click(screen.getByLabelText(/My slots start as soon/));
+    fireEvent.click(screen.getByRole("button", { name: "Pay now" }));
+    await waitFor(() => expect(assign).toHaveBeenCalledWith("https://pay.ozow.com/fixture"));
+    expect(fetch.mock.calls[1][0]).toBe("/api/pay-invoice");
+    expect(sent(1)).toEqual({
+      action: "pay",
+      expectedTotalCents: 62100,
+      coolingOffConsent: true,
+      token: linkToken,
     });
   });
 

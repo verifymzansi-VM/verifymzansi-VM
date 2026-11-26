@@ -7,9 +7,7 @@
 //   backendSwitches      getDataBackend() calls (old/new backend switches)
 //   legacyClientImports  files importing @/lib/supabase/{admin,server,client}
 //   retiredCommandNames  distinct .rpc() names that are not foundation `api`
-//                        commands (database/foundation/*api-manifest.json),
-//                        including names passed to .rpc(variable) wrappers
-//                        that the retired supabase/migrations tree defines
+//                        commands (database/foundation/*api-manifest.json)
 //   retiredCommandCalls  .rpc("literal") call sites with such names
 //   retiredTableReads    .from("table") call sites (foundation exposes no
 //                        tables; Storage bucket calls are excluded), and
@@ -26,7 +24,6 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import {
   baselineFrom,
   compareWithBaseline,
-  definedFunctionNames,
   isScannedFile,
   measureLegacySurface,
   topFiles,
@@ -37,7 +34,6 @@ const API_MANIFESTS = [
   "database/foundation/api-manifest.json",
   "database/foundation/runtime-api-manifest.json",
 ];
-const RETIRED_MIGRATIONS = "supabase/migrations";
 
 function gitFiles(...args) {
   return execFileSync("git", ["ls-files", ...args], { encoding: "utf8", maxBuffer: 64 << 20 })
@@ -55,19 +51,6 @@ function readApiNames() {
   return names;
 }
 
-function readRetiredFunctionNames() {
-  const sql = gitFiles(RETIRED_MIGRATIONS)
-    .filter((file) => file.endsWith(".sql") && existsSync(file))
-    .map((file) => readFileSync(file, "utf8"));
-  const names = definedFunctionNames(sql);
-  if (names.size === 0) {
-    throw new Error(
-      `${RETIRED_MIGRATIONS} defines no functions; update scripts/check-legacy-surface.mjs before deleting the retired tree`
-    );
-  }
-  return names;
-}
-
 function measureRepository() {
   // Tracked plus untracked (not ignored) files, so a new file counts before it is committed.
   const files = [
@@ -76,10 +59,7 @@ function measureRepository() {
     .filter((file) => isScannedFile(file) && existsSync(file))
     .sort()
     .map((file) => ({ path: file, text: readFileSync(file, "utf8") }));
-  return measureLegacySurface(files, {
-    apiNames: readApiNames(),
-    retiredFunctionNames: readRetiredFunctionNames(),
-  });
+  return measureLegacySurface(files, { apiNames: readApiNames() });
 }
 
 function main(argv) {

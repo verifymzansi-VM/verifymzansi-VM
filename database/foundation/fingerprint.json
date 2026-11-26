@@ -19,16 +19,16 @@
     ],
     "notYetCompared": [],
     "howToCompare": "In the Supabase SQL editor (read-only), run `set search_path to \"$user\", public;` first, so pg_get_indexdef prints `extensions.gin_trgm_ops` as the replay does, then run database/foundation/fingerprint.sql unchanged and compare each row with categories below.",
-    "matchedThroughUpdate": "20261126053631_keep_for_periods.sql",
+    "matchedThroughUpdate": "20261126053701_invoice_pay_link.sql",
     "matchedFingerprints": {
       "column_grants": "5e5623672e80b927048d8553487d5442",
-      "columns": "381e610f94547ef93e5833a318a3f3de",
-      "constraints": "f2e5c1afdd99f6e2e2fe13a97e12c874",
+      "columns": "d2f5b1993710928c743beee66d8bf414",
+      "constraints": "4d03d4f5f67cc9976f74c831dd2262d0",
       "event_triggers": "821f7d069c595c075754fad9309136ac",
-      "function_bodies": "0d661e99b0193ca3b5ac9bd456dcd478",
-      "function_grants": "c4357fe50c367951eb54bf6fd6262bf0",
-      "function_metadata": "a6547f6c1ea9096696c825b9648499be",
-      "indexes": "edf5e53767ac7a22ac6aa6a3d7e1f52e",
+      "function_bodies": "8b1a6aceea73564055f5e4161eaab13b",
+      "function_grants": "426a8006e974a14c3579ed9243809bf6",
+      "function_metadata": "68ec4316ecf27693f0f7ee4649e9efe4",
+      "indexes": "2f19c47ab5c875caf360ea831259afd1",
       "policies": "085a305fbc41d38d34eb40c3748c0793",
       "row_level_security": "833c95cfe0709cc6ab0ed86504463fef",
       "triggers": "534926ff5fd0890045de1f0a6122bcd6"
@@ -39,40 +39,40 @@
     "Reference data is not fingerprinted. candidate.sql seeds posting-terms version posting-v2, which production does not hold: production has posting-v1 and posting-v3 (current since 20261109173012_posting_terms_v3.sql), and posting-v4 once 20261112122001_publish_posting_terms_v4.sql is applied (current from 20261112173841_switch_posting_terms_v4.sql).",
     "schema_grants: production has 8 items (d397fed9c8bd9d4fc50ebdd777899d93) and the replay 7 (categories below). The extra production item is `internal supabase_auth_admin:USAGE`, which Supabase grants when the Auth \"Before user created\" hook is switched on; no repository file creates it (see replay/hosted-auth-hook-grants.sql)."
   ],
-  "updateCount": 127,
-  "lastUpdate": "20261126053631_keep_for_periods.sql",
+  "updateCount": 128,
+  "lastUpdate": "20261126053701_invoice_pay_link.sql",
   "categories": {
     "column_grants": {
       "items": 10,
       "fingerprint": "5e5623672e80b927048d8553487d5442"
     },
     "columns": {
-      "items": 1547,
-      "fingerprint": "381e610f94547ef93e5833a318a3f3de"
+      "items": 1548,
+      "fingerprint": "d2f5b1993710928c743beee66d8bf414"
     },
     "constraints": {
-      "items": 1349,
-      "fingerprint": "f2e5c1afdd99f6e2e2fe13a97e12c874"
+      "items": 1350,
+      "fingerprint": "4d03d4f5f67cc9976f74c831dd2262d0"
     },
     "event_triggers": {
       "items": 1,
       "fingerprint": "821f7d069c595c075754fad9309136ac"
     },
     "function_bodies": {
-      "items": 1222,
-      "fingerprint": "0d661e99b0193ca3b5ac9bd456dcd478"
+      "items": 1228,
+      "fingerprint": "8b1a6aceea73564055f5e4161eaab13b"
     },
     "function_grants": {
-      "items": 882,
-      "fingerprint": "c4357fe50c367951eb54bf6fd6262bf0"
+      "items": 890,
+      "fingerprint": "426a8006e974a14c3579ed9243809bf6"
     },
     "function_metadata": {
-      "items": 1222,
-      "fingerprint": "a6547f6c1ea9096696c825b9648499be"
+      "items": 1228,
+      "fingerprint": "68ec4316ecf27693f0f7ee4649e9efe4"
     },
     "indexes": {
-      "items": 619,
-      "fingerprint": "edf5e53767ac7a22ac6aa6a3d7e1f52e"
+      "items": 620,
+      "fingerprint": "2f19c47ab5c875caf360ea831259afd1"
     },
     "policies": {
       "items": 4,

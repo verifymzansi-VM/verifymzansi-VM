@@ -31,6 +31,7 @@ create table private.customer_invoices (
   voided_by uuid,
   voided_at timestamp with time zone,
   void_reason text,
+  pay_link_hash text,
   constraint customer_invoices_account_id_fkey FOREIGN KEY (account_id) REFERENCES auth.users(id) ON DELETE RESTRICT,
   constraint customer_invoices_buyer CHECK ((buyer_name IS NULL) = (buyer_address IS NULL) AND (buyer_name IS NULL) = (buyer_saved_at IS NULL) AND (buyer_registration_number IS NULL OR buyer_name IS NOT NULL)),
   constraint customer_invoices_buyer_address_check CHECK (buyer_address IS NULL OR internal.plain_text_valid(buyer_address, 5, 300, true)),
@@ -46,6 +47,7 @@ create table private.customer_invoices (
   constraint customer_invoices_number_format CHECK (invoice_number = ((('VM-'::text || invoice_year::text) || '-'::text) || lpad(sequence_number::text, 6, '0'::text))),
   constraint customer_invoices_number_key UNIQUE (invoice_number),
   constraint customer_invoices_paid CHECK ((status = 'paid'::text) = (payment_id IS NOT NULL AND paid_at IS NOT NULL)),
+  constraint customer_invoices_pay_link_hash CHECK (pay_link_hash ~ '^[0-9a-f]{64}$'::text),
   constraint customer_invoices_payment_id_fkey FOREIGN KEY (payment_id) REFERENCES private.payments(id) ON DELETE RESTRICT,
   constraint customer_invoices_payment_key UNIQUE (payment_id),
   constraint customer_invoices_pkey PRIMARY KEY (id),
@@ -68,6 +70,7 @@ alter table private.customer_invoices owner to postgres;
 alter table private.customer_invoices enable row level security;
 CREATE INDEX customer_invoices_account_idx ON private.customer_invoices USING btree (account_id, issued_at DESC);
 CREATE INDEX customer_invoices_issued_by_idx ON private.customer_invoices USING btree (issued_by);
+CREATE UNIQUE INDEX customer_invoices_pay_link_idx ON private.customer_invoices USING btree (pay_link_hash) WHERE (pay_link_hash IS NOT NULL);
 CREATE INDEX customer_invoices_plan_version_idx ON private.customer_invoices USING btree (plan_version_id);
 CREATE INDEX customer_invoices_recent_idx ON private.customer_invoices USING btree (issued_at DESC, id DESC);
 CREATE INDEX customer_invoices_voided_by_idx ON private.customer_invoices USING btree (voided_by) WHERE (voided_by IS NOT NULL);

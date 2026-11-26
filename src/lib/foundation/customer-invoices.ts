@@ -7,11 +7,15 @@ import {
   lookupDatabaseReason,
   type FoundationErrorReason,
 } from "./error-reasons";
-import { staffReason } from "./organisations";
+import { hashFoundationInviteToken, staffReason } from "./organisations";
 import { FoundationStaffCommandError, settleStaffCommand } from "./staff-command";
 import type { FoundationRefusal } from "./owner-route";
 import { createFoundationServiceApi } from "./service-api";
-import { FoundationBillingError, openFoundationInvoiceCheckout } from "./billing-runtime";
+import {
+  FoundationBillingError,
+  INVOICE_LINK_PATH,
+  openFoundationInvoiceCheckout,
+} from "./billing-runtime";
 import { BILLING_EMAIL } from "../billing/slot-checkout";
 
 /**
@@ -431,6 +435,137 @@ export function invoiceRouteRefusal(error: unknown): FoundationRefusal | null {
       ? null
       : { status: error.status, error: error.message, reason: error.code ?? "billing_refused" };
   return null;
+}
+
+// ---------------------------------------------------------- payment link
+
+/**
+ * The invoice email's payment link (update 20261126053701): its payer sees
+ * and pays the invoice without signing in. The link's token (32 random bytes,
+ * base64url) is made by the email job; only its SHA-256 reaches the database,
+ * which finds the invoice whose current link it is and lets its account act
+ * with every rule of the member's Pay now. Server-side only, with the service
+ * key; nothing here takes an invoice number, an account or an amount from the
+ * browser.
+ */
+const invoiceLinkToken = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
+
+/** What the payer of a payment link reads when the account behind the invoice
+ * cannot pay it now (its ID review, another open payment, its slot limit or
+ * its package): the same neutral words for each, as hosted payment pages do,
+ * so the link reveals nothing about the account. The invoice's own state
+ * (paid, cancelled, a transfer being checked, a changed total) keeps the
+ * member's words. */
+const LINK_ACCOUNT_REFUSAL = `This invoice can't be paid online right now. Please ask the account holder to sign in and pay it, or email ${BILLING_EMAIL}.`;
+const LINK_WORDING: InvoiceMemberWording = {
+  reasons: new Map([
+    ...MEMBER_REFUSALS,
+    ...(
+      [
+        "invoice_buyer_unverified",
+        "invoice_checkout_open",
+        "slot_limit_reached",
+        "package_active",
+        "package_ended",
+        "packages_not_on_sale",
+      ] as const
+    ).map((reason) => [reason, [409, LINK_ACCOUNT_REFUSAL]] as const),
+  ]),
+  unavailable: INVOICE_WORDING.unavailable,
+};
+
+/** The invoice a payment link names; null for a malformed, unknown, replaced
+ * or expired link (or one whose account can no longer use the site). */
+export async function readInvoiceByLink(
+  token: string,
+  service = createFoundationServiceApi()
+): Promise<CustomerInvoice | null> {
+  if (!invoiceLinkToken.safeParse(token).success) return null;
+  try {
+    return await settleMemberCommand(
+      service.rpc("get_invoice_by_link", { p_token_hash: await hashFoundationInviteToken(token) }),
+      customerInvoiceSchema
+    );
+  } catch (error) {
+    if (error instanceof FoundationInvoiceError && error.status === 404) return null;
+    throw error;
+  }
+}
+
+export const invoiceLinkBillingInput = invoiceBillingInput
+  .omit({ invoiceNumber: true })
+  .extend({ token: invoiceLinkToken });
+
+/** Saves the billing details of the invoice a payment link names. */
+export async function saveInvoiceBillingByLink(
+  input: z.infer<typeof invoiceLinkBillingInput>,
+  service = createFoundationServiceApi()
+) {
+  const value = invoiceLinkBillingInput.parse(input);
+  await settleInvoiceMemberCommand(
+    service.rpc("save_invoice_billing_by_link", {
+      p_token_hash: await hashFoundationInviteToken(value.token),
+      p_revision: value.revision,
+      p_buyer_name: value.buyerName,
+      p_buyer_address: value.buyerAddress,
+      p_buyer_registration_number: value.buyerRegistrationNumber?.trim() || null,
+    }),
+    customerInvoiceSchema.extend({ repeated: z.boolean() }),
+    LINK_WORDING
+  );
+}
+
+export const invoiceLinkPaymentInput = invoicePaymentInput
+  .omit({ invoiceNumber: true })
+  .extend({ token: invoiceLinkToken });
+
+/** "Pay now" through a payment link: as the member's, then the Ozow request is
+ * opened for the invoice's account, and Ozow sends the payer back to the
+ * payment link page. Returns Ozow's page. */
+export async function startInvoicePaymentByLink(
+  input: z.infer<typeof invoiceLinkPaymentInput>,
+  appUrl: string,
+  service = createFoundationServiceApi()
+) {
+  const value = invoiceLinkPaymentInput.parse(input);
+  if (value.coolingOffConsent !== true)
+    throw new FoundationInvoiceError(
+      422,
+      "Tick the box to confirm that your slots start as soon as you pay.",
+      "invoice_refused"
+    );
+  const { owner_id: ownerId, ...quote } = await settleInvoiceMemberCommand(
+    service.rpc("start_invoice_payment_by_link", {
+      p_token_hash: await hashFoundationInviteToken(value.token),
+      p_expected_total_cents: value.expectedTotalCents,
+      p_cooling_off_consent: true,
+    }),
+    invoiceQuote.extend({ owner_id: z.uuid() }),
+    LINK_WORDING
+  );
+  // The payment the database answered is an invoice's (its reference).
+  if (!/^VM-\d{4}-\d{6}(-\d{1,2})?$/.test(quote.merchant_reference))
+    throw new FoundationInvoiceError(
+      503,
+      "The payment could not be started. Please try again in a few minutes.",
+      "invoice_response_invalid"
+    );
+  try {
+    const { checkoutUrl } = await openFoundationInvoiceCheckout(
+      quote,
+      ownerId,
+      appUrl,
+      service,
+      INVOICE_LINK_PATH
+    );
+    return { checkoutUrl };
+  } catch (error) {
+    // Opening the Ozow request is refused for the account's own reasons (its
+    // package, another payment): the link payer reads the same neutral words.
+    if (error instanceof FoundationBillingError && error.status < 500)
+      throw new FoundationInvoiceError(409, LINK_ACCOUNT_REFUSAL, "invoice_refused");
+    throw error;
+  }
 }
 
 // ---------------------------------------------------------------- staff
