@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { FoundationSessionError } from "@/lib/foundation/request-api";
 
 const { readSelfReviewCaller, readMyFrontendDecisions } = vi.hoisted(() => ({
   readSelfReviewCaller: vi.fn(),
@@ -19,16 +20,21 @@ describe("getMemberDecisions", () => {
     readSelfReviewCaller.mockResolvedValue({ api, accountId: ACCOUNT });
   });
 
-  it("reads the member's own decisions from the foundation", async () => {
+  it("reads the signed-in member's own decisions from the foundation", async () => {
     readMyFrontendDecisions.mockResolvedValue([{ decisionId: "d-1" }]);
-    await expect(getMemberDecisions(ACCOUNT)).resolves.toEqual([{ decisionId: "d-1" }]);
+    await expect(getMemberDecisions()).resolves.toEqual([{ decisionId: "d-1" }]);
     expect(readMyFrontendDecisions).toHaveBeenCalledExactlyOnceWith(api, ACCOUNT);
   });
 
-  it("refuses when the signed-in account is not the one asked for", async () => {
-    await expect(getMemberDecisions("22222222-2222-4222-8222-222222222222")).rejects.toThrow(
-      "Current account changed"
-    );
+  it("answers null when nobody is signed in", async () => {
+    readSelfReviewCaller.mockRejectedValue(new FoundationSessionError(401));
+    await expect(getMemberDecisions()).resolves.toBeNull();
+    expect(readMyFrontendDecisions).not.toHaveBeenCalled();
+  });
+
+  it("passes on an unavailable session check", async () => {
+    readSelfReviewCaller.mockRejectedValue(new FoundationSessionError(503));
+    await expect(getMemberDecisions()).rejects.toBeInstanceOf(FoundationSessionError);
     expect(readMyFrontendDecisions).not.toHaveBeenCalled();
   });
 });

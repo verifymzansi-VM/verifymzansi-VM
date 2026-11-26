@@ -30,6 +30,9 @@ export default function CompleteProfilePage() {
   const [phone, setPhone] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  // Change mode (from My profile): a member with a verified number verifies
+  // a new one; the current number stays until the new one is verified.
+  const [isChange, setIsChange] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -45,9 +48,9 @@ export default function CompleteProfilePage() {
     let cancelled = false;
 
     async function load() {
-      const returnUrl = sanitizeReturnUrl(
-        new URLSearchParams(window.location.search).get("returnUrl")
-      );
+      const params = new URLSearchParams(window.location.search);
+      const returnUrl = sanitizeReturnUrl(params.get("returnUrl"));
+      const change = params.get("change") === "1";
       const supabase = createClient();
       const {
         data: { user },
@@ -63,14 +66,15 @@ export default function CompleteProfilePage() {
       const profile = await readRestoredOwnProfile(supabase, user.id);
       if (cancelled) return;
 
-      if (profile?.phone) {
+      if (profile?.phone && !change) {
         // Canonical OTP-verified phone already exists — skip this step.
         router.push(returnUrl);
         return;
       }
+      setIsChange(change && Boolean(profile?.phone));
 
       // Pre-fill from pending_phone so manual-registration users don't re-type their number.
-      if (profile?.pending_phone) {
+      if (profile?.pending_phone && !change) {
         setPhone(sanitizeSaPhoneInput(profile.pending_phone));
       }
       setIsLoading(false);
@@ -216,9 +220,16 @@ export default function CompleteProfilePage() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Verify your phone number"
-        description="We send a 6-digit code by SMS to confirm the number is yours."
-        breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Verify phone" }]}
+        title={isChange ? "Change your phone number" : "Verify your phone number"}
+        description={
+          isChange
+            ? "We send a 6-digit code by SMS to your new number. Your current number stays until the new one is verified."
+            : "We send a 6-digit code by SMS to confirm the number is yours."
+        }
+        breadcrumbs={[
+          { label: "Dashboard", href: "/dashboard" },
+          { label: isChange ? "Change phone" : "Verify phone" },
+        ]}
       />
 
       <Card className="w-full max-w-xl">
@@ -226,7 +237,9 @@ export default function CompleteProfilePage() {
           <CardTitle className="flex items-center gap-2 text-lg">
             <Phone className="h-5 w-5" />
             {step === "phone"
-              ? "Your mobile number"
+              ? isChange
+                ? "Your new mobile number"
+                : "Your mobile number"
               : step === "otp"
                 ? "Enter the code"
                 : "Phone number verified"}

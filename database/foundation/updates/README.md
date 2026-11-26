@@ -115,14 +115,74 @@ guard watches only staff roles.
   by an admin. Restrictions already in place are unchanged; the preflight counts
   admins who cannot sign in and restriction proposals about an admin (approving
   one is refused from the update on).
+- **Trade-off.** A hacked admin can now only be stopped by two other admins or
+  the owner's SQL session (owner accepted 26 Nov).
 
-Expand only: no command, argument or grant changes. ORDER: **website-first**
-(merge and deploy, then apply straight after): the website words the new
-refusal; either order is safe. Read-only preflight:
+Expand only: no command, argument or grant changes. ORDER: either order is
+safe (the website words the new refusal); released apply-first on 26 November
+2026. Read-only preflight:
 `../preflight/20261125174942_end_admin_role_before_restriction.check.sql`;
 rollback:
 `../rollback/20261125174942_end_admin_role_before_restriction.down.sql` (puts
 the three earlier bodies back).
+
+## Members change their verified place, 25 November 2026
+
+`20261125161326_change_verified_place.sql` was applied on 26 November 2026 at
+02:01 UTC (see the applied register). Launch checklist item 20, part 2.
+
+- New table `private.verification_locality_changes` (from and to province and
+  city, and the time), row level security on, no grants. It belongs to the
+  member's place row (on delete cascade), so account erasure and the retention
+  sweep, which delete that row, delete its history too.
+- `internal.confirm_verification_locality` (full body): a different valid place
+  replaces the member's place and is recorded, at most once every 15 days (PT409
+  `location_change_cooldown`, the next allowed time as the hint). The same place
+  answers "reused" as before; the first place is not a change.
+- `internal.frontend_privacy_export_data` (full body) adds the dataset
+  `locality_changes`.
+- A verified phone number already changes through a new SMS code at most every
+  15 days, with an accepted ID review (`create_verification_phone_challenge`,
+  `finalize_verification_phone`); this update does not change that. The website
+  now offers it from My profile.
+
+Expand only; no command, argument or grant is removed. ORDER: apply first, then
+merge. Read-only preflight:
+`../preflight/20261125161326_change_verified_place.check.sql` (expect "update
+not applied" and the number of members with a place); rollback:
+`../rollback/20261125161326_change_verified_place.down.sql` (refused once any
+member changed their place). Behaviour test:
+`scripts/test-foundation-change-verified-place.mjs`.
+
+## Removing an admin needs another admin's approval, 25 November 2026
+
+`20261125150338_admin_removal_needs_approval.sql` was applied on 25 November
+2026 at 19:45 UTC (see the applied register). Launch checklist item 20.
+
+- `internal.propose_frontend_staff_role` (full body) still applies a lowering at
+  once when the person is a moderator or a governor. Lowering an admin (to
+  governor, moderator or member) is now a proposal that waits up to 7 days for a
+  different admin to approve or reject it on the Staff roles page
+  (`api.review_frontend_staff_role`): never the proposer, never the admin it is
+  about, and only while the proposer is still an admin. The proposer may
+  withdraw it. No command, argument, result or grant changes.
+- **Emergency path.** With only two admins, a removal waits for an approver who
+  does not exist. If an admin account must lose its role at once (for example it
+  was taken over), the owner does it in a reviewed SQL editor session, as for
+  the first administrator: set `revoked_at` and `revoked_by` on that person's
+  current `private.staff_roles` row, insert a matching
+  `private.frontend_staff_role_changes` row (status `applied`, `direct_removal`
+  true, the reason) so the Staff roles history shows it, and record the session
+  in the implementation log. The last active admin can never be removed.
+
+Replaced body only. ORDER: apply first, then merge (the live roles route already
+accepts "proposed"). Read-only preflight:
+`../preflight/20261125150338_admin_removal_needs_approval.check.sql` (expect
+"update not applied", the number of active admins and the role changes waiting);
+rollback: `../rollback/20261125150338_admin_removal_needs_approval.down.sql`
+(puts the earlier body back; proposals made meanwhile stay and can still be
+decided). Behaviour test:
+`scripts/test-foundation-admin-removal-needs-approval.mjs`.
 
 ## Small lifecycle rules, 25 November 2026
 
@@ -8231,6 +8291,24 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   report: 0; reminders queued: 0" with no problem rows, after "already applied"
   with the same counts; production fingerprint after it (fingerprint.sql)
   matched the full replay (except the known schema grant difference)
+
+- `20261125150338_admin_removal_needs_approval.sql`: applied 2026-11-25 19:45
+  UTC; apply-first, owner-approved, before pull request #373 was merged;
+  Supabase SQL editor (browser), file from raw GitHub at 2545b23c, update sha256
+  starting f31ca126e7d354fa; preflight before "update not applied; active
+  admins: 3; role changes waiting: 0 (admin removals: 0)" with no problem rows,
+  after "already applied" with the same counts; production fingerprint after it
+  (fingerprint.sql) matched the full replay (except the known schema grant
+  difference)
+
+- `20261125161326_change_verified_place.sql`: applied 2026-11-26 02:01 UTC;
+  apply-first, owner-approved, before pull request #376 was merged; Supabase SQL
+  editor (browser), file from raw GitHub at f8578cd7, update sha256 starting
+  81a4568c156240c7; preflight before "verified place: update not applied;
+  members with a place: 3" with no problem rows, after "verified place: already
+  applied; members with a place: 3; place changes: 0"; production fingerprint
+  after it (fingerprint.sql) matched the full replay (except the known schema
+  grant difference)
 
 - `20261125174942_end_admin_role_before_restriction.sql`: pending
 

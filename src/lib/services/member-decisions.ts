@@ -1,6 +1,7 @@
 import "server-only";
 
 import { readMyFrontendDecisions } from "@/lib/foundation/member-appeals";
+import { FoundationSessionError } from "@/lib/foundation/request-api";
 import { readSelfReviewCaller } from "@/lib/foundation/self-review-session";
 
 /**
@@ -24,8 +25,15 @@ export interface MemberDecision {
   appealable: boolean;
 }
 
-export async function getMemberDecisions(userId: string): Promise<MemberDecision[]> {
-  const { api, accountId } = await readSelfReviewCaller();
-  if (accountId !== userId) throw new Error("Current account changed");
-  return readMyFrontendDecisions(api, accountId);
+/** The signed-in member's decisions, or null when nobody is signed in. A
+ * suspended or banned member can still read them (and appeal). */
+export async function getMemberDecisions(): Promise<MemberDecision[] | null> {
+  let caller;
+  try {
+    caller = await readSelfReviewCaller();
+  } catch (error) {
+    if (error instanceof FoundationSessionError && error.status === 401) return null;
+    throw error;
+  }
+  return readMyFrontendDecisions(caller.api, caller.accountId);
 }
