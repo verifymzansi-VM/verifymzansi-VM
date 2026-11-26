@@ -175,6 +175,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 110. Release one blocked phone number (item 21) (and the group 110 part of 1 row elsewhere) | approved by owner 2026-11-26 (answer: 'Yes to everything') | Nothing for members or visitors. Admins and governors, on Restrictions: a 'Blocked phone numbers' card to ask to free one number a ban blocks (number and reason), the waiting requests (a different staff member approves or rejects; the person who asked can withdraw) and the latest releases. The person's ID ban stays. |
 | 112. Lifecycle rule follow-ups (item 56, batch D) | approved by owner 2026-11-26 (answer: 'Yes to both') (no file rows: the group 112 part of 2 existing rows; text outside the checked scope in `src/lib/foundation/restored-post-route.ts`) | Business verification page: dates are shown in South African time, so an owner abroad sees the same 'renew by' date as the reminder email (no change in South Africa). Saving a free event that starts more than 12 months ahead says 'Events can start at most 12 months ahead.' instead of the general message (the form already blocks this). On My posts, while a report from the public is open, the owner can delete the post only once the report is 7 days old and the post's clean-up waiting time has passed; a staff duplicate flag no longer stops it; the message is unchanged. |
 | 113. Video length checked by the database (item 39) (no file rows of its own: the group 113 part of 2 rows elsewhere) | approved by owner 2026-11-26 | Nothing for members or visitors, except a clear message when a post's video is too long for it (events: 1 minute, other posts: 2 minutes). Staff: the review panel shows each video's length and the limit. |
+| 120. Post viewer: one message for an empty section (item 81) | approved by owner 2026-11-26 | Post viewer, after switching to a section with no posts (for example Mzansi Business while it has none): only 'Nothing here yet' shows; the 'You’re all caught up' end card no longer shows on top of it, and the up and down arrows are hidden there (they did nothing and covered the message on phones). Sections with posts still end with the end card. |
 
 Questions for the owner:
 
@@ -4631,6 +4632,22 @@ Pictures (synthetic data, local preview, not published):
 `screenshots/item39-video-length/` (desktop 1280 and phone 375).
 
 Decision: approved by owner 2026-11-26.
+
+### 120. Post viewer: one message for an empty section (item 81)
+
+Launch checklist item 81, a live bug the owner found. In the post viewer, a
+section with no posts showed two messages on top of each other: 'Nothing here
+yet' and the end card 'You’re all caught up'. The 27 October viewer had the
+same overlap. Behaviour fix only; no new design.
+
+Pictures: `screenshots/item81-viewer-empty/` (375 and 1280, after the fix).
+
+Decision: approved by owner 2026-11-26.
+
+| File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `src/components/immersive/immersive-viewer.tsx` | wording-behaviour | Group 120: an empty section shows only its own 'Nothing here yet' message, without the end card or the up and down arrows. | Post viewer, after switching to a section with no posts (for example Mzansi Business while it has none): only 'Nothing here yet' shows; the 'You’re all caught up' end card no longer shows on top of it, and the up and down arrows are hidden there (they did nothing and covered the message on phones). Sections with posts still end with the end card. | keep | approved by owner 2026-11-26 | 2026-11-26 | e39f6a9b04da |
+| `src/components/immersive/immersive-interactions.test.tsx` | test | Group 120: tests that an empty section shows one message and no arrows, and a section with posts still ends with the end card. | Nothing (not part of a page) | keep | approved by owner 2026-11-26 | 2026-11-26 | 4d9ab7ce8382 |
 
 <!-- frontend-ledger:end -->
 
