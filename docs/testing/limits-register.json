@@ -10133,6 +10133,25 @@
       ]
     },
     {
+      "id": "LIM-SQL-s14-notice-business-days",
+      "title": "Section 14 unused-days hint: counted from the end of 20 South African business days' notice given today",
+      "value": "20 business days",
+      "category": "range",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_staff_refunds_left.sql",
+          "symbol": "internal.get_staff_refunds_left",
+          "contains": "while counted < 20 loop"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-part-refund-follow-ups.mjs"
+        }
+      ]
+    },
+    {
       "id": "LIM-SQL-inbox-page-size",
       "title": "Owner inbox pages: 1 to 50 items",
       "value": "1 to 50",

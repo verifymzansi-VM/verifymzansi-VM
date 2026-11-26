@@ -11,7 +11,11 @@ import {
 import { readFoundationAccountContext, FoundationAccountContextError } from "./account-context";
 import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
 import { createLogger } from "../utils/logger";
-import { resolveRestoredLocality, LocalityInputError } from "./restored-locality";
+import {
+  resolveRestoredLocality,
+  LocalityInputError,
+  locationCooldownMessage,
+} from "./restored-locality";
 import { hasDatabaseReason } from "./error-reasons";
 
 const log = createLogger("RestoredProfile");
@@ -81,11 +85,10 @@ export function handleRestoredProfileUpdate(request: NextRequest) {
           throw new ProfileRefusal(412, "Your profile changed. Reload it before saving");
         if (hasDatabaseReason(error, "legal_name_locked"))
           throw new ProfileRefusal(403, "Your verified name cannot be changed");
+        if (hasDatabaseReason(error, "location_change_cooldown"))
+          throw new ProfileRefusal(409, locationCooldownMessage(error.hint), "LOCATION_COOLDOWN");
         if (error.code === "PT409")
-          throw new ProfileRefusal(
-            403,
-            "Your confirmed location cannot be changed here. Request a verification review"
-          );
+          throw new ProfileRefusal(412, "Your profile changed. Reload it before saving");
         if (error.code === "22023")
           throw new ProfileRefusal(400, "Check your name, bio, province and city");
         throw new Error("Profile save unavailable");

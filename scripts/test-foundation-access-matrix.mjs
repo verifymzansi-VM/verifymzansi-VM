@@ -201,6 +201,8 @@ const OWNER_TABLES = [
   ["accepted_identity_facts", "owner_id=$1"],
   ["verification_phone_proofs", "owner_id=$1"],
   ["verification_localities", "owner_id=$1"],
+  // Place changes (20261125161326_change_verified_place): A's recorded changes.
+  ["verification_locality_changes", "owner_id=$1"],
   ["payments", "owner_id=$1"],
   ["entitlements", "owner_id=$1"],
   ["organisation_applications", "applicant_id=$1"],

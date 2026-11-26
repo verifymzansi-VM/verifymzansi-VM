@@ -72,6 +72,8 @@ const EXPORT_LATER = [
   "fb567a31cf8ca166f117d5b02f744235",
   // 20261125113433_add_lost_days.sql (the lost_day_additions dataset)
   "b0d8e2600a63b8e5b298ee180f488c05",
+  // 20261125161326_change_verified_place.sql (the locality_changes dataset)
+  "0ddcef84e7abeef43fa2509a31d6a298",
 ];
 /** The grant after later reviewed updates. */
 const GRANT_LATER = [

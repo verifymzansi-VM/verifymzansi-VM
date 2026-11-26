@@ -84,6 +84,28 @@ describe("CompleteProfilePage", () => {
     });
   });
 
+  it("in change mode keeps a member with a verified number on the step, with an empty field", async () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/dashboard/complete-profile?change=1&returnUrl=%2Fdashboard%2Fprofile"
+    );
+    mockReadOwnProfile.mockResolvedValue({
+      display_name: "Nomsa",
+      phone: "0712345678",
+      pending_phone: "0712345678",
+    });
+
+    render(<CompleteProfilePage />);
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Change your phone number" })
+    ).toBeInTheDocument();
+    expect(screen.getByText("Your new mobile number")).toBeInTheDocument();
+    expect(screen.getByLabelText("SA mobile number *")).toHaveValue("");
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
   it("sends a signed-out visitor to sign in without reading a profile", async () => {
     mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
 
