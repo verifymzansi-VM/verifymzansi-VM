@@ -63,8 +63,8 @@ function isVideoUrl(url: string): boolean {
  * Returns null if the URL doesn't match any known pattern.
  */
 export function extractMediaStorageKey(url: string): string | null {
-  // Stored raw key (without a URL) from some legacy/seed data paths
-  if (url.startsWith("media/") || url.startsWith("listings/")) {
+  // Stored raw key (without a URL)
+  if (url.startsWith("media/")) {
     return url;
   }
 

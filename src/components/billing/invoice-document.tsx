@@ -55,6 +55,7 @@ export function InvoiceDocument({
   className,
   headingLevel: Heading = "h2",
   onlineMaxCents = null,
+  payHere = false,
 }: {
   invoice: CustomerInvoice;
   sellerAddress: string | null;
@@ -65,6 +66,9 @@ export function InvoiceDocument({
   onlineMaxCents?: number | null;
   /** h1 when the invoice is the page itself. */
   headingLevel?: "h1" | "h2";
+  /** On the invoice payment link page, Pay now is beside the invoice: the
+   * screen says so (printed, the invoice reads as everywhere else). */
+  payHere?: boolean;
 }) {
   const status = invoiceStatusLabel(invoice);
   const bankTransferOnly = aboveOnlineLimit(invoice.total_cents, onlineMaxCents);
@@ -220,9 +224,18 @@ export function InvoiceDocument({
             </p>
           ) : (
             <p>
-              Pay online with Ozow, straight from your bank: sign in at verifymzansi.com, open this
-              invoice under Invoices and choose <strong>Pay now</strong>. Your slots start as soon
-              as the payment is confirmed. The invoice number is your payment reference.
+              Pay online with Ozow, straight from your bank:{" "}
+              {payHere ? (
+                <span className="print:hidden">
+                  choose <strong>Pay now</strong> on this page.
+                </span>
+              ) : null}
+              <span className={payHere ? "hidden print:inline" : undefined}>
+                sign in at verifymzansi.com, open this invoice under Invoices and choose{" "}
+                <strong>Pay now</strong>.
+              </span>{" "}
+              Your slots start as soon as the payment is confirmed. The invoice number is your
+              payment reference.
             </p>
           )}
           {bank ? (

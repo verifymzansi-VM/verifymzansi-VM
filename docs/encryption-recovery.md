@@ -1,9 +1,9 @@
 # Encryption and verification recovery
 
 The upload route, storage service and KYC engine must agree on the encrypted
-document format and key interpretation. Documents written by the former
-`kyc-encryptor` Worker (removed; it used 100 000 key-derivation iterations)
-still decrypt. Run `pnpm test:kyc` for format compatibility, malformed/truncated
+document format and key interpretation. Only the current v2 format (first byte
+`0x02`, HMAC-SHA256 key derivation) is readable; data without that byte is
+refused. Run `pnpm test:kyc` for format compatibility, malformed/truncated
 ciphertext, authenticated evidence access and upload compensation tests. Never
 use a real customer document for an audit fixture or expose a key in evidence.
 

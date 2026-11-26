@@ -6,7 +6,7 @@ CREATE OR REPLACE FUNCTION api.get_my_invoice(p_invoice_number text)
  LANGUAGE sql
  SET search_path TO 'pg_catalog'
 AS $function$
-  select internal.get_my_invoice(p_invoice_number);
+  select internal.get_my_invoice(p_invoice_number, null);
 $function$;
 alter function api.get_my_invoice(text) owner to postgres;
 revoke all on function api.get_my_invoice(text) from public;

@@ -114,6 +114,47 @@ comes back NOT VALID if a decided visit check has no address any more; deleted
 details stay deleted). Behaviour test:
 `scripts/test-foundation-business-check-retention.mjs`.
 
+## Invoice payment link, 26 November 2026
+
+`20261126053701_invoice_pay_link.sql` was applied on 26 November 2026 at 20:30
+UTC (see the applied register). Launch checklist items 38 and 34 (inventory
+A28): a customer invoice is emailed with a link that lets its payer see and pay
+it without signing in, and the receipt names the invoice it paid.
+
+- **The link.** `private.customer_invoices.pay_link_hash` keeps the SHA-256
+  (hex) of the invoice's current link, unique where set. The website's email job
+  makes the link (32 random bytes) just before it sends, and stores its hash
+  with the new service command `api.prepare_invoice_email` (only while the
+  invoice is unpaid); each sending replaces the hash, so the latest email holds
+  the live link.
+- **The email.** `internal.notify_invoice_issued` (full body) also queues an
+  outbox row of the new kind `invoice_issued`, one per invoice, for every way
+  staff issue an invoice; `internal.claim_supported_notification_outbox` (full
+  body) accepts the kind and gives no recipient once the account is closed.
+- **Paying by link.** New service commands `api.get_invoice_by_link`,
+  `api.save_invoice_billing_by_link` and `api.start_invoice_payment_by_link`
+  (the website's server only). They reach the same functions as the member's
+  commands: `internal.get_my_invoice`, `internal.save_my_invoice_billing` and
+  `internal.start_invoice_payment` gain `p_link_hash` (old signatures dropped;
+  the member's `api` commands keep their arguments and grants and pass null).
+  With a hash (service role only, else 42501), new
+  `internal.customer_invoice_for_caller` finds the invoice whose link it is, of
+  an account that can still use the site, until 30 days after the invoice's due
+  date (anything else is not found), and that account acts with every rule of
+  the member's Pay now. The read is the member's read; Pay now also answers
+  `owner_id` for the server's Ozow request.
+- **The receipt.** `internal.get_payment_receipt` (full body) adds
+  `customer_invoice_number` (from the payment's snapshot), null for a checkout.
+
+ORDER: **apply-first** (apply, then merge): the release calls the new commands
+and the deploy gate checks them. The live website leaves the new outbox kind
+unclaimed until the release is deployed, and its receipt reader ignores the
+extra field. Read-only preflight:
+`../preflight/20261126053701_invoice_pay_link.check.sql` (expect "invoice
+payment link: update not applied"); rollback:
+`../rollback/20261126053701_invoice_pay_link.down.sql` (refused once an invoice
+email was queued; deploy a website without the payment link first).
+
 ## Keep-for periods for the newer personal-data tables, 26 November 2026
 
 `20261126053631_keep_for_periods.sql` was applied on 26 November 2026 at 20:15
@@ -8844,6 +8885,15 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   0"; production fingerprint after it (fingerprint.sql, 20:18 UTC) matched the
   full replay (except the known schema grant difference)
 
+- `20261126053701_invoice_pay_link.sql`: applied 2026-11-26 20:30 UTC;
+  apply-first, owner-approved, before pull request #394 was merged; Supabase SQL
+  editor (browser), file from raw GitHub at 1d30293c, update sha256 starting
+  cd1e79ba0ef2af6d; preflight before "invoice payment link: update not applied;
+  unpaid invoices: 0" with no problem rows, after "invoice payment link: already
+  applied; unpaid invoices: 0; invoices with a link: 0; invoice emails: 0";
+  production fingerprint after it and 20261126053631_keep_for_periods.sql
+  (fingerprint.sql, 20:31 UTC) matched the full replay (except the known schema
+  grant difference)
 - `20261126210022_business_check_retention.sql`: pending; apply-first
 
 <!-- applied-register:end -->
