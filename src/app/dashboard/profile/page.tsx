@@ -128,7 +128,7 @@ export default function ProfilePage() {
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [activeTab, setActiveTab] = useState<TabValue>("profile");
   const [isNameLocked, setIsNameLocked] = useState(false);
-  const [isLocationLocked, setIsLocationLocked] = useState(false);
+  const [hasConfirmedPlace, setHasConfirmedPlace] = useState(false);
   const [phoneCooldownUntil, setPhoneCooldownUntil] = useState<Date | null>(null);
   const [emailCooldownUntil, setEmailCooldownUntil] = useState<Date | null>(null);
   const [newEmail, setNewEmail] = useState("");
@@ -247,7 +247,7 @@ export default function ProfilePage() {
           setPhone(sanitizeSaPhoneInput(profile.phone || ""));
           setAvatarUrl(profile.avatar_url || null);
           setIsNameLocked(!!profile.legal_name_locked_at);
-          setIsLocationLocked(!!profile.location_verified_at);
+          setHasConfirmedPlace(!!profile.location_verified_at);
           setPhoneCooldownUntil(
             checkCooldown(profile.contact_last_phone_change_at ?? null, PHONE_CHANGE_COOLDOWN_MS)
           );
@@ -360,6 +360,10 @@ export default function ProfilePage() {
       const data = await res.json();
 
       if (!res.ok) {
+        if (data.code === "LOCATION_COOLDOWN") {
+          toast({ title: "Place not changed", description: data.error, variant: "destructive" });
+          return;
+        }
         if (res.status === 409) {
           toast({
             title: "Phone number already in use",
@@ -823,96 +827,76 @@ export default function ProfilePage() {
 
                 <div className="space-y-1.5">
                   <Label htmlFor="phone">Phone</Label>
+                  {/* The verified number changes only through a new SMS code
+                      (the phone step in change mode), never by typing here. */}
                   <Input
                     id="phone"
                     type="tel"
-                    inputMode="tel"
                     value={phone}
-                    onChange={
-                      phoneCooldownUntil
-                        ? undefined
-                        : (e) => setPhone(sanitizeSaPhoneInput(e.target.value))
-                    }
-                    readOnly={!!phoneCooldownUntil}
-                    disabled={!!phoneCooldownUntil}
-                    placeholder="082 000 0000"
-                    autoComplete="tel"
-                    pattern="^(\+27|0)[6-8][0-9]{8}$"
-                    title="Enter a valid SA mobile number (e.g. 071 234 5678)"
-                    className={phoneCooldownUntil ? "bg-muted cursor-not-allowed" : undefined}
+                    readOnly
+                    aria-readonly="true"
+                    className="bg-muted"
                   />
                   {phoneCooldownUntil ? (
                     <p className="flex items-center gap-1 text-xs text-brand-gold-800 dark:text-brand-gold-300">
                       <AlertCircle aria-hidden="true" className="h-3 w-3" />
                       Phone changes unlock on {formatSaLongDate(phoneCooldownUntil)}.
                     </p>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">
-                      SA mobile number. Verify it before using it for calls or WhatsApp.
-                    </p>
-                  )}
+                  ) : phone ? (
+                    <Button asChild type="button" size="sm" variant="outline" className="h-11">
+                      <Link
+                        href={`/dashboard/complete-profile?change=1&returnUrl=${encodeURIComponent("/dashboard/profile")}`}
+                      >
+                        Change number
+                      </Link>
+                    </Button>
+                  ) : null}
                 </div>
 
-                {isLocationLocked ? (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label className="flex items-center gap-1.5">
-                        Province <Lock className="h-3.5 w-3.5 text-muted-foreground" />
-                      </Label>
-                      <div className="flex h-10 w-full items-center rounded-md border border-input bg-muted px-3 text-sm text-muted-foreground cursor-not-allowed">
-                        {province || "—"}
-                      </div>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="flex items-center gap-1.5">
-                        City <Lock className="h-3.5 w-3.5 text-muted-foreground" />
-                      </Label>
-                      <div className="flex h-10 w-full items-center rounded-md border border-input bg-muted px-3 text-sm text-muted-foreground cursor-not-allowed">
-                        {city || "—"}
-                      </div>
-                    </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="province">Province</Label>
+                    <select
+                      id="province"
+                      title="Select province"
+                      className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      value={province}
+                      onChange={(e) => {
+                        setProvince(e.target.value);
+                        setCity("");
+                      }}
+                    >
+                      <option value="">Select province</option>
+                      {provinces.map((p) => (
+                        <option key={p} value={p}>
+                          {p}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="province">Province</Label>
-                      <select
-                        id="province"
-                        title="Select province"
-                        className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                        value={province}
-                        onChange={(e) => {
-                          setProvince(e.target.value);
-                          setCity("");
-                        }}
-                      >
-                        <option value="">Select province</option>
-                        {provinces.map((p) => (
-                          <option key={p} value={p}>
-                            {p}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="city">City</Label>
-                      <select
-                        id="city"
-                        title="Select city"
-                        className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                        value={city}
-                        onChange={(e) => setCity(e.target.value)}
-                        disabled={!province}
-                      >
-                        <option value="">Select city</option>
-                        {cities.map((c) => (
-                          <option key={c} value={c}>
-                            {c}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="city">City</Label>
+                    <select
+                      id="city"
+                      title="Select city"
+                      className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      value={city}
+                      onChange={(e) => setCity(e.target.value)}
+                      disabled={!province}
+                    >
+                      <option value="">Select city</option>
+                      {cities.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
                   </div>
+                </div>
+                {hasConfirmedPlace && (
+                  <p className="text-xs text-muted-foreground">
+                    You can change your province and city once every 15 days.
+                  </p>
                 )}
 
                 <Button type="submit" size="sm" className="h-11 w-full gap-2" disabled={isSaving}>

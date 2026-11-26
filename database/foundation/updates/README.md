@@ -80,6 +80,34 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Members change their verified place, 25 November 2026
+
+`20261125161326_change_verified_place.sql` is pending (see the applied
+register). Launch checklist item 20, part 2.
+
+- New table `private.verification_locality_changes` (from and to province and
+  city, and the time), row level security on, no grants. It belongs to the
+  member's place row (on delete cascade), so account erasure and the retention
+  sweep, which delete that row, delete its history too.
+- `internal.confirm_verification_locality` (full body): a different valid place
+  replaces the member's place and is recorded, at most once every 15 days (PT409
+  `location_change_cooldown`, the next allowed time as the hint). The same place
+  answers "reused" as before; the first place is not a change.
+- `internal.frontend_privacy_export_data` (full body) adds the dataset
+  `locality_changes`.
+- A verified phone number already changes through a new SMS code at most every
+  15 days, with an accepted ID review (`create_verification_phone_challenge`,
+  `finalize_verification_phone`); this update does not change that. The website
+  now offers it from My profile.
+
+Expand only; no command, argument or grant is removed. ORDER: apply first, then
+merge. Read-only preflight:
+`../preflight/20261125161326_change_verified_place.check.sql` (expect "update
+not applied" and the number of members with a place); rollback:
+`../rollback/20261125161326_change_verified_place.down.sql` (refused once any
+member changed their place). Behaviour test:
+`scripts/test-foundation-change-verified-place.mjs`.
+
 ## Removing an admin needs another admin's approval, 25 November 2026
 
 `20261125150338_admin_removal_needs_approval.sql` was applied on 25 November
@@ -8226,5 +8254,7 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   after "already applied" with the same counts; production fingerprint after it
   (fingerprint.sql) matched the full replay (except the known schema grant
   difference)
+
+- `20261125161326_change_verified_place.sql`: pending
 
 <!-- applied-register:end -->
