@@ -89,19 +89,18 @@ register). Launch checklist item 56, batch F.
   admin invitation was claimed only when an authenticator app was added or
   verified (the trigger on `auth.mfa_factors`), so a person invited after
   setting one up never became an admin. Both paths now use one helper,
-  `internal.claim_owner_admin_invitation_for(uuid,boolean)` (no API role may run
-  it), and a new trigger on `private.owner_admin_invitations` runs it when the
-  owner adds an invitation: the person becomes an admin at once when their
-  account already has a verified authenticator app. The checks are unchanged: a
+  `internal.claim_owner_admin_invitation_for(uuid)` (no API role may run it),
+  and a new trigger on `private.owner_admin_invitations` runs it when the owner
+  adds an invitation: the person becomes an admin at once when their account
+  already has a verified authenticator app. The checks are unchanged: a
   confirmed account that can sign in, an unclaimed and unrevoked invitation for
   its email (only the account that signed up with it, once one has), and no
   earlier staff role, which an invitation never reactivates.
-- **A new two-step check after a claim by invitation.** A role claimed when the
-  owner adds the invitation sets `frontend_mfa_not_before` to that moment, as
-  every other role grant does (`internal.apply_frontend_staff_role`), so the
-  person's existing sessions pass no staff command until they check their
-  authenticator app again. A claim by the authenticator-app check itself does
-  not set it: that check has just happened.
+- **A new two-step check after every claim.** A claimed role sets
+  `frontend_mfa_not_before` to the moment of the claim, as every other role
+  grant does (`internal.apply_frontend_staff_role`), on both paths: the person's
+  sessions pass no staff command until they check their authenticator app again
+  (this covers an older session when a second app is enrolled).
 - **The update claims no waiting invitation itself**: making someone an admin is
   the owner's step. The preflight counts waiting invitations whose account
   already has an authenticator app. If that is above 0 at apply time, ask the
@@ -109,14 +108,7 @@ register). Launch checklist item 56, batch F.
   session, which fires the new trigger, keeping who signed up with it:
 
   ```sql
-  begin;
-  delete from private.owner_admin_invitations
-    where email = '<email>' and claimed_at is null and revoked_at is null
-    returning signed_up_at, signed_up_by;
-  -- Use the two values returned (null, null when nothing signed up with it).
-  insert into private.owner_admin_invitations (email, signed_up_at, signed_up_by)
-    values ('<email>', <signed_up_at>, <signed_up_by>);
-  commit;
+  with d as (delete from private.owner_admin_invitations where email='<email>' and claimed_at is null and revoked_at is null returning email, signed_up_at, signed_up_by) insert into private.owner_admin_invitations(email, signed_up_at, signed_up_by) select email, signed_up_at, signed_up_by from d;
   ```
 
   Revoke each one the owner does not approve:

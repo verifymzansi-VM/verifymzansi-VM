@@ -1,7 +1,7 @@
 -- Generated from the replay of database/foundation by `pnpm db:foundation:snapshot`.
 -- Do not edit; change the schema with a reviewed file in database/foundation/updates/.
 
-CREATE OR REPLACE FUNCTION internal.claim_owner_admin_invitation_for(p_user uuid, p_new_check boolean DEFAULT false)
+CREATE OR REPLACE FUNCTION internal.claim_owner_admin_invitation_for(p_user uuid)
  RETURNS boolean
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -34,10 +34,10 @@ begin
     return false; -- A prior/revoked assignment is never reactivated by an invitation.
   end if;
   insert into private.staff_roles(user_id,role,frontend_mfa_not_before)
-    values(p_user,'admin',case when p_new_check then statement_timestamp() end);
+    values(p_user,'admin',statement_timestamp());
   update private.owner_admin_invitations set claimed_by=p_user,claimed_at=now()
     where email=invitation.email;
   return true;
 end$function$;
-alter function internal.claim_owner_admin_invitation_for(uuid,boolean) owner to postgres;
-revoke all on function internal.claim_owner_admin_invitation_for(uuid,boolean) from public;
+alter function internal.claim_owner_admin_invitation_for(uuid) owner to postgres;
+revoke all on function internal.claim_owner_admin_invitation_for(uuid) from public;

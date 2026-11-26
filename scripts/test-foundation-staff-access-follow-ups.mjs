@@ -70,6 +70,13 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
   );
   const capabilitiesPassing = (who, totpAt) =>
     Number(q(staff(who, "select vmtest.admin_capabilities_passing();", totpAt)));
+  // A two-step check at (or after) the moment the person's role was granted.
+  const freshCheck = (who) =>
+    Number(
+      q(
+        `select ceil(extract(epoch from frontend_mfa_not_before))::bigint from private.staff_roles where user_id='${who.id}' and revoked_at is null;`
+      )
+    );
   const checkAfter = (who) =>
     q(
       `select coalesce(frontend_mfa_not_before::text,'none') from private.staff_roles where user_id='${who.id}' and revoked_at is null;`
@@ -90,9 +97,11 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
     );
   const invite = (who) =>
     q(`insert into private.owner_admin_invitations(email) values(lower('${who.email}'));`);
+  // The owner's re-invite statement from updates/README.md, as written there.
   const reinvite = (who) =>
-    q(`delete from private.owner_admin_invitations where email=lower('${who.email}');
-      insert into private.owner_admin_invitations(email) values(lower('${who.email}'));`);
+    q(
+      `with d as (delete from private.owner_admin_invitations where email=lower('${who.email}') and claimed_at is null and revoked_at is null returning email, signed_up_at, signed_up_by) insert into private.owner_admin_invitations(email, signed_up_at, signed_up_by) select email, signed_up_at, signed_up_by from d;`
+    );
   const claimedBy = (who) =>
     q(
       `select coalesce(claimed_by::text,'unclaimed') from private.owner_admin_invitations where email=lower('${who.email}');`
@@ -173,13 +182,29 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
     assert.ok(adminCapabilities > 0);
     assert.equal(capabilitiesPassing(person, tenMinutesAgo), 0);
     // A check at (or after) the moment of the claim passes every capability.
-    const fresh = Number(
-      q(
-        `select ceil(extract(epoch from frontend_mfa_not_before))::bigint from private.staff_roles where user_id='${person.id}' and revoked_at is null;`
-      )
-    );
-    assert.equal(capabilitiesPassing(person, fresh), adminCapabilities);
+    assert.equal(capabilitiesPassing(person, freshCheck(person)), adminCapabilities);
   });
+
+  await check(
+    "after a claim by a second authenticator app, an older session needs a new check",
+    () => {
+      // An invitation refused while the person was banned waits; once the ban
+      // ends, enrolling a second app claims it. The session that checked the
+      // first app 10 minutes ago passes no staff command.
+      const person = world.user("staffaccess-second-app");
+      addApp(person);
+      q(`update auth.sessions set aal='aal2' where id='${person.session}';`);
+      q(`update auth.users set banned_until=now()+interval '1 day' where id='${person.id}';`);
+      invite(person);
+      assert.equal(claimedBy(person), "unclaimed");
+      q(`update auth.users set banned_until=null where id='${person.id}';`);
+      const tenMinutesAgo = Math.floor(Date.now() / 1000) - 600;
+      addApp(person);
+      assert.equal(role(person), "admin");
+      assert.equal(capabilitiesPassing(person, tenMinutesAgo), 0);
+      assert.equal(capabilitiesPassing(person, freshCheck(person)), adminCapabilities);
+    }
+  );
 
   await check("without an authenticator app the invitation waits; a new app claims it", () => {
     const person = world.user("staffaccess-new-app");
@@ -195,9 +220,9 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
     addApp(later);
     assert.equal(role(later), "admin");
     assert.equal(claimedBy(later), later.id);
-    // The authenticator-app check that claimed it has just happened.
-    assert.equal(checkAfter(person), "none");
-    assert.equal(checkAfter(later), "none");
+    // The authenticator-app path asks for a new check too.
+    assert.notEqual(checkAfter(person), "none");
+    assert.notEqual(checkAfter(later), "none");
   });
 
   await check(
@@ -296,7 +321,7 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
       json(`select jsonb_build_object('service',has_function_privilege('service_role','api.close_account_evidence(uuid)','execute'),
         'anon',has_function_privilege('anon','api.close_account_evidence(uuid)','execute'),
         'authenticated',has_function_privilege('authenticated','api.close_account_evidence(uuid)','execute'),
-        'helper',has_function_privilege('service_role','internal.claim_owner_admin_invitation_for(uuid,boolean)','execute'),
+        'helper',has_function_privilege('service_role','internal.claim_owner_admin_invitation_for(uuid)','execute'),
         'trigger',has_function_privilege('authenticated','internal.claim_new_owner_admin_invitation()','execute'));`);
     assert.deepEqual(grants, {
       service: true,
