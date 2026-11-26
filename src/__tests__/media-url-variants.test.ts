@@ -75,9 +75,9 @@ describe("media-url variant helpers", () => {
 
   // Backward-compatible URL routing (Step 24)
   describe("backward compatibility", () => {
-    it("normalizeMediaUrl still works for legacy keys", () => {
-      const url = normalizeMediaUrl("listings/old-photo.jpg");
-      expect(url).toBe("/api/media/serve/listings/old-photo.jpg");
+    it("normalizeMediaUrl routes raw media keys and leaves other paths unchanged", () => {
+      expect(normalizeMediaUrl("media/old-photo.jpg")).toBe("/api/media/serve/media/old-photo.jpg");
+      expect(normalizeMediaUrl("listings/old-photo.jpg")).toBe("listings/old-photo.jpg");
     });
 
     it("normalizeMediaUrl still works for CDN URLs", () => {

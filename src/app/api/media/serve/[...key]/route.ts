@@ -27,7 +27,7 @@ const logger = createLogger("MediaServe");
  * through application servers.
  *
  * URL pattern:  /api/media/serve/<key…>
- * Example:      /api/media/serve/media/listing/abc123/17200000-xyz.jpg
+ * Example:      /api/media/serve/media/<uuid>.w800.webp
  */
 
 // ── R2 Binding types (matches @cloudflare/workers-types) ────────────────
@@ -273,9 +273,9 @@ function fallbackCacheControl(stem: string): string {
 
 /**
  * Derive a filename for the Content-Disposition header from the storage key.
- * Generated keys never contain the original filename (e.g.
- * "media/listing/<ownerId>/17200000-a1b2c3d4.jpg"), so this returns the last
- * segment with any leading hex timestamp/random prefix stripped.
+ * Keys never contain the original filename (e.g. "media/<uuid>"), so this
+ * returns the last segment with any leading hex timestamp/random prefix
+ * stripped.
  */
 function deriveFilename(key: string): string {
   const lastSegment = key.split("/").pop() ?? key;
@@ -611,9 +611,8 @@ async function getMediaResponse(
     return NextResponse.json({ error: "Invalid key" }, { status: 400 });
   }
 
-  // Security: only serve known public-bucket prefixes
-  const ALLOWED_PREFIXES = ["media/", "listings/"];
-  if (!ALLOWED_PREFIXES.some((p) => key.startsWith(p))) {
+  // Security: only serve the public bucket's media prefix
+  if (!key.startsWith("media/")) {
     return NextResponse.json({ error: "Invalid key" }, { status: 400 });
   }
 
