@@ -38,20 +38,26 @@ export function fieldLabelFor(key: string, labels?: Record<string, string>): str
 }
 
 const SIZE_MESSAGE =
-  /^Too (small|big): expected (string|number|array) to (?:have|be) [<>]=?\s*(\d+(?:\.\d+)?)/;
+  /^Too (?:small|big): expected (string|number|array) to (?:have|be) (>=?|<=?)\s*(\d+(?:\.\d+)?)/;
+const BOUND_WORDS: Record<string, string> = {
+  ">=": "at least",
+  "<=": "at most",
+  ">": "more than",
+  "<": "less than",
+};
 
-/** Replaces raw schema wording with plain words; written messages pass through unchanged. */
+/** Replaces zod's built-in wording with plain words; written messages pass through unchanged. */
 export function plainFieldMessage(message: string): string {
   const size = SIZE_MESSAGE.exec(message);
   if (size) {
-    const bound = size[1] === "small" ? "at least" : "at most";
-    const plural = size[3] === "1" ? "" : "s";
+    const [, kind, op, amount] = size;
+    const plural = amount === "1" ? "" : "s";
     const unit =
-      size[2] === "string" ? ` character${plural}` : size[2] === "array" ? ` item${plural}` : "";
-    return `Must be ${bound} ${size[3]}${unit}`;
+      kind === "string" ? ` character${plural}` : kind === "array" ? ` item${plural}` : "";
+    return `Must be ${BOUND_WORDS[op]} ${amount}${unit}`;
   }
   if (/^Invalid (option|enum value)/.test(message)) return "Choose one of the options.";
-  if (/^(Invalid input|Invalid type|Too small|Too big|Expected |Required$)/.test(message))
-    return "Check this field.";
+  if (/^Invalid (input|type): expected .+, received .+$/.test(message)) return "Check this field.";
+  if (/^Too (small|big): expected /.test(message)) return "Check this field.";
   return message;
 }

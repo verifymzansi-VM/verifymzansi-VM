@@ -1031,6 +1031,17 @@ describe("CreateBusinessPage", () => {
       expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: "Draft restored" }));
     });
 
+    it("restores service areas typed into an old draft's serviceAreasInput", async () => {
+      seedDraft({ businessType: "mobile_service", serviceAreasInput: "Soweto, Sandton" });
+      render(<CreateBusinessPage />);
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Business Name/)).toHaveValue("Saved Boutique");
+      });
+      await completeStandaloneStepOne();
+      expect(screen.getByRole("checkbox", { name: "I travel to customers" })).toBeChecked();
+      expect(screen.getByLabelText(/Service areas/)).toHaveValue("Soweto, Sandton");
+    });
+
     it("clears restored fields when discard draft is clicked", async () => {
       seedDraft();
       render(<CreateBusinessPage />);

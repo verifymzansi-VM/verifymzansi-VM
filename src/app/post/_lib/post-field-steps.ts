@@ -67,8 +67,8 @@ export const LISTING_FIELD_STEPS: FieldSteps = {
 
 /** Keys after the tourism form's aliases (start_date → startDate, …). */
 export const TOURISM_FIELD_STEPS: FieldSteps = {
+  ...onStep(0, ["eventType", "subcategory", "category_details.subcategory"]),
   ...onStep(1, [
-    "eventType",
     "starRating",
     "numberOfRooms",
     "bookingUrl",

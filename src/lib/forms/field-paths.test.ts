@@ -41,12 +41,28 @@ describe("plainFieldMessage", () => {
     );
   });
 
+  it("words exclusive limits as more or less than", () => {
+    expect(plainFieldMessage("Too small: expected number to be >0")).toBe("Must be more than 0");
+    expect(plainFieldMessage("Too big: expected number to be <100")).toBe("Must be less than 100");
+    expect(plainFieldMessage("Too small: expected string to have >1 characters")).toBe(
+      "Must be more than 1 character"
+    );
+  });
+
   it("replaces other raw schema text", () => {
     expect(plainFieldMessage('Invalid option: expected one of "house"|"apartment"')).toBe(
       "Choose one of the options."
     );
     expect(plainFieldMessage("Invalid input: expected string, received undefined")).toBe(
       "Check this field."
+    );
+  });
+
+  it("passes custom messages through, even ones that start like built-in text", () => {
+    expect(plainFieldMessage("Expected true or false")).toBe("Expected true or false");
+    expect(plainFieldMessage("Required fields are missing")).toBe("Required fields are missing");
+    expect(plainFieldMessage("Invalid input for the registered office")).toBe(
+      "Invalid input for the registered office"
     );
   });
 

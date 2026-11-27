@@ -22,6 +22,11 @@ describe("post field steps", () => {
     expect(stepForField("video_thumbnail", TOURISM_FIELD_STEPS)).toBe(3);
   });
 
+  it("names the first tourism step for the category and event type", () => {
+    expect(stepForField("eventType", TOURISM_FIELD_STEPS)).toBe(0);
+    expect(stepForField("category_details.subcategory", TOURISM_FIELD_STEPS)).toBe(0);
+  });
+
   it("opens the earliest step that has an error", () => {
     expect(
       stepForFieldErrors(
