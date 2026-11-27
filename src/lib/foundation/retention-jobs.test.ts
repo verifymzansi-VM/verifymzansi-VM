@@ -1,7 +1,12 @@
 /** @vitest-environment node */
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FoundationServiceApi } from "./service-api";
-import { CLEANUP_LIMITS, runFoundationRetention, type CleanupStorage } from "./retention-jobs";
+import {
+  CLEANUP_LIMITS,
+  runFoundationRetention,
+  type CleanupStorage,
+  type EdgePurge,
+} from "./retention-jobs";
 vi.mock("server-only", () => ({}));
 vi.mock("../services/storage", () => ({
   deleteFromR2: vi.fn(),
@@ -748,4 +753,146 @@ it("skips partner deletions without the partner key, and fails the run when the 
     })
   ).rejects.toThrow("incomplete");
   expect(logLine().line).toContain("identity_check_claim");
+});
+
+describe("edge cache purge of removed media", () => {
+  /** An edge purge that records each request (one subrequest each). */
+  const recordingPurge = (world: ReturnType<typeof createWorld>, fail = false) => {
+    const purge = vi.fn<EdgePurge["purge"]>(async (keys) => {
+      // Purged only after storage deleted every key of every object.
+      for (const key of keys) expect(world.stored.has(key)).toBe(false);
+      if (fail) throw new Error("Edge cache purge refused (HTTP 403)");
+    });
+    return { purge };
+  };
+  const runWith = (
+    world: ReturnType<typeof createWorld>,
+    edgePurge: EdgePurge | null,
+    limits?: Parameters<typeof runFoundationRetention>[2] extends infer O
+      ? O extends { limits?: infer L }
+        ? L
+        : never
+      : never
+  ) =>
+    runFoundationRetention({ rpc: world.rpc } as unknown as FoundationServiceApi, world.storage, {
+      edgePurge,
+      limits,
+      now: () => world.clock.at,
+    });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete process.env.MEDIA_CACHE_PURGE_TOKEN;
+    delete process.env.MEDIA_CACHE_ZONE_ID;
+    delete process.env.NEXT_PUBLIC_MEDIA_URL;
+  });
+
+  it("is off without the purge token: objects are deleted and acknowledged as before, and the run says so", async () => {
+    const world = createWorld({ media: 2 });
+    expect(await world.run()).toMatchObject({ deleted: 2 });
+    expect(logLine()).toMatchObject({ level: "info" });
+    expect(logLine().line).toContain('"edgePurge":"off"');
+  });
+
+  it("purges the round's deleted objects in one request, then acknowledges them", async () => {
+    const world = createWorld({ media: 3 });
+    const edge = recordingPurge(world);
+    const order: string[] = [];
+    edge.purge.mockImplementation(async () => {
+      order.push("purge");
+    });
+    world.overrides.mark_media_deleted = (args) => {
+      order.push("acknowledge");
+      const object = world.objects.find((o) => o.id === args.p_object_id)!;
+      object.state = "deleted";
+      object.acknowledged++;
+      return { data: true, error: null };
+    };
+    expect(await runWith(world, edge)).toMatchObject({ deleted: 3, retrying: 0 });
+    expect(edge.purge).toHaveBeenCalledExactlyOnceWith(
+      world.objects.map((o) => o.key),
+      expect.any(AbortSignal)
+    );
+    expect(order).toEqual(["purge", "acknowledge", "acknowledge", "acknowledge"]);
+    expect(logLine().line).toContain('"edgePurge":"purged"');
+  });
+
+  it("acknowledges nothing when the purge fails, fails the run, and finishes on a later run", async () => {
+    const world = createWorld({ media: 2 });
+    await expect(runWith(world, recordingPurge(world, true))).rejects.toThrow("incomplete");
+    expect(world.objects.every((o) => o.state === "cleanup_required" && !o.acknowledged)).toBe(
+      true
+    );
+    expect(logLine()).toMatchObject({ level: "warn" });
+    expect(logLine().line).toContain("edge_purge");
+    expect(logLine().line).toContain('"edgePurge":"failed"');
+    // After the lease the objects are claimed again: deleting a missing key is
+    // harmless, the purge is sent again and the objects are acknowledged.
+    world.clock.at += LEASE_MS;
+    info.mockClear();
+    warn.mockClear();
+    const edge = recordingPurge(world);
+    expect(await runWith(world, edge)).toMatchObject({ deleted: 2 });
+    expect(edge.purge).toHaveBeenCalledOnce();
+    expect(world.objects.every((o) => o.acknowledged === 1)).toBe(true);
+  });
+
+  it("claims at most 100 objects a round (Cloudflare's prefix limit) and counts the purge in the budget", async () => {
+    const world = createWorld({ media: 300 });
+    const edge = recordingPurge(world);
+    await runWith(world, edge, { subrequests: 400, mediaClaimPerRound: 200 });
+    for (const [, args] of world.claims()) expect(args.p_limit).toBeLessThanOrEqual(100);
+    expect(world.subrequests() + edge.purge.mock.calls.length).toBeLessThanOrEqual(400);
+
+    const small = createWorld({ media: 500 });
+    const smallEdge = recordingPurge(small);
+    await runWith(small, smallEdge);
+    // 40 - 2 sweeps - evidence claim - media claim - batch delete - purge
+    // = 34 acknowledgements (one fewer than without the purge).
+    expect(small.rpc).toHaveBeenCalledWith("claim_media_cleanup", { p_limit: 34 });
+    expect(small.subrequests() + smallEdge.purge.mock.calls.length).toBeLessThanOrEqual(
+      CLEANUP_LIMITS.subrequests
+    );
+  });
+
+  it("with the token set, purges by prefix on the media host through Cloudflare's API", async () => {
+    process.env.MEDIA_CACHE_PURGE_TOKEN = "purge-token-fixture";
+    process.env.MEDIA_CACHE_ZONE_ID = "0123456789abcdef0123456789abcdef";
+    process.env.NEXT_PUBLIC_MEDIA_URL = "https://media.verifymzansi.com";
+    const fetchMock = vi.fn(async () => Response.json({ success: true, errors: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+    const world = createWorld({ media: 2 });
+    expect(await world.run()).toMatchObject({ deleted: 2 });
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe(
+      "https://api.cloudflare.com/client/v4/zones/0123456789abcdef0123456789abcdef/purge_cache"
+    );
+    expect(init.method).toBe("POST");
+    expect(init.headers).toMatchObject({ Authorization: "Bearer purge-token-fixture" });
+    expect(JSON.parse(String(init.body))).toEqual({
+      prefixes: world.objects.map((o) => `media.verifymzansi.com/${o.key}`),
+    });
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("treats a refused purge reply as a failure, and stays off for a bad zone id or another host", async () => {
+    process.env.MEDIA_CACHE_PURGE_TOKEN = "purge-token-fixture";
+    process.env.MEDIA_CACHE_ZONE_ID = "0123456789abcdef0123456789abcdef";
+    const fetchMock = vi.fn(async () =>
+      Response.json({ success: false, errors: [{ code: 10000 }] }, { status: 403 })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(createWorld({ media: 1 }).run()).rejects.toThrow("incomplete");
+
+    fetchMock.mockClear();
+    info.mockClear();
+    warn.mockClear();
+    process.env.MEDIA_CACHE_ZONE_ID = "not-a-zone";
+    await createWorld({ media: 1 }).run();
+    process.env.MEDIA_CACHE_ZONE_ID = "0123456789abcdef0123456789abcdef";
+    process.env.NEXT_PUBLIC_MEDIA_URL = "https://cdn.example.com";
+    await createWorld({ media: 1 }).run();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });

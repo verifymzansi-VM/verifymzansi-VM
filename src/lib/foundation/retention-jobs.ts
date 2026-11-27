@@ -113,6 +113,55 @@ const r2Storage: CleanupStorage = {
   deleteMany: (bucket, keys, signal) => deleteManyFromR2(bucket, keys, { signal }),
 };
 
+/**
+ * Purges removed media from Cloudflare's edge cache: one request per round,
+ * by prefix, so every cached copy of an object goes (copies made for requests
+ * with other headers, and the photo display copies beside it).
+ */
+export type EdgePurge = {
+  purge(objectKeys: string[], signal: AbortSignal): Promise<void>;
+};
+const MEDIA_HOSTS = new Set(["media.verifymzansi.com", "media-staging.verifymzansi.com"]);
+/** Cloudflare accepts at most 100 prefixes in one purge request. */
+const PURGE_PREFIX_LIMIT = 100;
+
+/**
+ * The edge purge for the media host, or null until the owner has set the
+ * Worker secret MEDIA_CACHE_PURGE_TOKEN (an API token with only Zone > Cache
+ * Purge > Purge on verifymzansi.com) beside MEDIA_CACHE_ZONE_ID. Without it
+ * the cleanup deletes and acknowledges as before and its run line says
+ * `edgePurge: "off"`.
+ */
+function cloudflareEdgePurge(env = process.env): EdgePurge | null {
+  const token = env.MEDIA_CACHE_PURGE_TOKEN;
+  const zone = env.MEDIA_CACHE_ZONE_ID;
+  let host: string;
+  try {
+    host = new URL(
+      env.NEXT_PUBLIC_MEDIA_URL || env.R2_PUBLIC_URL || "https://media.verifymzansi.com"
+    ).host;
+  } catch {
+    return null;
+  }
+  if (!token || !zone || !/^[0-9a-f]{32}$/.test(zone) || !MEDIA_HOSTS.has(host)) return null;
+  return {
+    async purge(objectKeys, signal) {
+      const response = await fetch(
+        `https://api.cloudflare.com/client/v4/zones/${zone}/purge_cache`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ prefixes: objectKeys.map((key) => `${host}/${key}`) }),
+          signal,
+        }
+      );
+      const body = (await response.json().catch(() => null)) as { success?: unknown } | null;
+      if (!response.ok || body?.success !== true)
+        throw new Error(`Edge cache purge refused (HTTP ${response.status})`);
+    },
+  };
+}
+
 function retryLater(error: unknown) {
   return (error as { retryLater?: unknown } | null)?.retryLater === true;
 }
@@ -146,6 +195,8 @@ type RunContext = {
   budget: Budget;
   /** Aborts every database and storage call at the run's deadline. */
   signal: AbortSignal;
+  /** The edge cache purge for deleted media; null when it is not set up. */
+  edgePurge: EdgePurge | null;
   /** False when a claim lease is too close to its end to start deleting. */
   leaseUsable(leaseUntil: string): boolean;
   elapsed(): number;
@@ -165,6 +216,8 @@ export async function runFoundationRetention(
     limits?: Partial<CleanupLimits>;
     /** The partner's session deletion; null (no partner key) skips that step. */
     identityChecks?: IdentityCheckSessions | null;
+    /** The edge cache purge; null (no purge token) skips that step. */
+    edgePurge?: EdgePurge | null;
   } = {}
 ) {
   const now = options.now ?? Date.now;
@@ -192,6 +245,7 @@ export async function runFoundationRetention(
     limits,
     budget,
     signal,
+    edgePurge: options.edgePurge === undefined ? cloudflareEdgePurge() : options.edgePurge,
     leaseUsable: (leaseUntil) => Date.parse(leaseUntil) - now() >= limits.leaseMarginMs,
     elapsed: () => now() - started,
   };
@@ -205,6 +259,7 @@ export async function runFoundationRetention(
   if (evidence.claimFailed) failures.push("evidence_claim");
   if (media.claimFailed) failures.push("media_claim");
   if (sessions.claimFailed) failures.push("identity_check_claim");
+  if (media.purgeFailed) failures.push("edge_purge");
 
   // Counts only: no keys, identifiers or account data. Warn level whenever
   // the owner should look: failures, slow claims, storage trouble, retries.
@@ -227,6 +282,13 @@ export async function runFoundationRetention(
       backlog: media.drained ? "drained" : "remaining",
       batchFallback: media.batchFallback,
       claimMs: media.claimMs,
+      edgePurge: !context.edgePurge
+        ? "off"
+        : media.purgeFailed
+          ? "failed"
+          : media.purged
+            ? "purged"
+            : "idle",
     },
     evidence: { claimed: evidence.claimed, deleted: evidence.deleted, failed: evidence.failed },
     identityCheckSessions: {
@@ -377,8 +439,11 @@ async function cleanEvidence({
  * refuses that request, the run switches to one request per key for what is
  * left of its budget (deleting a missing object is harmless) and sizes later
  * claims for that cost. If storage is busy, the run stops sending and leaves
- * the rest for the next run. Rows it cannot finish keep their claim and are
- * claimed again after the lease ends.
+ * the rest for the next run. Once the edge purge is set up, the round's
+ * deleted objects are purged from the edge cache (one request) before they
+ * are acknowledged; if the purge fails, none of them is acknowledged and the
+ * run stops. Rows it cannot finish keep their claim and are claimed again
+ * after the lease ends (deleting a missing object again is harmless).
  */
 async function cleanMedia({
   service,
@@ -386,6 +451,7 @@ async function cleanMedia({
   limits,
   budget,
   signal,
+  edgePurge,
   leaseUsable,
   elapsed,
 }: RunContext) {
@@ -403,14 +469,19 @@ async function cleanMedia({
     storageBusy: false,
     claimFailed: false,
     claimMs: 0,
+    /** Objects purged from the edge cache this run. */
+    purged: 0,
+    purgeFailed: false,
   };
   while (result.rounds < limits.rounds && elapsed() < limits.runMs && !signal.aborted) {
-    // Fixed cost: the claim (+ one batch delete). Per row: the acknowledgement
-    // (+ one delete per key once storage has refused the batch request).
-    const fixed = result.batchFallback ? 1 : 2;
+    // Fixed cost: the claim (+ one batch delete) (+ one edge purge). Per row:
+    // the acknowledgement (+ one delete per key once storage has refused the
+    // batch request).
+    const fixed = (result.batchFallback ? 1 : 2) + (edgePurge ? 1 : 0);
     const perRow = result.batchFallback ? MEDIA_KEYS_PER_OBJECT + 1 : 1;
     const limit = Math.min(
       limits.mediaClaimPerRound,
+      edgePurge ? PURGE_PREFIX_LIMIT : limits.mediaClaimPerRound,
       Math.floor((budget.remaining - fixed) / perRow)
     );
     if (limit < 1) break;
@@ -497,6 +568,21 @@ async function cleanMedia({
       );
     }
 
+    if (edgePurge && deleted.length > 0) {
+      budget.take(1);
+      try {
+        await edgePurge.purge(
+          deleted.map((row) => row.object_key),
+          signal
+        );
+        result.purged += deleted.length;
+      } catch {
+        result.purgeFailed = true;
+        result.failed += deleted.length;
+        deleted.length = 0;
+      }
+    }
+
     budget.take(deleted.length);
     await Promise.all(
       deleted.map(async (row) => {
@@ -514,7 +600,8 @@ async function cleanMedia({
         }
       })
     );
-    if (result.drained || result.storageBusy || claimMs > limits.slowClaimMs) break;
+    if (result.drained || result.storageBusy || result.purgeFailed || claimMs > limits.slowClaimMs)
+      break;
   }
   return result;
 }
