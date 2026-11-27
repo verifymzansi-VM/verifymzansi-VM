@@ -123,14 +123,14 @@ describe("MediaUpload", () => {
       ).toBeInTheDocument();
     });
 
-    it("refuses a video the browser cannot show, at the field and without adding it", async () => {
+    it("refuses an MP4 that goes up as it is but cannot be shown, at the field and without adding it", async () => {
       vi.mocked(canBrowserShowVideo).mockResolvedValueOnce(false);
       render(<EventVideoHarness />);
-      pick("hevc.mp4");
+      pick("broken.mp4");
       expect(
         await screen.findByText("This video format isn't supported. Try saving it as MP4.")
       ).toBeInTheDocument();
-      expect(screen.queryByRole("button", { name: "Remove hevc.mp4" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Remove broken.mp4" })).not.toBeInTheDocument();
     });
 
     it("does not refuse a MOV the converter will handle, even if the browser cannot show it", async () => {

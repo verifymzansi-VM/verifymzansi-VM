@@ -146,8 +146,9 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
       href: `/mzansi-business/${sellerBusiness.id}`,
     };
 
-  // A job with no disclosed salary must not be published as a free (R0) offer.
-  const hidesPrice = listing.category === "jobs_services" && !listing.price_cents;
+  // A post with no amount that is not Free (a job with no salary, "Price on request")
+  // must not be published to search engines as an R0 offer.
+  const hidesPrice = !listing.price_cents && listing.price_mode !== "free";
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Product",

@@ -365,8 +365,8 @@ export function MediaUpload({
             );
             continue;
           }
-          // A video that goes up as it is, and that the browser cannot show (e.g. HEVC
-          // in Chrome), is refused here, not at upload. A video that will be converted
+          // A video that goes up as it is (an MP4 that needs no conversion) and
+          // that the browser still cannot show is refused here, not at upload. A video that will be converted
           // (MOV, WebM, a large or non-H.264 MP4) skips this: the converter decides.
           if (!(await videoNeedsConversion(normalized))) {
             setCheckingVideo(true);
