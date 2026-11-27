@@ -62,6 +62,7 @@ import { templateDataFromForm } from "@/lib/post-templates";
 import { ListingPriceFields } from "@/components/posting/listing-price-fields";
 import {
   listingPriceModeFromRow,
+  listingPricePreview,
   listingPriceSubmission,
   type ListingPriceForm,
 } from "@/lib/domains/listings/price-form";
@@ -89,11 +90,10 @@ export default function EditListingPage() {
   const [priceMode, setPriceMode] = useState<ListingPriceForm["mode"]>("amount");
   const priceForm: ListingPriceForm = { mode: priceMode, amount: price, negotiable };
   // The previews show the seller's choice: an amount, "Free" or "Price on request".
-  const previewPriced = category ? listingPriceSubmission(category, priceForm) : null;
-  const previewPriceMode =
-    previewPriced && !("error" in previewPriced) ? previewPriced.price_mode : null;
-  const previewPriceCents =
-    previewPriced && !("error" in previewPriced) ? Math.round(previewPriced.price_zar * 100) : 0;
+  const { priceMode: previewPriceMode, priceCents: previewPriceCents } = listingPricePreview(
+    category,
+    priceForm
+  );
   const [contactMethods, setContactMethods] = useState<string[]>(DEFAULT_LISTING_CONTACT_METHODS);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);

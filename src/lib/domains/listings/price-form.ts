@@ -122,3 +122,13 @@ export function listingPriceSubmission(
 export function listingPriceModeFromRow(row: { price_mode?: unknown }): ListingPriceForm["mode"] {
   return row.price_mode === "free" || row.price_mode === "on_request" ? row.price_mode : "amount";
 }
+
+/** What the card and detail previews show for the price fields as filled in so far. */
+export function listingPricePreview(
+  category: string,
+  form: ListingPriceForm
+): { priceMode: ListingPriceSubmission["price_mode"] | null; priceCents: number } {
+  const priced = category ? listingPriceSubmission(category, form) : null;
+  if (!priced || "error" in priced) return { priceMode: null, priceCents: 0 };
+  return { priceMode: priced.price_mode, priceCents: Math.round(priced.price_zar * 100) };
+}

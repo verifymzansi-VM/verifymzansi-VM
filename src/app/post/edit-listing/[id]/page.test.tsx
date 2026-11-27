@@ -358,6 +358,21 @@ describe("EditListingPage", () => {
     expect(payload).toMatchObject({ price_mode: "on_request", price_zar: 0, negotiable: true });
   });
 
+  it("opens an existing Free post (price 0) with Free selected", async () => {
+    const { data } = await mockMaybeSingle();
+    mockMaybeSingle.mockResolvedValue({
+      data: { ...data, price_mode: "free", price_cents: 0, price_negotiable: false },
+      error: null,
+    });
+    render(<EditListingPage />);
+    await termsLoaded();
+
+    await waitFor(() => {
+      expect(screen.getByRole("radio", { name: "Free" })).toBeChecked();
+    });
+    expect(screen.queryByLabelText("Asking price (ZAR)")).not.toBeInTheDocument();
+  });
+
   it("switches a priced post to Free and drops the amount and Negotiable", async () => {
     render(<EditListingPage />);
     await termsLoaded();

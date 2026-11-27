@@ -89,7 +89,11 @@ import {
 } from "./listing-template";
 import { formFieldsFromTemplate } from "@/lib/post-templates";
 import { ListingPriceFields } from "@/components/posting/listing-price-fields";
-import { listingPriceSubmission, type ListingPriceForm } from "@/lib/domains/listings/price-form";
+import {
+  listingPricePreview,
+  listingPriceSubmission,
+  type ListingPriceForm,
+} from "@/lib/domains/listings/price-form";
 
 const STEPS: PostFormStep[] = [
   {
@@ -533,8 +537,10 @@ function CreateListingForm() {
     setStep(Math.min(Math.max(restored.step ?? 0, 0), STEPS.length - 1));
     setTitle(restoredData.title ?? "");
     setDescription(restoredData.description ?? "");
-    setPrice(restoredData.price ?? "");
-    setPriceMode(restoredData.priceMode || "amount");
+    // A draft saved before the price choice existed used "0" to mean Free.
+    const oldFreeDraft = !restoredData.priceMode && restoredData.price === "0";
+    setPrice(oldFreeDraft ? "" : (restoredData.price ?? ""));
+    setPriceMode(oldFreeDraft ? "free" : restoredData.priceMode || "amount");
     setNegotiable(Boolean(restoredData.negotiable));
     setCategory((restoredData.category as ListingCategory | "") ?? "");
     setCondition((restoredData.condition as ListingCondition | "") ?? "");
@@ -1103,11 +1109,10 @@ function CreateListingForm() {
   }
 
   // The previews show the seller's choice: an amount, "Free" or "Price on request".
-  const previewPriced = category ? listingPriceSubmission(category, priceForm) : null;
-  const previewPriceMode =
-    previewPriced && !("error" in previewPriced) ? previewPriced.price_mode : null;
-  const previewPriceCents =
-    previewPriced && !("error" in previewPriced) ? Math.round(previewPriced.price_zar * 100) : 0;
+  const { priceMode: previewPriceMode, priceCents: previewPriceCents } = listingPricePreview(
+    category,
+    priceForm
+  );
 
   function handleDiscardDraft() {
     discardDraft();

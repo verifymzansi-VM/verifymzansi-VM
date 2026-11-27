@@ -977,7 +977,7 @@ describe("CreateListingPage", () => {
       };
       localStorage.setItem(
         `vm-draft:listing:${DRAFT_USER_ID}`,
-        JSON.stringify({ v: 1, savedAt: Date.now(), step: 0, data })
+        JSON.stringify({ v: 1, savedAt: Date.now(), step: overrides.step ?? 0, data })
       );
     }
 
@@ -1000,6 +1000,15 @@ describe("CreateListingPage", () => {
         "A draft description from last session."
       );
       expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: "Draft restored" }));
+    });
+
+    it("restores an old draft with price 0 and no price choice as Free", async () => {
+      seedDraft({ price: "0", negotiable: false, step: 1 });
+      render(<CreateListingPage />);
+
+      await waitFor(() => {
+        expect(screen.getByRole("radio", { name: "Free" })).toBeChecked();
+      });
     });
 
     it("clears restored fields when discard draft is clicked", async () => {
