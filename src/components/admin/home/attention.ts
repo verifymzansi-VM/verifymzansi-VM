@@ -168,7 +168,7 @@ export function attentionItems(dashboard: StaffDashboard, role: StaffRole): Atte
   );
   add(
     "escalations",
-    decisions && decisions.escalated + decisions.pending_approval - decisions.expiring_24h,
+    decisions && decisions.escalated + (decisions.pending_approval ?? 0) - decisions.expiring_24h,
     "escalation waiting",
     "escalations waiting",
     "/admin/governance/escalations",

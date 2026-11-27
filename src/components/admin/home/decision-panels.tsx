@@ -58,17 +58,18 @@ export function DecisionsPanel({
     {
       label: "Escalations",
       href: "/admin/governance/escalations",
-      value: decisions && decisions.escalated + decisions.pending_approval,
+      value: decisions && decisions.escalated + (decisions.pending_approval ?? 0),
       card: (
         <StatCard
           label="Escalations"
           icon={Gavel}
-          value={decisions && decisions.escalated + decisions.pending_approval}
+          value={decisions && decisions.escalated + (decisions.pending_approval ?? 0)}
           href="/admin/governance/escalations"
           detail={
             decisions && (
               <>
-                {formatCount(decisions.pending_approval)} need a second approval
+                {decisions.pending_approval !== undefined &&
+                  `${formatCount(decisions.pending_approval)} need a second approval`}
                 {decisions.expiring_24h > 0 && (
                   <p className="font-medium text-destructive">
                     {plural(decisions.expiring_24h, "expires", "expire")} within 24 hours
@@ -111,7 +112,9 @@ export function DecisionsPanel({
             dsar && (
               <>
                 {formatCount(dsar.open)} open · {formatCount(dsar.due_7d)} due within 7 days
-                {dsar.unassigned > 0 && ` · ${formatCount(dsar.unassigned)} unassigned`}
+                {dsar.unassigned !== undefined &&
+                  dsar.unassigned > 0 &&
+                  ` · ${formatCount(dsar.unassigned)} unassigned`}
                 {dsar.next_due_at && <p>Next deadline {formatSaShortDate(dsar.next_due_at)}</p>}
               </>
             )
@@ -151,7 +154,8 @@ export function DecisionsPanel({
       ),
     },
     // Retried from Operations health, hidden until it works.
-    ...(SHOW_STAFF_OPERATIONS
+    // Only when the live backend reports it (no read for it yet).
+    ...(SHOW_STAFF_OPERATIONS && decisions?.failed_executions !== undefined
       ? [
           {
             label: "Decisions not applied",

@@ -1,16 +1,3 @@
-import { toContentEditModerationItem } from "@/lib/content-edit-moderation";
-import {
-  BUSINESS_FIELDS,
-  EDIT_FIELDS,
-  LISTING_FIELDS,
-  MZANSI_BUSINESS_FILTER,
-  PROMOTION_FIELDS,
-  TOURISM_BUSINESS_FILTER,
-  businessItem,
-  listingItem,
-  oldestFirst,
-  promotionItem,
-} from "@/lib/admin/moderation-items";
 /**
  * Admin query helpers — shared data-fetching for admin pages. Queue,
  * activity and report reads come from the foundation staff commands.
@@ -106,68 +93,24 @@ export async function getAreaReports(area: MarketplaceArea) {
   return (await readNativeProgramReports(area)).open;
 }
 
-// getPendingContent, getSiteVisitStats and getShowroomExposureReport have no
-// foundation read yet: they still use the retired service client, which
-// reaches no tables in production, so the panels show their unavailable state.
-// (The old private-contact lookup that followed the business reads is gone:
-// it could only run after a read that always fails.)
+// getSiteVisitStats has no foundation read yet: it still uses the retired
+// service client, which reaches no tables in production, so its panel shows its
+// unavailable state.
 
-/** A failed read throws, so the page says so instead of showing an empty queue. */
-function rowsOrThrow<T>(result: { data: T[] | null; error: { message: string } | null }): T[] {
-  if (result.error) throw new Error(`Failed to load pending content: ${result.error.message}`);
-  return result.data ?? [];
-}
-
-async function getPendingNewContent(area: MarketplaceArea) {
-  const supabase = createAdminClient();
-  const pending = <T extends string>(table: "listings" | "businesses" | "promotions", fields: T) =>
-    supabase
-      .from(table)
-      .select(fields)
-      .eq("status", "pending_moderation")
-      .order("created_at", { ascending: true })
-      .limit(50);
-
-  if (area === "MZANSI_MARKET") {
-    return rowsOrThrow(await pending("listings", LISTING_FIELDS)).map(listingItem);
-  }
-
-  if (area === "MZANSI_BUSINESS") {
-    return rowsOrThrow(
-      await pending("businesses", BUSINESS_FIELDS)
-        .eq("area", "MZANSI_BUSINESS")
-        .or(MZANSI_BUSINESS_FILTER)
-    ).map(businessItem);
-  }
-
-  if (area === "PROMOTIONS_EVENTS") {
-    const [promotions, tourismBusinesses] = await Promise.all([
-      pending("promotions", PROMOTION_FIELDS),
-      pending("businesses", BUSINESS_FIELDS).or(TOURISM_BUSINESS_FILTER),
-    ]);
-    return oldestFirst([
-      ...rowsOrThrow(promotions).map(promotionItem),
-      ...rowsOrThrow(tourismBusinesses).map(businessItem),
-    ]);
-  }
-
-  return [];
-}
-
-/** Content pending moderation for an area. */
+/**
+ * Content pending moderation for an area, oldest first: the same foundation
+ * queue the Moderation page reads, narrowed to the area. Market holds listings;
+ * Business holds businesses; Tourism & Events holds events and tourism
+ * businesses. A failed read throws, so the page says so instead of showing an
+ * empty queue.
+ */
 export async function getPendingContent(area: MarketplaceArea) {
-  const [content, edits] = await Promise.all([
-    getPendingNewContent(area),
-    createAdminClient()
-      .from("content_edit_requests")
-      .select(EDIT_FIELDS)
-      .eq("area", area)
-      .eq("status", "pending")
-      .order("created_at", { ascending: true })
-      .limit(50),
-  ]);
-  if (edits.error) throw new Error("Failed to load pending post edits");
-  return oldestFirst([...content, ...(edits.data ?? []).map(toContentEditModerationItem)]);
+  const { readFoundationServerSession } = await import("@/lib/foundation/server-session");
+  const { readStaffModerationQueue } = await import("@/lib/foundation/staff-moderation-queue");
+  const { foundationArea } = await import("@/lib/foundation/areas");
+  const { api, user } = await readFoundationServerSession();
+  const { allItems } = await readStaffModerationQueue(api, user.id, foundationArea(area));
+  return allItems.filter((item) => item.area === area);
 }
 
 export type DashboardReport = ReportItem;
@@ -244,47 +187,5 @@ export async function getSiteVisitStats(): Promise<SiteVisitStats> {
     };
   } catch {
     return EMPTY_SITE_VISIT_STATS;
-  }
-}
-
-// ── Showroom fairness (admin home) ────────────────────────────
-
-export interface ShowroomSurfaceExposure {
-  surface: "home" | "business" | "market" | "tourism";
-  posts: number;
-  appearances7d: number;
-  fairShare7d: number | null;
-  lowest7d: number;
-  highest7d: number;
-}
-
-export interface ZeroExposurePost {
-  surface: ShowroomSurfaceExposure["surface"];
-  table: "businesses" | "listings" | "promotions";
-  id: string;
-  title: string;
-  province: string | null;
-  liveSince: string;
-}
-
-export interface ShowroomExposureReport {
-  available: boolean;
-  surfaces: ShowroomSurfaceExposure[];
-  zeroExposure: ZeroExposurePost[];
-}
-
-/** Fair-rotation health: appearances per showroom and posts nobody saw in 24h. */
-export async function getShowroomExposureReport(): Promise<ShowroomExposureReport> {
-  try {
-    const { data, error } = await createAdminClient().rpc("get_showroom_exposure_report");
-    if (error || !data) return { available: false, surfaces: [], zeroExposure: [] };
-    const report = data as Partial<ShowroomExposureReport>;
-    return {
-      available: true,
-      surfaces: report.surfaces ?? [],
-      zeroExposure: report.zeroExposure ?? [],
-    };
-  } catch {
-    return { available: false, surfaces: [], zeroExposure: [] };
   }
 }

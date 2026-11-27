@@ -78,7 +78,7 @@ function ClaimRow({ claim }: { claim: Claim }) {
           : minutes === 0
             ? "Expired"
             : `${minutes} min left`}
-        {` · ${MAX_RENEWALS - claim.renewals} renewals left`}
+        {claim.renewals !== undefined && ` · ${MAX_RENEWALS - claim.renewals} renewals left`}
       </span>
     </li>
   );
