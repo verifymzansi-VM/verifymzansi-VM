@@ -27,7 +27,7 @@ import {
   VM_GLYPH,
 } from "@/components/video-mode/video-mode-rails";
 import { useAutoHide } from "@/components/video-mode/use-auto-hide";
-import { captionTop } from "@/components/video-mode/letterbox";
+import { captionBottom, captionTop } from "@/components/video-mode/letterbox";
 import { useConstrainedNetwork, VideoModeMedia } from "@/components/video-mode/video-mode-media";
 import { VideoModeSeek } from "@/components/video-mode/video-mode-seek";
 import { useVideoModeFeed, type VideoModePost } from "@/components/video-mode/use-video-mode-feed";
@@ -743,10 +743,16 @@ export function VideoModeViewer({
 
   /* ── A video that leaves black space under it gets the title there ── */
   const [captionAt, setCaptionAt] = useState<number | null>(null);
+  // Over the video: just above Details, which can wrap onto two rows on narrow phones.
+  const [captionAbove, setCaptionAbove] = useState<number | null>(null);
   const activeVideoKey = activeSlide && !ended ? `${activeSlide.key}:${mediaIndex}` : null;
   useEffect(() => {
     const measure = () => {
       const video = document.querySelector<HTMLVideoElement>("video[data-vm-active-video]");
+      // The top of Details (it counts the phone's bottom safe area).
+      const details = document.querySelector("[data-vm-details]");
+      const detailsTop = details ? details.getBoundingClientRect().top : window.innerHeight - 72;
+      setCaptionAbove(details ? captionBottom(window.innerHeight, detailsTop) : null);
       setCaptionAt(
         video
           ? captionTop(
@@ -754,9 +760,7 @@ export function VideoModeViewer({
               window.innerHeight,
               video.videoWidth,
               video.videoHeight,
-              // The top of Details (it counts the phone's bottom safe area).
-              document.querySelector("[data-vm-details]")?.getBoundingClientRect().top ??
-                window.innerHeight - 72
+              detailsTop
             )
           : null
       );
@@ -1062,7 +1066,13 @@ export function VideoModeViewer({
               leaves black space, else at the bottom over it. */}
           <div
             data-vm-caption={captionAt === null ? "over" : "under"}
-            style={captionAt === null ? undefined : { top: captionAt }}
+            style={
+              captionAt !== null
+                ? { top: captionAt }
+                : !cleanView && captionAbove !== null
+                  ? { bottom: captionAbove }
+                  : undefined
+            }
             className={cn(
               "vm-info absolute left-[max(12px,env(safe-area-inset-left))] right-[calc(max(8px,env(safe-area-inset-right))+64px)] z-20 max-w-xl",
               captionAt !== null
