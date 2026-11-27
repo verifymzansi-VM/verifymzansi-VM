@@ -40,7 +40,7 @@ const UPDATE = "20261126210022_business_check_retention.sql";
 const SIGNATURE = "internal.retention_verification(integer)";
 const [REVIEWED, UPDATED] = [
   "56e4f71f0ad4ecb994e79ea9b0d695b8",
-  "0121042302cb64dec7f7d1bcf81df0e0",
+  "fb71d0e909923fd4b50d622647450ce7",
 ];
 const OLD_RULE = "CHECK (seen_method <> 'visit'::text OR visit_address IS NOT NULL)";
 const NEW_RULE =
@@ -72,26 +72,45 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
     return id;
   };
   /**
-   * A decided business check of `kind` ('seen' visit or 'cipc' through a
-   * representative) for a new member, with every detail the Privacy page
-   * names: decided `decided` ago, approved (sticker for 365 days) unless
-   * `status` says otherwise, revoked `revoked` ago when given.
+   * A business check of `kind` ('seen' visit, or 'cipc' / 'cipc_link' through
+   * a representative) with every detail the Privacy page names: decided
+   * `decided` ago, approved (sticker for 365 days, or until `expires`, an SQL
+   * time) unless `status` says otherwise, revoked `revoked` ago when given.
+   * An undecided check (`status` pending or info_requested) was created
+   * `created` ago. A new member and business unless `owner` and `business`
+   * are given; a CIPC check names `linked` as its root business.
    */
-  const businessCheck = (label, kind, { decided, status = "approved", revoked = null }) => {
-    const owner = world.user(label);
-    const business = world.post(owner, "business", "business");
+  const businessCheck = (
+    label,
+    kind,
+    {
+      decided = null,
+      status = "approved",
+      revoked = null,
+      expires,
+      owner,
+      business,
+      linked,
+      created,
+    }
+  ) => {
+    owner ??= world.user(label);
+    business ??= world.post(owner, "business", "business");
     const id = randomUUID();
     const final = revoked ? "withdrawn" : status;
-    const expires = final === "approved" ? `${ago(decided)}+interval '365 days'` : "null";
-    asOwner(`insert into private.evidence_cases(id,subject_id,kind,status) values('${id}','${owner.id}','business','decided');
+    const at = ago(decided ?? created);
+    expires ??= final === "approved" ? `${at}+interval '365 days'` : "null";
+    asOwner(`insert into private.evidence_cases(id,subject_id,kind,status)
+        values('${id}','${owner.id}','business',${decided ? "'decided'" : "default"});
       insert into private.frontend_business_checks(id,business_id,owner_id,kind,status,seen_method,visit_address,available_slots,
           screenshots_consent_at,visit_report,report_by,report_at,reviewed_by,review_note,reason_code,public_city,
-          decided_at,expires_at,revoked_at)
+          decided_at,expires_at,revoked_at,created_at)
         values('${id}','${business}','${owner.id}','${kind}','${final}',
-          ${kind === "seen" ? `'visit','12 Main Road, Empangeni',array['Monday morning'],${ago(decided)}` : "null,null,null,null"},
+          ${kind === "seen" ? `'visit','12 Main Road, Empangeni',array['Monday morning'],${at}` : "null,null,null,null"},
           ${kind === "seen" ? `'{"outcome":"seen","identityConfirmed":true,"signage":true,"productsSeen":"Fresh bread","premisesType":"shop","notes":"Owner met us at the door.","city":"Empangeni"}'` : "null"},
-          '${admin.id}',${ago(decided)},'${admin.id}','Checked in person.','checked',
-          ${kind === "seen" ? "'Empangeni'" : "null"},${ago(decided)},${expires},${revoked ? ago(revoked) : "null"});
+          '${admin.id}',${at},'${admin.id}','Checked in person.','checked',
+          ${kind === "seen" ? "'Empangeni'" : "null"},${decided ? at : "null"},${expires},
+          ${revoked ? ago(revoked) : "null"},${at});
       insert into private.frontend_business_check_messages(check_id,author_id,author_role,body)
         values('${id}','${admin.id}','staff','Please send a photo of the shop front.');`);
     if (kind === "seen") {
@@ -102,10 +121,10 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
       const pdf = file(owner, id, "registration");
       asOwner(`insert into private.frontend_cipc_reviews(check_id,registration_number,route,submitted_at,owner_file,registered_name,
           accepted_role,position_title,registered_office,representative_email,representative_position,representative_verified_at,
-          domain_confirmed,callback_confirmed,callback_record)
-        values('${id}','2020/123456/07','representative',${ago(decided)},'${pdf}','Fixture Bakery (Pty) Ltd','representative',
+          domain_confirmed,callback_confirmed,linked_business_id,callback_record)
+        values('${id}','2020/123456/07','representative',${at},'${pdf}','Fixture Bakery (Pty) Ltd','representative',
           'Manager','{"suburb":"Meerensee","city":"Richards Bay","province":"KwaZulu-Natal"}','manager@fixture-bakery.example',
-          'Manager',${ago(decided)},true,true,'{"numberSource":"Company website","spokeTo":"Reception","confirmedPosition":"Manager","confirmed":true,"notes":"Confirmed by phone."}');
+          'Manager',${at},true,true,${linked ? `'${linked}'` : "null"},'{"numberSource":"Company website","spokeTo":"Reception","confirmedPosition":"Manager","confirmed":true,"notes":"Confirmed by phone."}');
         insert into private.frontend_cipc_documents(artifact_id,check_id,actor_id,source,content_digest,reviewed_version,summary,recorded_at)
         values('${pdf}','${id}','${owner.id}','owner_upload','${sha(pdf)}',now(),
           '{"registrationNumber":"2020/123456/07","registeredName":"Fixture Bakery (Pty) Ltd","directors":[{"name":"Thando Dlamini"}]}',now());`);
@@ -285,9 +304,96 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
         "frontend_business_check_messages",
       ])
         assert.equal(count(table, `check_id='${id}'`), 0, `${table} ${id}`);
-      // The case shell stays closed for the five-year sweep of closed accounts.
+      // The case shell stays (status 'decided') for the five-year sweep of
+      // closed accounts.
       assert.equal(q(`select status from private.evidence_cases where id='${id}';`), "decided");
     }
+  });
+
+  /** An owner with a full ID review (the CIPC sticker shows only then), a root business and a linked one. */
+  const linkWorld = (label) => {
+    const owner = world.reviewedId(label, admin);
+    return {
+      owner,
+      root: world.post(owner, "business", "business"),
+      link: world.post(owner, "business", "business"),
+    };
+  };
+  /** Whether business `id` shows a CIPC sticker. */
+  const showsCipc = (id) => count("frontend_current_cipc_stickers", `business_id='${id}'`) === 1;
+  /** The expiry of check `id`, as SQL. */
+  const expiryOf = (id) =>
+    `(select expires_at from private.frontend_business_checks where id='${id}')`;
+  /** A CIPC check (`kind` 'cipc' on the root or 'cipc_link' on the linked business) in link world `w`. */
+  const cipcIn = (w, kind, decided, expires) =>
+    businessCheck("", kind, {
+      decided,
+      owner: w.owner,
+      business: kind === "cipc" ? w.root : w.link,
+      linked: kind === "cipc" ? undefined : w.root,
+      expires,
+    });
+
+  await check("a CIPC link sticker is kept while its root business renews", () => {
+    const w = linkWorld("bcr-link-live");
+    // The root's first sticker ended 14 months ago; the link was approved
+    // against it, so the link's own expiry passed 14 months ago too.
+    const first = cipcIn(w, "cipc", "365 days 14 months");
+    const link = cipcIn(w, "cipc_link", "365 days 14 months", expiryOf(first.id));
+    // The root renewed 70 days ago: its sticker runs, so the link's shows.
+    cipcIn(w, "cipc", "70 days");
+    assert.ok(showsCipc(w.link), "the link sticker shows before the sweep");
+    assert.match(preflight()[0][1], /; records due: 1; held: 0$/);
+    const result = sweep();
+    assert.equal(result.business_checks, 1, JSON.stringify(result));
+    assert.ok(!exists(first.id), "the root's ended sticker goes 12 months after it ended");
+    assert.ok(exists(link.id), "the live link keeps its record");
+    assert.ok(showsCipc(w.link), "the link sticker still shows");
+    assert.ok(showsCipc(w.root));
+    assert.deepEqual(details(link.id), cleared, "its details still go 30 days after the decision");
+  });
+
+  await check("once the root ends, the link's record goes 12 months later", () => {
+    // Ended 11 months ago: the root and its link stay.
+    const w11 = linkWorld("bcr-link-11");
+    const root11 = cipcIn(w11, "cipc", "365 days 11 months");
+    const link11 = cipcIn(w11, "cipc_link", "365 days 11 months", expiryOf(root11.id));
+    // Root before link (the usual order): the sweep deletes the root first,
+    // then finds no root for the link and falls back to the link's own expiry.
+    const wA = linkWorld("bcr-link-13a");
+    const rootA = cipcIn(wA, "cipc", "365 days 14 months");
+    const linkA = cipcIn(wA, "cipc_link", "365 days 13 months", expiryOf(rootA.id));
+    // Link before root: the link was approved against a sticker that a later
+    // renewal replaced; the renewal ended 13 months ago and is swept after
+    // the link, which reads the renewal's end.
+    const wB = linkWorld("bcr-link-13b");
+    const oldB = cipcIn(wB, "cipc", "365 days 26 months");
+    const linkB = cipcIn(wB, "cipc_link", "365 days 25 months", expiryOf(oldB.id));
+    const renewalB = cipcIn(wB, "cipc", "365 days 13 months");
+    assert.ok(![w11, wA, wB].some((w) => showsCipc(w.link)), "no link sticker shows");
+    const result = sweep();
+    assert.equal(result.business_checks, 5, JSON.stringify(result));
+    assert.ok(exists(root11.id) && exists(link11.id), "ended 11 months ago: kept");
+    for (const { id } of [rootA, linkA, oldB, linkB, renewalB]) assert.ok(!exists(id), id);
+    assert.equal(sweep().business_checks, 0);
+  });
+
+  await check("undecided checks are never swept", () => {
+    const pending = businessCheck("bcr-pending", "seen", { status: "pending", created: "2 years" });
+    const asked = businessCheck("bcr-asked", "cipc", {
+      status: "info_requested",
+      created: "2 years",
+    });
+    const result = sweep();
+    assert.equal(result.business_check_details, 0, JSON.stringify(result));
+    assert.equal(result.business_checks, 0, JSON.stringify(result));
+    assert.deepEqual(details(pending.id), seenFull);
+    assert.deepEqual(details(asked.id), cipcFull);
+    assert.equal(
+      q(`select string_agg(status,',' order by status) from private.frontend_business_checks
+        where id in('${pending.id}','${asked.id}');`),
+      "info_requested,pending"
+    );
   });
 
   await check("an open legal hold or fraud hold keeps everything", () => {
@@ -353,6 +459,23 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
         "f",
         role
       );
+  });
+
+  await check("rollback after the sweep cleared an address, then apply again", () => {
+    applySteps(database, [{ label: "business check retention rollback", sql: kit.rollbackSql }]);
+    assert.equal(functionBodyMd5(kit, SIGNATURE), REVIEWED);
+    assert.equal(
+      rule(),
+      `${OLD_RULE} NOT VALID`,
+      "a cleared visit check keeps the rule unvalidated"
+    );
+    const [summary, ...problems] = preflight();
+    assert.deepEqual(problems, []);
+    assert.match(summary[1], /^business check retention: update not applied; /);
+    applySteps(database, [kit.step]);
+    assert.equal(functionBodyMd5(kit, SIGNATURE), UPDATED);
+    assert.equal(rule(), NEW_RULE);
+    assert.match(preflight()[0][1], /^business check retention: already applied; /);
   });
 
   const later = kit.steps.slice(kit.index + 1);

@@ -8,7 +8,8 @@
 -- rule is added NOT VALID and then validated only if every row meets it: a
 -- decided visit check whose address the sweep already deleted would fail it,
 -- and such a row keeps the rule unvalidated (new and changed rows are still
--- checked). Details and records the sweep already deleted stay deleted.
+-- checked); the update accepts that NOT VALID rule if it is applied again.
+-- Details and records the sweep already deleted stay deleted.
 -- It refuses (55000) unless the function has this update's body (a later
 -- update changed it: undo that update first).
 begin;
@@ -19,7 +20,7 @@ declare shape text;
 begin
   select coalesce((select md5(replace(p.prosrc,E'\r\n',E'\n')) from pg_proc p
     where p.oid=to_regprocedure('internal.retention_verification(integer)')),'absent') into shape;
-  if shape<>'0121042302cb64dec7f7d1bcf81df0e0' then
+  if shape<>'fb71d0e909923fd4b50d622647450ce7' then
     raise exception 'rollback precondition: internal.retention_verification(integer) % is not this update''s body', shape using errcode='55000';
   end if;
 end$$;

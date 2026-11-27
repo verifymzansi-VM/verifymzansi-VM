@@ -11,6 +11,7 @@ declare candidate record; numbers integer:=0; challenges integer; proofs integer
   acceptances integer; signup_acceptances integer; choice_events integer; histories integer:=0; cases uuid[];
   attempt_names integer; checks integer; ask_reasons integer; disclosures integer; mode_events integer; overdue integer;
   return_reasons integer; business_details integer:=0; business_checks integer:=0; business_check private.frontend_business_checks;
+  changed boolean;
 begin
   -- The encrypted ID number goes with the selfie: once the selfie is deleted
   -- or due, unless its identity record is kept (internal.identity_record_kept).
@@ -133,12 +134,18 @@ begin
   -- representative's email and the call notes. The sticker, its date and
   -- town, the outcome and the staff note stay. The check itself goes 12
   -- months after it ended (the sticker expired or was revoked, or the
-  -- decision). An open legal hold on the owner or fraud hold on the case
-  -- keeps everything.
+  -- decision). A CIPC link sticker runs as long as its root business's
+  -- sticker (frontend_current_cipc_stickers), so while it is the latest
+  -- result of its business it ends when that root ends. An open legal hold
+  -- on the owner or fraud hold on the case keeps everything.
   for candidate in
     select x.id,x.owner_id from private.frontend_business_checks x
     where x.decided_at is not null
-      and (coalesce(x.revoked_at,x.expires_at,x.decided_at)<statement_timestamp()-interval '12 months'
+      and (greatest(coalesce(x.revoked_at,x.expires_at,x.decided_at),case when x.kind='cipc_link' then
+          (select coalesce(root.revoked_at,root.expires_at) from private.frontend_cipc_latest_result l
+            join private.frontend_cipc_latest_result root on root.business_id=l.linked_business_id and root.owner_id=l.owner_id
+              and root.kind='cipc' and root.registration_number=l.registration_number
+            where l.business_id=x.business_id and l.id=x.id and l.status='approved') end)<statement_timestamp()-interval '12 months'
         or (coalesce(x.revoked_at,x.decided_at)<statement_timestamp()-interval '30 days'
           and (x.visit_address is not null or x.visit_report is not null
             or exists(select 1 from private.frontend_business_seen_photos p where p.check_id=x.id
@@ -157,19 +164,29 @@ begin
     select * into business_check from private.frontend_business_checks x where x.id=candidate.id and x.decided_at is not null;
     if not found or internal.evidence_fraud_held(candidate.id)
       or exists(select 1 from private.legal_holds h where h.subject_id=candidate.owner_id and h.released_at is null) then continue; end if;
-    if coalesce(business_check.revoked_at,business_check.expires_at,business_check.decided_at)<statement_timestamp()-interval '12 months' then
+    if greatest(coalesce(business_check.revoked_at,business_check.expires_at,business_check.decided_at),
+        case when business_check.kind='cipc_link' then
+          (select coalesce(root.revoked_at,root.expires_at) from private.frontend_cipc_latest_result l
+            join private.frontend_cipc_latest_result root on root.business_id=l.linked_business_id and root.owner_id=l.owner_id
+              and root.kind='cipc' and root.registration_number=l.registration_number
+            where l.business_id=business_check.business_id and l.id=business_check.id and l.status='approved') end)
+        <statement_timestamp()-interval '12 months' then
       delete from private.frontend_business_checks where id=candidate.id;
       business_checks:=business_checks+1;
     elsif coalesce(business_check.revoked_at,business_check.decided_at)<statement_timestamp()-interval '30 days' then
       update private.frontend_business_checks set visit_address=null,visit_report=null
         where id=candidate.id and (visit_address is not null or visit_report is not null);
+      changed:=found;
       update private.frontend_business_seen_photos set latitude=null,longitude=null
         where check_id=candidate.id and (latitude is not null or longitude is not null);
+      changed:=changed or found;
       delete from private.frontend_business_check_messages where check_id=candidate.id;
+      changed:=changed or found;
       delete from private.frontend_cipc_documents where check_id=candidate.id;
+      changed:=changed or found;
       update private.frontend_cipc_reviews set representative_email=null,callback_record=null
         where check_id=candidate.id and (representative_email is not null or callback_record is not null);
-      business_details:=business_details+1;
+      if changed or found then business_details:=business_details+1; end if;
     end if;
   end loop;
 

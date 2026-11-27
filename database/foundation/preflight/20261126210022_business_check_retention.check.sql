@@ -14,7 +14,8 @@
 --   holding a visit address, visit report, photo location, message, CIPC
 --   document record, representative's email or call notes;
 -- - "records due": ended (sticker expired or revoked, or decided) more than 12
---   months ago;
+--   months ago (a CIPC link sticker ends when its root business's sticker
+--   ends);
 -- - "held": checks that would be due but an open legal hold on the owner or
 --   fraud hold on the case keeps.
 do $$begin
@@ -22,14 +23,15 @@ do $$begin
 end$$;
 with shapes as (
   select 'internal.retention_verification(integer)' as item,
-    '56e4f71f0ad4ecb994e79ea9b0d695b8' as reviewed, '0121042302cb64dec7f7d1bcf81df0e0' as updated,
+    '56e4f71f0ad4ecb994e79ea9b0d695b8' as reviewed, 'fb71d0e909923fd4b50d622647450ce7' as updated,
     coalesce((select md5(replace(p.prosrc, E'\r\n', E'\n')) from pg_proc p
       where p.oid = to_regprocedure('internal.retention_verification(integer)')), 'absent') as shape
   union all
   select 'frontend_business_checks_check1',
     'CHECK (seen_method <> ''visit''::text OR visit_address IS NOT NULL)',
     'CHECK (seen_method <> ''visit''::text OR visit_address IS NOT NULL OR decided_at IS NOT NULL)',
-    coalesce((select pg_get_constraintdef(c.oid, true) from pg_constraint c
+    -- The rollback can leave the earlier rule NOT VALID: still the earlier rule.
+    coalesce((select replace(pg_get_constraintdef(c.oid, true), ') NOT VALID', ')') from pg_constraint c
       where c.conrelid = 'private.frontend_business_checks'::regclass
         and c.conname = 'frontend_business_checks_check1'), 'absent')
 ),
@@ -43,7 +45,12 @@ problems as (
 ),
 checks as (
   select x.id,
-    coalesce(x.revoked_at, x.expires_at, x.decided_at) < statement_timestamp() - interval '12 months' as record_due,
+    greatest(coalesce(x.revoked_at, x.expires_at, x.decided_at), case when x.kind = 'cipc_link' then
+        (select coalesce(root.revoked_at, root.expires_at) from private.frontend_cipc_latest_result l
+          join private.frontend_cipc_latest_result root on root.business_id = l.linked_business_id
+            and root.owner_id = l.owner_id and root.kind = 'cipc' and root.registration_number = l.registration_number
+          where l.business_id = x.business_id and l.id = x.id and l.status = 'approved') end)
+      < statement_timestamp() - interval '12 months' as record_due,
     coalesce(x.revoked_at, x.decided_at) < statement_timestamp() - interval '30 days'
       and (x.visit_address is not null or x.visit_report is not null
         or exists(select 1 from private.frontend_business_seen_photos p where p.check_id = x.id
