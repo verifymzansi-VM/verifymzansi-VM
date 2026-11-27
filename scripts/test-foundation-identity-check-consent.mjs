@@ -84,7 +84,7 @@ try {
       update private.profiles set legal_first_name='Thando Sipho',legal_last_name='Dlamini' where account_id=(m->>'id')::uuid;
       if p_phone then
         insert into private.verification_phone_proofs(owner_id,challenge_id,phone)
-          values((m->>'id')::uuid,gen_random_uuid(),'+2783'||lpad((floor(random()*1e7))::bigint::text,7,'0'));
+          values((m->>'id')::uuid,gen_random_uuid(),'+2783'||lpad(nextval('vmtest.phone_seq')::text,7,'0'));
       end if;
       perform set_config('session_replication_role','origin',true);
       return m;

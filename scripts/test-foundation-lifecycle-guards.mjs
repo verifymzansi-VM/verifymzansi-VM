@@ -168,6 +168,9 @@ try {
 
   // ------------------------------------------------------- synthetic world
   q(`create schema vmtest;
+    -- Verified phone numbers come from one sequence, so two members never
+    -- share one (verification_phone_unique_active_idx).
+    create sequence if not exists vmtest.phone_seq maxvalue 9999999;
     create function vmtest.member(p_label text) returns jsonb language plpgsql as $$
     declare uid uuid:=gen_random_uuid(); sid uuid:=gen_random_uuid(); begin
       insert into auth.users(id,email,email_confirmed_at,raw_user_meta_data)
@@ -999,7 +1002,7 @@ try {
       insert into private.accepted_identity_facts(owner_id,submission_id,identity_hmac,reviewed_by)
         values(p_owner,gen_random_uuid(),fp,p_staff);
       insert into private.verification_phone_proofs(owner_id,challenge_id,phone)
-        values(p_owner,gen_random_uuid(),'+2782'||lpad((abs(hashtext(p_owner::text))%10000000)::text,7,'0'));
+        values(p_owner,gen_random_uuid(),'+2782'||lpad(nextval('vmtest.phone_seq')::text,7,'0'));
       insert into private.verification_localities(owner_id,province_id,city_id) values(p_owner,'gp','gp_johannesburg');
       perform set_config('session_replication_role','origin',true);
       return fp;

@@ -17,7 +17,7 @@ function printUsage(): void {
   console.log("Run Supabase CLI with env loaded from the workspace");
   console.log("");
   console.log("Usage: pnpm supabase:cli -- [--env-file=.env.local] <supabase args...>");
-  console.log("Example: pnpm supabase:cli -- migration list");
+  console.log("Example: pnpm supabase:cli -- projects list");
   console.log("");
 }
 

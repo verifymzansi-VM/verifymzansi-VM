@@ -859,25 +859,26 @@ describe("ProfilePage", () => {
     }
   });
 
-  it("drops the delayed redirect when the page unmounts before it fires", async () => {
+  it("loads the page the member goes to in full when they leave before the delayed load", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({ ok: true, json: async () => ({ status: "closed" }) })
     );
     const originalLocation = window.location;
     const assign = vi.fn();
-    Object.defineProperty(window, "location", {
-      configurable: true,
-      value: {
-        origin: "http://localhost",
-        href: "http://localhost/dashboard/profile#account",
-        pathname: "/dashboard/profile",
-        search: "",
-        hash: "#account",
-        assign,
-        replace: vi.fn(),
-      },
-    });
+    const location = {
+      origin: "http://localhost",
+      href: "http://localhost/dashboard/profile#account",
+      pathname: "/dashboard/profile",
+      search: "",
+      hash: "#account",
+      assign,
+      replace: vi.fn(),
+    };
+    Object.defineProperty(window, "location", { configurable: true, value: location });
+    // Fake timers that still move with real time (waitFor keeps working), so
+    // the 1.5 s delay can be passed at once.
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ["setTimeout", "clearTimeout"] });
     try {
       const { unmount } = render(<ProfilePage />);
       await screen.findByRole("heading", { name: "My profile" });
@@ -889,10 +890,15 @@ describe("ProfilePage", () => {
       await waitFor(() =>
         expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: "Account closed" }))
       );
+      // The member follows a link before the delayed load home (whether or not
+      // the delay has started yet).
+      location.href = "http://localhost/pricing";
       unmount();
-      await new Promise((resolve) => setTimeout(resolve, 1800));
-      expect(assign).not.toHaveBeenCalled();
+      await waitFor(() => expect(assign).toHaveBeenCalledWith("http://localhost/pricing"));
+      vi.advanceTimersByTime(1800);
+      expect(assign).toHaveBeenCalledTimes(1);
     } finally {
+      vi.useRealTimers();
       Object.defineProperty(window, "location", { configurable: true, value: originalLocation });
     }
   });
