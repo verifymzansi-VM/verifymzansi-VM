@@ -76,6 +76,14 @@ const MAX_PLAUSIBLE_SECONDS = 24 * 60 * 60;
 /** A movie header with its sample tables; 2 minutes of phone video needs far less. */
 const MAX_MOOV_BYTES = 32 * 1024 * 1024;
 const MAX_TOP_LEVEL_BOXES = 1024;
+/**
+ * Boxes collected from one parent inside `moov`. Real files have a handful per
+ * parent (and a few tracks); a crafted file packing millions of 8-byte boxes
+ * would otherwise cost seconds of CPU and more memory than a Worker has.
+ */
+const MAX_CHILD_BOXES = 10_000;
+/** Sample entries in one `stsd`; real files have one. */
+const MAX_SAMPLE_ENTRIES = 16;
 
 function u32(bytes: Uint8Array, offset: number): number {
   return (
@@ -112,7 +120,7 @@ function plausible(seconds: number | null): number | null {
     : null;
 }
 
-/** Child boxes of [start, end) inside an in-memory `moov`; null when malformed. */
+/** Child boxes of [start, end) inside an in-memory `moov`; null when malformed or too many. */
 function children(
   bytes: Uint8Array,
   start: number,
@@ -131,6 +139,7 @@ function children(
       header = 16;
     } else if (size === 0) size = end - offset;
     if (size < header || offset + size > end) return null;
+    if (found.length >= MAX_CHILD_BOXES) return null;
     found.push({ type: fourcc(bytes, offset + 4), data: offset + header, end: offset + size });
     offset += size;
   }
@@ -158,7 +167,7 @@ function timescaleOf(bytes: Uint8Array, box: Box | undefined): number {
  * media headers are only a declared summary). The sample count must match
  * `stsz`/`stz2`, or the table is treated as forged.
  */
-function sampleTableSeconds(bytes: Uint8Array, stbl: Box | undefined, timescale: number) {
+function sampleTable(bytes: Uint8Array, stbl: Box | undefined, timescale: number) {
   const stts = child(bytes, stbl, "stts");
   const sizes = child(bytes, stbl, "stsz") ?? child(bytes, stbl, "stz2");
   if (!stts || !sizes || !timescale || stts.data + 8 > stts.end || sizes.data + 12 > sizes.end) {
@@ -174,7 +183,7 @@ function sampleTableSeconds(bytes: Uint8Array, stbl: Box | undefined, timescale:
     ticks += count * u32(bytes, at + 4);
   }
   if (!samples || samples !== u32(bytes, sizes.data + 8)) return null;
-  return ticks / timescale;
+  return { seconds: ticks / timescale, samples };
 }
 
 /** Presentation length declared by an edit list, in seconds; 0 when absent, null when malformed. */
@@ -195,15 +204,148 @@ function editListSeconds(bytes: Uint8Array, trak: Box, movieTimescale: number): 
   return ticks / movieTimescale;
 }
 
+/** What the video track's sample description says (headers only, nothing is decoded). */
+export type VideoTrackFacts = {
+  /** Sample entry type, such as `avc1`, `avc3` or `hvc1`; `mixed` for several entries. */
+  codec: string;
+  /** H.264 profile and level from `avcC`; null for other codecs, or when `avcC` and its SPS disagree. */
+  profile: number | null;
+  level: number | null;
+  /** Coded size from the sample entry. */
+  width: number;
+  height: number;
+  /** Video samples per second of video track time. */
+  fps: number;
+};
+
+/** What the server and the phone know about an MP4 before keeping it (video-rule.ts). */
+export type VideoFileFacts = {
+  seconds: number;
+  /** The movie header comes before the media data, so playback can start at once. */
+  faststart: boolean;
+  /** The first video track (a file without one has no readable length). */
+  video: VideoTrackFacts;
+  videoTracks: number;
+  /** The first sound track's codec. `aac` is AAC-LC or HE-AAC (v1 or v2) in `mp4a`. */
+  audio: "aac" | "none" | "other";
+  audioTracks: number;
+  /** Tracks that are neither video nor sound (subtitles, timecode, timed metadata). */
+  otherTracks: number;
+};
+
+/** Sample entries of an `stsd` box; null when malformed. */
+function sampleEntries(bytes: Uint8Array, stsd: Box | undefined): Box[] | null {
+  if (!stsd || stsd.data + 8 > stsd.end) return null;
+  const count = u32(bytes, stsd.data + 4);
+  if (!count || count > MAX_SAMPLE_ENTRIES) return null;
+  const found = children(bytes, stsd.data + 8, stsd.end);
+  return found && found.length === count ? found : null;
+}
+
+/**
+ * Coded size, profile and level of a video sample entry. The profile and level
+ * come from `avcC` and must match the first SPS it carries (an `avc3` entry may
+ * carry none: its parameter sets travel with the samples).
+ */
+function videoEntryFacts(bytes: Uint8Array, entries: Box[]) {
+  const entry = entries[0];
+  // Visual sample entry: 6 reserved, 2 data reference, 16 predefined, then width and height.
+  if (entry.data + 78 > entry.end) return null;
+  const width = (bytes[entry.data + 24] << 8) | bytes[entry.data + 25];
+  const height = (bytes[entry.data + 26] << 8) | bytes[entry.data + 27];
+  const codec = entries.length === 1 ? entry.type : "mixed";
+  let profile: number | null = null;
+  let level: number | null = null;
+  const avcC =
+    codec === "avc1" || codec === "avc3"
+      ? child(bytes, { ...entry, data: entry.data + 78 }, "avcC")
+      : undefined;
+  if (avcC && avcC.data + 6 <= avcC.end && bytes[avcC.data] === 1) {
+    const sets = bytes[avcC.data + 5] & 0x1f;
+    const length =
+      avcC.data + 8 <= avcC.end ? (bytes[avcC.data + 6] << 8) | bytes[avcC.data + 7] : 0;
+    const sps = avcC.data + 8;
+    const agrees =
+      sets === 0
+        ? codec === "avc3"
+        : length >= 4 &&
+          sps + length <= avcC.end &&
+          (bytes[sps] & 0x1f) === 7 &&
+          bytes[sps + 1] === bytes[avcC.data + 1] &&
+          bytes[sps + 3] === bytes[avcC.data + 3];
+    if (agrees) {
+      profile = bytes[avcC.data + 1];
+      level = bytes[avcC.data + 3];
+    }
+  }
+  return { codec, profile, level, width, height };
+}
+
+/** Bytes of an MPEG-4 descriptor's length field and its value; null when malformed. */
+function descriptorLength(bytes: Uint8Array, at: number, end: number) {
+  let length = 0;
+  for (let i = 0; i < 4; i++) {
+    if (at + i >= end) return null;
+    length = (length << 7) | (bytes[at + i] & 0x7f);
+    if (!(bytes[at + i] & 0x80)) return { header: i + 1, length };
+  }
+  return null;
+}
+
+/**
+ * Whether a sound sample entry is AAC: `mp4a` whose `esds` names MPEG-4 audio
+ * (object type 0x40) with audio object type 2 (AAC-LC), 5 or 29 (HE-AAC).
+ */
+function isAacEntry(bytes: Uint8Array, entry: Box): boolean {
+  if (entry.type !== "mp4a" || entry.data + 28 > entry.end) return false;
+  // QuickTime sound description versions 1 and 2 add 16 and 36 bytes.
+  const version = (bytes[entry.data + 8] << 8) | bytes[entry.data + 9];
+  const extra = version === 1 ? 16 : version === 2 ? 36 : version === 0 ? 0 : -1;
+  if (extra < 0) return false;
+  const esds = child(bytes, { ...entry, data: entry.data + 28 + extra }, "esds");
+  if (!esds) return false;
+  let at = esds.data + 4;
+  // ES_Descriptor (tag 3): ES_ID, flags, then optional fields the flags announce.
+  if (bytes[at] !== 3) return false;
+  const es = descriptorLength(bytes, at + 1, esds.end);
+  if (!es) return false;
+  at += 1 + es.header;
+  if (at + 3 > esds.end) return false;
+  const flags = bytes[at + 2];
+  at += 3;
+  if (flags & 0x80) at += 2;
+  if (flags & 0x40) at += 1 + (bytes[at] ?? 0);
+  if (flags & 0x20) at += 2;
+  // DecoderConfigDescriptor (tag 4): object type, stream type, buffer and bitrates.
+  if (at >= esds.end || bytes[at] !== 4) return false;
+  const config = descriptorLength(bytes, at + 1, esds.end);
+  if (!config) return false;
+  at += 1 + config.header;
+  if (at + 13 > esds.end || bytes[at] !== 0x40) return false;
+  at += 13;
+  // DecoderSpecificInfo (tag 5): the audio object type is its first 5 bits.
+  if (at >= esds.end || bytes[at] !== 5) return false;
+  const info = descriptorLength(bytes, at + 1, esds.end);
+  if (!info || info.length < 1) return false;
+  at += 1 + info.header;
+  if (at >= esds.end) return false;
+  const objectType = bytes[at] >> 3;
+  return objectType === 2 || objectType === 5 || objectType === 29;
+}
+
+type MovieFacts = Omit<VideoFileFacts, "faststart">;
+const UNKNOWN_VIDEO = { codec: "unknown", profile: null, level: null, width: 0, height: 0 };
+
 /**
  * The movie's playing length, measured from the video track's sample table
- * (or its edit list, if that is longer). Another track counts only when it
- * runs more than a second past the video, so a few milliseconds of audio
- * priming never push a clip over the limit, while a long audio track behind
- * one frame does. Fragmented movies (`mvex`) are refused: their length is
- * spread over fragments, and neither phones nor the site's converter write them.
+ * (or its edit list, if that is longer), and what its tracks hold. Another
+ * track counts toward the length only when it runs more than a second past the
+ * video, so a few milliseconds of audio priming never push a clip over the
+ * limit, while a long audio track behind one frame does. Fragmented movies
+ * (`mvex`) are refused: their length is spread over fragments, and neither
+ * phones nor the site's converter write them.
  */
-function isobmffMovieSeconds(moov: Uint8Array): number | null {
+function isobmffMovieFacts(moov: Uint8Array): MovieFacts | null {
   const top = children(moov, 0, moov.length);
   if (!top || top.some((box) => box.type === "mvex")) return null;
   const movieTimescale = timescaleOf(
@@ -212,27 +354,53 @@ function isobmffMovieSeconds(moov: Uint8Array): number | null {
   );
   let video = 0;
   let other = 0;
+  const facts: MovieFacts = {
+    seconds: 0,
+    video: { ...UNKNOWN_VIDEO, fps: 0 },
+    videoTracks: 0,
+    audio: "none",
+    audioTracks: 0,
+    otherTracks: 0,
+  };
   for (const trak of top.filter((box) => box.type === "trak")) {
     const mdia = child(moov, trak, "mdia");
     const hdlr = child(moov, mdia, "hdlr");
     if (!hdlr || hdlr.data + 12 > hdlr.end) return null;
-    const media = sampleTableSeconds(
-      moov,
-      child(moov, child(moov, mdia, "minf"), "stbl"),
-      timescaleOf(moov, child(moov, mdia, "mdhd"))
-    );
+    const stbl = child(moov, child(moov, mdia, "minf"), "stbl");
+    const media = sampleTable(moov, stbl, timescaleOf(moov, child(moov, mdia, "mdhd")));
     const edits = editListSeconds(moov, trak, movieTimescale);
     if (media === null || edits === null) return null;
-    const seconds = Math.max(media, edits);
-    if (fourcc(moov, hdlr.data + 8) === "vide") video = Math.max(video, seconds);
-    else other = Math.max(other, seconds);
+    const seconds = Math.max(media.seconds, edits);
+    const handler = fourcc(moov, hdlr.data + 8);
+    if (handler === "vide") {
+      video = Math.max(video, seconds);
+      if (!facts.videoTracks++) {
+        const entries = sampleEntries(moov, child(moov, stbl, "stsd"));
+        // An unreadable description leaves the length readable; the keep rule refuses it.
+        const entry = (entries && videoEntryFacts(moov, entries)) ?? UNKNOWN_VIDEO;
+        facts.video = { ...entry, fps: media.samples / media.seconds };
+      }
+    } else {
+      other = Math.max(other, seconds);
+      if (handler === "soun") {
+        if (!facts.audioTracks++) {
+          const entries = sampleEntries(moov, child(moov, stbl, "stsd"));
+          facts.audio = entries?.length === 1 && isAacEntry(moov, entries[0]) ? "aac" : "other";
+        }
+      } else facts.otherTracks++;
+    }
   }
-  if (!video) return null;
-  return plausible(other > video + 1 ? other : video);
+  const seconds = video ? plausible(other > video + 1 ? other : video) : null;
+  return seconds === null ? null : { ...facts, seconds };
 }
 
-async function readIsobmffSeconds(read: VideoByteReader, size: number): Promise<number | null> {
-  let seconds: number | null = null;
+async function readIsobmffFacts(
+  read: VideoByteReader,
+  size: number
+): Promise<VideoFileFacts | null> {
+  let movie: MovieFacts | null = null;
+  let mediaSeen = false;
+  let faststart = false;
   let offset = 0;
   // Every top-level box is visited (headers only; media data is skipped), so
   // movie fragments after the movie header are seen and refused.
@@ -250,18 +418,20 @@ async function readIsobmffSeconds(read: VideoByteReader, size: number): Promise<
       boxSize = large;
     } else if (boxSize === 0) boxSize = size - offset;
     if (boxSize < 8 || offset + boxSize > size) return null;
-    if (type === "moof" || (type === "moov" && seconds !== null)) return null;
+    if (type === "moof" || (type === "moov" && movie !== null)) return null;
+    if (type === "mdat") mediaSeen = true;
     if (type === "moov") {
       if (boxSize > MAX_MOOV_BYTES) return null;
       const moov = await read(offset, boxSize);
       if (moov.length !== boxSize) return null;
       const header = u32(moov, 0) === 1 ? 16 : 8;
-      seconds = isobmffMovieSeconds(moov.subarray(header));
-      if (seconds === null) return null;
+      movie = isobmffMovieFacts(moov.subarray(header));
+      if (movie === null) return null;
+      faststart = !mediaSeen;
     }
     offset += boxSize;
   }
-  return offset === size ? seconds : null;
+  return offset === size && movie ? { ...movie, faststart } : null;
 }
 
 const EBML_ID = 0x1a45dfa3;
@@ -357,7 +527,7 @@ async function readVideoSeconds(read: VideoByteReader, size: number): Promise<nu
     if (magic.length === 4 && u32(magic, 0) === EBML_ID) {
       return webmSeconds(await read(0, Math.min(size, WEBM_HEAD_BYTES)));
     }
-    return await readIsobmffSeconds(read, size);
+    return (await readIsobmffFacts(read, size))?.seconds ?? null;
   } catch {
     return null;
   }
@@ -374,6 +544,32 @@ export function readVideoBytesSeconds(bytes: Uint8Array): Promise<number | null>
 /** Length of a picked file, reading only the headers it needs. */
 export function readVideoBlobSeconds(blob: Blob): Promise<number | null> {
   return readVideoSeconds(
+    async (offset, length) =>
+      new Uint8Array(await blob.slice(offset, offset + length).arrayBuffer()),
+    blob.size
+  );
+}
+
+/** Length and track facts of an MP4/MOV, or null when its length cannot be read. */
+async function readVideoFacts(read: VideoByteReader, size: number) {
+  try {
+    return await readIsobmffFacts(read, size);
+  } catch {
+    return null;
+  }
+}
+
+/** Facts of an in-memory upload (the server already holds every byte). */
+export function readVideoBytesFacts(bytes: Uint8Array): Promise<VideoFileFacts | null> {
+  return readVideoFacts(
+    async (offset, length) => bytes.subarray(offset, Math.min(bytes.length, offset + length)),
+    bytes.length
+  );
+}
+
+/** Facts of a picked file, reading only the headers it needs. */
+export function readVideoBlobFacts(blob: Blob): Promise<VideoFileFacts | null> {
+  return readVideoFacts(
     async (offset, length) =>
       new Uint8Array(await blob.slice(offset, offset + length).arrayBuffer()),
     blob.size

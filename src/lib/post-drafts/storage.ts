@@ -33,6 +33,8 @@ export interface ListingDraftData {
   title: string;
   description: string;
   price: string;
+  /** Absent on drafts saved before the price choice existed. */
+  priceMode?: "" | "amount" | "free" | "on_request";
   negotiable: boolean;
   province: string;
   city: string;
@@ -55,11 +57,11 @@ export interface BusinessDraftData {
   locationTown: string;
   locationAddress: string;
   storeNumber: string;
-  serviceAreasInput: string;
+  /** Older drafts only; service areas now live in categoryDetails.customer_access. */
+  serviceAreasInput?: string;
   mapDirections: string;
   phone: string;
   whatsapp: string;
-  email: string;
   website: string;
   hoursMonFri: string;
   hoursSat: string;
@@ -118,10 +120,11 @@ export interface TourismDraftData extends TourismCategorySpecificFormFields {
   joinMethods?: string[];
   meetingPoint?: string;
   pickupAreas?: string;
+  /** Tourism: the poster chose to show the typed address publicly. */
+  publishAddress?: boolean;
   contactMethods: string[];
   phone: string;
   whatsapp: string;
-  email: string;
   website: string;
   hoursMonFri: string;
   hoursSat: string;

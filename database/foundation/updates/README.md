@@ -82,7 +82,7 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Close unused commands; short names in the staff role review, 26 November 2026
 
-`20261126125203_close_unused_commands.sql` is pending (see the applied
+`20261127222829_close_unused_commands.sql` is pending (see the applied
 register). Launch checklist item 47. Contract step: eight member and staff
 commands that the website replaced in earlier, applied updates are removed, and
 the staff role review shows staff by their short name.
@@ -122,9 +122,307 @@ preflight probes only the commands in its runtime manifest, so it passes while
 production still has them (the update shows as pending). The release reads the
 role review without the email address, so between the deploy and the apply the
 staff roles page shows "Role management could not be loaded". Read-only
-preflight: `../preflight/20261126125203_close_unused_commands.check.sql`. No
+preflight: `../preflight/20261127222829_close_unused_commands.check.sql`. No
 rollback file: after the apply, a revert of this pull request cannot deploy; fix
 forward. Behaviour checks: `scripts/test-foundation-close-unused-commands.mjs`.
+
+## Business numbers through the click-to-view route, 27 November 2026
+
+`20261127055550_reveal_business_contacts.sql` was applied on 27 November 2026 at
+12:24 UTC (see the applied register).
+
+- **One rule for a business's numbers.** New
+  `internal.business_contact_number(data, contacts, channel)` gives the number a
+  business serves for a channel from its stored presentation
+  (`post_presentations.contacts`: `phone` for call, `whatsapp` for whatsapp),
+  normalised to `+27` and nine digits, or null. The channel must be ticked in
+  `data.category_details.contact_methods` when the business has that list (one
+  saved before the list existed offers each number it has, as its form shows
+  it). Call accepts a landline (01x-05x area codes), a mobile (06x, 071-074,
+  076-079 or 081-084) or a call-only number in ICASA's non-geographic ranges:
+  087 (VoIP), 0800 (toll-free) or 0860/0861 (share-call), never another 080 or
+  086 range (0862-0869 hold fax-to-email and premium numbers). That is the
+  business form's rule (`businessNumber` in `src/lib/utils/phone.ts`). WhatsApp
+  takes only the mobile (not a landline, 087, 080 or 086). Spaces, brackets and
+  dashes are ignored; any other value gives null.
+- **Business numbers on request.** `internal.reveal_post_phone` (behind the
+  service-only `api.reveal_post_phone`, which the website's "Show number" route
+  `/api/contact/reveal` calls after its Turnstile and per-visitor checks) now
+  answers for a publicly live business (Business and Tourism) with
+  `internal.business_contact_number`.
+- **No number in the public card read.** `internal.frontend_post_presentation`
+  (the presentation in `api.search_post_cards` with `frontend_presentation`,
+  open to anon and authenticated) no longer returns `business_contacts`. For a
+  business, `data` carries `business_contact_options` `{call, whatsapp}`:
+  booleans, true when `internal.business_contact_number` has a number for that
+  channel. The key sits inside `data` because the current website's parser
+  accepts any key there and rejects unknown keys beside it. The owner's own read
+  and staff review (`internal.frontend_owner_post`, unchanged) keep their
+  `contacts` with the numbers.
+- **Listings and events unchanged**: the owner's verified number, only for a
+  channel the owner chose.
+- **Guard.** The update refuses with 55000 unless `internal.reveal_post_phone`
+  has its reviewed body (md5 `98baceb9be415a5ba2150793263e58e1`) or this
+  update's (`a30f22dd9c40c95cdc35abb9dcf5e204`),
+  `internal.frontend_post_presentation` its reviewed body
+  (`9f279565fc4eca46f6b355313a2271a3`) or this update's
+  (`c679983dbb6c63714de6be71c459ee85`), and `internal.business_contact_number`
+  is absent or has this update's body (`fd668f7973bcc89a2d139ab4e3d24af8`).
+
+Expand only: one new internal function and two replaced bodies; no command,
+argument, grant or table changes (the removed key is a field inside a jsonb
+value, which the contract steps do not compare). ORDER: **apply-first** (apply,
+then merge). The current website never asks the reveal for a business number and
+ignores the new `data` key; without `business_contacts` it shows no business
+number buttons until the new website is deployed. A website deployed before the
+update would answer 404 to every business "Show number". Read-only preflight
+(counts only): `../preflight/20261127055550_reveal_business_contacts.check.sql`;
+rollback: `../rollback/20261127055550_reveal_business_contacts.down.sql` (puts
+both earlier bodies back and drops the new function). Behaviour checks:
+`scripts/test-foundation-reveal-business-contacts.mjs`.
+
+## Public post presentation limited to display fields, 27 November 2026
+
+`20261127044054_public_presentation_display_fields.sql` was applied on 27
+November 2026 at 06:13 UTC (see the applied register).
+
+- **Display fields only.** The public card read (`api.search_post_cards` with
+  `frontend_presentation`, open to `anon` and `authenticated`) returns each
+  post's presentation through `internal.frontend_post_presentation`. Its `data`
+  now goes through `internal.public_post_presentation_data` (new): an allow-list
+  of the top-level keys the public pages render (`presentedFormFields` and
+  `presentedVideoLayout`, `restoredPublicRow`, the business and tourism layouts,
+  `public-enquiry.ts`), with `business_details`, `category_details` (and its
+  `customer_access` and `business_profile`) and `event_details` limited to their
+  listed inner keys. `source_attributes`, the Market form's attribute set
+  (unknown keys stripped by the form schema), is kept as it is. `email`,
+  `phone`, `whatsapp` and every other key are not returned. `media` and
+  `business_contacts` are unchanged.
+- **Addresses.** A Market listing never returns `location_address`. A business
+  (Business and Tourism) whose `category_details.customer_access` exists without
+  `publishAddress: true` returns no `location_address`, `store_number`,
+  `map_directions`, `business_details.street_address` or
+  `business_details.suite_or_unit`, the forms' own rule. A business saved before
+  customer access existed keeps its address; an event keeps its venue.
+- **Owner reads unchanged.** `internal.frontend_owner_post` (the owner's edit
+  forms and dashboard, staff review) replaces `data` with the full stored
+  presentation.
+- **One-off cleanup.** Every stored presentation loses its `email` key (the
+  forms no longer collect one). An approval snapshot of a changed post that
+  matched it before the cleanup is moved to the post after it, so the cleanup
+  never counts as an unreviewed edit. The rollback does not restore removed
+  emails.
+- **Guard.** The update refuses with 55000 unless
+  `internal.frontend_post_presentation` has its reviewed body (md5
+  `d57885ae409a1a91b5bc9a71d2a94730`) or this update's
+  (`9f279565fc4eca46f6b355313a2271a3`).
+
+Expand only: two new internal functions
+(`internal.public_post_presentation_data`, `internal.json_object_keys_only`, no
+grants) and one replaced body; no command, argument, grant or table changes.
+ORDER: **apply-first** (apply, then merge): the website asks nothing new and
+accepts any `data` record, so public pages stop receiving keys they discard or
+do not show. A website that still saves an email keeps it in the owner's view
+only. Read-only preflight (counts only):
+`../preflight/20261127044054_public_presentation_display_fields.check.sql`;
+rollback:
+`../rollback/20261127044054_public_presentation_display_fields.down.sql` (puts
+the earlier body back and drops the two functions). Behaviour checks:
+`scripts/test-foundation-public-presentation-fields.mjs`.
+
+## Package running in the posting allowance, 26 November 2026
+
+`20261126202833_allowance_says_package_running.sql` was applied on 27 November
+2026 at 04:53 UTC (see the applied register). Launch checklist item 80.
+
+- **One key added.** `api.get_my_frontend_posting_allowance_v2`, which every
+  post form already reads, also answers `package_running` (boolean): true while
+  the caller's own Multi-listing package runs, by the same rule as
+  `api.list_my_post_templates` (`internal.slot_package_now`). The answer is the
+  same in every posting area, and the rest of the answer is unchanged.
+- **One request fewer.** Save as template on the Edit listing page reads this
+  from the allowance the page already loads, instead of its own
+  `GET /api/post-templates`.
+
+Expand only: one replaced body
+(`internal.get_my_frontend_posting_allowance_v2(text)`); no command, argument or
+grant changes. ORDER: **website-first** (merge and deploy, then apply): the
+website's allowance parser is strict, so the release that accepts the key (as
+optional) must be live first. Until the update is applied, the new website reads
+a missing key as no package and does not show Save as template on Edit listing.
+Read-only preflight:
+`../preflight/20261126202833_allowance_says_package_running.check.sql`;
+rollback: `../rollback/20261126202833_allowance_says_package_running.down.sql`
+(puts the earlier body back). Behaviour checks:
+`scripts/test-foundation-allowance-package-running.mjs`.
+
+## Business-check details deleted as the Privacy page says, 26 November 2026
+
+`20261126210022_business_check_retention.sql` was applied on 27 November 2026 at
+06:11 UTC (see the applied register). Launch checklist item 79. No table,
+column, trigger, command or grant is added or removed; one function body is
+replaced and one check rule relaxed.
+
+- **`internal.retention_verification`** (the daily retention sweep,
+  `api.run_retention`, service only) adds two counts. `business_check_details`:
+  30 days after a business check's decision, or its revocation (a later
+  decision), the visit address, the visit report, the photo locations, the
+  messages, the CIPC document records (the parsed copy of each CIPC PDF), the
+  representative's email and the call notes are deleted. The files already go 30
+  days after the decision. `business_checks`: the check record goes 12 months
+  after it ended (the sticker expired or was revoked; a refusal or withdrawal
+  ends at its decision), with its CIPC review, photo and file rows. A CIPC link
+  sticker shows while its root business's sticker runs, so it ends when that
+  root sticker ends. A business's results go oldest first: a result waits while
+  an older approved or revoked result of the same kind (seen, or CIPC and CIPC
+  link) is left, so deleting a record never changes the sticker a business
+  shows. The sticker, its date and town, the CIPC sticker details on the
+  profile, the outcome and the staff note stay until then. An open legal hold on
+  the owner or fraud hold on the case keeps everything. Each check is handled
+  under the owner's verification lock, which revocations and hold writers also
+  take.
+- **`frontend_business_checks_check1`**: a visit check needs a visit address
+  only until it is decided (was: always), so the sweep can delete it.
+
+ORDER: apply first, then merge (safe either way: no API command changes, and the
+readers already accept the cleared fields as missing). The website release adds
+to the Privacy page row 'Business verification files' that the check record is
+deleted 12 months after the sticker ends. Read-only preflight:
+`../preflight/20261126210022_business_check_retention.check.sql` (expect one
+summary row reading "update not applied"; its counts show what the next sweep
+would clear, delete and keep under a hold); rollback:
+`../rollback/20261126210022_business_check_retention.down.sql` (the earlier rule
+comes back NOT VALID if a decided visit check has no address any more; deleted
+details stay deleted). Behaviour test:
+`scripts/test-foundation-business-check-retention.mjs`.
+
+## Catalogue filters run in the database, 26 November 2026
+
+`20261126062428_catalogue_filters_in_database.sql` was applied on 26 November
+2026 at 23:48 UTC (see the applied register). Launch checklist item 29. No
+table, column, index, trigger, command, argument or grant is added or removed;
+two existing function bodies are replaced. Three public lists filtered, merged
+or paged in the website after reading far more cards than they showed: an
+organisation's supported businesses (`/organisation/<slug>` and
+`/mzansi-business?org=`, which missed any business past position 4,800), a text
+search under Businesses without a category (two reads merged in the website, up
+to 480 results) and Video mode (four pages of 50 full cards per section, only to
+use their ids).
+
+- **`internal.search_posts`** (full body; behind `api.search_posts` and
+  `internal.search_post_cards`) gains five optional request keys, so each list
+  is one filtered, ordered, counted and paged call: `organisation` (a slug of a
+  listed organisation; an unknown or unlisted slug matches nothing), `programme`
+  (a uuid, needs `organisation`), `sponsored` (true or false, needs
+  `organisation`; only posts with a sponsorship by that organisation running
+  now), `kind` (listing, business or event; business without an area is the
+  Business area plus the tourism businesses) and `ids_only` (true or false:
+  `items` is then a list of post ids in the same order, and a page may hold 1 to
+  200 instead of 1 to 48). Filters, order, totals, offsets (at most 4,800),
+  cursors and replies to requests without the new keys are unchanged.
+- **`internal.search_post_cards`** (full body) refuses `ids_only` (22023), so a
+  card page stays at most 48 cards.
+- **Guards.** The update refuses with 55000 unless both functions have a
+  reviewed body (or this update's), by md5 of the body with line ends
+  normalised: `internal.search_posts` `590ffdf23439ddbf6772f70afd199740` becomes
+  `3084bc16bb1a0fe19ed94f19a3e23089`; `internal.search_post_cards`
+  `6bb60ea1828671af6f73e785d217c8ba` becomes `4d8eb454d3e5650e8bf9f553ae0c0b50`.
+
+ORDER: **apply-first** (apply, then merge). The website release from the same
+pull request sends the new keys, which the earlier body refuses as unknown; the
+earlier website never sends them and gets the same replies as before. Read-only
+preflight: `../preflight/20261126062428_catalogue_filters_in_database.check.sql`
+(expect "update not applied" as the only row; run it again after the update,
+expecting "already applied"); rollback:
+`../rollback/20261126062428_catalogue_filters_in_database.down.sql` (puts the
+earlier bodies back byte for byte; undo the website release first, and it
+refuses with 55000 when a later update changed either function).
+
+## Invoice payment link, 26 November 2026
+
+`20261126053701_invoice_pay_link.sql` was applied on 26 November 2026 at 20:30
+UTC (see the applied register). Launch checklist items 38 and 34 (inventory
+A28): a customer invoice is emailed with a link that lets its payer see and pay
+it without signing in, and the receipt names the invoice it paid.
+
+- **The link.** `private.customer_invoices.pay_link_hash` keeps the SHA-256
+  (hex) of the invoice's current link, unique where set. The website's email job
+  makes the link (32 random bytes) just before it sends, and stores its hash
+  with the new service command `api.prepare_invoice_email` (only while the
+  invoice is unpaid); each sending replaces the hash, so the latest email holds
+  the live link.
+- **The email.** `internal.notify_invoice_issued` (full body) also queues an
+  outbox row of the new kind `invoice_issued`, one per invoice, for every way
+  staff issue an invoice; `internal.claim_supported_notification_outbox` (full
+  body) accepts the kind and gives no recipient once the account is closed.
+- **Paying by link.** New service commands `api.get_invoice_by_link`,
+  `api.save_invoice_billing_by_link` and `api.start_invoice_payment_by_link`
+  (the website's server only). They reach the same functions as the member's
+  commands: `internal.get_my_invoice`, `internal.save_my_invoice_billing` and
+  `internal.start_invoice_payment` gain `p_link_hash` (old signatures dropped;
+  the member's `api` commands keep their arguments and grants and pass null).
+  With a hash (service role only, else 42501), new
+  `internal.customer_invoice_for_caller` finds the invoice whose link it is, of
+  an account that can still use the site, until 30 days after the invoice's due
+  date (anything else is not found), and that account acts with every rule of
+  the member's Pay now. The read is the member's read; Pay now also answers
+  `owner_id` for the server's Ozow request.
+- **The receipt.** `internal.get_payment_receipt` (full body) adds
+  `customer_invoice_number` (from the payment's snapshot), null for a checkout.
+
+ORDER: **apply-first** (apply, then merge): the release calls the new commands
+and the deploy gate checks them. The live website leaves the new outbox kind
+unclaimed until the release is deployed, and its receipt reader ignores the
+extra field. Read-only preflight:
+`../preflight/20261126053701_invoice_pay_link.check.sql` (expect "invoice
+payment link: update not applied"); rollback:
+`../rollback/20261126053701_invoice_pay_link.down.sql` (refused once an invoice
+email was queued; deploy a website without the payment link first).
+
+## Keep-for periods for the newer personal-data tables, 26 November 2026
+
+`20261126053631_keep_for_periods.sql` was applied on 26 November 2026 at 20:15
+UTC (see the applied register). Launch checklist item 51 (roadmap M7.4). No
+table, column, trigger, command or grant changes; six existing function bodies
+are replaced, all used by the daily retention sweep (`api.run_retention`,
+service only).
+
+- **Payment records: 7 years.** `internal.retention_tax_year_due` keeps payment,
+  invoice and payout records 7 years (was 5) from the end of the tax year (1
+  March to the end of February). Everything `internal.retention_commerce` dates
+  by it follows. The cooling-off tick and the Terms version are stored in each
+  payment's snapshot, so they are kept with it.
+- **Privacy request proofs: 3 years** after the request closed (was 5;
+  `internal.retention_privacy_requests`).
+- **`internal.retention_operations`**: contact-form messages 12 months after
+  they were resolved (open ones are kept); owner administrator invitations 12
+  months after they were revoked, or 12 months after the claimant's account was
+  erased (a claimed invitation is the owner's approval the staff role commands
+  require); runtime switch and sign-up mode change logs 5 years.
+- **`internal.retention_staff_records`**: decided appeals 2 years after the
+  decision, once the decision appealed is gone (while it stands, its appeal
+  stops a second one); released content holds 2 years after release, never while
+  an appeal against them waits; staff role change proposals 5 years after they
+  were decided or expired; evidence case claim events 2 years; raised slot
+  limits 2 years after they ended (`internal.individual_slot_limit_guard` now
+  lets the sweep delete them). A closed report (2 years, unchanged) is not
+  deleted while an appeal against a warning it gave waits.
+- **`internal.retention_verification`**: reasons for returning an ID 12 months
+  after the return, unless a legal hold or fraud hold keeps them. The five-year
+  sweep of closed accounts also deletes them by case: a kept return used to stop
+  that sweep from deleting its case (the foreign key restricts) and failed the
+  whole retention run.
+
+Not changed here: account closures (they date the identity periods; deleted with
+the Auth user), suspensions and bans, business check notes and partner records
+(separate checklist items). ORDER: apply first, then merge (safe either way:
+nothing is old enough to be deleted yet). The website release states 7 years for
+payment records, 3 years for privacy request records and 12 months for
+contact-form messages. Read-only preflight:
+`../preflight/20261126053631_keep_for_periods.check.sql` (expect one summary row
+reading "update not applied" with every count 0); rollback:
+`../rollback/20261126053631_keep_for_periods.down.sql` (deleted records stay
+deleted). Behaviour test: `scripts/test-foundation-keep-for-periods.mjs`.
 
 ## Video length checked by the database, 26 November 2026
 
@@ -8798,6 +9096,49 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   (fingerprint.sql, 18:33 UTC) matched the full replay (except the known schema
   grant difference)
 
-- `20261126125203_close_unused_commands.sql`: pending; website-first
+- `20261126053631_keep_for_periods.sql`: applied 2026-11-26 20:15 UTC;
+  apply-first, owner-approved, before pull request #392 was merged; Supabase SQL
+  editor (browser), file from raw GitHub at a06dadd3, update sha256 starting
+  c43721a8d16441dc; preflight before "keep-for periods: update not applied;
+  contact messages: 0; admin invitations: 0; change logs: 0; appeals and holds:
+  0; closed reports: 0; role changes: 0; claim events: 0; slot limits: 0; ID
+  return reasons: 0; privacy request proofs: 0" with no problem rows, after
+  "keep-for periods: already applied; contact messages: 0; admin invitations: 0;
+  change logs: 0; appeals and holds: 0; closed reports: 0; role changes: 0;
+  claim events: 0; slot limits: 0; ID return reasons: 0; privacy request proofs:
+  0"; production fingerprint after it (fingerprint.sql, 20:18 UTC) matched the
+  full replay (except the known schema grant difference)
+
+- `20261126053701_invoice_pay_link.sql`: applied 2026-11-26 20:30 UTC;
+  apply-first, owner-approved, before pull request #394 was merged; Supabase SQL
+  editor (browser), file from raw GitHub at 1d30293c, update sha256 starting
+  cd1e79ba0ef2af6d; preflight before "invoice payment link: update not applied;
+  unpaid invoices: 0" with no problem rows, after "invoice payment link: already
+  applied; unpaid invoices: 0; invoices with a link: 0; invoice emails: 0";
+  production fingerprint after it and 20261126053631_keep_for_periods.sql
+  (fingerprint.sql, 20:31 UTC) matched the full replay (except the known schema
+  grant difference)
+- `20261126062428_catalogue_filters_in_database.sql`: applied 2026-11-26 23:48
+  UTC; apply-first; production fingerprint after it (fingerprint.sql, read-only,
+  23:5x UTC) matched the full replay (except the known schema grant difference)
+- `20261126202833_allowance_says_package_running.sql`: applied 2026-11-27 04:53
+  UTC; website-first; production fingerprint after it (fingerprint.sql,
+  read-only, 04:53 UTC) matched the full replay (except the known schema grant
+  difference)
+- `20261126210022_business_check_retention.sql`: applied 2026-11-27 06:11 UTC;
+  apply-first; production fingerprint after it and the next update
+  (fingerprint.sql, read-only, 06:14 UTC) matched the full replay (except the
+  known schema grant difference)
+- `20261127044054_public_presentation_display_fields.sql`: applied 2026-11-27
+  06:13 UTC; apply-first; production fingerprint after it (fingerprint.sql,
+  read-only, 06:14 UTC) matched the full replay (except the known schema grant
+  difference)
+- `20261127055550_reveal_business_contacts.sql`: applied 2026-11-27 12:24 UTC;
+  apply-first; production fingerprint after it (fingerprint.sql, read-only,
+  12:27 UTC) matched the full replay (except the known schema grant difference)
+- `20261127114113_video_upload_facts.sql`: applied 2026-11-27 16:10 UTC;
+  apply-first; production fingerprint after it (fingerprint.sql, read-only)
+  matched the full replay (except the known schema grant difference)
+- `20261127222829_close_unused_commands.sql`: pending; website-first
 
 <!-- applied-register:end -->

@@ -6,12 +6,17 @@ import { settleMediaUploads } from "@/app/post/_lib/settle-media-uploads";
 import { useEffect, useMemo, useState, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { usePostTransport } from "@/hooks/use-post-transport";
-import { Loader2, X, Phone, MessageCircle, Inbox, Check } from "lucide-react";
+import { Loader2, X, Phone, MessageCircle, Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PostLabel as Label } from "@/components/post/post-label";
 import { Textarea } from "@/components/ui/textarea";
 import { PostEditActionBar, PostFormSection } from "@/components/post/post-form-scaffold";
+import {
+  PHOTO_OR_VIDEO_RULE,
+  VIDEO_COVER_NEEDED,
+  photosWithVideoCover,
+} from "@/lib/forms/video-cover-photo";
 import { PostingTermsConsent } from "@/components/post/posting-terms-consent";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
@@ -23,13 +28,13 @@ import { getRestoredFoundationBrowserClient as createClient } from "@/lib/founda
 import { loadOwnListing } from "./load-own-listing";
 import { CategoryPicker } from "@/components/listings/category-picker";
 import { MediaUpload } from "@/components/ui/media-upload";
-import { UploadProgressPanel, type UploadSlotStatus } from "@/components/ui/upload-progress-panel";
-import { FocalPointPicker, type FocalPoint } from "@/components/ui/focal-point-picker";
 import {
-  usePlanMaxPhotos,
-  usePlanMaxVideos,
-  usePlanVideoAllowed,
-} from "@/components/billing/plan-gate";
+  UploadProgressPanel,
+  useUploadProgress,
+  type UploadSlotStatus,
+} from "@/components/ui/upload-progress-panel";
+import { FocalPointPicker, type FocalPoint } from "@/components/ui/focal-point-picker";
+import { usePlanEntitlements } from "@/components/billing/plan-gate";
 import { LocationSelector } from "@/components/ui/location-selector";
 import type { ListingCategory, ListingCondition } from "@/types/enums";
 import { mapListingCategory } from "@/lib/utils/enum-compat";
@@ -59,6 +64,13 @@ import { readMediaDimensions } from "@/lib/utils/media-metadata";
 import { VIDEO_GUIDANCE, VIDEO_SOUND_OFF_TIP } from "@/lib/media/video-length";
 import { SaveTemplateButton } from "@/components/post-templates/save-template-button";
 import { templateDataFromForm } from "@/lib/post-templates";
+import { ListingPriceFields } from "@/components/posting/listing-price-fields";
+import {
+  listingPriceModeFromRow,
+  listingPricePreview,
+  listingPriceSubmission,
+  type ListingPriceForm,
+} from "@/lib/domains/listings/price-form";
 
 const log = createLogger("EditListingPage");
 const TITLE_MAX = 100;
@@ -80,11 +92,19 @@ export default function EditListingPage() {
   const [town, setTown] = useState("");
   const [locationAddress, setLocationAddress] = useState("");
   const [negotiable, setNegotiable] = useState(false);
+  const [priceMode, setPriceMode] = useState<ListingPriceForm["mode"]>("amount");
+  const priceForm: ListingPriceForm = { mode: priceMode, amount: price, negotiable };
+  // The previews show the seller's choice: an amount, "Free" or "Price on request".
+  const { priceMode: previewPriceMode, priceCents: previewPriceCents } = listingPricePreview(
+    category,
+    priceForm
+  );
   const [contactMethods, setContactMethods] = useState<string[]>(DEFAULT_LISTING_CONTACT_METHODS);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submissionInFlightRef = useRef(false);
   const [submitProgress, setSubmitProgress] = useState<string | null>(null);
+  const uploadProgress = useUploadProgress();
   const [uploadStatuses, setUploadStatuses] = useState<Record<string, UploadSlotStatus>>({
     logo: "idle",
     photos: "idle",
@@ -114,9 +134,9 @@ export default function EditListingPage() {
   // Only while the member has not accepted the current posting terms.
   const [termsAccepted, setTermsAccepted] = useState(false);
   const { toast } = useToast();
-  const maxPhotos = usePlanMaxPhotos("MZANSI_MARKET");
-  const maxVideos = usePlanMaxVideos("MZANSI_MARKET");
-  const videoAllowed = usePlanVideoAllowed("MZANSI_MARKET");
+  // One allowance read for the media limits and Save as template.
+  const { maxPhotos, maxVideos, videoAllowed, packageRunning } =
+    usePlanEntitlements("MZANSI_MARKET");
   const previewLogoUrl = useMemo(
     () => (newLogoFile.length > 0 ? URL.createObjectURL(newLogoFile[0]) : null),
     [newLogoFile]
@@ -218,6 +238,7 @@ export default function EditListingPage() {
         );
         setLocationAddress(((data as Record<string, unknown>).location_address as string) || "");
         setNegotiable(data.price_negotiable ?? false);
+        setPriceMode(listingPriceModeFromRow(data));
         setContactMethods(
           Array.isArray(data.contact_methods) && data.contact_methods.length > 0
             ? withListingEnquiry(data.contact_methods as string[])
@@ -355,11 +376,22 @@ export default function EditListingPage() {
   const normalizedPreviewAttributes = category
     ? coerceListingAttributes(category, categoryAttributes)
     : {};
-  const displayExistingPhotos = useMemo(() => normalizeMediaUrls(existingPhotos), [existingPhotos]);
   const displayExistingVideos = useMemo(() => normalizeMediaUrls(existingVideos), [existingVideos]);
-  const previewPhotos = previewPhotoUrls.length > 0 ? previewPhotoUrls : existingPhotos;
   const previewVideos = previewVideoUrls.length > 0 ? previewVideoUrls : existingVideos;
-  const previewVideoThumbnail = previewVideoCoverUrl ?? existingVideoThumbnail;
+  // A one-video slot swaps the saved video for the new pick. The saved video's cover
+  // frame (and the photo made from it) goes with it, so it is never used for the new video.
+  const videoReplaced =
+    newVideoFile.length > 0 &&
+    existingVideos.length > 0 &&
+    Math.max(maxVideos, existingVideos.length) === 1;
+  const keptVideoThumbnail = videoReplaced ? null : existingVideoThumbnail;
+  const keptPhotos =
+    videoReplaced && existingVideoThumbnail
+      ? existingPhotos.filter((url) => url !== existingVideoThumbnail)
+      : existingPhotos;
+  const displayKeptPhotos = useMemo(() => normalizeMediaUrls(keptPhotos), [keptPhotos]);
+  const previewPhotos = previewPhotoUrls.length > 0 ? previewPhotoUrls : keptPhotos;
+  const previewVideoThumbnail = previewVideoCoverUrl ?? keptVideoThumbnail;
   const previewLogo = previewLogoUrl ?? existingLogo;
 
   function validateForm() {
@@ -381,21 +413,19 @@ export default function EditListingPage() {
       Object.assign(errors, validateListingAttributes(category, categoryAttributes));
     }
 
-    if (
-      (category !== "jobs_services" || price) &&
-      (!price || Number.isNaN(parseFloat(price)) || parseFloat(price) < 0)
-    ) {
-      errors.price_zar = "Enter a valid price.";
-    }
+    const priced = listingPriceSubmission(category, priceForm);
+    if ("error" in priced) errors.price_zar = priced.error;
     if (!province) errors.province = "Select a province.";
     if (!city) errors.city = "Select a city.";
     if (contactMethods.length === 0) {
       errors.contactMethods = "Choose at least one contact method.";
     }
 
-    const totalPhotos = existingPhotos.length + newPhotoFiles.length;
-    if (category !== "jobs_services" && totalPhotos === 0)
-      errors.images = "Upload at least one photo.";
+    const totalPhotos = keptPhotos.length + newPhotoFiles.length;
+    const hasVideo = existingVideos.length > 0 || newVideoFile.length > 0;
+    const hasVideoCover = newVideoCoverFile.length > 0 || !!keptVideoThumbnail;
+    if (category !== "jobs_services" && totalPhotos === 0 && !(hasVideo && hasVideoCover))
+      errors.images = hasVideo ? VIDEO_COVER_NEEDED : PHOTO_OR_VIDEO_RULE;
     if (totalPhotos > maxPhotos) {
       errors.images = `You can upload up to ${maxPhotos} photos on this plan.`;
     }
@@ -430,6 +460,7 @@ export default function EditListingPage() {
     submissionInFlightRef.current = true;
     setIsSubmitting(true);
     setSubmitProgress("Uploading media...");
+    uploadProgress.reset();
     setUploadStatuses({
       logo: newLogoFile.length > 0 ? "uploading" : "skipped",
       photos: newPhotoFiles.length > 0 ? "uploading" : "skipped",
@@ -443,31 +474,42 @@ export default function EditListingPage() {
         return;
       }
 
-      const numPrice = price ? parseFloat(price) : 0;
+      const priced = listingPriceSubmission(category, priceForm);
+      if ("error" in priced) throw new Error(priced.error);
       const normalizedAttributes = category
         ? coerceListingAttributes(category, categoryAttributes)
         : {};
 
+      // The terms first: if accepting fails, nothing has been uploaded.
+      if (needsTerms) await acceptTerms();
+
       // Upload photos, video, and video cover in parallel
       const [newLogoUrls, newPhotoUrls, newVideoUrl, newCoverUrls] = await settleMediaUploads([
-        uploadListingImages({ files: newLogoFile, area: "listing_logo", field: "logo_url" }).then(
-          (urls) => {
-            if (newLogoFile.length > 0) setUploadStatuses((c) => ({ ...c, logo: "done" }));
-            return urls;
-          }
-        ),
-        uploadListingImages({ files: newPhotoFiles, area: "listing", field: "images" }).then(
-          (urls) => {
-            if (newPhotoFiles.length > 0) setUploadStatuses((c) => ({ ...c, photos: "done" }));
-            return urls;
-          }
-        ),
+        uploadListingImages({
+          files: newLogoFile,
+          area: "listing_logo",
+          field: "logo_url",
+          onProgress: uploadProgress.track("logo", newLogoFile),
+        }).then((urls) => {
+          if (newLogoFile.length > 0) setUploadStatuses((c) => ({ ...c, logo: "done" }));
+          return urls;
+        }),
+        uploadListingImages({
+          files: newPhotoFiles,
+          area: "listing",
+          field: "images",
+          onProgress: uploadProgress.track("photos", newPhotoFiles),
+        }).then((urls) => {
+          if (newPhotoFiles.length > 0) setUploadStatuses((c) => ({ ...c, photos: "done" }));
+          return urls;
+        }),
         newVideoFile.length > 0
           ? (async () => {
               setSubmitProgress("Uploading media...");
               const urls = await uploadListingVideoFiles({
                 files: newVideoFile,
                 area: "listing_video",
+                onProgress: uploadProgress.trackVideo("video", newVideoFile),
               });
               const publicUrl = urls[0] ?? null;
               if (!publicUrl) {
@@ -481,13 +523,13 @@ export default function EditListingPage() {
       ]);
 
       // Resolve video thumbnail: new upload > existing > null
-      let videoThumbnail: string | null = existingVideoThumbnail;
+      let videoThumbnail: string | null = keptVideoThumbnail;
       if (newCoverUrls.length > 0) {
         videoThumbnail = newCoverUrls[0];
       }
       const finalLogoUrl = newLogoUrls[0] || existingLogo || null;
 
-      const allPhotos = [...existingPhotos, ...newPhotoUrls];
+      const allPhotos = [...keptPhotos, ...newPhotoUrls];
       // A one-video slot swaps the saved video for the new pick instead of adding to it.
       const allVideos = newVideoUrl
         ? Math.max(maxVideos, existingVideos.length) === 1
@@ -500,7 +542,6 @@ export default function EditListingPage() {
       setSubmitProgress("Saving listing...");
       setUploadStatuses((c) => ({ ...c, saving: "uploading" }));
 
-      if (needsTerms) await acceptTerms();
       // Submit via server-side API route for full validation & ownership check
       const res = await fetch(`/api/listings/${id}`, {
         method: "PUT",
@@ -509,8 +550,7 @@ export default function EditListingPage() {
           ...postFields(true),
           title: title.trim(),
           description: description.trim(),
-          price_zar: numPrice,
-          negotiable,
+          ...priced,
           category: mapListingCategory(category),
           condition:
             category === "jobs_services" || category === "auto_parts"
@@ -521,7 +561,7 @@ export default function EditListingPage() {
           city: city || "",
           town: town || "",
           address: locationAddress || "",
-          images: allPhotos,
+          images: photosWithVideoCover(allPhotos, allVideos.length > 0, videoThumbnail),
           videos: allVideos,
           videoThumbnail,
           logo_url: finalLogoUrl,
@@ -647,6 +687,7 @@ export default function EditListingPage() {
                   {/* Post templates (SHOW_POST_TEMPLATES, running package only). */}
                   <SaveTemplateButton
                     defaultName={title}
+                    packageRunning={packageRunning}
                     data={() =>
                       templateDataFromForm({
                         category,
@@ -750,15 +791,27 @@ export default function EditListingPage() {
                   title={category === "jobs_services" ? "Salary and area" : "Price and area"}
                 >
                   {/* ── Price ──────────────────────────────────── */}
-                  <div className="space-y-2">
-                    <Label htmlFor="price" required={category !== "jobs_services"}>
-                      {category === "property" && categoryAttributes.listing_intent === "rent"
-                        ? "Monthly Rent (ZAR) *"
-                        : category === "jobs_services"
-                          ? "Salary (ZAR) (Optional)"
-                          : "Asking price (ZAR) *"}
-                    </Label>
-                    <div className="flex flex-col xs:flex-row gap-3">
+                  {category !== "jobs_services" ? (
+                    <ListingPriceFields
+                      category={category || "other_items"}
+                      value={priceForm}
+                      onChange={(next) => {
+                        setPriceMode(next.mode);
+                        setPrice(next.amount);
+                        setNegotiable(next.negotiable);
+                        clearErrors("price_zar");
+                      }}
+                      amountId="price"
+                      amountLabel={
+                        category === "property" && categoryAttributes.listing_intent === "rent"
+                          ? "Monthly Rent (ZAR)"
+                          : "Asking price (ZAR)"
+                      }
+                      error={fieldErrors.price_zar}
+                    />
+                  ) : (
+                    <div className="space-y-2">
+                      <Label htmlFor="price">Salary (ZAR) (Optional)</Label>
                       <Input
                         id="price"
                         type="number"
@@ -770,31 +823,14 @@ export default function EditListingPage() {
                           setPrice(e.target.value);
                           clearErrors("price_zar");
                         }}
-                        required={category !== "jobs_services"}
-                        className={cn("flex-1", fieldErrors.price_zar && "border-destructive")}
+                        className={cn(fieldErrors.price_zar && "border-destructive")}
                         aria-invalid={!!fieldErrors.price_zar}
                       />
-                      {category !== "jobs_services" && (
-                        <button
-                          type="button"
-                          aria-pressed={negotiable}
-                          onClick={() => setNegotiable((v) => !v)}
-                          className={cn(
-                            "flex min-h-11 items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                            negotiable
-                              ? "border-brand-green-600 bg-brand-green-50 text-brand-green-800 dark:border-brand-green-400 dark:bg-brand-green-950/50 dark:text-brand-gold-200"
-                              : "border-input bg-card text-foreground/80 hover:border-foreground/30"
-                          )}
-                        >
-                          {negotiable && <Check className="h-4 w-4" aria-hidden="true" />}
-                          Negotiable
-                        </button>
+                      {fieldErrors.price_zar && (
+                        <p className="inline-form-error">{fieldErrors.price_zar}</p>
                       )}
                     </div>
-                    {fieldErrors.price_zar && (
-                      <p className="inline-form-error">{fieldErrors.price_zar}</p>
-                    )}
-                  </div>
+                  )}
 
                   {/* ── Location: Province / City / Town / Address ───────── */}
                   <LocationSelector
@@ -817,20 +853,24 @@ export default function EditListingPage() {
                   />
                 </PostFormSection>
 
-                <PostFormSection title="Photos and video">
+                <PostFormSection
+                  title="Photos and video"
+                  description={category === "jobs_services" ? undefined : PHOTO_OR_VIDEO_RULE}
+                >
                   <MediaUpload
                     id="edit-listing-photos-input"
                     label="Photos"
-                    description="Your first photo is the cover on cards."
+                    description="Your first photo is the cover on cards. With only a video, its cover image becomes the first photo."
                     maxFiles={maxPhotos}
                     files={newPhotoFiles}
-                    existing={existingPhotos.map((url, i) => ({
-                      url: displayExistingPhotos[i] || normalizeMediaUrl(url),
+                    existing={keptPhotos.map((url, i) => ({
+                      url: displayKeptPhotos[i] || normalizeMediaUrl(url),
                       label: `Photo ${i + 1}`,
                     }))}
                     onRemoveExisting={(index) => {
                       if (!window.confirm("Remove this photo?")) return;
-                      setExistingPhotos((prev) => prev.filter((_, i) => i !== index));
+                      const removed = keptPhotos[index];
+                      setExistingPhotos((prev) => prev.filter((url) => url !== removed));
                       clearErrors("images");
                     }}
                     error={fieldErrors.images}
@@ -842,9 +882,9 @@ export default function EditListingPage() {
                   />
 
                   {/* ── Focal Point Picker ────────────────────── */}
-                  {existingPhotos.length > 0 && (
+                  {keptPhotos.length > 0 && (
                     <FocalPointPicker
-                      src={normalizeMediaUrl(existingPhotos[0])}
+                      src={normalizeMediaUrl(keptPhotos[0])}
                       alt="Set focal point for primary photo"
                       value={focalPoint}
                       onChange={setFocalPoint}
@@ -966,7 +1006,8 @@ export default function EditListingPage() {
                   <ListingCard
                     id={id}
                     title={title || "Your listing title"}
-                    price={price ? Math.round(parseFloat(price || "0") * 100) : 0}
+                    price={previewPriceCents}
+                    priceMode={previewPriceMode}
                     imageUrl={previewVideos[0] || previewPhotos[0]}
                     posterUrl={previewVideoThumbnail || previewPhotos[0] || undefined}
                     isVideo={previewVideos.length > 0}
@@ -986,7 +1027,8 @@ export default function EditListingPage() {
                     owner_id: "preview-seller",
                     title: title || "Your listing title",
                     description: description || "Your listing description will appear here.",
-                    price_cents: price ? Math.round(parseFloat(price || "0") * 100) : 0,
+                    price_cents: previewPriceCents,
+                    price_mode: previewPriceMode,
                     price_negotiable: negotiable,
                     category: category || null,
                     condition: condition || null,
@@ -1033,6 +1075,7 @@ export default function EditListingPage() {
 
               <UploadProgressPanel
                 visible={isSubmitting}
+                progress={uploadProgress.values}
                 slots={[
                   {
                     key: "logo",

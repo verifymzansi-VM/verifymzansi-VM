@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Behaviour checks for 20261126125203_close_unused_commands.sql, a contract
+// Behaviour checks for 20261127222829_close_unused_commands.sql, a contract
 // step: eight api commands the website replaced earlier are removed, with the
 // three internal functions only they called; the five other internal functions
 // behind them lose their execute grant to authenticated; and the staff role
@@ -24,7 +24,7 @@ import {
 } from "./lib/foundation-sql-checks.mjs";
 import { applySteps } from "./lib/foundation-sql-lint.mjs";
 
-const UPDATE = "20261126125203_close_unused_commands.sql";
+const UPDATE = "20261127222829_close_unused_commands.sql";
 const PREFLIGHT = readFileSync(
   `database/foundation/preflight/${UPDATE.replace(/\.sql$/, ".check.sql")}`,
   "utf8"

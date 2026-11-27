@@ -6,6 +6,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import manifest from "./terms-documents/catalogue.json";
+import { ABUSE_CONTACT_EMAIL } from "@/lib/contact-email";
 import { getPublishedPostingTerms } from "./published-posting-terms";
 import { PLANS, RETAIL_OFFERS } from "@/lib/constants/pricing";
 import {
@@ -213,7 +214,7 @@ describe("posting-v6", () => {
       "liquor, tobacco and vaping products, medicines, loans and other financial products, and live animals and wildlife products",
       "Show your licence or registration number in the post when the law requires one",
       "Job ads that ask applicants to pay to apply or to get the job",
-      "use Report on the post, or email abuse@verifymzansi.com with the post's link, what is wrong and how to contact you",
+      `use Report on the post, or email ${ABUSE_CONTACT_EMAIL} with the post's link, what is wrong and how to contact you`,
       "We act on a report within 2 business days and keep a record of every report",
       "on a credible complaint, and restrict the account that posted it",
     ])

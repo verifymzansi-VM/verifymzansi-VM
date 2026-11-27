@@ -6,6 +6,7 @@ import {
 } from "@/components/post/business-contact-fields";
 import { PostSelect } from "@/components/post/post-select";
 
+import { photosWithVideoCover } from "@/lib/forms/video-cover-photo";
 import { settleMediaUploads } from "@/app/post/_lib/settle-media-uploads";
 
 import { useState, useEffect, useMemo, useRef } from "react";
@@ -31,7 +32,11 @@ import {
   readBusinessProfileExtras,
   type BusinessProfileExtras,
 } from "@/components/post/business-profile-extras-fields";
-import { UploadProgressPanel, type UploadSlotStatus } from "@/components/ui/upload-progress-panel";
+import {
+  UploadProgressPanel,
+  useUploadProgress,
+  type UploadSlotStatus,
+} from "@/components/ui/upload-progress-panel";
 import { FocalPointPicker, type FocalPoint } from "@/components/ui/focal-point-picker";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { useToast } from "@/hooks/use-toast";
@@ -63,8 +68,9 @@ import {
   customerAccessSchema,
   primaryBusinessType,
   cleanCustomerAccess,
+  serviceAreasFromAccess,
 } from "@/lib/forms/customer-access";
-import { parseServiceAreas, validateBusinessForm } from "@/lib/forms/business-form";
+import { validateBusinessForm } from "@/lib/forms/business-form";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import {
   coerceBusinessDetails,
@@ -121,6 +127,7 @@ export default function EditBusinessPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submissionInFlightRef = useRef(false);
   const [submitProgress, setSubmitProgress] = useState<string | null>(null);
+  const uploadProgress = useUploadProgress();
   const [uploadStatuses, setUploadStatuses] = useState<Record<string, UploadSlotStatus>>({
     logo: "idle",
     photos: "idle",
@@ -158,15 +165,13 @@ export default function EditBusinessPage() {
   const [profileExtras, setProfileExtras] = useState<BusinessProfileExtras>(
     EMPTY_BUSINESS_PROFILE_EXTRAS
   );
-  const [serviceAreasInput, setServiceAreasInput] = useState("");
   const [mapDirections, setMapDirections] = useState("");
 
   // Contact & Social
   const [phone, setPhone] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
-  const [email, setEmail] = useState("");
   const [website, setWebsite] = useState("");
-  const contactValues = { phone, whatsapp, email, website };
+  const contactValues = { phone, whatsapp, website };
   const contactMethods = readContactMethods(categoryDetails.contact_methods, contactValues);
   const publicContacts = selectedContacts(contactMethods, contactValues);
   // Profiles without customer access predate the address toggle and always show the pin.
@@ -288,7 +293,6 @@ export default function EditBusinessPage() {
         setMapDirections(b.map_directions || "");
         setPhone(b.phone || "");
         setWhatsapp(b.whatsapp || "");
-        setEmail(b.email || "");
         setWebsite(b.website || "");
         setBusinessDetails(
           coerceBusinessDetails(b.business_type || "standalone_shop", b.business_details)
@@ -331,11 +335,6 @@ export default function EditBusinessPage() {
           x: typeof b.focal_x === "number" ? (b.focal_x as number) : 0.5,
           y: typeof b.focal_y === "number" ? (b.focal_y as number) : 0.5,
         });
-
-        // Service areas
-        if (b.service_areas?.areas) {
-          setServiceAreasInput(b.service_areas.areas.join(", "));
-        }
       } catch {
         setError("Failed to load business");
       } finally {
@@ -427,6 +426,7 @@ export default function EditBusinessPage() {
     submissionInFlightRef.current = true;
     setIsSubmitting(true);
     setSubmitProgress("Uploading media...");
+    uploadProgress.reset();
     setUploadStatuses({
       logo: newLogoFile.length > 0 ? "uploading" : "skipped",
       photos:
@@ -444,11 +444,9 @@ export default function EditBusinessPage() {
         businessType,
         businessDetails,
         storeNumber: storeNumber.trim(),
-        serviceAreasInput,
         mapDirections: mapDirections.trim(),
         phone: publicContacts.phone.trim(),
         whatsapp: publicContacts.whatsapp.trim(),
-        email: publicContacts.email.trim(),
         website: publicContacts.website.trim(),
         socialFacebook: socialFacebook.trim(),
         socialInstagram: socialInstagram.trim(),
@@ -460,7 +458,7 @@ export default function EditBusinessPage() {
         for (const key of Object.keys(validationErrors))
           if (
             key.startsWith("business_details.") ||
-            ["store_number", "service_areas"].includes(key) ||
+            key === "store_number" ||
             (key === "map_directions" && !mapPinPublishable)
           )
             delete validationErrors[key];
@@ -473,7 +471,6 @@ export default function EditBusinessPage() {
         for (const [method, field] of [
           ["call", "phone"],
           ["whatsapp", "whatsapp"],
-          ["email", "email"],
           ["website", "website"],
         ] as const) {
           if (contactMethods.includes(method) && !publicContacts[field].trim())
@@ -506,6 +503,9 @@ export default function EditBusinessPage() {
         return;
       }
 
+      // The terms first: if accepting fails, nothing has been uploaded.
+      if (needsTerms) await acceptTerms();
+
       // Upload all new media in parallel
       const [logoUrls, [coverUrls, galleryUrls, mallPhotoUrls], videoUrl, thumbUrls] =
         await settleMediaUploads([
@@ -513,6 +513,7 @@ export default function EditBusinessPage() {
             files: newLogoFile,
             area: "business_logo",
             field: "logo_url",
+            onProgress: uploadProgress.track("logo", newLogoFile),
           }).then((urls) => {
             if (newLogoFile.length > 0) setUploadStatuses((c) => ({ ...c, logo: "done" }));
             return urls;
@@ -522,16 +523,19 @@ export default function EditBusinessPage() {
               files: newCoverFile,
               area: "business_cover",
               field: "cover_photo",
+              onProgress: uploadProgress.track("photos:cover", newCoverFile),
             }),
             uploadRequiredBusinessMedia({
               files: newGalleryFiles,
               area: "business_gallery",
               field: "gallery_photos",
+              onProgress: uploadProgress.track("photos:gallery", newGalleryFiles),
             }),
             uploadRequiredBusinessMedia({
               files: newMallPhotoFiles,
               area: "business_gallery",
               field: "gallery_photos",
+              onProgress: uploadProgress.track("photos:mall", newMallPhotoFiles),
             }),
           ]).then((urls) => {
             if (newCoverFile.length || newGalleryFiles.length || newMallPhotoFiles.length) {
@@ -543,6 +547,7 @@ export default function EditBusinessPage() {
             ? uploadRequiredBusinessVideo({
                 file: newPromoVideoFile[0],
                 area: "business_cover",
+                onProgress: uploadProgress.trackVideo("video", newPromoVideoFile),
               }).then((url) => {
                 setUploadStatuses((c) => ({ ...c, video: "done" }));
                 return url;
@@ -615,12 +620,9 @@ export default function EditBusinessPage() {
       }
 
       // Build service areas
-      const serviceAreas =
-        businessType === "mobile_service" && serviceAreasInput
-          ? {
-              areas: parseServiceAreas(serviceAreasInput),
-            }
-          : undefined;
+      const serviceAreas = serviceAreasFromAccess(
+        readCustomerAccess(categoryDetails.customer_access)
+      );
       const normalizedBusinessDetails = coerceBusinessDetails(businessType, businessDetails);
       const deliveryAvailable = deliveryOptions.length > 0;
       const finalBusinessDetails =
@@ -649,10 +651,14 @@ export default function EditBusinessPage() {
         map_directions: mapPinPublishable ? mapDirections.trim() || undefined : undefined,
         phone: publicContacts.phone || undefined,
         whatsapp: publicContacts.whatsapp || undefined,
-        email: publicContacts.email || undefined,
         website: publicContacts.website || undefined,
         logo_url: finalLogoUrl || undefined,
-        cover_photo: finalCoverPhoto || undefined,
+        // A video-only profile (no cover, no gallery): the chosen frame is the cover photo.
+        cover_photo:
+          finalCoverPhoto ||
+          (finalGalleryPhotos.length === 0
+            ? photosWithVideoCover([], !!finalCoverVideo, finalVideoThumbnail)[0]
+            : undefined),
         cover_video: finalCoverVideo || undefined,
         video_thumbnail: finalVideoThumbnail || undefined,
         gallery_photos: finalGalleryPhotos.length > 0 ? finalGalleryPhotos : [],
@@ -680,7 +686,6 @@ export default function EditBusinessPage() {
         focal_y: focalPoint.y,
       };
 
-      if (needsTerms) await acceptTerms();
       const res = await fetch(`/api/businesses/${businessId}`, {
         method: "PATCH",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
@@ -1197,7 +1202,6 @@ export default function EditBusinessPage() {
                   ({
                     phone: setPhone,
                     whatsapp: setWhatsapp,
-                    email: setEmail,
                     website: setWebsite,
                   })[field](value)
                 }
@@ -1528,9 +1532,9 @@ export default function EditBusinessPage() {
                       payment_methods_accepted: paymentMethods,
                       delivery_options: deliveryOptions,
                       service_areas:
-                        businessType === "mobile_service" && serviceAreasInput
-                          ? { areas: parseServiceAreas(serviceAreasInput) }
-                          : null,
+                        serviceAreasFromAccess(
+                          readCustomerAccess(categoryDetails.customer_access)
+                        ) ?? null,
                       location_city: city || null,
                       location_province: province || null,
                       location_town: locationTown || null,
@@ -1541,7 +1545,6 @@ export default function EditBusinessPage() {
                           : null,
                       phone: publicContacts.phone || null,
                       whatsapp: publicContacts.whatsapp || null,
-                      email: publicContacts.email || null,
                       website: publicContacts.website || null,
                       store_number: storeNumber || null,
                       map_directions:
@@ -1600,6 +1603,7 @@ export default function EditBusinessPage() {
               {/* Actions */}
               <UploadProgressPanel
                 visible={isSubmitting}
+                progress={uploadProgress.values}
                 slots={[
                   {
                     key: "logo",

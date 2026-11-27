@@ -117,3 +117,10 @@ it("shows only unambiguous native retail prices and features", () => {
   ).toEqual([]);
   expect(restoredPostingPlans({ plans: [plan], addons: [] }, "MZANSI_BUSINESS")).toEqual([]);
 });
+it("accepts package_running, and an answer without it (before 20261126202833)", () => {
+  expect(postingAllowanceSchema.parse({ ...facts(), package_running: true }).package_running).toBe(
+    true
+  );
+  expect(facts().package_running).toBeUndefined();
+  expect(() => postingAllowanceSchema.parse({ ...facts(), package_running: "yes" })).toThrow();
+});

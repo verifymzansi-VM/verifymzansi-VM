@@ -1,13 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 
-const { mockSend } = vi.hoisted(() => ({
+const { mockSend, s3Configs } = vi.hoisted(() => ({
   mockSend: vi.fn(),
+  s3Configs: [] as Array<Record<string, unknown>>,
 }));
 
 vi.mock("@aws-sdk/client-s3", () => ({
   S3Client: class {
     send = mockSend;
+    constructor(config: Record<string, unknown>) {
+      s3Configs.push(config);
+    }
   },
   GetObjectCommand: class {
     constructor(public input: Record<string, unknown>) {}
@@ -26,6 +30,7 @@ vi.mock("@/lib/utils/rate-limit", () => ({
   getClientIp: vi.fn().mockReturnValue("127.0.0.1"),
 }));
 
+import { FetchHttpHandler } from "@smithy/fetch-http-handler";
 import { GET } from "@/app/api/media/serve/[...key]/route";
 
 function createRequest(headers: Record<string, string> = {}) {
@@ -104,6 +109,24 @@ describe("GET /api/media/serve/[...key]", () => {
 
     expect(res.status).toBe(400);
     expect(res.headers.get("Cache-Control")).toBe("private, no-store");
+  });
+
+  it("reads R2 through the fetch-based handler, not the Node http layer", async () => {
+    mockSend.mockRejectedValue(Object.assign(new Error("missing"), { name: "NoSuchKey" }));
+    await GET(createRequest(), {
+      params: Promise.resolve({ key: ["media", "listing", "abc", "1730000-photo.jpg"] }),
+    });
+
+    expect(s3Configs.at(-1)?.requestHandler).toBeInstanceOf(FetchHttpHandler);
+  });
+
+  it("rejects keys outside the media prefix", async () => {
+    const res = await GET(createRequest(), {
+      params: Promise.resolve({ key: ["listings", "old-photo.jpg"] }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(mockSend).not.toHaveBeenCalled();
   });
 
   it("forces SVG downloads and adds defensive CSP", async () => {
@@ -260,64 +283,6 @@ describe("GET /api/media/serve/[...key]", () => {
     expect(cancel).toHaveBeenCalledTimes(1);
   });
 
-  it("selects a successful variant fallback and releases discarded streams", async () => {
-    const discarded = vi.fn();
-    mockSend.mockImplementation(async (command: { input: { Key: string } }) => {
-      if (command.input.Key.endsWith(".jpg")) throw new Error("temporary storage failure");
-      if (command.input.Key.endsWith(".jpeg") || command.input.Key.endsWith(".png")) {
-        return {
-          Body: {
-            transformToWebStream: () =>
-              new ReadableStream({
-                start(controller) {
-                  controller.enqueue(new Uint8Array([1, 2, 3]));
-                },
-                cancel: command.input.Key.endsWith(".png") ? discarded : undefined,
-              }),
-          },
-        };
-      }
-      throw Object.assign(new Error("missing"), { name: "NoSuchKey" });
-    });
-    const response = await GET(createRequest(), {
-      params: Promise.resolve({ key: ["media", "photo.w400.webp"] }),
-    });
-    expect(response.status).toBe(200);
-    expect(response.headers.get("Content-Type")).toBe("image/jpeg");
-    expect(discarded).toHaveBeenCalledTimes(1);
-    await response.body?.cancel();
-  });
-
-  it("briefly caches an original served while a responsive variant is missing", async () => {
-    mockSend.mockImplementation(async (command: { input: { Key: string } }) => {
-      if (command.input.Key.endsWith(".jpg")) {
-        return {
-          ContentType: "image/jpeg",
-          Body: {
-            transformToWebStream: vi.fn().mockImplementation(
-              () =>
-                new ReadableStream({
-                  start(controller) {
-                    controller.enqueue(new Uint8Array([1, 2, 3]));
-                    controller.close();
-                  },
-                })
-            ),
-          },
-        };
-      }
-      throw Object.assign(new Error("missing"), { name: "NoSuchKey" });
-    });
-
-    const res = await GET(createRequest(), {
-      params: Promise.resolve({ key: ["media", "listing", "abc", "photo.w400.webp"] }),
-    });
-
-    expect(res.status).toBe(200);
-    expect(res.headers.get("Content-Type")).toBe("image/jpeg");
-    expect(res.headers.get("Cache-Control")).toBe("public, max-age=300, s-maxage=300");
-  });
-
   it("serves a live-backend photo without its copy from its own extensionless key", async () => {
     const stem = "media/0f6c2a8e-1b7d-4e0a-9a51-3c2d9e7b1a01";
     const asked: string[] = [];
@@ -350,6 +315,19 @@ describe("GET /api/media/serve/[...key]", () => {
     // Only the copy and the extensionless original are looked up.
     expect(asked).toEqual([`${stem}.w800.webp`, stem]);
     await res.body?.cancel();
+  });
+
+  it("looks for no other original when a copy of any other key is missing", async () => {
+    const asked: string[] = [];
+    mockSend.mockImplementation(async (command: { input: { Key: string } }) => {
+      asked.push(command.input.Key);
+      throw Object.assign(new Error("missing"), { name: "NoSuchKey" });
+    });
+    const res = await GET(createRequest(), {
+      params: Promise.resolve({ key: ["media", "listing", "abc", "photo.w400.webp"] }),
+    });
+    expect(res.status).toBe(404);
+    expect(asked).toEqual(["media/listing/abc/photo.w400.webp"]);
   });
 
   it("redirects to R2_PUBLIC_URL when credentials are missing", async () => {

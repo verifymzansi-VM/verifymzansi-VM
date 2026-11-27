@@ -71,7 +71,7 @@ export default function PrivacyPolicyPage() {
         "CIPC registered and Seen by VerifyMzansi checks: CIPC documents, call notes and visit photos",
       recipients: "Restricted business-verification reviewers; never public",
       retention:
-        "Deleted 30 days after the decision. The sticker, its date and the town visited stay on the profile for 12 months",
+        "Deleted 30 days after the decision. The sticker, its date and the town visited stay on the profile for 12 months; the check record is deleted 12 months after the sticker ends, or once older checks of the business are gone",
       deletion: "Request through the data-rights workflow; calls are not recorded",
     },
     {
@@ -79,7 +79,7 @@ export default function PrivacyPolicyPage() {
       purpose: "Checkout, slots and packages, accounting, refunds, and dispute handling",
       recipients: "Ozow (payment provider), our accounting records, and platform support",
       retention:
-        "Kept for 5 years after the end of the tax year (1 March to the end of February) in which the payment was made, as tax law requires",
+        "Kept for 7 years after the end of the tax year (1 March to the end of February) in which the payment was made, as company and tax law require",
       deletion: "Handled under provider rules and platform legal/accounting obligations",
     },
   ] as const;
@@ -151,9 +151,9 @@ export default function PrivacyPolicyPage() {
       content: [
         "We retain account data while your account is active. After account deletion, some records may be retained for fraud prevention, accounting, dispute handling, legal obligations, or platform integrity before deletion or anonymisation.",
         "Posts are deleted 3 days after their plan ends or after you mark them sold, and events when they end, together with their photos, videos and enquiries. A pending payment, an open report or a legal hold can delay deletion.",
-        "Enquiries are deleted with the post, or 1 year after they were sent. Notices in your account are deleted after 90 days.",
+        "Enquiries are deleted with the post, or 1 year after they were sent. Notices in your account are deleted after 90 days. Messages sent through the contact form are deleted 12 months after they are resolved.",
         evidenceRetention,
-        "Staff access logs, moderation records and closed reports are kept for 2 years. Requests from authorities about you are logged and kept while your account exists and for 5 years after it closes. For a data-rights request, your contact details are removed within 30 days after it is closed and the record of it is kept for 5 years.",
+        "Staff access logs, moderation records and closed reports are kept for 2 years. Requests from authorities about you are logged and kept while your account exists and for 5 years after it closes. For a data-rights request, your contact details are removed within 30 days after it is closed and the record of it is kept for 3 years.",
         "When you close your account, you are signed out at once and your posts leave public view. Thirty days later your account, posts, enquiries and media are erased, and your home area, your records of accepting our Terms and your email choices are deleted. Payments and invoices are kept for tax and accounting, no longer linked to your account; an invoice made out to you keeps the name and address on it. Limited records may remain where the law, abuse prevention or an unresolved dispute requires it.",
       ],
     },

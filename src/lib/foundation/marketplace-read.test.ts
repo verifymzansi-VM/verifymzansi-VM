@@ -1,7 +1,7 @@
 /** @vitest-environment node */
 import { describe, expect, it, vi } from "vitest";
 import type { FoundationPublicApi } from "./public-api";
-import type { FoundationCardPresentation } from "./public-cards";
+import { searchFoundationPresentedCards, type FoundationCardPresentation } from "./public-cards";
 import {
   MarketplaceQueryError,
   readRestoredCollection,
@@ -56,18 +56,34 @@ const page = (
   facets: { categories: {} },
   presentation_contract: "restored-public-v1",
 });
+type Search = { p_request: Record<string, unknown> };
 function apiWith(rpc: ReturnType<typeof vi.fn>) {
   return { rpc } as unknown as FoundationPublicApi;
 }
 
 describe("restored marketplace reads", () => {
-  it("refuses business contacts on other kinds and inconsistent event metadata", async () => {
+  it("drops business numbers from public cards and refuses inconsistent event metadata", async () => {
+    // A database rolled back to before update 20261127055550 still sends
+    // business_contacts: the card parse drops it for every kind.
+    const rolledBack = vi.fn().mockResolvedValue({
+      data: page([
+        {
+          ...card(),
+          presentation: {
+            business_type: null,
+            event_window: null,
+            frontend: { data: {}, media: [], business_contacts: { phone: "+27700000123" } },
+          } as never,
+        },
+      ]),
+      error: null,
+    });
+    const cards = await searchFoundationPresentedCards(apiWith(rolledBack), {
+      area: "market",
+    });
+    expect(cards.items[0]!.presentation.frontend).toEqual({ data: {}, media: [] });
+    expect(JSON.stringify(cards)).not.toContain("700000123");
     for (const presentation of [
-      {
-        business_type: null,
-        event_window: null,
-        frontend: { data: {}, media: [], business_contacts: { phone: "+27700000123" } },
-      },
       {
         business_type: null,
         event_window: {
@@ -175,13 +191,14 @@ describe("restored marketplace reads", () => {
     }
   );
 
-  it("reads an organisation's businesses no deeper than the search depth", async () => {
-    const rpc = vi.fn(async (name: string, args: { p_request?: { offset?: number } }) => ({
+  it("reads an organisation's businesses in one filtered, counted read", async () => {
+    const rpc = vi.fn(async (name: string, _args: Search) => ({
       data:
-        name === "search_post_cards"
-          ? page(
-              Array.from({ length: 48 }, (_, n) =>
-                card((args.p_request?.offset ?? 0) + n + 1, {
+        name !== "search_post_cards"
+          ? []
+          : page(
+              [3, 4].map((n) =>
+                card(n, {
                   kind: "business",
                   area: "business",
                   category: "general_other",
@@ -190,21 +207,57 @@ describe("restored marketplace reads", () => {
                   condition: null,
                 })
               ),
-              20_000
-            )
-          : [],
+              30
+            ),
       error: null,
     }));
+    const programme = "bbbbbbbb-bbbb-4bbb-8bbb-000000000001";
     const result = await readRestoredCollection(
       apiWith(rpc),
       "businesses",
-      new URLSearchParams({ org: "example-org", limit: "24" })
+      new URLSearchParams({ org: "example-org", programme, sponsored: "1", page: "2", limit: "24" })
     );
-    expect(result.total).toBe(0);
-    const offsets = rpc.mock.calls
-      .filter(([name]) => name === "search_post_cards")
-      .map(([, args]) => args.p_request?.offset ?? 0);
-    expect(Math.max(...offsets)).toBe(4800);
+    // Only the stickers read follows the one card read; no affiliation or
+    // sponsorship batches, and the database's own total.
+    expect(rpc.mock.calls.map(([name]) => name)).toEqual([
+      "search_post_cards",
+      "get_public_frontend_business_seen",
+      "get_public_frontend_business_cipc",
+    ]);
+    expect(rpc.mock.calls[0]![1].p_request).toMatchObject({
+      area: "business",
+      organisation: "example-org",
+      programme,
+      sponsored: true,
+      offset: 24,
+      limit: 24,
+    });
+    expect(result).toMatchObject({ total: 30, page: 2, limit: 24 });
+    expect(result.rows.map((row) => row.id)).toEqual([id(3), id(4)]);
+  });
+
+  it.each([
+    [{ org: "Not A Slug" }, "Invalid organisation"],
+    [{ org: "example-org", programme: "not-a-uuid" }, "Invalid programme"],
+  ])("refuses organisation filters %o before contacting the backend", async (filters, message) => {
+    const rpc = vi.fn();
+    await expect(
+      readRestoredCollection(apiWith(rpc), "businesses", new URLSearchParams(filters))
+    ).rejects.toThrow(message);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("sends programme and sponsored only with an organisation", async () => {
+    const rpc = vi.fn(async (_name: string, _args: Search) => ({ data: page([]), error: null }));
+    await readRestoredCollection(
+      apiWith(rpc),
+      "businesses",
+      new URLSearchParams({ programme: "bbbbbbbb-bbbb-4bbb-8bbb-000000000001", sponsored: "1" })
+    );
+    const request = rpc.mock.calls[0]![1].p_request;
+    expect(request).not.toHaveProperty("programme");
+    expect(request).not.toHaveProperty("sponsored");
+    expect(request).not.toHaveProperty("organisation");
   });
 
   it("delegates price sorting before paging to the database", async () => {
@@ -261,6 +314,35 @@ describe("restored marketplace reads", () => {
     }
   });
 
+  it("publishes no stored email and no Market street address", () => {
+    const stored = {
+      business_type: null,
+      event_window: null,
+      frontend: {
+        data: {
+          email: "owner@example.com",
+          location_address: "12 Kloof Road",
+          location_town: "Orlando West",
+        },
+        media: [],
+      },
+    };
+    const listing = restoredPublicRow(card() as never, undefined, stored as never);
+    expect(listing.location_address).toBeNull();
+    expect(listing.location_town).toBe("Orlando West");
+    expect(JSON.stringify(listing)).not.toContain("owner@example.com");
+    expect(JSON.stringify(listing)).not.toContain("Kloof");
+    // A business address reaches the public only when its form saved it, which
+    // happens only when the poster chose to show it.
+    const business = restoredPublicRow(
+      card(2, { kind: "business", area: "business" }) as never,
+      undefined,
+      stored as never
+    );
+    expect(business.location_address).toBe("12 Kloof Road");
+    expect(JSON.stringify(business)).not.toContain("owner@example.com");
+  });
+
   it("keeps Free separate from a price on request", () => {
     expect(
       restoredPublicRow(card(1, { price_mode: "free", price_cents: "0" }) as never).price_cents
@@ -269,46 +351,6 @@ describe("restored marketplace reads", () => {
       restoredPublicRow(card(1, { price_mode: "on_request", price_cents: null }) as never)
         .price_cents
     ).toBeNull();
-  });
-
-  it("applies organisation and sponsorship filters using confirmed public relationships before counting", async () => {
-    const businesses = [1, 2].map((n) =>
-      card(n, {
-        kind: "business",
-        area: "business",
-        category: "general_other",
-        price_mode: null,
-        price_cents: null,
-        condition: null,
-      })
-    );
-    const rpc = vi.fn(async (name: string) => ({
-      data:
-        name === "search_post_cards"
-          ? page(businesses)
-          : name === "public_post_affiliations"
-            ? [
-                {
-                  post_id: id(2),
-                  organisation_slug: "local-org",
-                  organisation_name: "Local organisation",
-                  logo_object_key: null,
-                  label: "Member",
-                  programme_name: "Local programme",
-                  confirmed_at: "2026-10-01T12:00:00Z",
-                },
-              ]
-            : [],
-      error: null,
-    }));
-    const params = new URLSearchParams({ org: "local-org", programme_name: "Local programme" });
-    const affiliated = await readRestoredCollection(apiWith(rpc), "businesses", params);
-    expect(affiliated.total).toBe(1);
-    expect(affiliated.rows.map((row) => row.id)).toEqual([id(2)]);
-    params.set("sponsored", "1");
-    const sponsored = await readRestoredCollection(apiWith(rpc), "businesses", params);
-    expect(sponsored).toMatchObject({ rows: [], total: 0 });
-    expect(rpc.mock.calls.map(([name]) => name)).toContain("public_post_sponsorships");
   });
 
   it("serves fifty viewer cards with two bounded reads", async () => {
@@ -355,6 +397,50 @@ describe("restored marketplace reads", () => {
     expect(result.videos).toEqual([expect.stringContaining(id(1)), expect.stringContaining(id(2))]);
     expect(result.contact_methods).toEqual(["call", "whatsapp"]);
     expect(JSON.stringify(result)).not.toContain("+27");
+  });
+
+  it("never puts a business number on a public business row, only which ones Show number can serve", () => {
+    const core = card(1, {
+      kind: "business",
+      area: "business",
+      category: "restaurants",
+      price_mode: null,
+      price_cents: null,
+      condition: null,
+    });
+    const presentation = {
+      business_type: "physical",
+      event_window: null,
+      frontend: {
+        data: {
+          website: "https://example.invalid",
+          business_contact_options: { call: true, whatsapp: false },
+        },
+        media: [],
+      },
+    };
+    const result = restoredPublicRow(core as never, undefined, presentation as never);
+    expect(result.phone).toBeNull();
+    expect(result.whatsapp).toBeNull();
+    expect(result.contact_available).toEqual({ phone: true, whatsapp: false, email: false });
+    expect(result.website).toBe("https://example.invalid");
+    expect(result).not.toHaveProperty("business_contact_options");
+    // A reply from a database before the update still carries the numbers:
+    // they never reach the row, and no buttons are offered.
+    const older = restoredPublicRow(core as never, undefined, {
+      ...presentation,
+      frontend: {
+        data: { website: "https://example.invalid" },
+        media: [],
+        business_contacts: { phone: "031 123 4567", whatsapp: "0821234567" },
+      },
+    } as never);
+    expect(older.contact_available).toEqual({ phone: false, whatsapp: false, email: false });
+    const text = JSON.stringify(older);
+    expect(text).not.toContain("1234567");
+    expect(text).not.toContain("+27");
+    // A Market listing has no business numbers to ask for.
+    expect(restoredPublicRow(card() as never).contact_available).toBeUndefined();
   });
 
   it("filters event dates before pagination and never mixes tourism businesses into events", async () => {
@@ -422,74 +508,33 @@ describe("restored marketplace reads", () => {
   });
 
   describe("business search includes tourism businesses", () => {
-    const business = (n: number, score: string, extra = {}) =>
-      card(n, {
-        kind: "business",
-        area: "business",
-        category: "general_other",
-        price_mode: null,
-        price_cents: null,
-        condition: null,
-        score,
-        ...extra,
-      });
-    const tourism = (n: number, score: string, extra = {}) =>
-      business(n, score, { area: "tourism_events", category: "tourism_hospitality", ...extra });
-    const relevance = (items: Array<ReturnType<typeof card>>, total = items.length) => ({
-      ...page(items, total),
-      sort: "relevance",
-    });
-    function searchApi(own: Array<ReturnType<typeof card>>, stays: Array<ReturnType<typeof card>>) {
-      return vi.fn(async (name: string, args: { p_request: Record<string, unknown> }) => {
-        if (name !== "search_post_cards") return { data: [], error: null };
-        const {
-          area,
-          offset = 0,
-          limit = 24,
-        } = args.p_request as {
-          area: string;
-          offset?: number;
-          limit?: number;
-        };
-        const rows = area === "tourism_events" ? stays : own;
-        return { data: relevance(rows.slice(offset, offset + limit), rows.length), error: null };
-      });
-    }
-
-    it("reads the tourism business category with a text search and merges in the database's order", async () => {
-      const rpc = searchApi(
-        [business(1, "0.9"), business(2, "0.4")],
-        [tourism(3, "0.7"), tourism(4, "0.4", { published_at: "2026-10-17T10:00:00Z" })]
-      );
+    it("searches every business in one read, in the database's order and depth", async () => {
+      const rpc = vi.fn(async (_name: string, _args: Search) => ({
+        data: { ...page([], 2400), sort: "relevance" },
+        error: null,
+      }));
       const result = await readRestoredCollection(
         apiWith(rpc),
         "businesses",
-        new URLSearchParams({ q: "lodge", province: "gp", limit: "3" })
+        new URLSearchParams({ q: "lodge", province: "gp", page: "30", limit: "24" })
       );
-      const searches = rpc.mock.calls.filter(([name]) => name === "search_post_cards");
-      expect(searches.map(([, args]) => args.p_request)).toEqual([
-        expect.objectContaining({ area: "business", q: "lodge", province: "gp", offset: 0 }),
-        expect.objectContaining({
-          area: "tourism_events",
-          category: "tourism_hospitality",
-          q: "lodge",
-          province: "gp",
-          offset: 0,
-        }),
-      ]);
-      expect(result.total).toBe(4);
-      expect(result.rows.map((row) => row.id)).toEqual([id(1), id(3), id(4)]);
-      expect(result.rows[1]).toMatchObject({ category: "tourism_hospitality" });
-      const second = await readRestoredCollection(
-        apiWith(rpc),
-        "businesses",
-        new URLSearchParams({ q: "lodge", province: "gp", page: "2", limit: "3" })
-      );
-      expect(second.rows.map((row) => row.id)).toEqual([id(2)]);
+      expect(rpc).toHaveBeenCalledTimes(1);
+      const request = rpc.mock.calls[0]![1].p_request;
+      expect(request).toMatchObject({
+        kind: "business",
+        q: "lodge",
+        sort: "relevance",
+        province: "gp",
+        offset: 29 * 24,
+        limit: 24,
+      });
+      expect(request).not.toHaveProperty("area");
+      expect(result.total).toBe(2400);
     });
 
-    it("keeps browsing and category filters to one scope", async () => {
-      const rpc = searchApi([business(1, "0.9")], [tourism(3, "0.7")]);
+    it("keeps browsing and category filters to one area", async () => {
+      const rpc = vi.fn(async (_name: string, _args: Search) => ({ data: page([]), error: null }));
+      await readRestoredCollection(apiWith(rpc), "businesses", new URLSearchParams());
       await readRestoredCollection(
         apiWith(rpc),
         "businesses",
@@ -500,62 +545,13 @@ describe("restored marketplace reads", () => {
         "businesses",
         new URLSearchParams({ q: "lodge", category: "tourism_hospitality" })
       );
-      const areas = rpc.mock.calls
-        .filter(([name]) => name === "search_post_cards")
-        .map(([, args]) => args.p_request.area);
-      expect(areas).toEqual(["business", "tourism_events"]);
-    });
-
-    describe("a merged search's total covers only the pages it can serve", () => {
-      const many = (from: number, count: number, make: typeof business) =>
-        Array.from({ length: count }, (_, index) =>
-          make(from + index, (0.999 - index / 1000).toFixed(3))
-        );
-      const searches = (rpc: ReturnType<typeof searchApi>) =>
-        rpc.mock.calls.filter(([name]) => name === "search_post_cards").map(([, args]) => args);
-
-      it.each([
-        [50, 450, 9],
-        [48, 480, 10],
-        [24, 480, 20],
-      ])("at %i cards a page: total %i, last page %i served", async (limit, capped, last) => {
-        const rpc = searchApi(many(1, 300, business), many(1001, 300, tourism));
-        const params = (page: number) =>
-          new URLSearchParams({ q: "lodge", page: String(page), limit: String(limit) });
-        const first = await readRestoredCollection(apiWith(rpc), "businesses", params(1));
-        expect(first.total).toBe(capped);
-        expect(Math.ceil(first.total / limit)).toBe(last);
-        const end = await readRestoredCollection(apiWith(rpc), "businesses", params(last));
-        expect(end.total).toBe(capped);
-        expect(end.rows).toHaveLength(limit);
-        // Never more than ten bounded reads per scope.
-        expect(searches(rpc).length).toBeLessThanOrEqual(2 + 20);
-      });
-
-      it("answers a page past the served depth with no cards and two one-card reads", async () => {
-        const rpc = searchApi(many(1, 300, business), many(1001, 300, tourism));
-        const result = await readRestoredCollection(
-          apiWith(rpc),
-          "businesses",
-          new URLSearchParams({ q: "lodge", page: "10", limit: "50" })
-        );
-        expect(result).toEqual({ rows: [], total: 450, page: 10, limit: 50 });
-        expect(searches(rpc).map((args) => args.p_request)).toEqual([
-          expect.objectContaining({ area: "business", offset: 0, limit: 1 }),
-          expect.objectContaining({ area: "tourism_events", offset: 0, limit: 1 }),
-        ]);
-      });
-
-      it("reports the real total when it is within the served depth", async () => {
-        const rpc = searchApi(many(1, 30, business), many(1001, 20, tourism));
-        const result = await readRestoredCollection(
-          apiWith(rpc),
-          "businesses",
-          new URLSearchParams({ q: "lodge", limit: "50" })
-        );
-        expect(result.total).toBe(50);
-        expect(result.rows).toHaveLength(50);
-      });
+      const requests = rpc.mock.calls.map(([, args]) => args.p_request);
+      expect(requests.map((request) => request.area)).toEqual([
+        "business",
+        "business",
+        "tourism_events",
+      ]);
+      expect(requests.some((request) => "kind" in request)).toBe(false);
     });
   });
 });

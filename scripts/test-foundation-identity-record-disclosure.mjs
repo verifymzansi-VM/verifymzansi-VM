@@ -24,7 +24,7 @@
 // person, name, number, fingerprint and encrypted ID number is synthetic; no
 // object storage is involved.
 import assert from "node:assert/strict";
-import { createHash, randomInt, randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import {
   applyStepsBefore,
@@ -79,7 +79,10 @@ try {
   const { steps, index, step } = applyStepsBefore(database, UPDATE);
   const fp = (label) =>
     `${createHash("sha256").update(`person-${label}-${randomUUID()}`).digest("base64url").slice(0, 42)}A`;
-  const phoneNumber = () => `+2782${String(randomInt(1e7)).padStart(7, "0")}`;
+  // Numbered, not random: two synthetic members never share a verified phone
+  // (verification_phone_unique_active_idx) in this fresh database.
+  let phones = 0;
+  const phoneNumber = () => `+2782${String((phones += 1)).padStart(7, "0")}`;
 
   // Synthetic people, written as the database owner with triggers and foreign
   // keys off (as the other replayed-schema checks seed identity rows).

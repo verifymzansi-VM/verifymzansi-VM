@@ -10,6 +10,9 @@ import {
   readMyInvoiceTransferExpiry,
   recordStaffInvoiceTransfer,
   readMyInvoices,
+  readInvoiceByLink,
+  saveInvoiceBillingByLink,
+  startInvoicePaymentByLink,
   readMyUnpaidIndividualInvoices,
   readStaffInvoice,
   saveMyInvoiceBilling,
@@ -433,5 +436,182 @@ describe("staff invoice commands", () => {
     await expect(readStaffInvoice(api, "VM-2026-000002")).resolves.toBeNull();
     await expect(readStaffInvoice(api, "nope")).resolves.toBeNull();
     expect(rpc).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("the invoice payment link", () => {
+  const token = "fixture-payment-link-token".padEnd(43, "x");
+  const linkService = (...answers: unknown[]) => {
+    const rpc = vi.fn();
+    for (const answer of answers) rpc.mockResolvedValueOnce(answer);
+    return { rpc, service: { rpc } as unknown as FoundationServiceApi };
+  };
+  const sha256 = async (text: string) =>
+    Array.from(
+      new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text))),
+      (b) => b.toString(16).padStart(2, "0")
+    ).join("");
+
+  it("reads the invoice by the link's hash, never the token, as the member reads it", async () => {
+    const { rpc, service: linked } = linkService(ok(invoice));
+    await expect(readInvoiceByLink(token, linked)).resolves.toMatchObject({
+      invoice_number: "VM-2026-000001",
+    });
+    expect(rpc).toHaveBeenCalledExactlyOnceWith("get_invoice_by_link", {
+      p_token_hash: await sha256(token),
+    });
+  });
+
+  it("words a refused Ozow request (the account's package or another payment) the same neutral way", async () => {
+    const neutral =
+      "This invoice can't be paid online right now. Please ask the account holder to sign in and pay it, or email billing@verifymzansi.com.";
+    for (const refusal of [
+      new FoundationBillingError(409, "Your Multi-listing package is busy.", "package_busy"),
+      new FoundationBillingError(409, "Your package runs.", "package_active"),
+      new FoundationBillingError(409, "Your package ended.", "package_ended"),
+      new FoundationBillingError(409, "Pay the package invoice first.", "package_invoice_unpaid"),
+    ]) {
+      vi.mocked(openFoundationInvoiceCheckout).mockRejectedValueOnce(refusal);
+      await expect(
+        startInvoicePaymentByLink(
+          { token, expectedTotalCents: 62100, coolingOffConsent: true },
+          "https://verifymzansi.com",
+          linkService(ok({ ...quote, owner_id: owner })).service
+        )
+      ).rejects.toMatchObject({ status: 409, message: neutral, code: "invoice_refused" });
+    }
+    // An outage stays an outage.
+    vi.mocked(openFoundationInvoiceCheckout).mockRejectedValueOnce(new FoundationBillingError(503));
+    await expect(
+      startInvoicePaymentByLink(
+        { token, expectedTotalCents: 62100, coolingOffConsent: true },
+        "https://verifymzansi.com",
+        linkService(ok({ ...quote, owner_id: owner })).service
+      )
+    ).rejects.toBeInstanceOf(FoundationBillingError);
+  });
+
+  it("words every refusal about the account the same neutral way, and the invoice's own state as for the member", async () => {
+    const neutral =
+      "This invoice can't be paid online right now. Please ask the account holder to sign in and pay it, or email billing@verifymzansi.com.";
+    const pay = (answer: unknown) =>
+      startInvoicePaymentByLink(
+        { token, expectedTotalCents: 62100, coolingOffConsent: true },
+        "https://verifymzansi.com",
+        linkService(answer).service
+      );
+    for (const [code, reason] of [
+      ["PT412", "invoice_buyer_unverified"],
+      ["PT409", "invoice_checkout_open"],
+      ["PT429", "slot_limit_reached"],
+      ["PT409", "package_active"],
+      ["PT409", "package_ended"],
+      ["PT403", "packages_not_on_sale"],
+    ])
+      await expect(pay(refused(code, reason))).rejects.toMatchObject({
+        status: 409,
+        message: neutral,
+      });
+    for (const [code, reason, words] of [
+      ["PT409", "invoice_paid", "This invoice is already paid."],
+      ["PT409", "invoice_void", /This invoice was cancelled/],
+      ["PT409", "invoice_transfer_waiting", /bank transfer to this invoice is being checked/],
+      ["PT428", "invoice_amount_mismatch", "The invoice total changed. Reload the page."],
+    ] as const) {
+      const error = await pay(refused(code, reason)).catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(FoundationInvoiceError);
+      expect((error as Error).message).toMatch(words);
+    }
+    // The member's own Pay now keeps the account's words.
+    const { api } = fixture(refused("PT412", "invoice_buyer_unverified"));
+    await expect(
+      startMyInvoicePayment(
+        api,
+        owner,
+        { invoiceNumber: "VM-2026-000001", expectedTotalCents: 62100, coolingOffConsent: true },
+        "https://verifymzansi.com",
+        service
+      )
+    ).rejects.toMatchObject({ message: expect.stringMatching(/Your ID review must be accepted/) });
+  });
+
+  it("answers null for a malformed token without asking, and for an unknown link", async () => {
+    const { rpc, service: linked } = linkService(refused("PT404", "invoice_unavailable"));
+    for (const bad of ["", "short", `${token}x`, `${token.slice(0, 42)}+`])
+      await expect(readInvoiceByLink(bad, linked)).resolves.toBeNull();
+    expect(rpc).not.toHaveBeenCalled();
+    await expect(readInvoiceByLink(token, linked)).resolves.toBeNull();
+  });
+
+  it("saves billing details through the link at the shown revision", async () => {
+    const { rpc, service: linked } = linkService(ok({ ...invoice, repeated: false }));
+    await saveInvoiceBillingByLink(
+      {
+        token,
+        revision: 1,
+        buyerName: "Thando Trading",
+        buyerAddress: "1 Main Road, Durban",
+        buyerRegistrationNumber: " ",
+      },
+      linked
+    );
+    expect(rpc).toHaveBeenCalledExactlyOnceWith("save_invoice_billing_by_link", {
+      p_token_hash: await sha256(token),
+      p_revision: 1,
+      p_buyer_name: "Thando Trading",
+      p_buyer_address: "1 Main Road, Durban",
+      p_buyer_registration_number: null,
+    });
+  });
+
+  it("starts Pay now through the link and opens Ozow for the invoice's account, back to the link page", async () => {
+    const { rpc, service: linked } = linkService(ok({ ...quote, owner_id: owner }));
+    vi.mocked(openFoundationInvoiceCheckout).mockResolvedValue({
+      paymentId,
+      checkoutUrl: "https://pay.ozow.com/fixture",
+    });
+    await expect(
+      startInvoicePaymentByLink(
+        { token, expectedTotalCents: 62100, coolingOffConsent: true },
+        "https://verifymzansi.com",
+        linked
+      )
+    ).resolves.toEqual({ checkoutUrl: "https://pay.ozow.com/fixture" });
+    expect(rpc).toHaveBeenCalledExactlyOnceWith("start_invoice_payment_by_link", {
+      p_token_hash: await sha256(token),
+      p_expected_total_cents: 62100,
+      p_cooling_off_consent: true,
+    });
+    expect(openFoundationInvoiceCheckout).toHaveBeenCalledWith(
+      quote,
+      owner,
+      "https://verifymzansi.com",
+      linked,
+      "/pay-invoice"
+    );
+  });
+
+  it("refuses without the box or the account, and never opens a payment that is not an invoice's", async () => {
+    const { rpc, service: linked } = linkService(
+      ok(quote),
+      ok({ ...quote, owner_id: owner, merchant_reference: "abcdef1234" })
+    );
+    await expect(
+      startInvoicePaymentByLink(
+        { token, expectedTotalCents: 62100, coolingOffConsent: false },
+        "https://verifymzansi.com",
+        linked
+      )
+    ).rejects.toMatchObject({ status: 422 });
+    expect(rpc).not.toHaveBeenCalled();
+    for (let i = 0; i < 2; i++)
+      await expect(
+        startInvoicePaymentByLink(
+          { token, expectedTotalCents: 62100, coolingOffConsent: true },
+          "https://verifymzansi.com",
+          linked
+        )
+      ).rejects.toMatchObject({ status: 503 });
+    expect(openFoundationInvoiceCheckout).not.toHaveBeenCalled();
   });
 });

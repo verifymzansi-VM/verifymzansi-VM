@@ -1,6 +1,9 @@
 import { createLogger } from "@/lib/utils/logger";
 import { VideoTranscodeError } from "@/lib/media/compress-before-upload";
-import { uploadVideoWithFastPath } from "@/app/post/_lib/video-fast-upload";
+import {
+  uploadVideoWithFastPath,
+  type VideoUploadProgress,
+} from "@/app/post/_lib/video-fast-upload";
 import { normalizeCreatePostRuntimeError } from "@/app/post/_lib/create-post-errors";
 import {
   uploadMediaFileViaServer,
@@ -45,14 +48,17 @@ function toBusinessMediaUploadError(
 async function uploadBusinessVideoViaServer({
   file,
   area,
+  onProgress,
 }: {
   file: File;
   area: UploadArea;
+  onProgress?: (percent: number) => void;
 }): Promise<string> {
   return uploadMediaFileViaServer({
     file,
     area,
     fallbackMessage: FIELD_MESSAGES.cover_video,
+    onProgress,
   });
 }
 
@@ -96,10 +102,12 @@ export async function uploadRequiredBusinessMedia({
   files,
   area,
   field,
+  onProgress,
 }: {
   files: File[];
   area: UploadArea;
   field: BusinessMediaField;
+  onProgress?: (percent: number) => void;
 }): Promise<string[]> {
   if (files.length === 0) return [];
 
@@ -108,6 +116,7 @@ export async function uploadRequiredBusinessMedia({
       files,
       area,
       fallbackMessage: FIELD_MESSAGES[field],
+      onProgress,
     });
   } catch (error) {
     log.warn("Blocking business save because media upload failed", {
@@ -123,15 +132,19 @@ export async function uploadRequiredBusinessMedia({
 export async function uploadRequiredBusinessVideo({
   file,
   area,
+  onProgress,
 }: {
   file: File;
   area: UploadArea;
+  onProgress?: (progress: VideoUploadProgress) => void;
 }): Promise<string> {
   try {
     return await uploadVideoWithFastPath({
       file,
       area,
-      uploadViaServer: (uploadFile) => uploadBusinessVideoViaServer({ file: uploadFile, area }),
+      onProgress,
+      uploadViaServer: (uploadFile, onUploadProgress) =>
+        uploadBusinessVideoViaServer({ file: uploadFile, area, onProgress: onUploadProgress }),
     });
   } catch (error) {
     if (error instanceof VideoTranscodeError) {

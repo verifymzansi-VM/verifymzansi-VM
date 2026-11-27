@@ -46,6 +46,14 @@ vi.mock("@/lib/services/queue-claims", async (importOriginal) => ({
   getMyClaimedItems: vi.fn(async () => []),
 }));
 
+// jsdom cannot load media, so the picked-video format check would wait for its
+// timeout. Tests default to a showable video; src/lib/media/video-decode-client.test.ts
+// covers the real check, and media-upload tests override it per case.
+vi.mock("@/lib/media/video-decode-client", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  canBrowserShowVideo: vi.fn(async () => true),
+}));
+
 // Mock next/font/google — the font loader only runs at Next.js build time;
 // under vitest it returns undefined unless mocked.
 vi.mock("next/font/google", () => {

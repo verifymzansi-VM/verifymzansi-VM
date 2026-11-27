@@ -4,8 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import {
-  uploadKycDocument,
-  downloadKycDocument,
   getR2ObjectSize,
   getR2ObjectBytes,
   deleteFromR2,
@@ -13,10 +11,9 @@ import {
   uploadToR2,
 } from "./storage";
 
-vi.mock("@/lib/config/env", () => ({
-  env: (key: string) => (key === "KYC_ENCRYPTION_KEY" ? "0123456789abcdef".repeat(4) : undefined),
-}));
-describe("isolated KYC encrypted storage lifecycle", () => {
+const evidenceKey = () => `evidence/${crypto.randomUUID()}/${crypto.randomUUID()}`;
+
+describe("isolated private storage lifecycle", () => {
   const contextSymbol = Symbol.for("__cloudflare-context__");
   beforeEach(() => {
     vi.stubEnv("NODE_ENV", "production");
@@ -33,26 +30,28 @@ describe("isolated KYC encrypted storage lifecycle", () => {
     vi.unstubAllEnvs();
     delete (globalThis as Record<PropertyKey, unknown>)[contextSymbol];
   });
-  it("writes encrypted bytes, reads privately and removes only its own fixture file", async () => {
-    const bytes = Buffer.from([0, 255, 128, 13, 10]);
-    const upload = await uploadKycDocument(
-      new Blob([bytes]) as never,
-      crypto.randomUUID(),
-      "id_document"
-    );
-    const localPath = path.join(process.cwd(), "tmp", "e2e-private-storage", upload.key);
+  it("writes private bytes, reads them privately and removes only its own fixture file", async () => {
+    const bytes = Buffer.from([2, 0, 255, 128, 13, 10]);
+    const key = evidenceKey();
+    await uploadToR2({
+      bucket: "verifymzansi-private",
+      key,
+      file: new Blob([bytes]) as never,
+      contentType: "application/octet-stream",
+    });
+    const localPath = path.join(process.cwd(), "tmp", "e2e-private-storage", key);
     try {
-      const ciphertext = await readFile(localPath);
-      expect(ciphertext).not.toEqual(bytes);
-      expect(ciphertext[0]).toBe(2);
-      expect(await getR2ObjectSize("verifymzansi-private", upload.key)).toBe(ciphertext.length);
-      expect(await downloadKycDocument(upload.key)).toEqual(bytes);
-      expect(await getR2ObjectBytes("verifymzansi-public", upload.key)).toBeNull();
+      expect(await readFile(localPath)).toEqual(bytes);
+      expect(await getR2ObjectSize("verifymzansi-private", key)).toBe(bytes.length);
+      expect(Buffer.from((await getR2ObjectBytes("verifymzansi-private", key))!.bytes)).toEqual(
+        bytes
+      );
+      expect(await getR2ObjectBytes("verifymzansi-public", key)).toBeNull();
     } finally {
-      await deleteFromR2("verifymzansi-private", upload.key);
+      await deleteFromR2("verifymzansi-private", key);
     }
-    expect(await getR2ObjectBytes("verifymzansi-private", upload.key)).toBeNull();
-    expect(await getR2ObjectSize("verifymzansi-private", upload.key)).toBeNull();
+    expect(await getR2ObjectBytes("verifymzansi-private", key)).toBeNull();
+    expect(await getR2ObjectSize("verifymzansi-private", key)).toBeNull();
   });
   it("cannot enable local disk writes in production by setting test flags", async () => {
     vi.stubEnv("ENVIRONMENT", "production");
@@ -60,17 +59,19 @@ describe("isolated KYC encrypted storage lifecycle", () => {
     (globalThis as Record<PropertyKey, unknown>)[contextSymbol] = {
       env: { PRIVATE_BUCKET: bucket },
     };
-    const upload = await uploadKycDocument(
-      new Blob(["synthetic"]) as never,
-      crypto.randomUUID(),
-      "id_document"
-    );
+    const key = evidenceKey();
+    await uploadToR2({
+      bucket: "verifymzansi-private",
+      key,
+      file: new Blob(["synthetic"]) as never,
+      contentType: "application/octet-stream",
+    });
     expect(bucket.put).toHaveBeenCalledOnce();
     await expect(
-      readFile(path.join(process.cwd(), "tmp", "e2e-private-storage", upload.key))
+      readFile(path.join(process.cwd(), "tmp", "e2e-private-storage", key))
     ).rejects.toMatchObject({ code: "ENOENT" });
-    await deleteFromR2("verifymzansi-private", upload.key);
-    expect(bucket.delete).toHaveBeenCalledWith(upload.key);
+    await deleteFromR2("verifymzansi-private", key);
+    expect(bucket.delete).toHaveBeenCalledWith(key);
   });
   it("batch-deletes local fixture media, counting missing keys as deleted", async () => {
     const key = `media/${crypto.randomUUID()}`;

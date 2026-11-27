@@ -230,6 +230,25 @@
       ]
     },
     {
+      "id": "LIM-APP-pay-invoice",
+      "title": "Request body cap for /api/pay-invoice",
+      "value": 4096,
+      "unit": "bytes",
+      "category": "size",
+      "enforcedAt": [
+        {
+          "file": "src/app/api/pay-invoice/route.ts",
+          "contains": "maxBytes: 4096"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "src/__tests__/limits/route-body-limits.test.ts"
+        }
+      ]
+    },
+    {
       "id": "LIM-APP-billing-package-add-invoice",
       "title": "Request body cap for /api/billing/package-add-invoice",
       "value": 4096,
@@ -1200,6 +1219,25 @@
       ]
     },
     {
+      "id": "LIM-APP-video-keep-size",
+      "title": "Stored videos: the keep rule refuses files over 50 MB (logged, or refused when the rule is enforced)",
+      "value": 52428800,
+      "unit": "bytes",
+      "category": "size",
+      "enforcedAt": [
+        {
+          "file": "src/lib/media/video-rule.ts",
+          "contains": "const MAX_KEPT_VIDEO_BYTES = 52_428_800;"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "src/lib/media/video-rule.test.ts"
+        }
+      ]
+    },
+    {
       "id": "LIM-APP-video-original-size",
       "title": "Post videos: the browser refuses originals over 300 MB before compressing",
       "value": 314572800,
@@ -1739,13 +1777,13 @@
     {
       "id": "LIM-F-claim_supported_notification_outbox",
       "title": "internal.claim_supported_notification_outbox: supported mail kinds required",
-      "value": "1 to 27",
+      "value": "1 to 28",
       "category": "cap",
       "enforcedAt": [
         {
           "file": "database/foundation/current/functions/internal/claim_supported_notification_outbox.sql",
           "symbol": "internal.claim_supported_notification_outbox",
-          "contains": "if p_supported_kinds is null or cardinality(p_supported_kinds) not between 1 and 27 or coalesce(array_ndims(p_supported_kinds),0)<>1"
+          "contains": "if p_supported_kinds is null or cardinality(p_supported_kinds) not between 1 and 28 or coalesce(array_ndims(p_supported_kinds),0)<>1"
         }
       ],
       "tests": [
@@ -10620,14 +10658,14 @@
     },
     {
       "id": "LIM-SQL-search-page-size",
-      "title": "Public search: 1 to 48 results per page",
-      "value": "1 to 48",
+      "title": "Public search: 1 to 48 results per page, or 1 to 200 post ids with ids_only",
+      "value": "1 to 48 (1 to 200 ids)",
       "category": "batch",
       "enforcedAt": [
         {
           "file": "database/foundation/current/functions/internal/search_posts.sql",
           "symbol": "internal.search_posts",
-          "contains": "or (req->>'limit')::integer not between 1 and 48 then"
+          "contains": "or (req->>'limit')::integer not between 1 and (case when v_ids then 200 else 48 end) then"
         }
       ],
       "tests": [
@@ -14360,6 +14398,41 @@
     }
   ],
   "notLimits": [
+    {
+      "file": "database/foundation/current/functions/internal/complete_frontend_video_upload.sql",
+      "contains": "if p_facts is not null and (jsonb_typeof(p_facts)<>'object' or pg_column_size(p_facts)>512",
+      "reason": "size bound of the facts the upload server reads from a stored video's headers (video-rule.ts videoUploadFacts, which keeps them in these ranges); a shape check on server-written data, not a limit on members"
+    },
+    {
+      "file": "database/foundation/current/functions/internal/complete_frontend_video_upload.sql",
+      "contains": "(f.key in ('codec','audio') and jsonb_typeof(f.value)='string' and length(f.value#>>'{}') between 1 and 8)",
+      "reason": "codec and audio names (1 to 8 characters) in the facts the upload server reads from a stored video's headers (video-rule.ts videoUploadFacts, which keeps them in these ranges); a shape check on server-written data, not a limit on members"
+    },
+    {
+      "file": "database/foundation/current/functions/internal/complete_frontend_video_upload.sql",
+      "contains": "then f.value::numeric between 0 and 20000 and f.value::numeric%1=0 else false end)",
+      "reason": "profile, level, width and height ranges in the facts the upload server reads from a stored video's headers (video-rule.ts videoUploadFacts, which keeps them in these ranges); a shape check on server-written data, not a limit on members"
+    },
+    {
+      "file": "database/foundation/current/functions/internal/complete_frontend_video_upload.sql",
+      "contains": "then f.value::numeric between 0 and 1000 else false end)",
+      "reason": "frame-rate range in the facts the upload server reads from a stored video's headers (video-rule.ts videoUploadFacts, which keeps them in these ranges); a shape check on server-written data, not a limit on members"
+    },
+    {
+      "file": "database/foundation/current/functions/internal/complete_frontend_video_upload.sql",
+      "contains": "or (jsonb_typeof(f.value)='string' and length(f.value#>>'{}') between 1 and 20)))",
+      "reason": "the keep-rule reason code (1 to 20 characters) in the facts the upload server reads from a stored video's headers (video-rule.ts videoUploadFacts, which keeps them in these ranges); a shape check on server-written data, not a limit on members"
+    },
+    {
+      "file": "database/foundation/current/tables/private/media_objects.sql",
+      "contains": "constraint media_objects_video_facts_check CHECK (video_facts IS NULL OR kind = 'video'::text AND jsonb_typeof(video_facts) = 'object'::text AND pg_column_size(video_facts) <= 512),",
+      "reason": "stored size bound of the facts the upload server reads from a stored video's headers (video-rule.ts videoUploadFacts, which keeps them in these ranges); a shape check on server-written data, not a limit on members"
+    },
+    {
+      "file": "database/foundation/current/functions/internal/search_posts.sql",
+      "contains": "if req->>'organisation' !~ '^[a-z0-9]+(-[a-z0-9]+)*$' or length(req->>'organisation') > 60 then",
+      "reason": "the organisation slug format of private.organisations (organisations_slug_check, at most 60 characters); a malformed slug is refused as invalid, not counted against a limit"
+    },
     {
       "file": "database/foundation/current/functions/internal/za_business_day.sql",
       "contains": "select extract(isodow from p_day) < 6 and not internal.za_public_holiday(p_day);",

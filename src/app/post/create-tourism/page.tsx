@@ -1,4 +1,5 @@
 "use client";
+import { PostingTermsConsent } from "@/components/post/posting-terms-consent";
 import { PostSelect } from "@/components/post/post-select";
 import { EventDateFields } from "@/components/post/event-date-fields";
 import { eventTimeToIso } from "@/lib/forms/event-time";
@@ -18,8 +19,13 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { MediaUpload } from "@/components/ui/media-upload";
 import { OnlinePresenceFields } from "@/components/post/online-presence-fields";
-import { UploadProgressPanel, type UploadSlotStatus } from "@/components/ui/upload-progress-panel";
+import {
+  UploadProgressPanel,
+  useUploadProgress,
+  type UploadSlotStatus,
+} from "@/components/ui/upload-progress-panel";
 import { VideoFrameSelector } from "@/components/ui/video-frame-selector";
+import { PHOTO_OR_VIDEO_RULE, photosWithVideoCover } from "@/lib/forms/video-cover-photo";
 import { MediaCropPreview, type CropPosition } from "@/components/ui/media-crop-preview";
 import {
   PlanGate,
@@ -97,6 +103,12 @@ import {
   type PromotionAdvertiserRecord,
 } from "@/components/listings/promotion-detail-content";
 import { normalizeUserEnteredUrl } from "@/lib/utils/external-url";
+import { businessNumber } from "@/lib/utils/phone";
+import {
+  TOURISM_FIELD_STEPS,
+  stepForField,
+  stepForFieldErrors,
+} from "@/app/post/_lib/post-field-steps";
 
 const SELECT_CLASS =
   "flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:h-10 sm:text-sm";
@@ -138,7 +150,6 @@ const FIELD_IDS: Record<string, string> = {
   pickupAreas: "pickupAreas",
   phone: "phone",
   whatsapp: "whatsapp",
-  email: "email",
   website: "website",
   mapDirections: "mapDirections",
   socialFacebook: "socialFacebook",
@@ -155,7 +166,11 @@ const FIELD_IDS: Record<string, string> = {
 };
 
 const FIELD_KEY_ALIASES: Record<string, string> = {
+  business_name: "title",
   listing_type: "listingType",
+  "event_details.event_type": "eventType",
+  "event_details.venue_name": "venueName",
+  "event_details.venue_capacity": "venueCapacity",
   event_type: "eventType",
   venue_capacity: "venueCapacity",
   booking_url: "bookingUrl",
@@ -195,7 +210,7 @@ const FIELD_LABELS: Record<string, string> = {
   subcategory: "Subcategory",
   province: "Province",
   city: "City",
-  locationAddress: "Street address",
+  locationAddress: "Detailed address",
   locationTown: "Suburb / town",
   contactMethods: "Contact methods",
   joinMethods: "How visitors join",
@@ -203,7 +218,6 @@ const FIELD_LABELS: Record<string, string> = {
   pickupAreas: "Pickup areas",
   phone: "Phone",
   whatsapp: "WhatsApp",
-  email: "Email",
   website: "Website",
   mapDirections: "Location pin",
   socialFacebook: "Facebook",
@@ -243,63 +257,11 @@ function getFieldId(key: string | undefined): string | undefined {
 }
 
 function getStepForFieldKey(key: string): number {
-  const normalizedKey = FIELD_KEY_ALIASES[key] ?? key;
-
-  if (
-    normalizedKey === "images" ||
-    normalizedKey === "videos" ||
-    normalizedKey === "termsAccepted"
-  ) {
-    return 3;
-  }
-
-  if (
-    normalizedKey === "province" ||
-    normalizedKey === "city" ||
-    normalizedKey === "contactMethods" ||
-    normalizedKey === "joinMethods" ||
-    normalizedKey === "meetingPoint" ||
-    normalizedKey === "pickupAreas" ||
-    normalizedKey === "phone" ||
-    normalizedKey === "whatsapp" ||
-    normalizedKey === "email" ||
-    normalizedKey === "website" ||
-    normalizedKey === "socialFacebook" ||
-    normalizedKey === "socialInstagram" ||
-    normalizedKey === "socialTwitter" ||
-    normalizedKey === "socialTiktok" ||
-    normalizedKey === "mapDirections" ||
-    normalizedKey === "locationAddress" ||
-    normalizedKey === "locationTown"
-  ) {
-    return 2;
-  }
-
-  if (
-    normalizedKey === "subcategory" ||
-    normalizedKey === "eventType" ||
-    normalizedKey === "starRating" ||
-    normalizedKey === "numberOfRooms" ||
-    normalizedKey === "bookingUrl" ||
-    normalizedKey === "startDate" ||
-    normalizedKey === "endDate" ||
-    normalizedKey === "priceZar" ||
-    normalizedKey === "venueCapacity" ||
-    normalizedKey === "ticketsUrl"
-  ) {
-    return 1;
-  }
-
-  return 0;
+  return stepForField(FIELD_KEY_ALIASES[key] ?? key, TOURISM_FIELD_STEPS);
 }
 
 function getStepForServerErrors(errors: Record<string, string>): number {
-  const keys = Object.keys(errors);
-  if (keys.length === 0) {
-    return 0;
-  }
-
-  return keys.reduce((targetStep, key) => Math.min(targetStep, getStepForFieldKey(key)), 3);
+  return stepForFieldErrors(errors, TOURISM_FIELD_STEPS, 3);
 }
 
 export default function CreateTourismPage() {
@@ -352,6 +314,7 @@ function CreateTourismContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submissionInFlightRef = useRef(false);
   const [submitProgress, setSubmitProgress] = useState<string | null>(null);
+  const uploadProgress = useUploadProgress();
   const [uploadStatuses, setUploadStatuses] = useState<Record<string, UploadSlotStatus>>({
     logo: "idle",
     photos: "idle",
@@ -379,7 +342,7 @@ function CreateTourismContent() {
   const [contactMethods, setContactMethods] = useState<string[]>(["call"]);
   const [phone, setPhone] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
-  const [email, setEmail] = useState("");
+  const [publishAddress, setPublishAddress] = useState(false);
   const [website, setWebsite] = useState("");
   const [socialFacebook, setSocialFacebook] = useState("");
   const [socialInstagram, setSocialInstagram] = useState("");
@@ -552,6 +515,17 @@ function CreateTourismContent() {
     });
   }, [profile, province, city]);
 
+  // Pre-fill phone and WhatsApp from the profile number, as Business does.
+  // Never replaces a typed or restored number.
+  const profilePhone = profile?.phone ?? "";
+  useEffect(() => {
+    if (!profilePhone) return;
+    queueMicrotask(() => {
+      setPhone((current) => current || profilePhone);
+      setWhatsapp((current) => current || profilePhone);
+    });
+  }, [profilePhone]);
+
   // Reset category-specific fields when subcategory changes
   // Keep compatible answers when temporarily changing activity; the payload builder
   // includes only fields belonging to the selected activity.
@@ -635,13 +609,13 @@ function CreateTourismContent() {
         if (d.city) setCity(d.city);
         if (d.locationTown) setLocationTown(d.locationTown);
         if (d.locationAddress) setLocationAddress(d.locationAddress);
+        if (d.publishAddress) setPublishAddress(true);
         if (d.joinMethods?.length) setJoinMethods(d.joinMethods);
         if (d.meetingPoint) setMeetingPoint(d.meetingPoint);
         if (d.pickupAreas) setPickupAreas(d.pickupAreas);
         if (d.contactMethods?.length) setContactMethods(d.contactMethods);
         if (d.phone) setPhone(d.phone);
         if (d.whatsapp) setWhatsapp(d.whatsapp);
-        if (d.email) setEmail(d.email);
         if (d.website) setWebsite(d.website);
         if (d.socialFacebook) setSocialFacebook(d.socialFacebook);
         if (d.socialInstagram) setSocialInstagram(d.socialInstagram);
@@ -713,13 +687,13 @@ function CreateTourismContent() {
       city,
       locationTown,
       locationAddress,
+      publishAddress,
       joinMethods,
       meetingPoint,
       pickupAreas,
       contactMethods,
       phone,
       whatsapp,
-      email,
       website,
       hoursMonFri,
       hoursSat,
@@ -800,13 +774,13 @@ function CreateTourismContent() {
     city,
     locationTown,
     locationAddress,
+    publishAddress,
     joinMethods,
     meetingPoint,
     pickupAreas,
     contactMethods,
     phone,
     whatsapp,
-    email,
     website,
     hoursMonFri,
     hoursSat,
@@ -855,7 +829,6 @@ function CreateTourismContent() {
         "contactMethods",
         "phone",
         "whatsapp",
-        "email",
         "website",
         "mapDirections",
         "socialFacebook",
@@ -884,13 +857,14 @@ function CreateTourismContent() {
   /** Visitor access for the selected tourism activity; inactive answers are left out. */
   function buildTourismAccess() {
     const hasAddress = Boolean(locationAddress.trim());
+    const showAddress = hasAddress && publishAddress;
     if (fieldGroup === "D" || fieldGroup === "F") {
       return hasAddress
         ? {
             version: 2,
             methods: ["visit", "online"],
             premises: "standalone_shop",
-            publishAddress: true,
+            publishAddress: showAddress,
           }
         : { version: 2, methods: ["online"], publishAddress: false };
     }
@@ -903,14 +877,14 @@ function CreateTourismContent() {
         methods: methods.length ? methods : ["online"],
         ...(methods.includes("visit") ? { premises: "standalone_shop" } : {}),
         ...(methods.includes("travel") ? { serviceAreas: pickupAreas.trim() } : {}),
-        publishAddress: hasAddress,
+        publishAddress: showAddress,
       };
     }
     return {
       version: 2,
       methods: ["visit"],
       premises: "standalone_shop",
-      publishAddress: hasAddress,
+      publishAddress: showAddress,
     };
   }
 
@@ -949,7 +923,6 @@ function CreateTourismContent() {
         gpsAvailable,
         phone,
         whatsapp,
-        email,
         website,
         socialFacebook,
         socialInstagram,
@@ -970,7 +943,8 @@ function CreateTourismContent() {
         pickupAreas,
       },
       photoFiles.length,
-      videoFiles.length
+      videoFiles.length,
+      videoThumbnailFile.length
     );
 
     // Plan-based media limits
@@ -1051,13 +1025,10 @@ function CreateTourismContent() {
     if (bookingUrl) categoryDetails.booking_url = normalizeUserEnteredUrl(bookingUrl);
 
     // SA tourism additions
-    if ((group === "A" || group === "B") && tgcsaGrading)
-      categoryDetails.tgcsa_grading = tgcsaGrading;
-    if ((group === "A" || group === "B") && minimumStayNights)
-      categoryDetails.minimum_stay_nights = Number(minimumStayNights);
-    if ((group === "A" || group === "B") && childPolicy) categoryDetails.child_policy = childPolicy;
-    if ((group === "A" || group === "B") && seasonalPricing)
-      categoryDetails.seasonal_pricing = seasonalPricing;
+    if (tgcsaGrading) categoryDetails.tgcsa_grading = tgcsaGrading;
+    if (minimumStayNights) categoryDetails.minimum_stay_nights = Number(minimumStayNights);
+    if (childPolicy) categoryDetails.child_policy = childPolicy;
+    if (seasonalPricing) categoryDetails.seasonal_pricing = seasonalPricing;
     if (nearbyAttractions) categoryDetails.nearby_attractions = nearbyAttractions;
 
     return categoryDetails;
@@ -1086,6 +1057,7 @@ function CreateTourismContent() {
     submissionInFlightRef.current = true;
     setIsSubmitting(true);
     setSubmitProgress("Checking upload service...");
+    uploadProgress.reset();
     setUploadStatuses({
       logo: logoFiles.length > 0 ? "uploading" : "skipped",
       photos: photoFiles.length > 0 ? "uploading" : "skipped",
@@ -1117,6 +1089,7 @@ function CreateTourismContent() {
             files: photoFiles,
             area: uploadArea,
             field: "images",
+            onProgress: uploadProgress.track("photos", photoFiles),
           }).then((urls) => {
             if (photoFiles.length > 0) {
               setUploadStatuses((current) => ({ ...current, photos: "done" }));
@@ -1127,6 +1100,7 @@ function CreateTourismContent() {
             files: videoFiles,
             area: uploadArea,
             maxSeconds: videoLimitSeconds(listingType === "event" ? "event" : "other"),
+            onProgress: uploadProgress.trackVideo("videos", videoFiles),
           }).then((urls) => {
             if (videoFiles.length > 0) {
               setUploadStatuses((current) => ({ ...current, videos: "done" }));
@@ -1142,6 +1116,7 @@ function CreateTourismContent() {
             files: logoFiles,
             area: listingType === "tourism_business" ? "business_logo" : "promotion",
             field: "logo_url",
+            onProgress: uploadProgress.track("logo", logoFiles),
           }).then((urls) => {
             if (logoFiles.length > 0) {
               setUploadStatuses((current) => ({ ...current, logo: "done" }));
@@ -1151,6 +1126,11 @@ function CreateTourismContent() {
         ]);
 
       const mediaDimensions = await mediaDimensionsPromise;
+      const photoUrls = photosWithVideoCover(
+        imageUrls,
+        videoUrls.length > 0,
+        uploadedVideoThumbnailUrl
+      );
 
       if (listingType === "tourism_business") {
         setSubmitProgress("Saving tourism business...");
@@ -1195,10 +1175,10 @@ function CreateTourismContent() {
           category: "tourism_hospitality",
           subcategory: subcategory || undefined,
           logo_url: uploadedLogoUrl || undefined,
-          cover_photo: imageUrls[0] || undefined,
+          cover_photo: photoUrls[0] || undefined,
           cover_video: videoUrls[0] || undefined,
           video_thumbnail: uploadedVideoThumbnailUrl,
-          gallery_photos: imageUrls,
+          gallery_photos: photoUrls,
           media_width: mediaDimensions?.width,
           media_height: mediaDimensions?.height,
           focal_x: focalPoint.x,
@@ -1209,10 +1189,9 @@ function CreateTourismContent() {
           location_address: locationAddress || undefined,
           phone: phone || undefined,
           whatsapp: whatsapp || undefined,
-          email: email || undefined,
           website: website || undefined,
           map_directions:
-            locationAddress.trim() && mapDirections.trim()
+            locationAddress.trim() && publishAddress && mapDirections.trim()
               ? normalizeUserEnteredUrl(mapDirections)
               : undefined,
           social_links: Object.keys(socialLinks).length > 0 ? socialLinks : undefined,
@@ -1366,7 +1345,7 @@ function CreateTourismContent() {
           location_town: locationTown || undefined,
           location_address: locationAddress || undefined,
           contact_methods: contactMethods,
-          images: imageUrls,
+          images: photoUrls,
           videos: videoUrls,
           video_thumbnail: uploadedVideoThumbnailUrl,
           logo_url: uploadedLogoUrl || undefined,
@@ -1536,9 +1515,9 @@ function CreateTourismContent() {
     setLocationTown("");
     setLocationAddress("");
     setContactMethods(["call"]);
-    setPhone("");
-    setWhatsapp("");
-    setEmail("");
+    setPhone(profile?.phone ?? "");
+    setWhatsapp(profile?.phone ?? "");
+    setPublishAddress(false);
     setWebsite("");
     setSocialFacebook("");
     setSocialInstagram("");
@@ -1629,16 +1608,16 @@ function CreateTourismContent() {
         location_city: city || null,
         location_province: province || null,
         location_town: locationTown || null,
-        location_address: locationAddress || null,
+        location_address: publishAddress ? locationAddress || null : null,
         phone: phone || null,
         whatsapp: whatsapp || null,
-        email: email || null,
         website: website || null,
         store_number: null,
-        map_directions: locationAddress.trim() ? mapDirections.trim() || null : null,
+        map_directions:
+          locationAddress.trim() && publishAddress ? mapDirections.trim() || null : null,
         business_details: {
           type: "standalone_shop" as const,
-          street_address: locationAddress || "",
+          street_address: publishAddress ? locationAddress || "" : "",
           suburb: locationTown || "",
         },
         layout_template: null,
@@ -1849,6 +1828,7 @@ function CreateTourismContent() {
                     )}
                     <UploadProgressPanel
                       visible={isSubmitting}
+                      progress={uploadProgress.values}
                       slots={[
                         {
                           key: "logo",
@@ -3155,23 +3135,32 @@ function CreateTourismContent() {
                         setCity(v.city);
                         setLocationTown(v.town ?? "");
                         setLocationAddress(v.address ?? "");
-                        clearErrors("province", "city");
+                        clearErrors("province", "city", "locationAddress");
                       }}
                       showTown
                       showAddress
-                      townRequired={
-                        listingType === "tourism_business" &&
-                        ["A", "B", "E"].includes(TOURISM_SUBCATEGORY_FIELD_GROUPS[subcategory])
-                      }
-                      addressRequired={
-                        listingType === "tourism_business" &&
-                        ["A", "B", "E"].includes(TOURISM_SUBCATEGORY_FIELD_GROUPS[subcategory])
-                      }
                       errors={{
                         province: fieldErrors.province,
                         city: fieldErrors.city,
                       }}
                     />
+
+                    {listingType === "tourism_business" && (
+                      <div className="space-y-1">
+                        <label className="flex min-h-11 items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={publishAddress}
+                            onChange={(e) => setPublishAddress(e.target.checked)}
+                            className="rounded border-gray-300"
+                          />
+                          Show my exact visitor address publicly
+                        </label>
+                        <p className="text-xs text-muted-foreground">
+                          If you leave this off, only your area is published.
+                        </p>
+                      </div>
+                    )}
 
                     {listingType === "tourism_business" && fieldGroup === "C" && (
                       <fieldset id="tourism-join-methods" className="space-y-3">
@@ -3332,9 +3321,11 @@ function CreateTourismContent() {
                               placeholder="071 234 5678"
                               aria-invalid={!!fieldErrors.phone}
                             />
-                            {fieldErrors.phone && (
+                            {fieldErrors.phone ? (
                               <p className="inline-form-error">{fieldErrors.phone}</p>
-                            )}
+                            ) : businessNumber(phone)?.kind === "landline" ? (
+                              <p className="text-sm text-muted-foreground">Landline: calls only</p>
+                            ) : null}
                           </div>
                           <div className="space-y-2">
                             <Label
@@ -3356,27 +3347,6 @@ function CreateTourismContent() {
                             />
                             {fieldErrors.whatsapp && (
                               <p className="inline-form-error">{fieldErrors.whatsapp}</p>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Email */}
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                          <div className="space-y-2">
-                            <Label htmlFor="email">Email</Label>
-                            <Input
-                              id="email"
-                              type="email"
-                              value={email}
-                              onChange={(e) => {
-                                setEmail(e.target.value);
-                                clearErrors("email");
-                              }}
-                              placeholder="info@business.co.za"
-                              aria-invalid={!!fieldErrors.email}
-                            />
-                            {fieldErrors.email && (
-                              <p className="inline-form-error">{fieldErrors.email}</p>
                             )}
                           </div>
                         </div>
@@ -3415,8 +3385,9 @@ function CreateTourismContent() {
                           : undefined
                       }
                       mapPinUnavailableReason={
-                        listingType === "tourism_business" && !locationAddress.trim()
-                          ? "Add your street address above to show a location pin. Without an address only your area is published."
+                        listingType === "tourism_business" &&
+                        !(locationAddress.trim() && publishAddress)
+                          ? "Add your address above and choose to show it publicly to show a location pin. Otherwise only your area is published."
                           : undefined
                       }
                     />
@@ -3478,13 +3449,11 @@ function CreateTourismContent() {
                   <div className="space-y-6">
                     <PostFormSection
                       title="Photos and video"
-                      description="The first photo is the cover."
+                      description={`${PHOTO_OR_VIDEO_RULE} The first photo is the cover. With only a video, the frame you choose becomes the first photo.`}
                     >
                       {/* Photos */}
                       <div className="space-y-2">
-                        <p className="text-sm font-medium">
-                          {listingType === "event" ? "Photos or video *" : "Photos *"}
-                        </p>
+                        <p className="text-sm font-medium">Photos</p>
                         <MediaUpload
                           id="tourism-images-input"
                           label="Upload photos"
@@ -3517,7 +3486,7 @@ function CreateTourismContent() {
                       {/* Video */}
                       <div className="space-y-2">
                         <p className="text-sm font-medium">
-                          Video (optional)
+                          Video
                           {!videoAllowed ? " — Upgrade to unlock" : ""}
                         </p>
                         <MediaUpload
@@ -3635,36 +3604,17 @@ function CreateTourismContent() {
                       )}
                     </PostFormSection>
                     <PostFormSection title="Final check">
-                      <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-border bg-muted/30 p-4 text-sm leading-6">
-                        <input
-                          id="tourism-terms-checkbox"
-                          type="checkbox"
-                          checked={termsAccepted}
-                          onChange={(event) => {
-                            setTermsAccepted(event.target.checked);
-                            clearErrors("termsAccepted");
-                          }}
-                          className="mt-1 h-4 w-4 shrink-0 rounded accent-teal-600"
-                          aria-invalid={!!fieldErrors.termsAccepted}
-                        />
-                        <span>
-                          I accept the VerifyMzansi posting terms, including the free-post
-                          visibility period and my responsibility for the accuracy and legality of
-                          this tourism or event post.{" "}
-                          <a
-                            className="font-semibold text-teal-700 underline underline-offset-2 dark:text-teal-300"
-                            href="/terms"
-                          >
-                            View terms
-                          </a>
-                          .
-                          {fieldErrors.termsAccepted && (
-                            <span className="mt-1 block text-destructive">
-                              {fieldErrors.termsAccepted}
-                            </span>
-                          )}
-                        </span>
-                      </label>
+                      <PostingTermsConsent
+                        id="tourism-terms-checkbox"
+                        checked={termsAccepted}
+                        onCheckedChange={(checked) => {
+                          setTermsAccepted(checked);
+                          clearErrors("termsAccepted");
+                        }}
+                        error={fieldErrors.termsAccepted}
+                        subject="tourism or event post"
+                        accent="teal"
+                      />
                     </PostFormSection>
                     {renderPreview()}
                   </div>

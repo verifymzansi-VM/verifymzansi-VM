@@ -9,7 +9,6 @@ import {
 import EditListingPage from "./page";
 import { useParams, useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
-import type * as HiddenFeatures from "@/lib/hidden-features";
 
 // The member accepted the current posting terms before (the edit form shows
 // no tick), unless a test serves them as not accepted yet.
@@ -25,12 +24,14 @@ const { listingDetailPreviewSpy } = vi.hoisted(() => ({
   listingDetailPreviewSpy: vi.fn(),
 }));
 
-// Not about post templates: SHOW_POST_TEMPLATES is pinned off so the form
-// makes no template read and these tests count only the save requests
-// (src/components/post-templates/save-template-button.test.tsx covers it).
-vi.mock("@/lib/hidden-features", async (importOriginal) => ({
-  ...(await importOriginal<typeof HiddenFeatures>()),
-  SHOW_POST_TEMPLATES: false,
+// Uploads with a progress bar use XHR; these tests stub fetch, so send them there.
+vi.mock("@/lib/utils/xhr-upload", () => ({
+  xhrFetch: (input: RequestInfo | URL, init?: RequestInit) => fetch(input, init),
+}));
+
+// The one allowance read the page makes (media limits and Save as template).
+const { entitlements } = vi.hoisted(() => ({
+  entitlements: { maxPhotos: 5, maxVideos: 1, videoAllowed: true, packageRunning: false },
 }));
 
 vi.mock("next/navigation", () => ({
@@ -60,9 +61,7 @@ vi.mock("@/components/layout/page-header", () => ({
 }));
 
 vi.mock("@/components/billing/plan-gate", () => ({
-  usePlanMaxPhotos: () => 5,
-  usePlanMaxVideos: () => 1,
-  usePlanVideoAllowed: () => true,
+  usePlanEntitlements: () => entitlements,
 }));
 
 vi.mock("@/components/listings/listing-detail-content", () => ({
@@ -159,9 +158,11 @@ describe("EditListingPage", () => {
   let fetchMock: Mock;
   let termsLoaded: () => Promise<void>;
   let serveAcceptedAt: (value: string | null) => void;
+  let terms: Mock;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    entitlements.packageRunning = false;
     vi.spyOn(window, "confirm").mockReturnValue(true);
     mockMaybeSingle.mockResolvedValue({
       data: {
@@ -196,6 +197,7 @@ describe("EditListingPage", () => {
 
     ({
       api: fetchMock,
+      terms,
       termsLoaded,
       serveAcceptedAt,
     } = installFoundationPostFetch(
@@ -213,7 +215,22 @@ describe("EditListingPage", () => {
     render(<EditListingPage />);
     await termsLoaded();
     await waitFor(() => expect(screen.getByDisplayValue("Used iPhone 15")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "Save as template" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText(POSTING_TERMS_TICK)).toBeNull();
+  });
+
+  it("Save as template follows the allowance and sends no request of its own", async () => {
+    const { unmount } = render(<EditListingPage />);
+    await termsLoaded();
+    await waitFor(() => expect(screen.getByDisplayValue("Used iPhone 15")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "Save as template" })).toBeNull();
+    unmount();
+
+    entitlements.packageRunning = true;
+    render(<EditListingPage />);
+    expect(await screen.findByRole("button", { name: "Save as template" })).toBeInTheDocument();
+    // Only the posting-terms reads reach the network; the page sends no template read.
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("asks for the current terms when not accepted yet, and accepts them before saving", async () => {
@@ -232,6 +249,30 @@ describe("EditListingPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/dashboard/listings"));
     expectTermsAcceptedBeforeSave("/api/listings/listing-1");
+  });
+
+  it("when accepting the terms is refused, says so and uploads and saves nothing", async () => {
+    serveAcceptedAt(null);
+    render(<EditListingPage />);
+    await termsLoaded();
+    await waitFor(() => expect(screen.getByDisplayValue("Used iPhone 15")).toBeInTheDocument());
+    // A new logo waits to be uploaded.
+    fireEvent.click(screen.getByRole("button", { name: "Listing logo (optional)" }));
+    fireEvent.click(screen.getByLabelText(POSTING_TERMS_TICK));
+    terms.mockResolvedValueOnce({ ok: false, status: 503, json: async () => ({}) });
+    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+    expect(
+      await screen.findByText(
+        "The posting terms could not be accepted. Refresh this form and try again."
+      )
+    ).toBeInTheDocument();
+    expect(terms).toHaveBeenCalledWith(
+      "/api/foundation/posting-terms",
+      expect.objectContaining({ method: "POST" })
+    );
+    // No upload and no save request.
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
   });
 
   it("does not claim a saved update was submitted without server confirmation", async () => {
@@ -290,12 +331,71 @@ describe("EditListingPage", () => {
     expect(request[0]).toBe("/api/listings/listing-1");
     expect(payload.title).toBe("Used iPhone 15");
     expect(payload.price_zar).toBe(1500);
+    expect(payload.price_mode).toBe("amount");
     expect(payload.negotiable).toBe(true);
     expect(payload.town).toBe("Sandton");
     expect(payload.contactMethods).toEqual(["call", "whatsapp", "in_app"]);
     expect(payload.logo_url).toBe("https://media.verifymzansi.com/listings/existing-logo.jpg");
     expect(payload.attributes).toMatchObject({ brand: "Apple", storage_gb: 256 });
     expectFoundationPostFields(payload, { expectedRevision: 4 });
+  });
+
+  it("opens a Price on request post with no amount and saves it unchanged", async () => {
+    const { data } = await mockMaybeSingle();
+    mockMaybeSingle.mockResolvedValue({
+      data: { ...data, price_mode: "on_request", price_cents: null, price_negotiable: true },
+      error: null,
+    });
+    render(<EditListingPage />);
+    await termsLoaded();
+
+    await waitFor(() => {
+      expect(screen.getByRole("radio", { name: "Price on request" })).toBeChecked();
+    });
+    expect(screen.queryByLabelText("Asking price (ZAR)")).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Price negotiable" })).toBeChecked();
+    expect(listingCardSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ price: 0, priceMode: "on_request" })
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+    const payload = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(payload).toMatchObject({ price_mode: "on_request", price_zar: 0, negotiable: true });
+  });
+
+  it("opens an existing Free post (price 0) with Free selected", async () => {
+    const { data } = await mockMaybeSingle();
+    mockMaybeSingle.mockResolvedValue({
+      data: { ...data, price_mode: "free", price_cents: 0, price_negotiable: false },
+      error: null,
+    });
+    render(<EditListingPage />);
+    await termsLoaded();
+
+    await waitFor(() => {
+      expect(screen.getByRole("radio", { name: "Free" })).toBeChecked();
+    });
+    expect(screen.queryByLabelText("Asking price (ZAR)")).not.toBeInTheDocument();
+  });
+
+  it("switches a priced post to Free and drops the amount and Negotiable", async () => {
+    render(<EditListingPage />);
+    await termsLoaded();
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("1500")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("radio", { name: "Free" }));
+    expect(screen.queryByRole("checkbox", { name: "Price negotiable" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+    const payload = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(payload).toMatchObject({ price_mode: "free", price_zar: 0, negotiable: false });
   });
 
   it("allows removing the existing listing logo before save", async () => {
@@ -341,6 +441,91 @@ describe("EditListingPage", () => {
     });
     expect(mockToast).not.toHaveBeenCalled();
     expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it("does not reuse the old video's cover frame when the saved video is swapped", async () => {
+    const frame = "https://media.verifymzansi.com/listings/old-frame.jpg";
+    mockMaybeSingle.mockResolvedValue({
+      data: {
+        id: "listing-1",
+        seller_id: "user-1",
+        status: "live",
+        revision: 4,
+        title: "Used iPhone 15",
+        description: "Clean phone in excellent condition.",
+        price_cents: 150000,
+        category: "electronics",
+        condition: "used",
+        attributes: { device_type: "Smartphone", brand: "Apple", storage_gb: 256 },
+        location_province: "Gauteng",
+        location_city: "Johannesburg",
+        location_suburb: "Sandton",
+        price_negotiable: true,
+        contact_methods: ["call", "whatsapp"],
+        photos: [frame],
+        videos: ["https://media.verifymzansi.com/listings/old.mp4"],
+        video_thumbnail: frame,
+        logo_url: null,
+      },
+      error: null,
+    });
+    render(<EditListingPage />);
+    await termsLoaded();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Video \(max 1\)/ })).toBeInTheDocument();
+    });
+
+    // A new video replaces the saved one and no new cover is picked.
+    fireEvent.click(screen.getByRole("button", { name: /Video \(max 1\)/ }));
+    // The old frame is no longer listed as a photo, so the screen matches what is saved.
+    expect(screen.queryByRole("button", { name: "Remove Photo 1" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+
+    expect(await screen.findByText("Please fix the highlighted fields.")).toBeInTheDocument();
+    expect(fetchMock.mock.calls.filter(([url]) => url === "/api/listings/listing-1")).toHaveLength(
+      0
+    );
+  });
+
+  it("lists only the other photos once the saved video is swapped", async () => {
+    const frame = "https://media.verifymzansi.com/listings/old-frame.jpg";
+    const other = "https://media.verifymzansi.com/listings/other.jpg";
+    mockMaybeSingle.mockResolvedValue({
+      data: {
+        id: "listing-1",
+        seller_id: "user-1",
+        status: "live",
+        revision: 4,
+        title: "Used iPhone 15",
+        description: "Clean phone in excellent condition.",
+        price_cents: 150000,
+        category: "electronics",
+        condition: "used",
+        attributes: { device_type: "Smartphone", brand: "Apple", storage_gb: 256 },
+        location_province: "Gauteng",
+        location_city: "Johannesburg",
+        location_suburb: "Sandton",
+        price_negotiable: true,
+        contact_methods: ["call", "whatsapp"],
+        photos: [frame, other],
+        videos: ["https://media.verifymzansi.com/listings/old.mp4"],
+        video_thumbnail: frame,
+        logo_url: null,
+      },
+      error: null,
+    });
+    render(<EditListingPage />);
+    await termsLoaded();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Remove Photo 2" })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Video \(max 1\)/ }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "Remove Photo 2" })).not.toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: "Remove Photo 1" })).toBeInTheDocument();
   });
 
   it("uploads and uses a replacement listing logo", async () => {

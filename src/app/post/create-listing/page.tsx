@@ -8,17 +8,7 @@ import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { usePostTransport } from "@/hooks/use-post-transport";
 import Link from "next/link";
-import {
-  Camera,
-  Check,
-  Eye,
-  FileText,
-  Inbox,
-  Loader2,
-  MessageCircle,
-  Phone,
-  Tag,
-} from "lucide-react";
+import { Camera, Eye, FileText, Inbox, Loader2, MessageCircle, Phone, Tag } from "lucide-react";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { usePostActionFields } from "@/hooks/use-post-action-fields";
 import { loadOwnListing } from "@/app/post/edit-listing/[id]/load-own-listing";
@@ -36,8 +26,17 @@ import { usePostDraftAutosave } from "@/hooks/use-post-draft-autosave";
 import { CategoryPicker } from "@/components/listings/category-picker";
 import { MediaUpload } from "@/components/ui/media-upload";
 import { VideoFrameSelector } from "@/components/ui/video-frame-selector";
+import {
+  PHOTO_OR_VIDEO_RULE,
+  VIDEO_COVER_NEEDED,
+  photosWithVideoCover,
+} from "@/lib/forms/video-cover-photo";
 import { MediaCropPreview, type CropPosition } from "@/components/ui/media-crop-preview";
-import { UploadProgressPanel, type UploadSlotStatus } from "@/components/ui/upload-progress-panel";
+import {
+  UploadProgressPanel,
+  useUploadProgress,
+  type UploadSlotStatus,
+} from "@/components/ui/upload-progress-panel";
 import {
   PlanGate,
   usePlanMaxPhotos,
@@ -98,6 +97,17 @@ import {
   type ListingStart,
 } from "./listing-template";
 import { formFieldsFromTemplate } from "@/lib/post-templates";
+import {
+  LISTING_FIELD_STEPS,
+  stepForField,
+  stepForFieldErrors,
+} from "@/app/post/_lib/post-field-steps";
+import { ListingPriceFields } from "@/components/posting/listing-price-fields";
+import {
+  listingPricePreview,
+  listingPriceSubmission,
+  type ListingPriceForm,
+} from "@/lib/domains/listings/price-form";
 
 const STEPS: PostFormStep[] = [
   {
@@ -215,37 +225,11 @@ function normalizeListingFieldErrors(errors: Record<string, string>): Record<str
 }
 
 function getStepForFieldKey(key: string): number {
-  const normalizedKey = LISTING_FIELD_KEY_ALIASES[key] ?? key;
-
-  if (
-    normalizedKey === "logo_url" ||
-    normalizedKey === "videoThumbnail" ||
-    normalizedKey === "images" ||
-    normalizedKey === "videos" ||
-    normalizedKey === "termsAccepted"
-  ) {
-    return 2;
-  }
-
-  if (
-    normalizedKey === "price_zar" ||
-    normalizedKey === "province" ||
-    normalizedKey === "city" ||
-    normalizedKey === "contactMethods"
-  ) {
-    return 1;
-  }
-
-  return 0;
+  return stepForField(LISTING_FIELD_KEY_ALIASES[key] ?? key, LISTING_FIELD_STEPS);
 }
 
 function getStepForServerErrors(errors: Record<string, string>): number {
-  const keys = Object.keys(errors);
-  if (keys.length === 0) {
-    return 0;
-  }
-
-  return keys.reduce((targetStep, key) => Math.min(targetStep, getStepForFieldKey(key)), 2);
+  return stepForFieldErrors(errors, LISTING_FIELD_STEPS, 2);
 }
 
 interface UploadStatuses {
@@ -262,7 +246,19 @@ const INITIAL_UPLOAD_STATUSES: UploadStatuses = {
   saving: "idle",
 };
 
+/**
+ * The Create listing page. The form is keyed on the copy it was opened with,
+ * so if the page is kept alive between visits (client navigation), a copy and
+ * the ordinary form (or a template) never share leftovers: moving to or from a
+ * copy starts a fresh form. A template opened in a kept ordinary form is
+ * handled by the form itself (it sets the work aside, with Undo).
+ */
 export default function CreateListingPage() {
+  const searchParams = useSearchParams();
+  return <CreateListingForm key={searchParams?.get("copy") ?? ""} />;
+}
+
+function CreateListingForm() {
   const { user, profile, isLoading } = useAuth();
   const categoryAnswers = useRef<Record<string, Record<string, string | boolean | string[]>>>({});
   const [step, setStep] = useState(0);
@@ -270,6 +266,9 @@ export default function CreateListingPage() {
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
   const [negotiable, setNegotiable] = useState(false);
+  // "Amount" is preselected; Free and Price on request are one tap away.
+  const [priceMode, setPriceMode] = useState<ListingPriceForm["mode"]>("amount");
+  const priceForm: ListingPriceForm = { mode: priceMode, amount: price, negotiable };
   const [category, setCategory] = useState<ListingCategory | "">("");
   const [condition, setCondition] = useState<ListingCondition | "">("");
   const [categoryAttributes, setCategoryAttributes] = useState<
@@ -291,6 +290,7 @@ export default function CreateListingPage() {
   const submissionInFlightRef = useRef(false);
   const [submitProgress, setSubmitProgress] = useState<string | null>(null);
   const [uploadStatuses, setUploadStatuses] = useState<UploadStatuses>(INITIAL_UPLOAD_STATUSES);
+  const uploadProgress = useUploadProgress();
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
@@ -351,7 +351,7 @@ export default function CreateListingPage() {
     const base = [
       !!title.trim(),
       !!description.trim(),
-      !!price,
+      !!price || priceMode === "free" || priceMode === "on_request",
       !!category,
       !!province,
       !!city,
@@ -386,6 +386,7 @@ export default function CreateListingPage() {
     title,
     description,
     price,
+    priceMode,
     category,
     province,
     city,
@@ -466,6 +467,7 @@ export default function CreateListingPage() {
         setTitle(copy.title);
         setDescription(copy.description);
         setPrice(copy.price);
+        setPriceMode(copy.priceMode);
         setNegotiable(copy.negotiable);
         setCategory(copy.category);
         setCondition(copy.condition);
@@ -524,7 +526,10 @@ export default function CreateListingPage() {
     setStep(Math.min(Math.max(restored.step ?? 0, 0), STEPS.length - 1));
     setTitle(restoredData.title ?? "");
     setDescription(restoredData.description ?? "");
-    setPrice(restoredData.price ?? "");
+    // A draft saved before the price choice existed used "0" to mean Free.
+    const oldFreeDraft = !restoredData.priceMode && restoredData.price === "0";
+    setPrice(oldFreeDraft ? "" : (restoredData.price ?? ""));
+    setPriceMode(oldFreeDraft ? "free" : restoredData.priceMode || "amount");
     setNegotiable(Boolean(restoredData.negotiable));
     setCategory((restoredData.category as ListingCategory | "") ?? "");
     setCondition((restoredData.condition as ListingCondition | "") ?? "");
@@ -562,6 +567,7 @@ export default function CreateListingPage() {
       title,
       description,
       price,
+      priceMode,
       negotiable,
       province,
       city,
@@ -582,6 +588,7 @@ export default function CreateListingPage() {
       ...fields,
       title: "",
       price: "",
+      priceMode: "amount",
       negotiable: false,
       province: fields.province || profile?.location_province || "",
       city:
@@ -593,6 +600,7 @@ export default function CreateListingPage() {
     setStep(0);
     setTitle("");
     setPrice("");
+    setPriceMode("amount");
     setNegotiable(false);
     setPhotoFiles([]);
     setVideoFile([]);
@@ -652,6 +660,7 @@ export default function CreateListingPage() {
       title,
       description,
       price,
+      priceMode,
       negotiable,
       province,
       city,
@@ -683,6 +692,7 @@ export default function CreateListingPage() {
     title,
     description,
     price,
+    priceMode,
     negotiable,
     province,
     city,
@@ -747,12 +757,8 @@ export default function CreateListingPage() {
     }
 
     if (targetStep === 1) {
-      if (
-        (category !== "jobs_services" || price) &&
-        (!price || Number.isNaN(parseFloat(price)) || parseFloat(price) < 0)
-      ) {
-        errors.price_zar = "Enter a valid price.";
-      }
+      const priced = listingPriceSubmission(category, priceForm);
+      if ("error" in priced) errors.price_zar = priced.error;
       if (!province) errors.province = "Select a province.";
       if (!city) errors.city = "Select a city.";
       if (province.trim().length > 50) {
@@ -774,8 +780,9 @@ export default function CreateListingPage() {
 
     if (targetStep === 2) {
       const photoCount = existingPhotos.length + photoFiles.length;
-      if (category !== "jobs_services" && photoCount === 0)
-        errors.images = "Upload at least one photo.";
+      const hasVideoCover = videoFile.length > 0 && videoCoverFile.length > 0;
+      if (category !== "jobs_services" && photoCount === 0 && !hasVideoCover)
+        errors.images = videoFile.length > 0 ? VIDEO_COVER_NEEDED : PHOTO_OR_VIDEO_RULE;
       if (photoCount > maxPhotos) {
         errors.images = `You can upload up to ${maxPhotos} photos on this plan.`;
       }
@@ -883,6 +890,7 @@ export default function CreateListingPage() {
     setIsSubmitting(true);
     submissionInFlightRef.current = true;
     setSubmitProgress("Checking upload service...");
+    uploadProgress.reset();
     setUploadStatuses({
       logo: logoFile.length > 0 ? "uploading" : "skipped",
       photos: photoFiles.length > 0 ? "uploading" : "skipped",
@@ -897,6 +905,10 @@ export default function CreateListingPage() {
         return;
       }
 
+      // A copy accepts the terms itself, first: if that fails, nothing has
+      // been uploaded.
+      if (copyId && needsTerms) await acceptTerms();
+
       // Best-effort preflight — never block the form on a health check.
       try {
         await checkUploadServiceReachable();
@@ -910,19 +922,29 @@ export default function CreateListingPage() {
         : {};
 
       const [logoUrls, photoUrls, videoUrls, videoThumbnailUrl] = await settleMediaUploads([
-        uploadListingImages({ files: logoFile, area: "listing_logo", field: "logo_url" }).then(
-          (urls) => {
-            if (logoFile.length) setUploadStatuses((current) => ({ ...current, logo: "done" }));
-            return urls;
-          }
-        ),
-        uploadListingImages({ files: photoFiles, area: "listing", field: "images" }).then(
-          (urls) => {
-            if (photoFiles.length) setUploadStatuses((current) => ({ ...current, photos: "done" }));
-            return urls;
-          }
-        ),
-        uploadListingVideoFiles({ files: videoFile, area: "listing_video" }).then((urls) => {
+        uploadListingImages({
+          files: logoFile,
+          area: "listing_logo",
+          field: "logo_url",
+          onProgress: uploadProgress.track("logo", logoFile),
+        }).then((urls) => {
+          if (logoFile.length) setUploadStatuses((current) => ({ ...current, logo: "done" }));
+          return urls;
+        }),
+        uploadListingImages({
+          files: photoFiles,
+          area: "listing",
+          field: "images",
+          onProgress: uploadProgress.track("photos", photoFiles),
+        }).then((urls) => {
+          if (photoFiles.length) setUploadStatuses((current) => ({ ...current, photos: "done" }));
+          return urls;
+        }),
+        uploadListingVideoFiles({
+          files: videoFile,
+          area: "listing_video",
+          onProgress: uploadProgress.trackVideo("video", videoFile),
+        }).then((urls) => {
           if (videoFile.length) setUploadStatuses((current) => ({ ...current, video: "done" }));
           return urls;
         }),
@@ -938,12 +960,13 @@ export default function CreateListingPage() {
       const primaryMediaFile = videoFile[0] ?? photoFiles[0] ?? null;
       const mediaDimensions = primaryMediaFile ? await readMediaDimensions(primaryMediaFile) : null;
 
+      const priced = listingPriceSubmission(category, priceForm);
+      if ("error" in priced) throw new Error(priced.error);
       const body = {
         ...postFields(copyId !== null),
         title: title.trim(),
         description: description.trim(),
-        price_zar: price ? parseFloat(price) : 0,
-        negotiable: category === "jobs_services" ? false : negotiable,
+        ...priced,
         category: mapListingCategory(category),
         condition:
           category === "jobs_services" || category === "auto_parts"
@@ -955,7 +978,11 @@ export default function CreateListingPage() {
         town,
         address,
         logo_url: logoUrls[0] || existingLogo || null,
-        images: [...existingPhotos, ...photoUrls],
+        images: photosWithVideoCover(
+          [...existingPhotos, ...photoUrls],
+          videoUrls.length > 0,
+          videoThumbnailUrl
+        ),
         videos: videoUrls,
         videoThumbnail: videoThumbnailUrl,
         contactMethods,
@@ -967,7 +994,6 @@ export default function CreateListingPage() {
 
         trialDays,
       };
-      if (copyId && needsTerms) await acceptTerms();
       const res = copyId
         ? await submitListingCopy(
             copyId,
@@ -1087,12 +1113,19 @@ export default function CreateListingPage() {
     }
   }
 
+  // The previews show the seller's choice: an amount, "Free" or "Price on request".
+  const { priceMode: previewPriceMode, priceCents: previewPriceCents } = listingPricePreview(
+    category,
+    priceForm
+  );
+
   function handleDiscardDraft() {
     discardDraft();
     setStep(0);
     setTitle("");
     setDescription("");
     setPrice("");
+    setPriceMode("amount");
     setNegotiable(false);
     setCategory("");
     setCondition("");
@@ -1117,7 +1150,6 @@ export default function CreateListingPage() {
   }
 
   function renderCardPreview() {
-    const numericPrice = parseFloat(price);
     const normalizedAttributes = category
       ? coerceListingAttributes(category, categoryAttributes)
       : {};
@@ -1128,7 +1160,8 @@ export default function CreateListingPage() {
       <ListingCard
         id="preview-listing"
         title={title || "Your listing title"}
-        price={!Number.isNaN(numericPrice) && numericPrice > 0 ? Math.round(numericPrice * 100) : 0}
+        price={previewPriceCents}
+        priceMode={previewPriceMode}
         imageUrl={cardMediaUrl || undefined}
         posterUrl={cardPosterUrl}
         isVideo={videoFile.length > 0}
@@ -1162,7 +1195,6 @@ export default function CreateListingPage() {
   }
 
   function renderPreview() {
-    const numericPrice = parseFloat(price);
     const normalizedAttributes = category
       ? coerceListingAttributes(category, categoryAttributes)
       : {};
@@ -1189,8 +1221,8 @@ export default function CreateListingPage() {
             owner_id: "preview-owner",
             title: title || "Your listing title",
             description: description || "Your listing description will appear here.",
-            price_cents:
-              !Number.isNaN(numericPrice) && numericPrice > 0 ? Math.round(numericPrice * 100) : 0,
+            price_cents: previewPriceCents,
+            price_mode: previewPriceMode,
             price_negotiable: negotiable,
             category: category || null,
             condition: condition || null,
@@ -1293,6 +1325,7 @@ export default function CreateListingPage() {
                     {isSubmitting && (
                       <UploadProgressPanel
                         visible={isSubmitting}
+                        progress={uploadProgress.values}
                         slots={[
                           {
                             key: "logo",
@@ -1470,16 +1503,26 @@ export default function CreateListingPage() {
                     <PostFormSection
                       title={category === "jobs_services" ? "Salary (Optional)" : "Price"}
                     >
-                      <div className="space-y-2">
-                        <Label htmlFor="price" required={category !== "jobs_services"}>
-                          {isPropertyRentListing
-                            ? "Monthly Rent (ZAR) *"
-                            : category === "jobs_services"
-                              ? "Salary (ZAR) (Optional)"
-                              : "Asking price (ZAR) *"}
-                        </Label>
-                        <div className="flex flex-col xs:flex-row gap-3">
-                          <div className="relative flex-1">
+                      {category !== "jobs_services" ? (
+                        <ListingPriceFields
+                          category={category || "other_items"}
+                          value={priceForm}
+                          onChange={(next) => {
+                            setPriceMode(next.mode);
+                            setPrice(next.amount);
+                            setNegotiable(next.negotiable);
+                            clearErrors("price_zar");
+                          }}
+                          amountId="price"
+                          amountLabel={
+                            isPropertyRentListing ? "Monthly Rent (ZAR)" : "Asking price (ZAR)"
+                          }
+                          error={fieldErrors.price_zar}
+                        />
+                      ) : (
+                        <div className="space-y-2">
+                          <Label htmlFor="price">Salary (ZAR) (Optional)</Label>
+                          <div className="relative">
                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">
                               R
                             </span>
@@ -1499,31 +1542,11 @@ export default function CreateListingPage() {
                               aria-invalid={!!fieldErrors.price_zar}
                             />
                           </div>
-
-                          {category !== "jobs_services" && (
-                            <label
-                              className={cn(
-                                "flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2",
-                                negotiable
-                                  ? "border-brand-green-600 bg-brand-green-50 text-brand-green-800 dark:border-brand-green-400 dark:bg-brand-green-950/50 dark:text-brand-gold-200"
-                                  : "border-input bg-card text-foreground/80 hover:border-foreground/30"
-                              )}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={negotiable}
-                                onChange={(event) => setNegotiable(event.target.checked)}
-                                className="sr-only"
-                              />
-                              {negotiable ? <Check className="h-4 w-4" aria-hidden="true" /> : null}
-                              Negotiable
-                            </label>
+                          {fieldErrors.price_zar && (
+                            <p className="inline-form-error">{fieldErrors.price_zar}</p>
                           )}
                         </div>
-                        {fieldErrors.price_zar && (
-                          <p className="inline-form-error">{fieldErrors.price_zar}</p>
-                        )}
-                      </div>
+                      )}
                     </PostFormSection>
 
                     <PostFormSection
@@ -1604,7 +1627,11 @@ export default function CreateListingPage() {
                   <div className="space-y-6">
                     <PostFormSection
                       title="Photos and video"
-                      description="Your first photo is the cover."
+                      description={
+                        category === "jobs_services"
+                          ? "Your first photo is the cover."
+                          : `${PHOTO_OR_VIDEO_RULE} Your first photo is the cover.`
+                      }
                     >
                       <div id="listing-images" tabIndex={-1} className="space-y-2 rounded-lg">
                         <MediaUpload
@@ -1613,7 +1640,7 @@ export default function CreateListingPage() {
                           description={
                             category === "jobs_services"
                               ? "Optional for job vacancies."
-                              : "Required. Your first photo becomes the public cover."
+                              : "With only a video, the cover frame you choose becomes the first photo."
                           }
                           error={fieldErrors.images}
                           maxFiles={maxPhotos}
@@ -1653,7 +1680,7 @@ export default function CreateListingPage() {
                         <MediaUpload
                           id="listing-video-input"
                           label={`Video (max ${maxVideos})${!videoAllowed ? " — Upgrade to unlock" : ""}`}
-                          description={`Optional. Use clear portrait clips that show the item, property, or service honestly. ${VIDEO_GUIDANCE} ${VIDEO_SOUND_OFF_TIP}`}
+                          description={`${category === "jobs_services" ? "Optional. " : ""}Use clear portrait clips that show the item, property, or service honestly. ${VIDEO_GUIDANCE} ${VIDEO_SOUND_OFF_TIP}`}
                           error={fieldErrors.videos}
                           maxFiles={maxVideos}
                           files={videoFile}
@@ -1694,6 +1721,7 @@ export default function CreateListingPage() {
                             onFrameSelect={(frame) => {
                               setVideoCoverFile(frame ? [frame] : []);
                               clearErrors("videoThumbnail");
+                              clearErrors("images");
                             }}
                           />
                           <details
@@ -1757,7 +1785,7 @@ export default function CreateListingPage() {
                         title={title}
                         description={description}
                         priceCents={price === "" ? null : Math.round(Number(price) * 100)}
-                        priceExpected
+                        priceExpected={category === "jobs_services" || priceMode === "amount"}
                         category={category || null}
                         location={city || null}
                         pendingPhotoCount={photoFiles.length + existingPhotos.length}

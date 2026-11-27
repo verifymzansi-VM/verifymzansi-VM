@@ -25,6 +25,11 @@ const { searchParamGetMock, routerPushMock } = vi.hoisted(() => ({
   routerPushMock: vi.fn(),
 }));
 
+// Uploads with a progress bar use XHR; these tests stub fetch, so send them there.
+vi.mock("@/lib/utils/xhr-upload", () => ({
+  xhrFetch: (input: RequestInfo | URL, init?: RequestInit) => fetch(input, init),
+}));
+
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: routerPushMock }),
   useSearchParams: () => ({ get: searchParamGetMock }),
@@ -39,7 +44,11 @@ vi.mock("@/lib/media/video-length-client", () => ({
 vi.mock("@/hooks/use-auth", () => ({
   useAuth: () => ({
     user: { id: "user-1" },
-    profile: { location_province: "Gauteng", location_city: "Johannesburg" },
+    profile: {
+      location_province: "Gauteng",
+      location_city: "Johannesburg",
+      phone: "0821234567",
+    },
     isLoading: false,
   }),
 }));
@@ -569,6 +578,7 @@ describe("CreateTourismPage type switch behavior", () => {
     fireEvent.change(screen.getByLabelText("Town"), {
       target: { value: "Orlando West" },
     });
+    fireEvent.click(screen.getByLabelText("Show my exact visitor address publicly"));
     fireEvent.change(screen.getByLabelText("Website (Optional)"), {
       target: { value: "https:// www.kruger.example" },
     });
@@ -599,8 +609,68 @@ describe("CreateTourismPage type switch behavior", () => {
     });
     expect(body.category_details.booking_url).toBe("https://www.booking.co.za");
     expect(body.map_directions).toBe("https://maps.app.goo.gl/kruger");
+    expect(body.category_details.customer_access.publishAddress).toBe(true);
     expect(body.termsAccepted).toBe(true);
     expectFoundationPostFields(body);
+  });
+
+  it("keeps the address private by default, fills the profile number and saves SA details for an attraction", async () => {
+    (fetchWithRetry as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        urls: ["https://media.verifymzansi.com/tourism/photo.jpg"],
+        errors: [],
+      }),
+    });
+
+    render(<CreateTourismPage />);
+    await termsLoaded();
+
+    fireEvent.change(screen.getByLabelText("Business Name (Required)"), {
+      target: { value: "Soweto Heritage Museum" },
+    });
+    fireEvent.change(screen.getByLabelText("Description (Required)"), {
+      target: { value: "A museum about the history of Soweto, open to visitors every day." },
+    });
+    fireEvent.change(screen.getByLabelText("Tourism category (Required)"), {
+      target: { value: "cultural_heritage" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.change(screen.getByLabelText("TGCSA Grading"), { target: { value: "4_star" } });
+    fireEvent.change(screen.getByLabelText(/^Minimum stay/), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(screen.getByLabelText(/Phone number/)).toHaveValue("0821234567");
+    expect(screen.getByLabelText(/WhatsApp Number/)).toHaveValue("0821234567");
+    expect(screen.queryByLabelText(/^Email/)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Street address"), {
+      target: { value: "8115 Vilakazi Street" },
+    });
+    // Without "Show my exact visitor address publicly" there is no map pin to add.
+    expect(
+      screen.queryByLabelText("Location pin (Google Maps link) (Optional)")
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.click(screen.getByRole("button", { name: /Add media for Upload photos/i }));
+    acceptPostingTerms();
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/businesses",
+        expect.objectContaining({ method: "POST" })
+      );
+    });
+    const businessCall = fetchMock.mock.calls.find(([input]) => input === "/api/businesses");
+    const body = JSON.parse(String(businessCall?.[1]?.body));
+    expect(body.category_details.customer_access.publishAddress).toBe(false);
+    expect(body.map_directions).toBeUndefined();
+    expect(body).not.toHaveProperty("email");
+    expect(body.phone).toBe("0821234567");
+    expect(body.category_details.tgcsa_grading).toBe("4_star");
+    expect(body.category_details.minimum_stay_nights).toBe(2);
   });
 
   it("allows event submit with video only", async () => {
@@ -785,6 +855,55 @@ describe("CreateTourismPage type switch behavior", () => {
       })
     );
   });
+
+  it.each([
+    { shown: false, expected: null, street: "" },
+    { shown: true, expected: "24 Vilakazi Street", street: "24 Vilakazi Street" },
+  ])(
+    "preview shows the street address only when the public-address switch is on (on: $shown)",
+    async ({ shown, expected, street }) => {
+      render(<CreateTourismPage />);
+      await termsLoaded();
+
+      fireEvent.change(screen.getByLabelText("Business Name (Required)"), {
+        target: { value: "Kruger Sunset Lodge" },
+      });
+      fireEvent.change(screen.getByLabelText("Description (Required)"), {
+        target: {
+          value: "A detailed tourism business description with enough content to pass validation.",
+        },
+      });
+      fireEvent.change(screen.getByLabelText("Tourism category (Required)"), {
+        target: { value: "hotel_resort" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Next" }));
+      fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+      fireEvent.click(screen.getByLabelText("Phone Call"));
+      fireEvent.click(screen.getByLabelText("Contact Form"));
+      fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
+      fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
+      fireEvent.change(screen.getByLabelText("Street address"), {
+        target: { value: "24 Vilakazi Street" },
+      });
+      fireEvent.change(screen.getByLabelText("Town"), { target: { value: "Orlando West" } });
+      if (shown) fireEvent.click(screen.getByLabelText("Show my exact visitor address publicly"));
+      fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+      fireEvent.click(screen.getByRole("button", { name: /Add media for Upload photos/i }));
+
+      await waitFor(() => {
+        expect(businessPreviewProps.current).not.toBeNull();
+      });
+      const business = (businessPreviewProps.current as { business: Record<string, unknown> })
+        .business as {
+        location_address: string | null;
+        business_details: { street_address: string };
+      };
+      expect(business.location_address).toBe(expected);
+      expect(business.business_details.street_address).toBe(street);
+    }
+  );
 
   it("marks the event preview card as video media for blob-based uploads", async () => {
     mediaFilesByLabel.set("Upload video", [new File(["video"], "clip.mp4", { type: "video/mp4" })]);
@@ -1117,6 +1236,19 @@ describe("CreateTourismPage type switch behavior", () => {
     expect(screen.getByText(/re-attach your photos and videos/i)).toBeInTheDocument();
     expect(routerPushMock).not.toHaveBeenCalled();
     window.history.pushState({}, "", "/");
+  });
+
+  it("names the first step of the event form for an event type server error", async () => {
+    await fillAndSubmitEvent({
+      status: 422,
+      body: {
+        error: "Choose one of the options.",
+        reason: "invalid_post",
+        issues: [{ path: "event_details.event_type", message: "Choose one of the options." }],
+      },
+    });
+
+    expect(await screen.findByText(/Please fix 1 field on Step 1/i)).toBeInTheDocument();
   });
 
   it("does not follow an off-site event redirectUrl", async () => {

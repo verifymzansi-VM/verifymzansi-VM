@@ -1,6 +1,7 @@
 import { customerAccessSchema } from "@/lib/forms/customer-access";
 import { z } from "zod";
 import { isTrustedPlatformMediaUrl } from "@/lib/utils/media-url";
+import { businessNumber, WHATSAPP_NEEDS_MOBILE } from "@/lib/utils/phone";
 import { BUSINESS_TEXT_LIMITS } from "./business-limits";
 import {
   externalUrlOrEmptySchema,
@@ -12,8 +13,6 @@ import {
 
 /** Tourism activities whose visitors join at a meeting point or are collected. */
 const TOUR_ACTIVITIES = new Set(["tour_operator", "safari_wildlife", "adventure_activities"]);
-
-const saPhoneRegex = /^(\+27|0)[6-8][0-9]{8}$/;
 
 const BUSINESS_TYPES = [
   "mall_store",
@@ -190,13 +189,26 @@ export const businessSchema = z
     map_directions: externalUrlOrEmptySchema("Enter a valid map directions URL."),
 
     // Contact
-    phone: z.string().regex(saPhoneRegex, "Enter a valid SA number").optional().or(z.literal("")),
-    whatsapp: z
+    // Calls take a landline, a mobile or 087/0800/0860/0861, WhatsApp a mobile
+    // only (businessNumber, the same rule as the database's click-to-view
+    // command).
+    phone: z
       .string()
-      .regex(saPhoneRegex, "Enter a valid SA number")
+      .refine((value) => businessNumber(value) !== null, "Enter a valid SA number")
       .optional()
       .or(z.literal("")),
-    email: z.string().email().optional().or(z.literal("")),
+    whatsapp: z
+      .string()
+      .superRefine((value, ctx) => {
+        const found = businessNumber(value);
+        if (found?.kind !== "mobile")
+          ctx.addIssue({
+            code: "custom",
+            message: found ? WHATSAPP_NEEDS_MOBILE : "Enter a valid SA number",
+          });
+      })
+      .optional()
+      .or(z.literal("")),
     website: externalUrlOrEmptySchema("Enter a valid URL"),
 
     // Media
@@ -216,7 +228,7 @@ export const businessSchema = z
 
     // Details
     contact_methods: z
-      .array(z.enum(["call", "whatsapp", "email", "website", "form"]))
+      .array(z.enum(["call", "whatsapp", "website", "form"]))
       .min(1)
       .optional(),
     services_offered: z.array(z.string().max(200)).max(30).optional().default([]),
@@ -344,18 +356,16 @@ export const businessSchema = z
         });
       if (data.contact_methods?.includes("whatsapp") && !data.whatsapp?.trim())
         ctx.addIssue({ code: "custom", path: ["whatsapp"], message: "Add a WhatsApp number." });
-      if (data.contact_methods?.includes("email") && !data.email?.trim())
-        ctx.addIssue({ code: "custom", path: ["email"], message: "Add an email address." });
       if (data.contact_methods?.includes("website") && !data.website?.trim())
         ctx.addIssue({ code: "custom", path: ["website"], message: "Add a website address." });
       if (
         !data.contact_methods?.includes("form") &&
-        ![data.phone, data.whatsapp, data.email, data.website].some((v) => v?.trim())
+        ![data.phone, data.whatsapp, data.website].some((v) => v?.trim())
       )
         ctx.addIssue({
           code: "custom",
           path: ["phone"],
-          message: "Add at least one contact method: phone, WhatsApp, email or website.",
+          message: "Add at least one contact method: phone, WhatsApp or website.",
         });
       return;
     }

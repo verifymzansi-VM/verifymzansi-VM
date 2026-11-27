@@ -160,7 +160,13 @@ export class MockOzow {
   async handle(url: URL, { redirect = true }: { redirect?: boolean } = {}): Promise<Served> {
     const paymentId = url.searchParams.get("paymentId") ?? "";
     const returnUrl = url.searchParams.get("returnUrl") ?? "";
-    if (!UUID.test(paymentId) || returnUrl !== `${APP_ORIGIN}/billing/success?payment=${paymentId}`)
+    // A member returns to the payment status page; the payer of an invoice
+    // payment link (not signed in) to the link page, which names no payment.
+    const returns = [
+      `${APP_ORIGIN}/billing/success?payment=${paymentId}`,
+      `${APP_ORIGIN}/pay-invoice?ozow=back`,
+    ];
+    if (!UUID.test(paymentId) || !returns.includes(returnUrl))
       return { ...page("Mock Ozow", "<h1>Unknown payment request</h1>"), status: 400 };
     if (url.pathname === "/checkout") {
       const amount = url.searchParams.get("amount") ?? "";

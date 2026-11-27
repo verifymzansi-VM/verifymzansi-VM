@@ -8,7 +8,12 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { applyStepsBefore, createChecks, sqlHelpers } from "./foundation-sql-checks.mjs";
+import {
+  applyStepsBefore,
+  assertReadOnlyPreflight,
+  createChecks,
+  sqlHelpers,
+} from "./foundation-sql-checks.mjs";
 import { applySteps, startLintDatabase } from "./foundation-sql-lint.mjs";
 
 /** The Individual slots on sale since 20261113002421_individual_slots_r69.sql. */
@@ -57,6 +62,9 @@ export function updateCheckKit(database, update, current) {
  */
 export function createPaymentWorld({ q, json }) {
   q(`create schema vmtest;
+    -- Verified phone numbers come from one sequence, so two members never
+    -- share one (verification_phone_unique_active_idx).
+    create sequence if not exists vmtest.phone_seq maxvalue 9999999;
     create function vmtest.member(p_label text) returns jsonb language plpgsql as $$
     declare uid uuid:=gen_random_uuid(); sid uuid:=gen_random_uuid(); mail text; begin
       mail:=p_label||'-'||uid||'@example.invalid';
@@ -78,7 +86,7 @@ export function createPaymentWorld({ q, json }) {
       insert into private.accepted_identity_facts(owner_id,submission_id,identity_hmac,reviewed_by)
         values(p_owner,gen_random_uuid(),p_fp,p_staff);
       insert into private.verification_phone_proofs(owner_id,challenge_id,phone)
-        values(p_owner,gen_random_uuid(),'+2782'||lpad((abs(hashtext(p_owner::text))%10000000)::text,7,'0'));
+        values(p_owner,gen_random_uuid(),'+2782'||lpad(nextval('vmtest.phone_seq')::text,7,'0'));
       insert into private.verification_localities(owner_id,province_id,city_id) values(p_owner,'gp','gp_johannesburg');
       perform set_config('session_replication_role','origin',true);
     end$$;
@@ -414,6 +422,29 @@ export const functionBodyMd5 = ({ q }, signature) =>
  * unexpected state" with `rows` rows, the second naming the function. Each
  * body is put back; the schema fingerprint is unchanged.
  */
+/**
+ * Before the update: the preflight prints one read-only summary row saying the
+ * update is not applied, and an early rollback and a drifted body are refused.
+ */
+export async function checkPreflightBeforeApply(
+  kit,
+  database,
+  check,
+  { label, signatures, notApplied, rows }
+) {
+  await check(
+    "preflight: one read-only summary row before the update; early rollback and drift refused",
+    () => {
+      const [summary, ...problems] = kit.preflight();
+      assert.deepEqual(problems, []);
+      assert.equal(summary[0], "summary");
+      assert.match(summary[1], notApplied);
+      assertReadOnlyPreflight(database, kit.preflightSql);
+      assertDriftRefused(kit, { label, signatures, rows });
+    }
+  );
+}
+
 export function assertDriftRefused(kit, { label, signatures, rows: expected }) {
   const { q, fails, fingerprint, preflight } = kit;
   const before = fingerprint();

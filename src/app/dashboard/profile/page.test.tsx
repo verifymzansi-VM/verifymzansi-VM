@@ -350,10 +350,10 @@ describe("ProfilePage", () => {
       for (const text of [
         "Your account closes as soon as you confirm. You can't undo this or reopen the account yourself.",
         "Your posts leave the site at once and are deleted with your account.",
-        "As our Terms say, closing your account counts as a request to cancel all your slots. If you are an individual or sole trader, we work out any credit for unused days after the 20-business-day notice period, minus a R50 fee; a 30-day slot usually returns nothing. Companies and other buyers that are not individuals get no credit.",
+        "As our Terms say, closing your account counts as a request to cancel all your slots and your Multi-listing package. If you are an individual or sole trader, we work out any credit for unused days after the 20-business-day notice period, minus a R50 fee; a 30-day slot usually returns nothing. Companies and other buyers that are not individuals get no credit.",
         "You are signed out on every device and can't sign in again.",
         "Erasing your profile, posts, enquiries, photos and videos is planned for 17 December 2026, 30 days after closing. If a payment, refund, invoice, report or legal hold is still open, erasure waits until it is settled.",
-        /^Payment records and invoices are kept for 5 years for tax, as the law requires\. Some other records, such as ID-check history, are kept as our/,
+        /^Payment records and invoices are kept for 7 years, as company and tax law require\. Some other records, such as ID-check history, are kept as our/,
         "For your safety, this works only within 15 minutes of signing in with your password or Google.",
       ])
         expect(within(dialog).getByText(text)).toBeInTheDocument();
@@ -859,25 +859,26 @@ describe("ProfilePage", () => {
     }
   });
 
-  it("drops the delayed redirect when the page unmounts before it fires", async () => {
+  it("loads the page the member goes to in full when they leave before the delayed load", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({ ok: true, json: async () => ({ status: "closed" }) })
     );
     const originalLocation = window.location;
     const assign = vi.fn();
-    Object.defineProperty(window, "location", {
-      configurable: true,
-      value: {
-        origin: "http://localhost",
-        href: "http://localhost/dashboard/profile#account",
-        pathname: "/dashboard/profile",
-        search: "",
-        hash: "#account",
-        assign,
-        replace: vi.fn(),
-      },
-    });
+    const location = {
+      origin: "http://localhost",
+      href: "http://localhost/dashboard/profile#account",
+      pathname: "/dashboard/profile",
+      search: "",
+      hash: "#account",
+      assign,
+      replace: vi.fn(),
+    };
+    Object.defineProperty(window, "location", { configurable: true, value: location });
+    // Fake timers that still move with real time (waitFor keeps working), so
+    // the 1.5 s delay can be passed at once.
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ["setTimeout", "clearTimeout"] });
     try {
       const { unmount } = render(<ProfilePage />);
       await screen.findByRole("heading", { name: "My profile" });
@@ -889,10 +890,15 @@ describe("ProfilePage", () => {
       await waitFor(() =>
         expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: "Account closed" }))
       );
+      // The member follows a link before the delayed load home (whether or not
+      // the delay has started yet).
+      location.href = "http://localhost/pricing";
       unmount();
-      await new Promise((resolve) => setTimeout(resolve, 1800));
-      expect(assign).not.toHaveBeenCalled();
+      await waitFor(() => expect(assign).toHaveBeenCalledWith("http://localhost/pricing"));
+      vi.advanceTimersByTime(1800);
+      expect(assign).toHaveBeenCalledTimes(1);
     } finally {
+      vi.useRealTimers();
       Object.defineProperty(window, "location", { configurable: true, value: originalLocation });
     }
   });

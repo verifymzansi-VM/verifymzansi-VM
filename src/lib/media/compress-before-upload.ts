@@ -65,6 +65,8 @@ type VideoPreparationOptions = {
    * a phone's trailer after the last box), and the converted MP4 can be.
    */
   forceConversion?: boolean;
+  /** Conversion progress (0-100), from the encoder. */
+  onProgress?: (percent: number) => void;
 };
 
 export function compressVideoForUpload(
@@ -88,7 +90,7 @@ export function compressVideoForUpload(
  * compatible (H.264/AAC) MP4 within the 50 MB stored-file cap. WebM is
  * converted like MOV: browser-made WebM often has no readable length.
  */
-async function videoNeedsConversion(file: Blob): Promise<boolean> {
+export async function videoNeedsConversion(file: Blob): Promise<boolean> {
   return (
     file.type !== "video/mp4" ||
     file.size > MAX_VIDEO_UPLOAD_BYTES ||
@@ -107,7 +109,11 @@ async function prepareVideo(file: File, options?: VideoPreparationOptions): Prom
 
   try {
     result = await Promise.race([
-      compressVideo(file, { signal: timeout.signal, forceTranscode: needsConversion }),
+      compressVideo(file, {
+        signal: timeout.signal,
+        forceTranscode: needsConversion,
+        ...(options?.onProgress ? { onProgress: options.onProgress } : {}),
+      }),
       timeout.promise,
     ]);
   } catch (error) {

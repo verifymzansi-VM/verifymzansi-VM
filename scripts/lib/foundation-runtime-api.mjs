@@ -142,11 +142,12 @@ export async function probeFoundationRuntimeApi(
   assert.equal(manifest.schemaVersion, 1);
   assert.equal(manifest.schema, "api");
   // A sanity bound on the probe (one anonymous request per command), raised
-  // from 160 when the customer invoice commands took the manifest to 163.
+  // from 160 when the customer invoice commands took the manifest to 163, and
+  // from 250 when the invoice payment link took it to 252.
   assert.ok(
     Array.isArray(manifest.functions) &&
       manifest.functions.length > 0 &&
-      manifest.functions.length <= 250
+      manifest.functions.length <= 300
   );
   assert.equal(new Set(manifest.functions.map((fn) => fn.name)).size, manifest.functions.length);
   const results = [];

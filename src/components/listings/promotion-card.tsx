@@ -1,7 +1,6 @@
 "use client";
 
 import { memo } from "react";
-import { Tag } from "lucide-react";
 import { formatSaShortDate, formatZARShort, saCalendarDaysBetween } from "@/lib/utils/format";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { PosterCardShell } from "@/components/listings/poster-card-shell";
@@ -26,6 +25,7 @@ interface PromotionCardProps {
   ownerTrustLevel?: TrustLevel;
   ownerName?: string;
   viewCount?: number;
+  /** @deprecated Ignored: paid add-ons were removed (item 37). Kept so existing callers compile. */
   boosted?: boolean;
   featured?: boolean;
   startDate?: string | null;
@@ -58,28 +58,10 @@ export function getUrgencyLabel(endDate: string | null | undefined, now: Date): 
 
 /* ── Status badge ───────────────────────────────────────────────── */
 
-function getPromotionStatus(
-  featured: boolean | undefined,
-  boosted: boolean | undefined,
-  promotionType: PromotionType
-) {
-  // Featured / boosted get a premium badge variant
-  if (featured) {
-    return {
-      label: "Featured",
-      className: "bg-amber-400 text-amber-950",
-    };
-  }
-
+/** The card's type tag. Paid add-ons (Featured, Boost) were removed (item
+ * 37), so no card shows a paid badge. */
+function getPromotionStatus(promotionType: PromotionType) {
   const typePresentation = getStoredPromotionTypePresentation(promotionType);
-
-  if (boosted) {
-    return {
-      label: `${typePresentation.cardTagLabel} ★`,
-      className: typePresentation.cardTagClassName,
-    };
-  }
-
   return {
     label: typePresentation.cardTagLabel,
     className: typePresentation.cardTagClassName,
@@ -135,8 +117,6 @@ export const PromotionCard = memo(function PromotionCard({
   ownerName: _ownerName,
   viewCount,
   categoryLabel: _categoryLabel,
-  boosted,
-  featured,
   startDate,
   endDate,
   businessName,
@@ -152,7 +132,7 @@ export const PromotionCard = memo(function PromotionCard({
 }: PromotionCardProps) {
   const { isActive, isRailDragging } = useAutoScrollRailItemState();
   const typePresentation = getStoredPromotionTypePresentation(promotionType);
-  const status = getPromotionStatus(featured, boosted, promotionType);
+  const status = getPromotionStatus(promotionType);
   // "Now" differs between the server render and hydration, so the countdown is
   // only computed once the card is running in the browser.
   const isHydrated = useHydrated();
@@ -195,11 +175,6 @@ export const PromotionCard = memo(function PromotionCard({
       disableNativeDrag={disableNativeDrag}
       immersive={immersive}
       feedPlaybackActive={isActive && !isRailDragging}
-      fallback={
-        <div className="flex h-full w-full items-center justify-center text-white/35">
-          <Tag className="h-16 w-16" />
-        </div>
-      }
     />
   );
 });

@@ -10,6 +10,9 @@
  * Target output: MP4 H.264 baseline, ≤720p, 1.5 Mbps video, 128 Kbps AAC audio,
  * with -movflags +faststart for instant progressive playback.
  */
+import { hasCompatibleMp4Tracks } from "@/lib/media/mp4-compatibility";
+import { MAX_VIDEO_UPLOAD_BYTES } from "@/lib/media/upload-policy";
+import { readVideoBlobSeconds } from "@/lib/media/video-length";
 
 export interface CompressionOptions {
   /** Require a new H.264/AAC output even for small or low-bitrate MP4 inputs. */
@@ -57,6 +60,8 @@ const DEFAULT_OPTIONS: Required<Omit<CompressionOptions, "onProgress" | "signal"
 };
 
 const WEB_UPLOAD_VIDEO_TYPES = new Set(["video/mp4", "video/webm"]);
+/** Below this a compatible file is already small enough; compression won't help much. */
+const LOW_BITRATE_BPS = 2_000_000;
 const FFMPEG_CORE_BASE_PATH = "/vendor/ffmpeg-core";
 /** Where the picked file is mounted (read in slices, never copied whole). */
 const INPUT_MOUNT = "/upload";
@@ -161,13 +166,29 @@ function shouldSkipCompression(
     Math.min(dims.width, dims.height) <= Math.min(opts.maxWidth, opts.maxHeight);
   const bitrate = estimateBitrate(file.size, dims.duration);
   // 2 Mbps target threshold — if already below, compression won't help much
-  const isLowBitrate = bitrate < 2_000_000;
+  const isLowBitrate = bitrate < LOW_BITRATE_BPS;
 
   if (isWithinResolution && isLowBitrate) {
     return `Already ${dims.width}×${dims.height} at ${(bitrate / 1_000_000).toFixed(1)} Mbps`;
   }
 
   return null;
+}
+
+/**
+ * When the <video> element gives no size (a hidden tab defers media loading
+ * until it is shown), decide from the file's own headers instead. Skip only a
+ * compatible H.264/AAC MP4 within the stored-file cap whose header length
+ * gives a low bitrate; anything that cannot be confirmed is compressed.
+ */
+async function skipReasonWithoutDimensions(file: File): Promise<string | null> {
+  if (file.type !== "video/mp4" || file.size > MAX_VIDEO_UPLOAD_BYTES) return null;
+  const seconds = await readVideoBlobSeconds(file);
+  if (!seconds || seconds <= 0) return null;
+  const bitrate = estimateBitrate(file.size, seconds);
+  if (bitrate >= LOW_BITRATE_BPS) return null;
+  if (!(await hasCompatibleMp4Tracks(file))) return null;
+  return `Compatible MP4 at ${(bitrate / 1_000_000).toFixed(1)} Mbps (size not readable)`;
 }
 
 /**
@@ -187,7 +208,9 @@ export async function compressVideo(
 
   // ── Check if we should skip ──────────────────────────────
   const dims = await readVideoDimensions(file);
-  const skipReason = shouldSkipCompression(file, dims, opts);
+  const skipReason =
+    shouldSkipCompression(file, dims, opts) ??
+    (!dims && !opts.forceTranscode ? await skipReasonWithoutDimensions(file) : null);
   if (skipReason) {
     return {
       file,

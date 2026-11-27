@@ -1,5 +1,6 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ReactNode } from "react";
 import { ModerationQueueClient } from "./moderation-queue-client";
 import type { ModerationItem } from "./moderation-preview-panel";
 import { QueueClaimsProvider } from "@/components/admin/queue-claims";
@@ -23,6 +24,20 @@ vi.mock("@/lib/utils/media-url", () => ({
 vi.mock("@/lib/utils/csrf", () => ({
   withCsrfHeaders: (headers?: HeadersInit) => mockWithCsrfHeaders(headers),
 }));
+
+// Keeps the sheet content mounted when the sheet is closed, as it is during and
+// after the real exit animation, so a panel that still reads a cleared item shows.
+vi.mock("@/components/ui/sheet", () => {
+  const Pass = ({ children }: { children?: ReactNode }) => <>{children}</>;
+  return {
+    Sheet: Pass,
+    SheetContent: ({ children }: { children?: ReactNode }) => <div role="dialog">{children}</div>,
+    SheetHeader: Pass,
+    SheetTitle: Pass,
+    SheetDescription: Pass,
+    SheetFooter: Pass,
+  };
+});
 
 vi.mock("./moderation-preview-panel", () => ({
   ModerationPreviewPanel: ({ item }: { item: { title?: string } }) => (
@@ -298,5 +313,46 @@ describe("ModerationQueueClient", () => {
     expect(actionRow).toHaveClass("max-w-full");
     expect(actionRow).toHaveClass("justify-start");
     expect(actionRow).toHaveClass("lg:justify-end");
+  });
+
+  describe("review panel after a decision", () => {
+    function openPanel() {
+      renderQueue(items);
+      fireEvent.click(screen.getAllByRole("button", { name: /review/i })[0]);
+      const panel = screen.getByText("preview:Used iPhone 15").closest('[role="dialog"]');
+      expect(panel).not.toBeNull();
+      return within(panel as HTMLElement);
+    }
+
+    async function expectPanelGone() {
+      await waitFor(() => expect(mockRefresh).toHaveBeenCalledTimes(1));
+      expect(screen.queryByText(/^preview:/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Item undefined/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/before making a decision/)).not.toBeInTheDocument();
+    }
+
+    it("closes the panel after approve", async () => {
+      const panel = openPanel();
+      fireEvent.click(panel.getByRole("button", { name: /^Approve$/, hidden: true }));
+      fireEvent.click(screen.getByRole("button", { name: /^Publish$/i }));
+      await expectPanelGone();
+    });
+
+    it("closes the panel after reject", async () => {
+      const panel = openPanel();
+      fireEvent.click(panel.getByRole("button", { name: /^Reject$/, hidden: true }));
+      fireEvent.change(screen.getByLabelText(/rejection reason/i), {
+        target: { value: "Missing details" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: /^Reject$/i }));
+      await expectPanelGone();
+    });
+
+    it("closes the panel after wrong category", async () => {
+      const panel = openPanel();
+      fireEvent.click(panel.getByRole("button", { name: /wrong category/i, hidden: true }));
+      fireEvent.click(screen.getByRole("button", { name: /^Reject$/i }));
+      await expectPanelGone();
+    });
   });
 });

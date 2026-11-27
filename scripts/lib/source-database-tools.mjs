@@ -3,7 +3,7 @@ import path from "node:path";
 
 const foundationProject = "gntzjtuncsyefujajmjy";
 
-/** The root supabase/migrations tree belongs to the retired source schema. */
+/** Root Supabase CLI schema operations belong to the retired source schema. */
 export function assertSourceDatabaseTool(tool, env = process.env, targets = []) {
   const references = [
     env.NEXT_PUBLIC_SUPABASE_URL,

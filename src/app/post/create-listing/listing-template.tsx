@@ -124,6 +124,7 @@ export function draftSnapshot(data: ListingDraftData) {
     data.title,
     data.description,
     data.price,
+    data.priceMode ?? "amount",
     data.negotiable,
     data.province,
     data.city,

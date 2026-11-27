@@ -11,6 +11,11 @@ import {
 } from "@/test/foundation-post-transport";
 
 const switches = vi.hoisted(() => ({ SHOW_POST_TEMPLATES: false, SHOW_POST_COPY: false }));
+// Uploads with a progress bar use XHR; these tests stub fetch, so send them there.
+vi.mock("@/lib/utils/xhr-upload", () => ({
+  xhrFetch: (input: RequestInfo | URL, init?: RequestInit) => fetch(input, init),
+}));
+
 vi.mock("@/lib/hidden-features", async (importOriginal) => ({
   ...(await importOriginal<typeof HiddenFeatures>()),
   get SHOW_POST_TEMPLATES() {
@@ -181,7 +186,15 @@ vi.mock("@/components/ui/media-upload", () => ({
 }));
 
 vi.mock("@/components/ui/video-frame-selector", () => ({
-  VideoFrameSelector: () => <div data-testid="video-frame-selector" />,
+  VideoFrameSelector: ({ onFrameSelect }: { onFrameSelect: (frame: File | null) => void }) => (
+    <button
+      type="button"
+      data-testid="video-frame-selector"
+      onClick={() => onFrameSelect(new File(["frame"], "clip_poster.jpg", { type: "image/jpeg" }))}
+    >
+      Pick cover frame
+    </button>
+  ),
 }));
 
 vi.mock("@/components/listings/listing-card", () => ({
@@ -385,6 +398,75 @@ describe("CreateListingPage", () => {
     expectFoundationPostFields(payload);
     expect(postingTermsFetch).toHaveBeenCalledTimes(1);
     expect(mockPush).toHaveBeenCalledWith("/dashboard/listings");
+  });
+
+  it("posts with Price on request and Negotiable, sending no amount", async () => {
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      if (input === "/api/media/upload")
+        return {
+          ok: true,
+          json: async () => ({
+            urls: ["https://media.verifymzansi.com/listings/photo.jpg"],
+            errors: [],
+          }),
+        };
+      if (input === "/api/listings") return { ok: true, json: async () => ({ id: "listing-1" }) };
+      throw new Error(`Unexpected fetch call: ${String(input)}`);
+    });
+
+    render(<CreateListingPage />);
+    await termsLoaded();
+
+    fireEvent.click(screen.getByText("Select Electronics"));
+    fireEvent.change(screen.getByLabelText("Title (Required)"), {
+      target: { value: "Used iPhone 15" },
+    });
+    fireEvent.change(screen.getByLabelText("Description (Required)"), {
+      target: { value: "A clean listing description with enough detail to continue." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    // "Amount" is preselected, so the usual flow is just typing a price.
+    expect(screen.getByRole("radio", { name: "Enter a price" })).toBeChecked();
+    fireEvent.click(screen.getByRole("radio", { name: "Price on request" }));
+    expect(screen.queryByLabelText(/^Asking price \(ZAR\)/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Price negotiable" }));
+    fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Photos (max 5)" }));
+    acceptListingTerms();
+    expect(listingCardSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ price: 0, priceMode: "on_request" })
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some((call) => call[0] === "/api/listings")).toBe(true);
+    });
+    const request = fetchMock.mock.calls.find((call) => call[0] === "/api/listings")!;
+    const payload = JSON.parse(request[1].body as string);
+    expect(payload).toMatchObject({ price_mode: "on_request", price_zar: 0, negotiable: true });
+  });
+
+  it("asks for a price when Amount is chosen and left empty", () => {
+    render(<CreateListingPage />);
+    fireEvent.click(screen.getByText("Select Electronics"));
+    fireEvent.change(screen.getByLabelText("Title (Required)"), {
+      target: { value: "Used iPhone 15" },
+    });
+    fireEvent.change(screen.getByLabelText("Description (Required)"), {
+      target: { value: "A clean listing description with enough detail to continue." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(
+      within(screen.getByRole("group", { name: "Price" })).getByText("Enter a valid price.")
+    ).toBeInTheDocument();
   });
 
   it("blocks saving when the server rejects a selected photo", async () => {
@@ -631,6 +713,117 @@ describe("CreateListingPage", () => {
     const payload = JSON.parse(request[1].body as string);
     expect(payload.videos).toEqual(["https://media.verifymzansi.com/listings/clip.mp4"]);
     expectFoundationPostFields(payload);
+  });
+
+  it("submits a video-only listing with the chosen cover frame as photo 1", async () => {
+    const coverUrl = "https://media.verifymzansi.com/media/00000000-0000-4000-8000-000000000001";
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (input === "/api/media/upload") {
+        const area = init?.body instanceof FormData ? init.body.get("area") : null;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            urls: [
+              area === "listing_video"
+                ? "https://media.verifymzansi.com/listings/clip.mp4"
+                : coverUrl,
+            ],
+            errors: [],
+          }),
+        };
+      }
+      if (input === "/api/listings") return { ok: true, json: async () => ({ id: "listing-1" }) };
+      return { ok: true, json: async () => ({ success: true }) };
+    });
+
+    render(<CreateListingPage />);
+    await termsLoaded();
+    fireEvent.click(screen.getByText("Select Electronics"));
+    fireEvent.change(screen.getByLabelText("Title (Required)"), {
+      target: { value: "Used iPhone 15" },
+    });
+    fireEvent.change(screen.getByLabelText("Description (Required)"), {
+      target: { value: "A clean listing description with enough detail to continue." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.change(screen.getByLabelText(/^(Asking price|Monthly Rent) \(ZAR\)/i), {
+      target: { value: "1500" },
+    });
+    fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(screen.getByText(/Add at least one photo or video\./)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Video (max 1)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Pick cover frame" }));
+    acceptListingTerms();
+    fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
+
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some((call) => call[0] === "/api/listings")).toBe(true)
+    );
+    const request = fetchMock.mock.calls.find((call) => call[0] === "/api/listings")!;
+    const payload = JSON.parse(request[1].body as string);
+    expect(payload.images).toEqual([coverUrl]);
+    expect(payload.videoThumbnail).toBe(coverUrl);
+    expect(payload.videos).toEqual(["https://media.verifymzansi.com/listings/clip.mp4"]);
+  });
+
+  it("asks for a photo or video when the media step is empty", async () => {
+    render(<CreateListingPage />);
+    await termsLoaded();
+    fireEvent.click(screen.getByText("Select Electronics"));
+    fireEvent.change(screen.getByLabelText("Title (Required)"), {
+      target: { value: "Used iPhone 15" },
+    });
+    fireEvent.change(screen.getByLabelText("Description (Required)"), {
+      target: { value: "A clean listing description with enough detail to continue." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.change(screen.getByLabelText(/^(Asking price|Monthly Rent) \(ZAR\)/i), {
+      target: { value: "1500" },
+    });
+    fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    acceptListingTerms();
+    fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
+
+    // The field error, besides the step's own line.
+    expect((await screen.findAllByText("Add at least one photo or video.")).length).toBeGreaterThan(
+      0
+    );
+    expect(screen.getByText(/Please fix 1 field on Step 3/)).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some((call) => call[0] === "/api/listings")).toBe(false);
+  });
+
+  it("asks for a cover image when there is a video but no cover frame", async () => {
+    render(<CreateListingPage />);
+    await termsLoaded();
+    fireEvent.click(screen.getByText("Select Electronics"));
+    fireEvent.change(screen.getByLabelText("Title (Required)"), {
+      target: { value: "Used iPhone 15" },
+    });
+    fireEvent.change(screen.getByLabelText("Description (Required)"), {
+      target: { value: "A clean listing description with enough detail to continue." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.change(screen.getByLabelText(/^(Asking price|Monthly Rent) \(ZAR\)/i), {
+      target: { value: "1500" },
+    });
+    fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Video (max 1)" }));
+    acceptListingTerms();
+    fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
+
+    expect(
+      (await screen.findAllByText("Add a photo, or a cover image for the video.")).length
+    ).toBeGreaterThan(0);
+    expect(screen.queryByText("Add at least one photo or video.")).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls.some((call) => call[0] === "/api/listings")).toBe(false);
   });
 
   it("keeps users on the media step with a videos field error when listing video upload fails", async () => {
@@ -908,7 +1101,7 @@ describe("CreateListingPage", () => {
       };
       localStorage.setItem(
         `vm-draft:listing:${DRAFT_USER_ID}`,
-        JSON.stringify({ v: 1, savedAt: Date.now(), step: 0, data })
+        JSON.stringify({ v: 1, savedAt: Date.now(), step: overrides.step ?? 0, data })
       );
     }
 
@@ -931,6 +1124,15 @@ describe("CreateListingPage", () => {
         "A draft description from last session."
       );
       expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: "Draft restored" }));
+    });
+
+    it("restores an old draft with price 0 and no price choice as Free", async () => {
+      seedDraft({ price: "0", negotiable: false, step: 1 });
+      render(<CreateListingPage />);
+
+      await waitFor(() => {
+        expect(screen.getByRole("radio", { name: "Free" })).toBeChecked();
+      });
     });
 
     it("clears restored fields when discard draft is clicked", async () => {
@@ -1409,6 +1611,19 @@ describe("CreateListingPage", () => {
           >
       );
       useAuthMock.mockReturnValue({ user: null, profile: null, isLoading: false });
+    });
+
+    it("starts a fresh form when the address no longer names the copy, keeping nothing from it", async () => {
+      serveCopy(draft("electronics", { device_type: "Smartphone", brand: "Apple" }));
+      const { rerender } = render(<CreateListingPage />);
+      expect(await screen.findByText(/Copy of .Used iPhone 15/)).toBeInTheDocument();
+      // The same page instance, now opened without a copy (client navigation).
+      vi.mocked(useSearchParams).mockReturnValue(
+        new URLSearchParams("") as unknown as ReturnType<typeof useSearchParams>
+      );
+      rerender(<CreateListingPage />);
+      await waitFor(() => expect(screen.queryByText(/Copy of .Used iPhone 15/)).toBeNull());
+      expect(screen.queryByText(/Same title as the post you copied/)).toBeNull();
     });
 
     it("opens the copy on the last step with the note, and submits it for review", async () => {
