@@ -1678,7 +1678,7 @@ function CreateListingForm() {
                         <MediaUpload
                           id="listing-video-input"
                           label={`Video (max ${maxVideos})${!videoAllowed ? " — Upgrade to unlock" : ""}`}
-                          description={`Optional. Use clear portrait clips that show the item, property, or service honestly. ${VIDEO_GUIDANCE} ${VIDEO_SOUND_OFF_TIP}`}
+                          description={`${category === "jobs_services" ? "Optional. " : ""}Use clear portrait clips that show the item, property, or service honestly. ${VIDEO_GUIDANCE} ${VIDEO_SOUND_OFF_TIP}`}
                           error={fieldErrors.videos}
                           maxFiles={maxVideos}
                           files={videoFile}

@@ -366,7 +366,8 @@ export function MediaUpload({
           // A video the browser cannot show (e.g. HEVC in Chrome) is refused here,
           // not at upload.
           if (!(await canBrowserShowVideo(normalized))) {
-            rejectFile("Video format not supported", UNSUPPORTED_VIDEO_FORMAT_MESSAGE);
+            // Shown once, at the field (no pop-up as well).
+            rejected.push(UNSUPPORTED_VIDEO_FORMAT_MESSAGE);
             continue;
           }
         }

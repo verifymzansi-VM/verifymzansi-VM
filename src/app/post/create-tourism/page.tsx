@@ -3522,7 +3522,7 @@ function CreateTourismContent() {
                       {/* Video */}
                       <div className="space-y-2">
                         <p className="text-sm font-medium">
-                          Video (optional)
+                          Video
                           {!videoAllowed ? " — Upgrade to unlock" : ""}
                         </p>
                         <MediaUpload

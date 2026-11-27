@@ -1214,7 +1214,7 @@ export default function EditPromotionPage() {
 
               <MediaUpload
                 id="edit-event-videos-input"
-                label={`Videos (optional)${!videoAllowed ? " — Upgrade to unlock" : ""}`}
+                label={`Videos${!videoAllowed ? " — Upgrade to unlock" : ""}`}
                 description={`${VIDEO_GUIDANCE} ${VIDEO_SOUND_OFF_TIP}`}
                 maxVideoSeconds={MAX_EVENT_VIDEO_SECONDS}
                 maxFiles={effectiveMaxVideos}

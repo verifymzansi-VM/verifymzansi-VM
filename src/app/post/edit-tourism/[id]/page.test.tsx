@@ -358,7 +358,7 @@ describe("EditPromotionPage", () => {
     const request = fetchMock.mock.calls[2];
     const payload = JSON.parse(request[1].body as string);
 
-    // Group 128: the video's thumbnail becomes the first photo.
+    // Group 129: the video's thumbnail becomes the first photo.
     expect(payload.images).toEqual(["https://example.com/promo-video-thumb.jpg"]);
     expect(payload.videos).toEqual(["https://example.com/promo-video.mp4"]);
     expect(payload.video_thumbnail).toBe("https://example.com/promo-video-thumb.jpg");
