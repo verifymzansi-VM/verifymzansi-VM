@@ -45,24 +45,14 @@ const summary = (state) =>
 const NOT_APPLIED = summary("update not applied");
 const APPLIED = summary("already applied");
 
-const {
-  started,
-  database,
-  check,
-  current,
-  passed: checks,
-  q,
-  json,
-  fails,
-  member,
-  service,
-  fingerprint,
-  preflightRows: preflight,
-  syntheticMember,
-} = await openUpdateCheck(PREFLIGHT);
+// A statement run as a visitor.
+const anon = (sql) => `set role anon;\n${sql}`;
+
+const harness = await openUpdateCheck(PREFLIGHT);
+const { database, q, json, fails, service, member, syntheticMember, fingerprint } = harness;
+const { check, current, started, passed: checks, preflightRows: preflight } = harness;
 try {
   const { steps, index, step } = applyStepsBefore(database, UPDATE);
-  const anon = (sql) => `set role anon;\n${sql}`;
 
   // ------------------------------------------------------- synthetic world
   const owner = syntheticMember("reveal-owner");
