@@ -17,6 +17,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Breadcrumbs, type BreadcrumbItem } from "@/components/layout/breadcrumbs";
 import { cn } from "@/lib/utils";
+import { fieldLabelFor, plainFieldMessage } from "@/lib/forms/field-paths";
 
 export interface PostFormStep {
   label: string;
@@ -115,20 +116,6 @@ interface PostFormScaffoldProps {
   aside?: React.ReactNode;
   /** A note shown under the heading, above the steps (a copy of a post). */
   notice?: React.ReactNode;
-}
-
-function formatFieldSummaryLabel(fieldKey: string, fieldLabels?: Record<string, string>): string {
-  const explicitLabel = fieldLabels?.[fieldKey]?.trim();
-  if (explicitLabel) {
-    return explicitLabel;
-  }
-
-  return fieldKey
-    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .replace(/[_-]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/(^|\s)\S/g, (character) => character.toUpperCase());
 }
 
 function completenessTone(value: number): { bar: string; label: string } {
@@ -253,7 +240,7 @@ export function PostFormScaffold({
               {fieldErrors && Object.keys(fieldErrors).length > 0 && (
                 <ul className="mt-2 list-disc space-y-0.5 pl-4 text-[13px]">
                   {Object.entries(fieldErrors).map(([key, msg], i) => {
-                    const label = formatFieldSummaryLabel(key, fieldLabels);
+                    const label = fieldLabelFor(key, fieldLabels);
                     return (
                       <li key={i}>
                         <button
@@ -264,7 +251,7 @@ export function PostFormScaffold({
                             else document.getElementById(key)?.focus();
                           }}
                         >
-                          <strong>{label}:</strong> {msg}
+                          <strong>{label}:</strong> {plainFieldMessage(msg)}
                         </button>
                       </li>
                     );

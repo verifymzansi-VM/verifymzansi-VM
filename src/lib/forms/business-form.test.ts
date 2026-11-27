@@ -1,23 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { parseServiceAreas, validateBusinessForm } from "./business-form";
+import { validateBusinessForm } from "./business-form";
 import { getDefaultBusinessDetails } from "./business-type-details";
 
 describe("business-form helpers", () => {
-  it("normalizes service areas into a trimmed list", () => {
-    expect(parseServiceAreas(" Sandton, Midrand , Soweto ")).toEqual([
-      "Sandton",
-      "Midrand",
-      "Soweto",
-    ]);
-  });
-
-  it("requires service areas for mobile services and validates social URLs", () => {
+  it("validates social URLs", () => {
     expect(
       validateBusinessForm({
         businessType: "mobile_service",
         businessDetails: getDefaultBusinessDetails("mobile_service"),
         storeNumber: "",
-        serviceAreasInput: " , ",
         mapDirections: "",
         phone: "",
         whatsapp: "",
@@ -29,7 +20,6 @@ describe("business-form helpers", () => {
         socialTiktok: "",
       })
     ).toMatchObject({
-      service_areas: "Add at least one service area.",
       socialFacebook: "Enter a valid Facebook URL.",
     });
   });
@@ -40,7 +30,6 @@ describe("business-form helpers", () => {
         businessType: "standalone_shop",
         businessDetails: getDefaultBusinessDetails("standalone_shop"),
         storeNumber: "",
-        serviceAreasInput: "",
         mapDirections: "",
         phone: "",
         whatsapp: "",
@@ -68,7 +57,6 @@ describe("business-form helpers", () => {
           support_response_time: "",
         },
         storeNumber: "",
-        serviceAreasInput: "",
         mapDirections: "",
         phone: "",
         whatsapp: "",
@@ -93,7 +81,6 @@ describe("business-form helpers", () => {
           support_response_time: "",
         },
         storeNumber: "",
-        serviceAreasInput: "",
         mapDirections: "",
         phone: "",
         whatsapp: "",

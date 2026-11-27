@@ -88,6 +88,11 @@ import {
   type ListingStart,
 } from "./listing-template";
 import { formFieldsFromTemplate } from "@/lib/post-templates";
+import {
+  LISTING_FIELD_STEPS,
+  stepForField,
+  stepForFieldErrors,
+} from "@/app/post/_lib/post-field-steps";
 import { ListingPriceFields } from "@/components/posting/listing-price-fields";
 import {
   listingPricePreview,
@@ -211,37 +216,11 @@ function normalizeListingFieldErrors(errors: Record<string, string>): Record<str
 }
 
 function getStepForFieldKey(key: string): number {
-  const normalizedKey = LISTING_FIELD_KEY_ALIASES[key] ?? key;
-
-  if (
-    normalizedKey === "logo_url" ||
-    normalizedKey === "videoThumbnail" ||
-    normalizedKey === "images" ||
-    normalizedKey === "videos" ||
-    normalizedKey === "termsAccepted"
-  ) {
-    return 2;
-  }
-
-  if (
-    normalizedKey === "price_zar" ||
-    normalizedKey === "province" ||
-    normalizedKey === "city" ||
-    normalizedKey === "contactMethods"
-  ) {
-    return 1;
-  }
-
-  return 0;
+  return stepForField(LISTING_FIELD_KEY_ALIASES[key] ?? key, LISTING_FIELD_STEPS);
 }
 
 function getStepForServerErrors(errors: Record<string, string>): number {
-  const keys = Object.keys(errors);
-  if (keys.length === 0) {
-    return 0;
-  }
-
-  return keys.reduce((targetStep, key) => Math.min(targetStep, getStepForFieldKey(key)), 2);
+  return stepForFieldErrors(errors, LISTING_FIELD_STEPS, 2);
 }
 
 interface UploadStatuses {
