@@ -135,6 +135,9 @@ describe("seller contact actions", () => {
       )
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ phone: "+27821234567", whatsapp: null }))
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ phone: "+27860123456", whatsapp: "+27860123456" }))
       );
     const reveal = async (name: string) => {
       fireEvent.click(screen.getByRole("button", { name: "Show contact number" }));
@@ -151,8 +154,15 @@ describe("seller contact actions", () => {
     );
     expect(screen.queryByRole("link", { name: /WhatsApp/ })).toBeNull();
     unmount();
-    render(<ListingContactActions listingId="abc" revealable={{ phone: true, whatsapp: false }} />);
+    const mobile = render(
+      <ListingContactActions listingId="abc" revealable={{ phone: true, whatsapp: false }} />
+    );
     expect(await reveal("Call +27821234567")).toHaveAttribute("href", "tel:+27821234567");
+    mobile.unmount();
+    // A call-only number (087, 0800, 0860, 0861) reads like a mobile, with no WhatsApp.
+    render(<ListingContactActions listingId="abc" revealable={{ phone: true, whatsapp: true }} />);
+    expect(await reveal("Call +27860123456")).toHaveAttribute("href", "tel:+27860123456");
+    expect(screen.queryByRole("link", { name: /WhatsApp/ })).toBeNull();
   });
   const businessCard = (hasOtherContact: boolean) => (
     <ContentContactActions

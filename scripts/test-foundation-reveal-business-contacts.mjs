@@ -2,9 +2,10 @@
 // Behaviour checks for 20261127055550_reveal_business_contacts.sql: the
 // click-to-view command (api.reveal_post_phone, service only) answers for a
 // publicly live business with the number the business chose for a ticked
-// channel, in +27 form (a 01x-05x landline or a 06x, 071-074, 076-079 or
-// 081-084 mobile for a call, the mobile only for WhatsApp), while listings and events keep the
-// owner's verified number for a chosen channel. The public card read
+// channel, in +27 form (a 01x-05x landline, a 06x, 071-074, 076-079 or
+// 081-084 mobile, or an 087, 0800, 0860 or 0861 call-only number for a call;
+// the mobile only for WhatsApp), while listings and events keep the owner's
+// verified number for a chosen channel. The public card read
 // (api.search_post_cards with presentation flags, open to visitors and
 // members) carries no business number, only business_contact_options
 // booleans, and the owner's own read keeps the numbers.
@@ -147,7 +148,7 @@ try {
     );
 
   let landline, mobile, spaced, international, landlineOnWhatsapp, odd, none, draft, listing, event;
-  let tickedCall, tickedBoth, tollFree;
+  let tickedCall, tickedBoth, tollFree, callOnly;
   await check("before the update: the world, and businesses answer nothing", () => {
     landline = post("business", { phone: "0311234567", whatsapp: null });
     mobile = post("business", { phone: null, whatsapp: "0821234567" });
@@ -168,8 +169,10 @@ try {
       { phone: "0825550003", whatsapp: "0835550004" },
       { methods: ["call", "whatsapp"] }
     );
-    // 080 (toll-free) and 086 (share-call) are neither landlines nor mobiles.
+    // 080 outside 0800 and 086 outside 0860/0861 are never served.
     tollFree = post("business", { phone: "0805550005", whatsapp: "0865550006" });
+    // 0860 (share-call) and 087 (VoIP) take calls, never WhatsApp.
+    callOnly = post("business", { phone: "0860 555 007", whatsapp: "0875550008" });
     STORED.push(
       ...json(`select jsonb_agg(v) from private.post_presentations d
         cross join lateral (values(d.contacts->>'phone'),(d.contacts->>'whatsapp')) n(v)
@@ -195,7 +198,7 @@ try {
     // Live businesses only; the empty phone and the draft are not counted.
     assert.equal(
       rows[0][1],
-      "business contacts reveal: update not applied; live businesses with a phone number: 8; with a WhatsApp number: 8; with a number not served: 4"
+      "business contacts reveal: update not applied; live businesses with a phone number: 9; with a WhatsApp number: 9; with a number not served: 5"
     );
     assert.match(rows[0][1], NOT_APPLIED);
     assertReadOnlyPreflight(database, PREFLIGHT);
@@ -248,29 +251,63 @@ try {
       for (const channel of ["call", "whatsapp"]) assert.notEqual(reveal(id, channel), OWNER_PHONE);
   });
 
-  await check("only ticked channels; calls: landline or mobile; WhatsApp: mobile only", () => {
-    assert.equal(reveal(tickedCall, "call"), "+27315550001");
-    assert.equal(reveal(tickedCall, "whatsapp"), "");
-    assert.equal(reveal(tickedBoth, "call"), "+27825550003");
-    assert.equal(reveal(tickedBoth, "whatsapp"), "+27835550004");
-    assert.equal(reveal(tollFree, "call"), "");
-    assert.equal(reveal(tollFree, "whatsapp"), "");
-    const served = (channel, prefix) =>
-      q(
-        `select coalesce(internal.business_contact_number('{}',${sqlJsonb({
-          [channel === "call" ? "phone" : "whatsapp"]: `${prefix}1234567`,
-        })},'${channel}'),'');`
-      );
-    const mobiles = ["060", "069", "071", "074", "076", "079", "081", "084"];
-    const neither = ["070", "075", "080", "085", "086", "087", "090"];
-    for (const prefix of ["010", "021", "031", "041", "051", "058", ...mobiles])
-      assert.equal(served("call", prefix), `+27${prefix.slice(1)}1234567`, prefix);
-    for (const prefix of mobiles)
-      assert.equal(served("whatsapp", prefix), `+27${prefix.slice(1)}1234567`, prefix);
-    for (const prefix of ["011", "031", "051", ...neither])
-      assert.equal(served("whatsapp", prefix), "", prefix);
-    for (const prefix of neither) assert.equal(served("call", prefix), "", prefix);
-  });
+  await check(
+    "only ticked channels; calls: landline, mobile or call-only; WhatsApp: mobile only",
+    () => {
+      assert.equal(reveal(tickedCall, "call"), "+27315550001");
+      assert.equal(reveal(tickedCall, "whatsapp"), "");
+      assert.equal(reveal(tickedBoth, "call"), "+27825550003");
+      assert.equal(reveal(tickedBoth, "whatsapp"), "+27835550004");
+      assert.equal(reveal(tollFree, "call"), "");
+      assert.equal(reveal(tollFree, "whatsapp"), "");
+      assert.equal(reveal(callOnly, "call"), "+27860555007");
+      assert.equal(reveal(callOnly, "whatsapp"), "");
+      // The same rule as businessNumber in src/lib/utils/phone.ts.
+      const served = (channel, number) =>
+        q(
+          `select coalesce(internal.business_contact_number('{}',${sqlJsonb({
+            [channel === "call" ? "phone" : "whatsapp"]: number,
+          })},'${channel}'),'');`
+        );
+      const mobiles = ["060", "069", "071", "074", "076", "079", "081", "084"];
+      const neither = ["070", "075", "080", "085", "090"];
+      for (const prefix of ["010", "021", "031", "041", "051", "058", ...mobiles])
+        assert.equal(served("call", `${prefix}1234567`), `+27${prefix.slice(1)}1234567`, prefix);
+      for (const prefix of mobiles)
+        assert.equal(
+          served("whatsapp", `${prefix}1234567`),
+          `+27${prefix.slice(1)}1234567`,
+          prefix
+        );
+      for (const prefix of ["011", "031", "051", ...neither])
+        assert.equal(served("whatsapp", `${prefix}1234567`), "", prefix);
+      for (const prefix of neither) assert.equal(served("call", `${prefix}1234567`), "", prefix);
+      // 087 (VoIP), 0800 (toll-free), 0860 and 0861 (share-call): calls only.
+      for (const number of [
+        "0871234567",
+        "087 123 4567",
+        "0800123456",
+        "0860123456",
+        "+27861123456",
+      ]) {
+        const plus27 = `+27${number.replace(/[^0-9]/g, "").slice(-9)}`;
+        assert.equal(served("call", number), plus27, number);
+        assert.equal(served("whatsapp", number), "", number);
+      }
+      // Other 080 and 086 ranges (0862-0869 hold fax-to-email and premium numbers).
+      for (const number of [
+        "0801123456",
+        "0809123456",
+        "0862123456",
+        "0865123456",
+        "0866123456",
+        "0867123456",
+        "0869123456",
+      ])
+        for (const channel of ["call", "whatsapp"])
+          assert.equal(served(channel, number), "", number);
+    }
+  );
 
   await check("the public card read carries channel booleans and no business number", () => {
     const expected = new Map([
@@ -283,6 +320,7 @@ try {
       [tickedCall, { call: true, whatsapp: false }],
       [tickedBoth, { call: true, whatsapp: true }],
       [tollFree, { call: false, whatsapp: false }],
+      [callOnly, { call: true, whatsapp: false }],
     ]);
     for (const [id, value] of expected) assert.deepEqual(options(id), value, id);
     // A listing has no business options.
@@ -349,7 +387,7 @@ try {
     );
     assert.equal(
       rows[0][1],
-      "business contacts reveal: already applied; live businesses with a phone number: 7; with a WhatsApp number: 8; with a number not served: 4"
+      "business contacts reveal: already applied; live businesses with a phone number: 8; with a WhatsApp number: 9; with a number not served: 5"
     );
   });
 

@@ -243,7 +243,7 @@ function validateStep2(v: TourismFormValues, errors: Record<string, string>) {
 
   const whatsapp = v.whatsapp ? businessNumber(v.whatsapp.trim()) : undefined;
   if (whatsapp === null) errors.whatsapp = "Enter a valid South African WhatsApp number.";
-  else if (whatsapp?.kind === "landline") errors.whatsapp = WHATSAPP_NEEDS_MOBILE;
+  else if (whatsapp && whatsapp.kind !== "mobile") errors.whatsapp = WHATSAPP_NEEDS_MOBILE;
 
   if (v.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.email.trim())) {
     errors.email = "Enter a valid email address.";

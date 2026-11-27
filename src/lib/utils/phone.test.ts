@@ -76,14 +76,37 @@ describe("businessNumber", () => {
     for (const prefix of ["010", "021", "031", "041", "058"])
       expect(businessNumber(`${prefix}1234567`)?.kind, prefix).toBe("landline");
   });
-  it("refuses toll-free, share-call, other numbers and anything else", () => {
+  it("takes 087, 0800, 0860 and 0861 as call-only numbers", () => {
+    expect(businessNumber("087 123 4567")).toEqual({
+      number: "+27871234567",
+      kind: "non-geographic",
+    });
+    expect(businessNumber("0800 123 456")).toEqual({
+      number: "+27800123456",
+      kind: "non-geographic",
+    });
+    expect(businessNumber("0860 123 456")).toEqual({
+      number: "+27860123456",
+      kind: "non-geographic",
+    });
+    expect(businessNumber("+27861123456")).toEqual({
+      number: "+27861123456",
+      kind: "non-geographic",
+    });
+  });
+  it("refuses other 080 and 086 ranges, other numbers and anything else", () => {
     for (const value of [
       "0701234567",
       "0751234567",
       "0801234567",
+      "0811234",
       "0851234567",
-      "0861234567",
-      "0871234567",
+      "0862123456",
+      "0865123456",
+      "0866123456",
+      "0867123456",
+      "0869123456",
+      "08712345678",
       "0911234567",
       "082123456",
       "082 *** 4567",

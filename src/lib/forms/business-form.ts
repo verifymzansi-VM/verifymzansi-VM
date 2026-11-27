@@ -116,7 +116,7 @@ export function validateBusinessForm(values: BusinessFormValues): Record<string,
 
   const whatsapp = values.whatsapp ? businessNumber(values.whatsapp.trim()) : undefined;
   if (whatsapp === null) errors.whatsapp = "Enter a valid South African WhatsApp number.";
-  else if (whatsapp?.kind === "landline") errors.whatsapp = WHATSAPP_NEEDS_MOBILE;
+  else if (whatsapp && whatsapp.kind !== "mobile") errors.whatsapp = WHATSAPP_NEEDS_MOBILE;
 
   if (values.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email.trim())) {
     errors.email = "Enter a valid email address.";

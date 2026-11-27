@@ -189,8 +189,9 @@ export const businessSchema = z
     map_directions: externalUrlOrEmptySchema("Enter a valid map directions URL."),
 
     // Contact
-    // Calls take a landline or a mobile, WhatsApp a mobile only (businessNumber,
-    // the same rule as the database's click-to-view command).
+    // Calls take a landline, a mobile or 087/0800/0860/0861, WhatsApp a mobile
+    // only (businessNumber, the same rule as the database's click-to-view
+    // command).
     phone: z
       .string()
       .refine((value) => businessNumber(value) !== null, "Enter a valid SA number")

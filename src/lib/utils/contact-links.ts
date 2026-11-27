@@ -4,8 +4,9 @@ export function contactPhone(value?: string | null): string | null {
   return value && isValidSaPhone(value) ? normalizeSaPhone(value) : null;
 }
 
-/** A number to call: a South African landline (01x-05x) or mobile, in +27
- * form, the database's rule for business numbers. */
+/** A number to call: a South African landline (01x-05x), mobile or call-only
+ * number (087, 0800, 0860, 0861), in +27 form, the database's rule for
+ * business numbers. */
 export function contactCallPhone(value?: string | null): string | null {
   return businessNumber(value)?.number ?? null;
 }

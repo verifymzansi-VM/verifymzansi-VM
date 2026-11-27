@@ -14,6 +14,12 @@ describe("contact links", () => {
     expect(contactCallPhone("+27311234567")).toBe("+27311234567");
     expect(contactCallPhone("(011) 123-4567")).toBe("+27111234567");
     expect(contactCallPhone("082 123 4567")).toBe("+27821234567");
+    expect(contactCallPhone("0860 123 456")).toBe("+27860123456");
+    for (const value of ["0871234567", "0800123456", "0860123456", "0861123456"]) {
+      expect(contactCallPhone(value), value).not.toBeNull();
+      expect(whatsappLink(value, "Post", "/listing/abc"), value).toBeNull();
+      expect(landlineDisplay(value), value).toBeNull();
+    }
     expect(whatsappLink("+27311234567", "Post", "/listing/abc")).toBeNull();
     // WhatsApp only for 06x, 071-074, 076-079 and 081-084.
     for (const value of ["0601234567", "0711234567", "0761234567", "0791234567", "0841234567"])
@@ -25,7 +31,7 @@ describe("contact links", () => {
       "",
       "0911234567",
       "0801234567",
-      "0861234567",
+      "0862123456",
       "082 *** 4567",
       "javascript:alert(1)",
     ])

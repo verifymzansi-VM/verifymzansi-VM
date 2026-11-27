@@ -1,7 +1,7 @@
 /** @vitest-environment node */
 import { describe, expect, it, vi } from "vitest";
 import type { FoundationPublicApi } from "./public-api";
-import type { FoundationCardPresentation } from "./public-cards";
+import { searchFoundationPresentedCards, type FoundationCardPresentation } from "./public-cards";
 import {
   MarketplaceQueryError,
   readRestoredCollection,
@@ -62,13 +62,28 @@ function apiWith(rpc: ReturnType<typeof vi.fn>) {
 }
 
 describe("restored marketplace reads", () => {
-  it("refuses business contacts on other kinds and inconsistent event metadata", async () => {
+  it("drops business numbers from public cards and refuses inconsistent event metadata", async () => {
+    // A database rolled back to before update 20261127055550 still sends
+    // business_contacts: the card parse drops it for every kind.
+    const rolledBack = vi.fn().mockResolvedValue({
+      data: page([
+        {
+          ...card(),
+          presentation: {
+            business_type: null,
+            event_window: null,
+            frontend: { data: {}, media: [], business_contacts: { phone: "+27700000123" } },
+          } as never,
+        },
+      ]),
+      error: null,
+    });
+    const cards = await searchFoundationPresentedCards(apiWith(rolledBack), {
+      area: "market",
+    });
+    expect(cards.items[0]!.presentation.frontend).toEqual({ data: {}, media: [] });
+    expect(JSON.stringify(cards)).not.toContain("700000123");
     for (const presentation of [
-      {
-        business_type: null,
-        event_window: null,
-        frontend: { data: {}, media: [], business_contacts: { phone: "+27700000123" } },
-      },
       {
         business_type: null,
         event_window: {

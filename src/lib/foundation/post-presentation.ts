@@ -2,15 +2,11 @@ import { z } from "zod";
 import { foundationMediaUrl } from "./public-media-url";
 // Only explicit owner assertions are presented. This projection contains no
 // private contact numbers, owner identity, verification or funding authority.
-export const frontendPostPresentationSchema = z.strictObject({
-  // Accepted only from a database without update 20261127055550 and never
-  // read: business numbers reach a page only through the click-to-view route.
-  business_contacts: z
-    .strictObject({
-      phone: z.string().nullable().optional(),
-      whatsapp: z.string().nullable().optional(),
-    })
-    .optional(),
+const presentationFields = z.strictObject({
+  // Sent only by a database without update 20261127055550 (or one rolled back
+  // to before it) and dropped below: business numbers reach a page only through
+  // the click-to-view route.
+  business_contacts: z.unknown().optional(),
   data: z
     .record(z.string(), z.unknown())
     .refine(
@@ -41,6 +37,9 @@ export const frontendPostPresentationSchema = z.strictObject({
     )
     .max(12),
 });
+export const frontendPostPresentationSchema = presentationFields.transform(
+  ({ business_contacts: _dropped, ...presentation }) => presentation
+);
 export type FrontendPostPresentation = z.infer<typeof frontendPostPresentationSchema>;
 /** Bounded owner layout hints for video; never replace inspected image facts. */
 export function presentedVideoLayout(frontend: FrontendPostPresentation | undefined) {

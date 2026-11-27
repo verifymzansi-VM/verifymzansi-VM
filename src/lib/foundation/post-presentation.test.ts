@@ -12,6 +12,8 @@ it("never puts business numbers into the page fields", () => {
     media: [],
     business_contacts: { phone: "+27700000123", whatsapp: "0821234567" },
   });
+  // A rolled-back database's business_contacts is dropped by the parse.
+  expect(value).not.toHaveProperty("business_contacts");
   const fields = presentedFormFields(value);
   expect(fields).toEqual({ website: "https://example.com" });
   expect(JSON.stringify(fields)).not.toContain("700000123");
