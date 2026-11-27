@@ -75,7 +75,7 @@ function isPlaceholderEvent(event: { title: string | null; description?: string 
 }
 
 export default async function EventsPage() {
-  // Fetch event promotions — prioritise upcoming (end_date in the future), boosted first
+  // Fetch event promotions — prioritise upcoming (end_date in the future)
   const events = (
     await readRestoredCollection(
       foundationServerPublicApi(),

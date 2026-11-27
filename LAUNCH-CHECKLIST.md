@@ -188,9 +188,9 @@ ext4-backed workspace. Native Windows remains unsupported.
 - [ ] Register → login redirect does NOT include `?email=` in the URL
 - [ ] Password reset uses `/api/auth/reset-password` (not direct Supabase client
       call)
-- [ ] POST `/api/listings/[id]/boost`, `/featured`, `/urgent` reject
-      cross-origin requests (403)
-- [ ] POST `/api/businesses/[id]/boost` rejects cross-origin requests (403)
+- [ ] The removed paid add-on routes (`/boost`, `/featured`, `/urgent` under
+      `/api/listings/[id]`, `/api/businesses/[id]` and `/api/promotions/[id]`,
+      and `/api/foundation/billing/addon`) answer 404
 - [ ] PUT+DELETE `/api/promotions/[id]` reject cross-origin requests (403)
 - [x] POST `/api/dsar/submit` rejects cross-origin requests (403)
 - [x] POST `/api/verify-buyer` rejects cross-origin requests (403)

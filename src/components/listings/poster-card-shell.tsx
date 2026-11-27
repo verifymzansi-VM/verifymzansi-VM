@@ -5,7 +5,7 @@ import type { ContentTargetType } from "@/lib/engagement";
 
 import Link from "next/link";
 import Image from "next/image";
-import { ImageOff, MapPin } from "lucide-react";
+import { MapPin } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import {
   VideoCardPlayer,
@@ -19,6 +19,24 @@ import { cn } from "@/lib/utils";
 import { useState, type ReactNode } from "react";
 
 const CARD_FRAME = { aspectRatio: 9 / 16, aspectClassName: "aspect-[9/16]" } as const;
+
+/**
+ * Shown when a card's picture is missing or still fails after its retry: a
+ * quiet dark tile with the shield, never stand-in artwork or text. The shield
+ * is a CSS background so it stays sharp and adds no image request per card.
+ */
+function CardMediaPlaceholder() {
+  return (
+    <div
+      aria-hidden="true"
+      className="relative h-full w-full bg-brand-green-950"
+      data-card-media-placeholder
+    >
+      <div className="absolute inset-0 bg-[url('/images/brand-shield-large.webp?v=20261007')] bg-[length:24%_auto] bg-center bg-no-repeat opacity-75" />
+    </div>
+  );
+}
+
 type PosterCardVariant = "default" | "showcase" | "hero";
 type MediaControlVariant = "default" | "hero";
 
@@ -42,9 +60,6 @@ interface PosterCardShellProps {
   contentClassName?: string;
   eyebrowClassName?: string;
   mediaSizes?: string;
-  fallback?: ReactNode;
-  /** Branded artwork shown when the primary media fails or is missing. */
-  mediaFallbackUrl?: string | null;
   /** Business logo URL — rendered as circular overlay bottom-right */
   logoUrl?: string | null;
   /** Short description — 1-line clamp below title */
@@ -120,8 +135,6 @@ export function PosterCardShell({
   contentClassName,
   eyebrowClassName,
   mediaSizes = "(max-width: 640px) 72vw, (max-width: 1024px) 50vw, 33vw",
-  fallback,
-  mediaFallbackUrl,
   logoUrl,
   description,
   location,
@@ -153,9 +166,6 @@ export function PosterCardShell({
   const normalizedMediaUrl = mediaUrl ? normalizeMediaUrl(mediaUrl) : undefined;
   const normalizedPosterUrl = posterUrl ? normalizeMediaUrl(posterUrl) : undefined;
   const normalizedLogoUrl = logoUrl ? normalizeMediaUrl(logoUrl) : undefined;
-  const normalizedMediaFallbackUrl = mediaFallbackUrl
-    ? normalizeMediaUrl(mediaFallbackUrl)
-    : undefined;
   const hasVideo = isVideo ?? isVideoUrl(mediaUrl);
   const frame = CARD_FRAME;
   // Keep hero media mounted as cards move between active and side slots.
@@ -321,38 +331,7 @@ export function PosterCardShell({
       </div>
     </div>
   );
-  const mediaFallback =
-    fallback ??
-    (normalizedMediaFallbackUrl ? (
-      <div className="relative h-full w-full overflow-hidden bg-slate-100 dark:bg-slate-950">
-        <Image
-          src={normalizedMediaFallbackUrl}
-          alt=""
-          fill
-          sizes={mediaSizes}
-          priority={priority}
-          {...(priority ? {} : { loading: "lazy" as const })}
-          className="object-contain"
-          aria-hidden="true"
-          draggable={disableNativeDrag ? false : undefined}
-          onDragStart={disableNativeDrag ? handleNativeDragStart : undefined}
-        />
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/80 via-slate-950/34 to-transparent px-4 pb-4 pt-12 text-white">
-          <p className="text-[11px] font-semibold text-white/70">Public preview</p>
-          <p className="mt-1 line-clamp-2 text-sm font-semibold leading-tight">{title}</p>
-        </div>
-      </div>
-    ) : (
-      <div className="flex h-full w-full flex-col items-center justify-center gap-2.5 bg-[linear-gradient(160deg,hsl(37_30%_95%)_0%,hsl(37_24%_89%)_100%)] px-6 text-center dark:bg-[linear-gradient(160deg,hsl(30_12%_14%)_0%,hsl(30_10%_10%)_100%)]">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/70 text-warm-400 shadow-sm ring-1 ring-black/5 dark:bg-white/5 dark:text-warm-500 dark:ring-white/10">
-          <ImageOff className="h-5 w-5" aria-hidden="true" />
-        </div>
-        <div className="space-y-1">
-          <p className="text-sm font-semibold text-warm-700 dark:text-warm-300">No photo yet</p>
-          <p className="line-clamp-2 text-xs text-warm-500 dark:text-warm-400">{title}</p>
-        </div>
-      </div>
-    ));
+  const mediaFallback = <CardMediaPlaceholder />;
 
   const cardInner = (
     <Card

@@ -39,7 +39,10 @@ begin
       from usable x where x.source='retail_paid' order by (x.snapshot->>'duration_days')::integer desc,x.id limit 1),'active') end,
     'trial_ends_at',max(u.ends_at) filter(where u.source='intro_trial'),
     'trial_used',claimed,'trial_offer',jsonb_build_object('eligible',eligible,'sevenDayAvailable',eligible,
-      'thirtyDayAvailable',false,'remaining',null,'launchEnabled',true,'shortDays',7,'longDays',30)
+      'thirtyDayAvailable',false,'remaining',null,'launchEnabled',true,'shortDays',7,'longDays',30),
+    -- Save as template on the Edit listing page reads this instead of its own
+    -- request (the same rule as internal.list_my_post_templates).
+    'package_running',exists(select 1 from internal.slot_package_now(actor))
   ) into result from usable u cross join lateral (
       select internal.slot_posts_held(u.id) as active_count,
         internal.slot_posts_started(u.id,statement_timestamp()-make_interval(days=>u.activation_period_days)) as period_count

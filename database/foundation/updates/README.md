@@ -80,6 +80,32 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Package running in the posting allowance, 26 November 2026
+
+`20261126202833_allowance_says_package_running.sql` was applied on 27 November
+2026 at 04:53 UTC (see the applied register). Launch checklist item 80.
+
+- **One key added.** `api.get_my_frontend_posting_allowance_v2`, which every
+  post form already reads, also answers `package_running` (boolean): true while
+  the caller's own Multi-listing package runs, by the same rule as
+  `api.list_my_post_templates` (`internal.slot_package_now`). The answer is the
+  same in every posting area, and the rest of the answer is unchanged.
+- **One request fewer.** Save as template on the Edit listing page reads this
+  from the allowance the page already loads, instead of its own
+  `GET /api/post-templates`.
+
+Expand only: one replaced body
+(`internal.get_my_frontend_posting_allowance_v2(text)`); no command, argument or
+grant changes. ORDER: **website-first** (merge and deploy, then apply): the
+website's allowance parser is strict, so the release that accepts the key (as
+optional) must be live first. Until the update is applied, the new website reads
+a missing key as no package and does not show Save as template on Edit listing.
+Read-only preflight:
+`../preflight/20261126202833_allowance_says_package_running.check.sql`;
+rollback: `../rollback/20261126202833_allowance_says_package_running.down.sql`
+(puts the earlier body back). Behaviour checks:
+`scripts/test-foundation-allowance-package-running.mjs`.
+
 ## Business-check details deleted as the Privacy page says, 26 November 2026
 
 `20261126210022_business_check_retention.sql` is pending (see the applied
@@ -8944,6 +8970,10 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
 - `20261126062428_catalogue_filters_in_database.sql`: applied 2026-11-26 23:48
   UTC; apply-first; production fingerprint after it (fingerprint.sql, read-only,
   23:5x UTC) matched the full replay (except the known schema grant difference)
+- `20261126202833_allowance_says_package_running.sql`: applied 2026-11-27 04:53
+  UTC; website-first; production fingerprint after it (fingerprint.sql,
+  read-only, 04:53 UTC) matched the full replay (except the known schema grant
+  difference)
 - `20261126210022_business_check_retention.sql`: pending; apply-first
 
 <!-- applied-register:end -->

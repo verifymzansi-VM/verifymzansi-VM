@@ -287,55 +287,57 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
 
       {/* ── Preview Sheet ─────────────────────────────── */}
       <Sheet open={!!previewItem} onOpenChange={(open) => !open && closePreview()}>
-        <SheetContent side="right" className="w-full sm:max-w-xl flex flex-col p-0">
-          <SheetHeader className="px-6 pt-6 pb-2">
-            <SheetTitle>{previewItem?.title || `Item ${previewItem?.id.slice(0, 8)}`}</SheetTitle>
-            <SheetDescription>
-              Review this {previewItem?.itemType?.toLowerCase()} before making a decision.
-            </SheetDescription>
-          </SheetHeader>
+        {previewItem && (
+          <SheetContent side="right" className="w-full sm:max-w-xl flex flex-col p-0">
+            <SheetHeader className="px-6 pt-6 pb-2">
+              <SheetTitle>{previewItem.title || `Item ${previewItem.id.slice(0, 8)}`}</SheetTitle>
+              <SheetDescription>
+                Review this {previewItem.itemType?.toLowerCase()} before making a decision.
+              </SheetDescription>
+            </SheetHeader>
 
-          <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden px-4 sm:px-6">
-            {previewItem && <ModerationPreviewPanel item={previewItem} />}
-          </div>
-
-          <SheetFooter className="border-t px-6 py-4 flex-row flex-wrap gap-2 sm:justify-between">
-            <div className="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                variant="destructive"
-                className="gap-1.5"
-                onClick={() => {
-                  if (previewItem) openReview(previewItem, "reject");
-                }}
-              >
-                <XCircle className="h-4 w-4" />
-                Reject
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="gap-1.5 border-amber-300 text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950"
-                onClick={() => {
-                  if (previewItem) openWrongCategory(previewItem);
-                }}
-              >
-                <FolderX className="h-4 w-4" />
-                Wrong category
-              </Button>
+            <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden px-4 sm:px-6">
+              <ModerationPreviewPanel item={previewItem} />
             </div>
-            <Button
-              size="sm"
-              className="gap-1.5 bg-brand-green text-white hover:bg-brand-green/90 dark:bg-brand-green dark:text-white dark:hover:bg-brand-green/90"
-              onClick={() => {
-                if (previewItem) openReview(previewItem, "approve");
-              }}
-            >
-              <CheckCircle className="h-4 w-4" />
-              Approve
-            </Button>
-          </SheetFooter>
-        </SheetContent>
+
+            <SheetFooter className="border-t px-6 py-4 flex-row flex-wrap gap-2 sm:justify-between">
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="gap-1.5"
+                  onClick={() => {
+                    if (previewItem) openReview(previewItem, "reject");
+                  }}
+                >
+                  <XCircle className="h-4 w-4" />
+                  Reject
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 border-amber-300 text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950"
+                  onClick={() => {
+                    if (previewItem) openWrongCategory(previewItem);
+                  }}
+                >
+                  <FolderX className="h-4 w-4" />
+                  Wrong category
+                </Button>
+              </div>
+              <Button
+                size="sm"
+                className="gap-1.5 bg-brand-green text-white hover:bg-brand-green/90 dark:bg-brand-green dark:text-white dark:hover:bg-brand-green/90"
+                onClick={() => {
+                  if (previewItem) openReview(previewItem, "approve");
+                }}
+              >
+                <CheckCircle className="h-4 w-4" />
+                Approve
+              </Button>
+            </SheetFooter>
+          </SheetContent>
+        )}
       </Sheet>
 
       <ContentDecisionDialog

@@ -23,7 +23,7 @@ import {
   PendingPaymentActions,
   usePendingPayment,
 } from "@/components/billing/pending-payment-actions";
-import { CheckoutTermsLinks } from "@/components/billing/checkout-terms-links";
+import { CheckoutTermsLinks, NoVatCharged } from "@/components/billing/checkout-terms-links";
 
 /** The running package as "Add slots" offers it (api.get_my_package_add_offer). */
 export interface PackageAddOffer {
@@ -307,6 +307,7 @@ export function PackageAddCheckout({
                   >
                     {totalCents === null ? "—" : formatPlanPrice(totalCents)}
                   </p>
+                  <NoVatCharged />
                 </div>
                 <p className="pb-0.5 text-right text-xs font-medium text-muted-foreground">
                   {`${slots ?? 0} ${slots === 1 ? "slot" : "slots"} × ${daysWord(offer.daysLeft)} at ${formatPlanPrice(PACKAGE_SLOT_PRICE_CENTS_PER_30_DAYS)} per 30 days`}
