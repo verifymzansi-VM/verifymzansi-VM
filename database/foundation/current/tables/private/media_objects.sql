@@ -22,6 +22,7 @@ create table private.media_objects (
   deleted_at timestamp with time zone,
   upload_digest text,
   duration_ms integer,
+  video_facts jsonb,
   constraint media_objects_check CHECK (kind = 'image'::text AND declared_bytes <= 5242880 OR kind = 'video'::text AND declared_bytes <= 52428800),
   constraint media_objects_check1 CHECK (state <> 'ready'::text OR sha256 IS NOT NULL AND size_bytes IS NOT NULL AND size_bytes <= declared_bytes AND mime IS NOT NULL),
   constraint media_objects_check2 CHECK ((state = 'deleted'::text) = (deleted_at IS NOT NULL)),
@@ -37,6 +38,7 @@ create table private.media_objects (
   constraint media_objects_size_bytes_check CHECK (size_bytes > 0),
   constraint media_objects_state_check CHECK (state = ANY (ARRAY['intent'::text, 'ready'::text, 'rejected'::text, 'cleanup_required'::text, 'deleted'::text])),
   constraint media_objects_upload_digest_check CHECK (upload_digest ~ '^[a-f0-9]{64}$'::text),
+  constraint media_objects_video_facts_check CHECK (video_facts IS NULL OR kind = 'video'::text AND jsonb_typeof(video_facts) = 'object'::text AND pg_column_size(video_facts) <= 512),
   constraint media_objects_width_check CHECK (width >= 1 AND width <= 20000)
 );
 alter table private.media_objects owner to postgres;

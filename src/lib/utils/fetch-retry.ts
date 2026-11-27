@@ -113,7 +113,10 @@ export async function fetchWithRetry(
   input: RequestInfo | URL,
   init?: RequestInit,
   maxRetries: number = DEFAULT_MAX_RETRIES,
-  timeoutMs: number = DEFAULT_TIMEOUT_MS
+  timeoutMs: number = DEFAULT_TIMEOUT_MS,
+  /** Sends one attempt; defaults to fetch (an upload with progress passes xhrFetch). */
+  fetcher: (input: RequestInfo | URL, init: RequestInit) => Promise<Response> = (i, r) =>
+    fetch(i, r)
 ): Promise<Response> {
   let lastError: unknown;
   const callerSignal = init?.signal ?? (input instanceof Request ? input.signal : undefined);
@@ -124,7 +127,7 @@ export async function fetchWithRetry(
     const combinedSignal = combineSignals(callerSignal, timeout.signal);
 
     try {
-      return await fetch(input, { ...init, signal: combinedSignal.signal });
+      return await fetcher(input, { ...init, signal: combinedSignal.signal });
     } catch (err) {
       lastError = err;
       if (combinedSignal.wasCallerAbort() || !isRetryable(err) || attempt === maxRetries) {

@@ -14,6 +14,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
 import type { PendingVerificationGroup } from "@/lib/utils/admin-queries";
 import type { ReportItem } from "@/lib/admin/report-item";
+import { actionTodayLabel } from "@/lib/admin/action-labels";
 
 interface AreaAdminTabsProps {
   /** Governors and admins may hide content and apply emergency containment. */
@@ -130,9 +131,7 @@ export function AreaAdminTabs({
                 {Object.entries(overviewStats.actionsToday).map(([action, count]) => (
                   <div key={action} className="text-center p-2 rounded-md bg-muted">
                     <p className="text-lg font-bold">{count}</p>
-                    <p className="text-xs text-muted-foreground capitalize">
-                      {action.replace(/_/g, " ")}
-                    </p>
+                    <p className="text-xs text-muted-foreground">{actionTodayLabel(action)}</p>
                   </div>
                 ))}
               </div>

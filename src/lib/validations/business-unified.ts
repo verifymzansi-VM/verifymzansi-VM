@@ -1,6 +1,7 @@
 import { customerAccessSchema } from "@/lib/forms/customer-access";
 import { z } from "zod";
 import { isTrustedPlatformMediaUrl } from "@/lib/utils/media-url";
+import { businessNumber, WHATSAPP_NEEDS_MOBILE } from "@/lib/utils/phone";
 import { BUSINESS_TEXT_LIMITS } from "./business-limits";
 import {
   externalUrlOrEmptySchema,
@@ -12,8 +13,6 @@ import {
 
 /** Tourism activities whose visitors join at a meeting point or are collected. */
 const TOUR_ACTIVITIES = new Set(["tour_operator", "safari_wildlife", "adventure_activities"]);
-
-const saPhoneRegex = /^(\+27|0)[6-8][0-9]{8}$/;
 
 const BUSINESS_TYPES = [
   "mall_store",
@@ -190,10 +189,24 @@ export const businessSchema = z
     map_directions: externalUrlOrEmptySchema("Enter a valid map directions URL."),
 
     // Contact
-    phone: z.string().regex(saPhoneRegex, "Enter a valid SA number").optional().or(z.literal("")),
+    // Calls take a landline, a mobile or 087/0800/0860/0861, WhatsApp a mobile
+    // only (businessNumber, the same rule as the database's click-to-view
+    // command).
+    phone: z
+      .string()
+      .refine((value) => businessNumber(value) !== null, "Enter a valid SA number")
+      .optional()
+      .or(z.literal("")),
     whatsapp: z
       .string()
-      .regex(saPhoneRegex, "Enter a valid SA number")
+      .superRefine((value, ctx) => {
+        const found = businessNumber(value);
+        if (found?.kind !== "mobile")
+          ctx.addIssue({
+            code: "custom",
+            message: found ? WHATSAPP_NEEDS_MOBILE : "Enter a valid SA number",
+          });
+      })
       .optional()
       .or(z.literal("")),
     email: z.string().email().optional().or(z.literal("")),

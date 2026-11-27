@@ -8,7 +8,12 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { applyStepsBefore, createChecks, sqlHelpers } from "./foundation-sql-checks.mjs";
+import {
+  applyStepsBefore,
+  assertReadOnlyPreflight,
+  createChecks,
+  sqlHelpers,
+} from "./foundation-sql-checks.mjs";
 import { applySteps, startLintDatabase } from "./foundation-sql-lint.mjs";
 
 /** The Individual slots on sale since 20261113002421_individual_slots_r69.sql. */
@@ -417,6 +422,29 @@ export const functionBodyMd5 = ({ q }, signature) =>
  * unexpected state" with `rows` rows, the second naming the function. Each
  * body is put back; the schema fingerprint is unchanged.
  */
+/**
+ * Before the update: the preflight prints one read-only summary row saying the
+ * update is not applied, and an early rollback and a drifted body are refused.
+ */
+export async function checkPreflightBeforeApply(
+  kit,
+  database,
+  check,
+  { label, signatures, notApplied, rows }
+) {
+  await check(
+    "preflight: one read-only summary row before the update; early rollback and drift refused",
+    () => {
+      const [summary, ...problems] = kit.preflight();
+      assert.deepEqual(problems, []);
+      assert.equal(summary[0], "summary");
+      assert.match(summary[1], notApplied);
+      assertReadOnlyPreflight(database, kit.preflightSql);
+      assertDriftRefused(kit, { label, signatures, rows });
+    }
+  );
+}
+
 export function assertDriftRefused(kit, { label, signatures, rows: expected }) {
   const { q, fails, fingerprint, preflight } = kit;
   const before = fingerprint();

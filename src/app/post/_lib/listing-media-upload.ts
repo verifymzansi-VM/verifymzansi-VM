@@ -1,7 +1,10 @@
 import { settleMediaUploads } from "./settle-media-uploads";
 import { VideoTranscodeError } from "@/lib/media/compress-before-upload";
 import { createLogger } from "@/lib/utils/logger";
-import { uploadVideoWithFastPath } from "@/app/post/_lib/video-fast-upload";
+import {
+  uploadVideoWithFastPath,
+  type VideoUploadProgress,
+} from "@/app/post/_lib/video-fast-upload";
 import { normalizeCreatePostRuntimeError } from "@/app/post/_lib/create-post-errors";
 import {
   uploadMediaFileViaServer,
@@ -29,10 +32,12 @@ export async function uploadListingImages({
   files,
   area,
   field,
+  onProgress,
 }: {
   files: File[];
   area: UploadArea;
   field: "images" | "logo_url" | "videoThumbnail";
+  onProgress?: (percent: number) => void;
 }): Promise<string[]> {
   if (!files.length) return [];
   try {
@@ -42,6 +47,7 @@ export async function uploadListingImages({
       fallbackMessage:
         "One or more selected images could not be uploaded. Retry the selected files.",
       preferPayloadError: true,
+      onProgress,
     });
   } catch (error) {
     throw new ListingMediaUploadError(
@@ -62,15 +68,18 @@ function toListingVideoUploadError(error: unknown): ListingMediaUploadError {
 async function uploadListingVideoViaServer({
   file,
   area,
+  onProgress,
 }: {
   file: File;
   area: UploadArea;
+  onProgress?: (percent: number) => void;
 }): Promise<string> {
   return uploadMediaFileViaServer({
     file,
     area,
     fallbackMessage: VIDEO_FIELD_MESSAGE,
     preferPayloadError: true,
+    onProgress,
   });
 }
 
@@ -93,9 +102,11 @@ export function getListingMediaUploadErrorState(error: unknown): {
 export async function uploadListingVideoFiles({
   files,
   area,
+  onProgress,
 }: {
   files: File[];
   area: UploadArea;
+  onProgress?: (progress: VideoUploadProgress) => void;
 }): Promise<string[]> {
   if (files.length === 0) return [];
 
@@ -105,7 +116,9 @@ export async function uploadListingVideoFiles({
         uploadVideoWithFastPath({
           file,
           area,
-          uploadViaServer: (uploadFile) => uploadListingVideoViaServer({ file: uploadFile, area }),
+          onProgress,
+          uploadViaServer: (uploadFile, onUploadProgress) =>
+            uploadListingVideoViaServer({ file: uploadFile, area, onProgress: onUploadProgress }),
         })
       )
     );

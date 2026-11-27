@@ -1,7 +1,7 @@
 /** @vitest-environment node */
 import { describe, expect, it, vi } from "vitest";
 import type { FoundationPublicApi } from "./public-api";
-import type { FoundationCardPresentation } from "./public-cards";
+import { searchFoundationPresentedCards, type FoundationCardPresentation } from "./public-cards";
 import {
   MarketplaceQueryError,
   readRestoredCollection,
@@ -62,13 +62,28 @@ function apiWith(rpc: ReturnType<typeof vi.fn>) {
 }
 
 describe("restored marketplace reads", () => {
-  it("refuses business contacts on other kinds and inconsistent event metadata", async () => {
+  it("drops business numbers from public cards and refuses inconsistent event metadata", async () => {
+    // A database rolled back to before update 20261127055550 still sends
+    // business_contacts: the card parse drops it for every kind.
+    const rolledBack = vi.fn().mockResolvedValue({
+      data: page([
+        {
+          ...card(),
+          presentation: {
+            business_type: null,
+            event_window: null,
+            frontend: { data: {}, media: [], business_contacts: { phone: "+27700000123" } },
+          } as never,
+        },
+      ]),
+      error: null,
+    });
+    const cards = await searchFoundationPresentedCards(apiWith(rolledBack), {
+      area: "market",
+    });
+    expect(cards.items[0]!.presentation.frontend).toEqual({ data: {}, media: [] });
+    expect(JSON.stringify(cards)).not.toContain("700000123");
     for (const presentation of [
-      {
-        business_type: null,
-        event_window: null,
-        frontend: { data: {}, media: [], business_contacts: { phone: "+27700000123" } },
-      },
       {
         business_type: null,
         event_window: {
@@ -353,6 +368,50 @@ describe("restored marketplace reads", () => {
     expect(result.videos).toEqual([expect.stringContaining(id(1)), expect.stringContaining(id(2))]);
     expect(result.contact_methods).toEqual(["call", "whatsapp"]);
     expect(JSON.stringify(result)).not.toContain("+27");
+  });
+
+  it("never puts a business number on a public business row, only which ones Show number can serve", () => {
+    const core = card(1, {
+      kind: "business",
+      area: "business",
+      category: "restaurants",
+      price_mode: null,
+      price_cents: null,
+      condition: null,
+    });
+    const presentation = {
+      business_type: "physical",
+      event_window: null,
+      frontend: {
+        data: {
+          website: "https://example.invalid",
+          business_contact_options: { call: true, whatsapp: false },
+        },
+        media: [],
+      },
+    };
+    const result = restoredPublicRow(core as never, undefined, presentation as never);
+    expect(result.phone).toBeNull();
+    expect(result.whatsapp).toBeNull();
+    expect(result.contact_available).toEqual({ phone: true, whatsapp: false, email: false });
+    expect(result.website).toBe("https://example.invalid");
+    expect(result).not.toHaveProperty("business_contact_options");
+    // A reply from a database before the update still carries the numbers:
+    // they never reach the row, and no buttons are offered.
+    const older = restoredPublicRow(core as never, undefined, {
+      ...presentation,
+      frontend: {
+        data: { website: "https://example.invalid" },
+        media: [],
+        business_contacts: { phone: "031 123 4567", whatsapp: "0821234567" },
+      },
+    } as never);
+    expect(older.contact_available).toEqual({ phone: false, whatsapp: false, email: false });
+    const text = JSON.stringify(older);
+    expect(text).not.toContain("1234567");
+    expect(text).not.toContain("+27");
+    // A Market listing has no business numbers to ask for.
+    expect(restoredPublicRow(card() as never).contact_available).toBeUndefined();
   });
 
   it("filters event dates before pagination and never mixes tourism businesses into events", async () => {
