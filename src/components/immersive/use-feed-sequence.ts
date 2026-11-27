@@ -34,6 +34,13 @@ export type FeedItem =
   | { type: "end"; terminal: FeedTerminal }
   | { type: "more-error" };
 
+export interface BrowseResult {
+  ok: boolean;
+  firstId: string | null;
+  lastId: string | null;
+  count: number;
+}
+
 export interface FeedSequence {
   ready: boolean;
   sessionId: string | null;
@@ -47,8 +54,12 @@ export interface FeedSequence {
   retryGrow: () => void;
   /** Section, province or filters chosen in the top bar; null when not browsing. */
   browse: FeedBrowse | null;
-  /** Replace the sequence with a browse; resolves with its first post (or null when empty). */
-  browseTo: (browse: FeedBrowse) => Promise<{ ok: boolean; firstId: string | null }>;
+  /**
+   * Replace the sequence with a browse; resolves with its first and last post
+   * (null when empty). With `skipEmpty`, a browse with no posts leaves the
+   * current sequence in place.
+   */
+  browseTo: (browse: FeedBrowse, options?: { skipEmpty?: boolean }) => Promise<BrowseResult>;
   totalKnown: number;
 }
 
@@ -233,13 +244,16 @@ export function useFeedSequence(
   const returnUrl = session?.returnUrl ?? null;
   const terminal = session?.terminal;
   const browseTo = useCallback(
-    async (browse: FeedBrowse) => {
+    async (browse: FeedBrowse, options?: { skipEmpty?: boolean }): Promise<BrowseResult> => {
       try {
         const payload = await fetchJson<{ refs: string[]; terminal: FeedTerminal }>(
           `/api/feed/browse?${serializeBrowse(browse)}`,
           abort.current.signal
         );
         const refs = payload.refs.map(decodeRef).filter((ref): ref is FeedRef => Boolean(ref));
+        if (options?.skipEmpty && refs.length === 0) {
+          return { ok: true, firstId: null, lastId: null, count: 0 };
+        }
         const next = createBrowseSession(
           browse,
           describeBrowse(browse),
@@ -250,9 +264,14 @@ export function useFeedSequence(
         setFailed(new Set());
         setGrowError(false);
         sessionStore.setSession(next);
-        return { ok: true, firstId: refs[0]?.id ?? null };
+        return {
+          ok: true,
+          firstId: refs[0]?.id ?? null,
+          lastId: refs[refs.length - 1]?.id ?? null,
+          count: refs.length,
+        };
       } catch {
-        return { ok: false, firstId: null };
+        return { ok: false, firstId: null, lastId: null, count: 0 };
       }
     },
     [returnUrl, sessionStore]

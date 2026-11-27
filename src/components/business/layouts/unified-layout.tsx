@@ -69,7 +69,6 @@ import { SHOW_ENGAGEMENT_TOTALS } from "@/lib/hidden-features";
 import { BusinessStickers } from "@/components/trust/business-stickers";
 import {
   CaptionPlace,
-  POST_CAPTION_ABOVE_CONTROLS,
   POST_MEDIA_FIRST_SCREEN_HEIGHT,
   useMediaPlaying,
 } from "@/components/listings/poster-caption";
@@ -315,9 +314,9 @@ function MediaColumn({
               </div>
             )}
 
-            {/* A repeat of the page heading, so screen readers skip it. Over a
-                video it shows on phones only, above the controls, and fades
-                while the video plays. */}
+            {/* A repeat of the page heading, so screen readers skip it. Photos
+                only: a video keeps its picture clear (the heading and logo
+                follow under it). */}
             <div
               aria-hidden="true"
               data-post-caption
@@ -325,7 +324,7 @@ function MediaColumn({
                 "pointer-events-none absolute inset-x-0 p-4 transition-opacity duration-300 motion-reduce:transition-none",
                 // Phones: shading strong enough for the place line (at least 65% black under the text).
                 "max-md:bg-[linear-gradient(to_top,rgb(0_0_0/0.8),rgb(0_0_0/0.65)_calc(100%_-_2.5rem),transparent)] max-md:pt-10",
-                isVideo ? cn("md:hidden", POST_CAPTION_ABOVE_CONTROLS) : "bottom-0 z-[15]",
+                isVideo ? "hidden" : "bottom-0 z-[15]",
                 media.playing ? "opacity-0" : "opacity-100"
               )}
             >
@@ -733,9 +732,21 @@ export function UnifiedLayout({
     <div className="space-y-5">
       <SectionCard
         lead={
-          <TitleTag className="break-words font-display text-2xl font-bold leading-tight tracking-tight sm:text-3xl">
-            {business.business_name}
-          </TitleTag>
+          <div className="flex items-center gap-3">
+            {/* Phones: the logo leaves the video, so it sits beside the name here. */}
+            {business.cover_video && business.logo_url ? (
+              <Image
+                src={normalizeMediaUrl(business.logo_url)}
+                alt=""
+                width={48}
+                height={48}
+                className="h-12 w-12 shrink-0 rounded-xl border border-border bg-white object-contain p-1 md:hidden"
+              />
+            ) : null}
+            <TitleTag className="min-w-0 break-words font-display text-2xl font-bold leading-tight tracking-tight sm:text-3xl">
+              {business.business_name}
+            </TitleTag>
+          </div>
         }
         title="About"
         body={introBody}

@@ -255,7 +255,7 @@ test.describe("Card video autoplay", () => {
       await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(false);
       await page.mouse.move(0, 0);
       await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(false);
-      const mute = card.getByRole("button", { name: "Unmute", exact: true });
+      const mute = card.getByRole("button", { name: "Turn sound on", exact: true });
       const frameBounds = await card.locator("[data-card-media]").boundingBox();
       const muteBounds = await mute.boundingBox();
       expect(frameBounds).toBeTruthy();
@@ -269,7 +269,7 @@ test.describe("Card video autoplay", () => {
       await mute.click();
       await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.muted)).toBe(false);
       await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(false);
-      await card.getByRole("button", { name: "Mute", exact: true }).click();
+      await card.getByRole("button", { name: "Turn sound off", exact: true }).click();
       await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(false);
       expect(page.url()).toBe(url);
       // The pause control stays visible on desktop cards too (44px hit target),
@@ -279,7 +279,7 @@ test.describe("Card video autoplay", () => {
         .last()
         .click();
       await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(true);
-      await card.getByRole("button", { name: "Unmute", exact: true }).click();
+      await card.getByRole("button", { name: "Turn sound on", exact: true }).click();
       await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(true);
       await expect(card.locator("[data-card-overlay]")).toHaveCSS("opacity", "1");
       await expect(card.getByText("Johannesburg", { exact: true })).toBeVisible();

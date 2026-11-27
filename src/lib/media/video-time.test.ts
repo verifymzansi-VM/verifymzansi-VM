@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeVideoProgress, formatVideoProgress, formatVideoTime } from "./video-time";
+import { describeVideoProgress, formatVideoTime } from "./video-time";
 
 describe("video time label", () => {
   it("shows minutes and two-digit seconds", () => {
@@ -23,9 +23,7 @@ describe("video time label", () => {
     expect(formatVideoTime(-3)).toBe("0:00");
   });
 
-  it("shows where playback is and the video's length", () => {
-    expect(formatVideoProgress(12, 45)).toBe("0:12 / 0:45");
-    expect(formatVideoProgress(0, 120)).toBe("0:00 / 2:00");
+  it("states where playback is and the video's length", () => {
     expect(describeVideoProgress(12, 45)).toBe("0:12 of 0:45");
   });
 });
