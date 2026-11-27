@@ -6,7 +6,7 @@ import { settleMediaUploads } from "@/app/post/_lib/settle-media-uploads";
 import { useEffect, useMemo, useState, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { usePostTransport } from "@/hooks/use-post-transport";
-import { Loader2, X, Phone, MessageCircle, Inbox, Check } from "lucide-react";
+import { Loader2, X, Phone, MessageCircle, Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PostLabel as Label } from "@/components/post/post-label";
@@ -59,6 +59,12 @@ import { readMediaDimensions } from "@/lib/utils/media-metadata";
 import { VIDEO_GUIDANCE, VIDEO_SOUND_OFF_TIP } from "@/lib/media/video-length";
 import { SaveTemplateButton } from "@/components/post-templates/save-template-button";
 import { templateDataFromForm } from "@/lib/post-templates";
+import { ListingPriceFields } from "@/components/posting/listing-price-fields";
+import {
+  listingPriceModeFromRow,
+  listingPriceSubmission,
+  type ListingPriceForm,
+} from "@/lib/domains/listings/price-form";
 
 const log = createLogger("EditListingPage");
 const TITLE_MAX = 100;
@@ -80,6 +86,14 @@ export default function EditListingPage() {
   const [town, setTown] = useState("");
   const [locationAddress, setLocationAddress] = useState("");
   const [negotiable, setNegotiable] = useState(false);
+  const [priceMode, setPriceMode] = useState<ListingPriceForm["mode"]>("amount");
+  const priceForm: ListingPriceForm = { mode: priceMode, amount: price, negotiable };
+  // The previews show the seller's choice: an amount, "Free" or "Price on request".
+  const previewPriced = category ? listingPriceSubmission(category, priceForm) : null;
+  const previewPriceMode =
+    previewPriced && !("error" in previewPriced) ? previewPriced.price_mode : null;
+  const previewPriceCents =
+    previewPriced && !("error" in previewPriced) ? Math.round(previewPriced.price_zar * 100) : 0;
   const [contactMethods, setContactMethods] = useState<string[]>(DEFAULT_LISTING_CONTACT_METHODS);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -218,6 +232,7 @@ export default function EditListingPage() {
         );
         setLocationAddress(((data as Record<string, unknown>).location_address as string) || "");
         setNegotiable(data.price_negotiable ?? false);
+        setPriceMode(listingPriceModeFromRow(data));
         setContactMethods(
           Array.isArray(data.contact_methods) && data.contact_methods.length > 0
             ? withListingEnquiry(data.contact_methods as string[])
@@ -381,12 +396,8 @@ export default function EditListingPage() {
       Object.assign(errors, validateListingAttributes(category, categoryAttributes));
     }
 
-    if (
-      (category !== "jobs_services" || price) &&
-      (!price || Number.isNaN(parseFloat(price)) || parseFloat(price) < 0)
-    ) {
-      errors.price_zar = "Enter a valid price.";
-    }
+    const priced = listingPriceSubmission(category, priceForm);
+    if ("error" in priced) errors.price_zar = priced.error;
     if (!province) errors.province = "Select a province.";
     if (!city) errors.city = "Select a city.";
     if (contactMethods.length === 0) {
@@ -443,7 +454,8 @@ export default function EditListingPage() {
         return;
       }
 
-      const numPrice = price ? parseFloat(price) : 0;
+      const priced = listingPriceSubmission(category, priceForm);
+      if ("error" in priced) throw new Error(priced.error);
       const normalizedAttributes = category
         ? coerceListingAttributes(category, categoryAttributes)
         : {};
@@ -511,8 +523,7 @@ export default function EditListingPage() {
           ...postFields(true),
           title: title.trim(),
           description: description.trim(),
-          price_zar: numPrice,
-          negotiable,
+          ...priced,
           category: mapListingCategory(category),
           condition:
             category === "jobs_services" || category === "auto_parts"
@@ -752,15 +763,27 @@ export default function EditListingPage() {
                   title={category === "jobs_services" ? "Salary and area" : "Price and area"}
                 >
                   {/* ── Price ──────────────────────────────────── */}
-                  <div className="space-y-2">
-                    <Label htmlFor="price" required={category !== "jobs_services"}>
-                      {category === "property" && categoryAttributes.listing_intent === "rent"
-                        ? "Monthly Rent (ZAR) *"
-                        : category === "jobs_services"
-                          ? "Salary (ZAR) (Optional)"
-                          : "Asking price (ZAR) *"}
-                    </Label>
-                    <div className="flex flex-col xs:flex-row gap-3">
+                  {category !== "jobs_services" ? (
+                    <ListingPriceFields
+                      category={category || "other_items"}
+                      value={priceForm}
+                      onChange={(next) => {
+                        setPriceMode(next.mode);
+                        setPrice(next.amount);
+                        setNegotiable(next.negotiable);
+                        clearErrors("price_zar");
+                      }}
+                      amountId="price"
+                      amountLabel={
+                        category === "property" && categoryAttributes.listing_intent === "rent"
+                          ? "Monthly Rent (ZAR)"
+                          : "Asking price (ZAR)"
+                      }
+                      error={fieldErrors.price_zar}
+                    />
+                  ) : (
+                    <div className="space-y-2">
+                      <Label htmlFor="price">Salary (ZAR) (Optional)</Label>
                       <Input
                         id="price"
                         type="number"
@@ -772,31 +795,14 @@ export default function EditListingPage() {
                           setPrice(e.target.value);
                           clearErrors("price_zar");
                         }}
-                        required={category !== "jobs_services"}
-                        className={cn("flex-1", fieldErrors.price_zar && "border-destructive")}
+                        className={cn(fieldErrors.price_zar && "border-destructive")}
                         aria-invalid={!!fieldErrors.price_zar}
                       />
-                      {category !== "jobs_services" && (
-                        <button
-                          type="button"
-                          aria-pressed={negotiable}
-                          onClick={() => setNegotiable((v) => !v)}
-                          className={cn(
-                            "flex min-h-11 items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                            negotiable
-                              ? "border-brand-green-600 bg-brand-green-50 text-brand-green-800 dark:border-brand-green-400 dark:bg-brand-green-950/50 dark:text-brand-gold-200"
-                              : "border-input bg-card text-foreground/80 hover:border-foreground/30"
-                          )}
-                        >
-                          {negotiable && <Check className="h-4 w-4" aria-hidden="true" />}
-                          Negotiable
-                        </button>
+                      {fieldErrors.price_zar && (
+                        <p className="inline-form-error">{fieldErrors.price_zar}</p>
                       )}
                     </div>
-                    {fieldErrors.price_zar && (
-                      <p className="inline-form-error">{fieldErrors.price_zar}</p>
-                    )}
-                  </div>
+                  )}
 
                   {/* ── Location: Province / City / Town / Address ───────── */}
                   <LocationSelector
@@ -968,7 +974,8 @@ export default function EditListingPage() {
                   <ListingCard
                     id={id}
                     title={title || "Your listing title"}
-                    price={price ? Math.round(parseFloat(price || "0") * 100) : 0}
+                    price={previewPriceCents}
+                    priceMode={previewPriceMode}
                     imageUrl={previewVideos[0] || previewPhotos[0]}
                     posterUrl={previewVideoThumbnail || previewPhotos[0] || undefined}
                     isVideo={previewVideos.length > 0}
@@ -988,7 +995,8 @@ export default function EditListingPage() {
                     owner_id: "preview-seller",
                     title: title || "Your listing title",
                     description: description || "Your listing description will appear here.",
-                    price_cents: price ? Math.round(parseFloat(price || "0") * 100) : 0,
+                    price_cents: previewPriceCents,
+                    price_mode: previewPriceMode,
                     price_negotiable: negotiable,
                     category: category || null,
                     condition: condition || null,

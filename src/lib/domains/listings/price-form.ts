@@ -86,3 +86,39 @@ export function restoreListingPriceForm(input: unknown, categoryInput: unknown):
         : "",
   };
 }
+
+export type ListingPriceSubmission = {
+  price_zar: number;
+  price_mode: "amount" | "free" | "on_request";
+  negotiable: boolean;
+};
+
+/** The create and edit pages' price fields as the post command expects them.
+ * Jobs keep the optional salary: no amount means "Salary not provided". */
+export function listingPriceSubmission(
+  category: string,
+  form: ListingPriceForm
+): ListingPriceSubmission | { error: string } {
+  const isJob = category === "jobs_services";
+  const amountText = form.amount.trim();
+  const mode = isJob ? (amountText ? "amount" : "on_request") : form.mode;
+  if (mode === "") return { error: "Choose a price option." };
+  if (mode !== "amount")
+    return {
+      price_zar: 0,
+      price_mode: mode,
+      negotiable: !isJob && mode === "on_request" && form.negotiable,
+    };
+  let cents: number;
+  try {
+    cents = parseListingPriceAmount(amountText);
+  } catch {
+    return { error: "Enter a valid price." };
+  }
+  return { price_zar: cents / 100, price_mode: "amount", negotiable: !isJob && form.negotiable };
+}
+
+/** The price choice of a saved post; older rows without one read as an amount. */
+export function listingPriceModeFromRow(row: { price_mode?: unknown }): ListingPriceForm["mode"] {
+  return row.price_mode === "free" || row.price_mode === "on_request" ? row.price_mode : "amount";
+}

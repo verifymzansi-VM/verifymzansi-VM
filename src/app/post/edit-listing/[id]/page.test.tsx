@@ -323,12 +323,56 @@ describe("EditListingPage", () => {
     expect(request[0]).toBe("/api/listings/listing-1");
     expect(payload.title).toBe("Used iPhone 15");
     expect(payload.price_zar).toBe(1500);
+    expect(payload.price_mode).toBe("amount");
     expect(payload.negotiable).toBe(true);
     expect(payload.town).toBe("Sandton");
     expect(payload.contactMethods).toEqual(["call", "whatsapp", "in_app"]);
     expect(payload.logo_url).toBe("https://media.verifymzansi.com/listings/existing-logo.jpg");
     expect(payload.attributes).toMatchObject({ brand: "Apple", storage_gb: 256 });
     expectFoundationPostFields(payload, { expectedRevision: 4 });
+  });
+
+  it("opens a Price on request post with no amount and saves it unchanged", async () => {
+    const { data } = await mockMaybeSingle();
+    mockMaybeSingle.mockResolvedValue({
+      data: { ...data, price_mode: "on_request", price_cents: null, price_negotiable: true },
+      error: null,
+    });
+    render(<EditListingPage />);
+    await termsLoaded();
+
+    await waitFor(() => {
+      expect(screen.getByRole("radio", { name: "Price on request" })).toBeChecked();
+    });
+    expect(screen.queryByLabelText("Asking price (ZAR)")).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Price negotiable" })).toBeChecked();
+    expect(listingCardSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ price: 0, priceMode: "on_request" })
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+    const payload = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(payload).toMatchObject({ price_mode: "on_request", price_zar: 0, negotiable: true });
+  });
+
+  it("switches a priced post to Free and drops the amount and Negotiable", async () => {
+    render(<EditListingPage />);
+    await termsLoaded();
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("1500")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("radio", { name: "Free" }));
+    expect(screen.queryByRole("checkbox", { name: "Price negotiable" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+    const payload = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(payload).toMatchObject({ price_mode: "free", price_zar: 0, negotiable: false });
   });
 
   it("allows removing the existing listing logo before save", async () => {
