@@ -261,8 +261,13 @@ test("enquiry opens as a bottom sheet from More and holds the video", async ({ p
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/dev/video-mode");
   await expect(heading(page)).toHaveText(market[0].title);
-  // This post has WhatsApp, so the right column shows it and the enquiry moves to More.
-  await expect(page.getByRole("link", { name: /^WhatsApp / })).toBeVisible();
+  // Numbers are never in the feed: the right column's contact button opens the post's
+  // click-to-reveal number (no sign-in), so the private enquiry moves into More.
+  const actions = page.getByRole("group", { name: "Post actions" });
+  const contact = actions.getByRole("link", { name: /^Contact / });
+  await expect(contact).toBeVisible();
+  await expect(contact).toHaveAttribute("href", /#contact$/);
+  await expect(actions.getByRole("button", { name: "Send a private enquiry" })).toHaveCount(0);
   await page.getByRole("button", { name: "More options" }).click();
   await page.getByRole("button", { name: "Send a private enquiry" }).click();
   const dialog = page.getByRole("dialog").last();

@@ -6,6 +6,7 @@ import {
 } from "@/components/post/business-contact-fields";
 import { PostSelect } from "@/components/post/post-select";
 
+import { photosWithVideoCover } from "@/lib/forms/video-cover-photo";
 import { settleMediaUploads } from "@/app/post/_lib/settle-media-uploads";
 
 import { useState, useEffect, useMemo, useRef } from "react";
@@ -169,9 +170,8 @@ export default function EditBusinessPage() {
   // Contact & Social
   const [phone, setPhone] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
-  const [email, setEmail] = useState("");
   const [website, setWebsite] = useState("");
-  const contactValues = { phone, whatsapp, email, website };
+  const contactValues = { phone, whatsapp, website };
   const contactMethods = readContactMethods(categoryDetails.contact_methods, contactValues);
   const publicContacts = selectedContacts(contactMethods, contactValues);
   // Profiles without customer access predate the address toggle and always show the pin.
@@ -293,7 +293,6 @@ export default function EditBusinessPage() {
         setMapDirections(b.map_directions || "");
         setPhone(b.phone || "");
         setWhatsapp(b.whatsapp || "");
-        setEmail(b.email || "");
         setWebsite(b.website || "");
         setBusinessDetails(
           coerceBusinessDetails(b.business_type || "standalone_shop", b.business_details)
@@ -448,7 +447,6 @@ export default function EditBusinessPage() {
         mapDirections: mapDirections.trim(),
         phone: publicContacts.phone.trim(),
         whatsapp: publicContacts.whatsapp.trim(),
-        email: publicContacts.email.trim(),
         website: publicContacts.website.trim(),
         socialFacebook: socialFacebook.trim(),
         socialInstagram: socialInstagram.trim(),
@@ -473,7 +471,6 @@ export default function EditBusinessPage() {
         for (const [method, field] of [
           ["call", "phone"],
           ["whatsapp", "whatsapp"],
-          ["email", "email"],
           ["website", "website"],
         ] as const) {
           if (contactMethods.includes(method) && !publicContacts[field].trim())
@@ -654,10 +651,14 @@ export default function EditBusinessPage() {
         map_directions: mapPinPublishable ? mapDirections.trim() || undefined : undefined,
         phone: publicContacts.phone || undefined,
         whatsapp: publicContacts.whatsapp || undefined,
-        email: publicContacts.email || undefined,
         website: publicContacts.website || undefined,
         logo_url: finalLogoUrl || undefined,
-        cover_photo: finalCoverPhoto || undefined,
+        // A video-only profile (no cover, no gallery): the chosen frame is the cover photo.
+        cover_photo:
+          finalCoverPhoto ||
+          (finalGalleryPhotos.length === 0
+            ? photosWithVideoCover([], !!finalCoverVideo, finalVideoThumbnail)[0]
+            : undefined),
         cover_video: finalCoverVideo || undefined,
         video_thumbnail: finalVideoThumbnail || undefined,
         gallery_photos: finalGalleryPhotos.length > 0 ? finalGalleryPhotos : [],
@@ -1201,7 +1202,6 @@ export default function EditBusinessPage() {
                   ({
                     phone: setPhone,
                     whatsapp: setWhatsapp,
-                    email: setEmail,
                     website: setWebsite,
                   })[field](value)
                 }
@@ -1545,7 +1545,6 @@ export default function EditBusinessPage() {
                           : null,
                       phone: publicContacts.phone || null,
                       whatsapp: publicContacts.whatsapp || null,
-                      email: publicContacts.email || null,
                       website: publicContacts.website || null,
                       store_number: storeNumber || null,
                       map_directions:

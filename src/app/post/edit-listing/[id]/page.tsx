@@ -12,6 +12,11 @@ import { Input } from "@/components/ui/input";
 import { PostLabel as Label } from "@/components/post/post-label";
 import { Textarea } from "@/components/ui/textarea";
 import { PostEditActionBar, PostFormSection } from "@/components/post/post-form-scaffold";
+import {
+  PHOTO_OR_VIDEO_RULE,
+  VIDEO_COVER_NEEDED,
+  photosWithVideoCover,
+} from "@/lib/forms/video-cover-photo";
 import { PostingTermsConsent } from "@/components/post/posting-terms-consent";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
@@ -371,11 +376,22 @@ export default function EditListingPage() {
   const normalizedPreviewAttributes = category
     ? coerceListingAttributes(category, categoryAttributes)
     : {};
-  const displayExistingPhotos = useMemo(() => normalizeMediaUrls(existingPhotos), [existingPhotos]);
   const displayExistingVideos = useMemo(() => normalizeMediaUrls(existingVideos), [existingVideos]);
-  const previewPhotos = previewPhotoUrls.length > 0 ? previewPhotoUrls : existingPhotos;
   const previewVideos = previewVideoUrls.length > 0 ? previewVideoUrls : existingVideos;
-  const previewVideoThumbnail = previewVideoCoverUrl ?? existingVideoThumbnail;
+  // A one-video slot swaps the saved video for the new pick. The saved video's cover
+  // frame (and the photo made from it) goes with it, so it is never used for the new video.
+  const videoReplaced =
+    newVideoFile.length > 0 &&
+    existingVideos.length > 0 &&
+    Math.max(maxVideos, existingVideos.length) === 1;
+  const keptVideoThumbnail = videoReplaced ? null : existingVideoThumbnail;
+  const keptPhotos =
+    videoReplaced && existingVideoThumbnail
+      ? existingPhotos.filter((url) => url !== existingVideoThumbnail)
+      : existingPhotos;
+  const displayKeptPhotos = useMemo(() => normalizeMediaUrls(keptPhotos), [keptPhotos]);
+  const previewPhotos = previewPhotoUrls.length > 0 ? previewPhotoUrls : keptPhotos;
+  const previewVideoThumbnail = previewVideoCoverUrl ?? keptVideoThumbnail;
   const previewLogo = previewLogoUrl ?? existingLogo;
 
   function validateForm() {
@@ -405,9 +421,11 @@ export default function EditListingPage() {
       errors.contactMethods = "Choose at least one contact method.";
     }
 
-    const totalPhotos = existingPhotos.length + newPhotoFiles.length;
-    if (category !== "jobs_services" && totalPhotos === 0)
-      errors.images = "Upload at least one photo.";
+    const totalPhotos = keptPhotos.length + newPhotoFiles.length;
+    const hasVideo = existingVideos.length > 0 || newVideoFile.length > 0;
+    const hasVideoCover = newVideoCoverFile.length > 0 || !!keptVideoThumbnail;
+    if (category !== "jobs_services" && totalPhotos === 0 && !(hasVideo && hasVideoCover))
+      errors.images = hasVideo ? VIDEO_COVER_NEEDED : PHOTO_OR_VIDEO_RULE;
     if (totalPhotos > maxPhotos) {
       errors.images = `You can upload up to ${maxPhotos} photos on this plan.`;
     }
@@ -505,13 +523,13 @@ export default function EditListingPage() {
       ]);
 
       // Resolve video thumbnail: new upload > existing > null
-      let videoThumbnail: string | null = existingVideoThumbnail;
+      let videoThumbnail: string | null = keptVideoThumbnail;
       if (newCoverUrls.length > 0) {
         videoThumbnail = newCoverUrls[0];
       }
       const finalLogoUrl = newLogoUrls[0] || existingLogo || null;
 
-      const allPhotos = [...existingPhotos, ...newPhotoUrls];
+      const allPhotos = [...keptPhotos, ...newPhotoUrls];
       // A one-video slot swaps the saved video for the new pick instead of adding to it.
       const allVideos = newVideoUrl
         ? Math.max(maxVideos, existingVideos.length) === 1
@@ -543,7 +561,7 @@ export default function EditListingPage() {
           city: city || "",
           town: town || "",
           address: locationAddress || "",
-          images: allPhotos,
+          images: photosWithVideoCover(allPhotos, allVideos.length > 0, videoThumbnail),
           videos: allVideos,
           videoThumbnail,
           logo_url: finalLogoUrl,
@@ -835,20 +853,24 @@ export default function EditListingPage() {
                   />
                 </PostFormSection>
 
-                <PostFormSection title="Photos and video">
+                <PostFormSection
+                  title="Photos and video"
+                  description={category === "jobs_services" ? undefined : PHOTO_OR_VIDEO_RULE}
+                >
                   <MediaUpload
                     id="edit-listing-photos-input"
                     label="Photos"
-                    description="Your first photo is the cover on cards."
+                    description="Your first photo is the cover on cards. With only a video, its cover image becomes the first photo."
                     maxFiles={maxPhotos}
                     files={newPhotoFiles}
-                    existing={existingPhotos.map((url, i) => ({
-                      url: displayExistingPhotos[i] || normalizeMediaUrl(url),
+                    existing={keptPhotos.map((url, i) => ({
+                      url: displayKeptPhotos[i] || normalizeMediaUrl(url),
                       label: `Photo ${i + 1}`,
                     }))}
                     onRemoveExisting={(index) => {
                       if (!window.confirm("Remove this photo?")) return;
-                      setExistingPhotos((prev) => prev.filter((_, i) => i !== index));
+                      const removed = keptPhotos[index];
+                      setExistingPhotos((prev) => prev.filter((url) => url !== removed));
                       clearErrors("images");
                     }}
                     error={fieldErrors.images}
@@ -860,9 +882,9 @@ export default function EditListingPage() {
                   />
 
                   {/* ── Focal Point Picker ────────────────────── */}
-                  {existingPhotos.length > 0 && (
+                  {keptPhotos.length > 0 && (
                     <FocalPointPicker
-                      src={normalizeMediaUrl(existingPhotos[0])}
+                      src={normalizeMediaUrl(keptPhotos[0])}
                       alt="Set focal point for primary photo"
                       value={focalPoint}
                       onChange={setFocalPoint}
