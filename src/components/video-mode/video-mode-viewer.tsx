@@ -2,17 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Building2,
-  ChevronUp,
-  RotateCcw,
-  ShoppingBag,
-  SlidersHorizontal,
-  TreePalm,
-  Volume2,
-  VolumeX,
-  X,
-} from "lucide-react";
+import { ChevronUp, MoreHorizontal, RotateCcw, X } from "lucide-react";
 import { ContactActionTracker } from "@/components/analytics/contact-action-tracker";
 import { FilterSheet } from "@/components/immersive/immersive-top-bar";
 import { BrandShield } from "@/components/shared/brand-shield";
@@ -23,17 +13,21 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { VideoSoundButton } from "@/components/ui/video-sound-button";
 import {
   ActionRail,
   CircleButton,
+  DetailsRow,
+  FilterButton,
   MoreSheet,
-  PostActionRow,
-  PostInfo,
+  PostSummary,
+  SECTION_ICONS,
   SectionRail,
   VM_CIRCLE,
   VM_GLYPH,
 } from "@/components/video-mode/video-mode-rails";
-import { EdgeTab } from "@/components/video-mode/video-mode-edge-tab";
+import { useAutoHide } from "@/components/video-mode/use-auto-hide";
+import { captionTop } from "@/components/video-mode/letterbox";
 import { useConstrainedNetwork, VideoModeMedia } from "@/components/video-mode/video-mode-media";
 import { VideoModeSeek } from "@/components/video-mode/video-mode-seek";
 import { useVideoModeFeed, type VideoModePost } from "@/components/video-mode/use-video-mode-feed";
@@ -55,6 +49,8 @@ import {
   rememberVertical,
 } from "@/lib/feed/video-mode";
 import { VIDEO_MODE_FROM_KEY } from "@/lib/feed/video-mode-keys";
+import { AREA_ORDER, nextArea, rolloverBrowse, rolloverCue } from "@/lib/feed/rollover";
+import { useVideoMuteStore } from "@/stores/video-mute-store";
 import { cn } from "@/lib/utils";
 
 /** Movement before a gesture picks an axis, and the edge strip left to the system's back gesture. */
@@ -64,11 +60,9 @@ const SWIPE_MEDIA_PX = 50;
 const FLICK_VELOCITY = 0.45;
 const TAP_GUARD_MS = 350;
 const SLIDE_MS = 380;
-const SOUND_KEY = "vm:video:sound";
-/** Idle time before the controls step aside for a clean view. */
-const AUTO_HIDE_MS = 6000;
-const AUTO_HIDE_KEY = "vm:video:auto-hide";
 const SEEK_ACTIVITY_MS = 1000;
+/** How long the new area's name shows after a roll-over. */
+const CUE_MS = 1500;
 const noop = () => {};
 /** First visit only: show how to move on, until the first swipe. */
 const HINT_KEY = "vm:video:swipe-hint";
@@ -149,14 +143,6 @@ function usePageVisible() {
   return visible;
 }
 
-function readSoundOn() {
-  try {
-    return window.sessionStorage.getItem(SOUND_KEY) === "on";
-  } catch {
-    return false;
-  }
-}
-
 /* ─────────────────────────── Small surfaces ─────────────────────────── */
 
 function PatternSurface({ children }: { children?: React.ReactNode }) {
@@ -198,16 +184,10 @@ function LoadingPost({ failed, onRetry }: { failed: boolean; onRetry: () => void
   );
 }
 
-const SECTION_ICONS: Record<FeedVertical, typeof ShoppingBag> = {
-  market: ShoppingBag,
-  business: Building2,
-  tourism: TreePalm,
-};
-
 /**
- * The end of a section, or a section with nothing yet. With little inventory
- * this is common, so it always offers the next best step instead of looping:
- * widen the province, clear filters, then another section.
+ * A section with nothing yet (the end of a section rolls on into the next
+ * one). It offers the next best step: widen the province, clear filters, then
+ * another section.
  */
 function EndCard({
   browse,
@@ -222,9 +202,7 @@ function EndCard({
 }) {
   const cleared = defaultBrowse(browse.vertical, browse.province);
   const filtered = describeBrowse(browse) !== describeBrowse(cleared);
-  const others = (["market", "business", "tourism"] as FeedVertical[]).filter(
-    (vertical) => vertical !== browse.vertical
-  );
+  const others = AREA_ORDER.filter((vertical) => vertical !== browse.vertical);
   return (
     <PatternSurface>
       <div
@@ -382,12 +360,12 @@ export function VideoModeViewer({
     initialPosition.post ? { [initialPosition.post]: initialPosition.media } : {}
   );
   const [onEnd, setOnEnd] = useState(false);
-  const [muted, setMuted] = useState(() => !readSoundOn());
+  // One sound choice for every player on the site.
+  const muted = useVideoMuteStore((state) => state.isMuted);
+  const setMuted = useVideoMuteStore((state) => state.setMuted);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [tourismOpen, setTourismOpen] = useState(false);
-  const [busy, setBusy] = useState<FeedVertical | "filters" | null>(null);
-  const [browseError, setBrowseError] = useState(false);
   const [viewCounts, setViewCounts] = useState<Record<string, number>>({});
 
   const feed = useVideoModeFeed({
@@ -406,47 +384,13 @@ export function VideoModeViewer({
   const mediaIndex = activePost ? (mediaByPost[activePost.id] ?? 0) : 0;
   const held = layers > 0 || !visible;
 
-  /* ── Clean view: the controls slide out through the edges; the edge tab brings them back ── */
-  const [chromeHidden, setChromeHidden] = useState(false);
-  const [activity, setActivity] = useState(0);
+  /* ── Clean view: after 4 s of playback the left column, Details and the top bar fade;
+     the right column, the title and price and the progress line stay; a tap brings
+     them back ── */
   const [videoPlaying, setVideoPlaying] = useState(false);
-  // Once the visitor brings the details back themselves, they decide from then on:
-  // the controls no longer step aside on their own (for the rest of this visit).
-  const [autoHide, setAutoHide] = useState(() => {
-    try {
-      return window.sessionStorage.getItem(AUTO_HIDE_KEY) !== "off";
-    } catch {
-      return true;
-    }
-  });
-  const cleanView = chromeHidden && !ended;
-  const toggleChrome = () => {
-    if (chromeHidden) {
-      setAutoHide(false);
-      try {
-        window.sessionStorage.setItem(AUTO_HIDE_KEY, "off");
-      } catch {
-        // Off for this page view only.
-      }
-    }
-    setChromeHidden(!chromeHidden);
-  };
-  // After a while without a touch the controls step aside on their own, so the
-  // visitor can keep swiping through clean videos. Only while a video is playing:
-  // someone reading a photo post, or who paused to look, keeps the details.
-  useEffect(() => {
-    if (!autoHide || chromeHidden || ended || held || !activeSlide || !videoPlaying) return;
-    const timer = window.setTimeout(() => {
-      const focused = document.activeElement;
-      // Keyboard users moving through the controls keep them.
-      if (focused?.closest("[data-vm-chrome]") && focused.matches(":focus-visible")) return;
-      setChromeHidden(true);
-    }, AUTO_HIDE_MS);
-    return () => window.clearTimeout(timer);
-  }, [autoHide, chromeHidden, ended, held, activeSlide, videoPlaying, activity]);
-  const noteActivity = () => {
-    if (!chromeHidden) setActivity((value) => value + 1);
-  };
+  const autoHide = useAutoHide(Boolean(activeSlide) && !ended && !held && videoPlaying);
+  const cleanView = autoHide.hidden;
+  const noteActivity = autoHide.noteActivity;
   // Dragging the seek bar is activity too, so the controls never step aside mid-drag.
   // Counted at most once a second: a drag sends a move for every frame.
   const lastSeekMoveAt = useRef(0);
@@ -521,6 +465,56 @@ export function VideoModeViewer({
     return () => window.clearTimeout(timer);
   }, [showHint, dismissHint]);
 
+  /* ── Roll-over: past an area's last post the next area carries on (and back) ── */
+  const [busy, setBusy] = useState<FeedVertical | "filters" | null>(null);
+  const [browseError, setBrowseError] = useState(false);
+  const [cue, setCue] = useState<{ vertical: FeedVertical; text: string; key: number } | null>(
+    null
+  );
+  // Each area's filters from earlier in this visit come back when the visitor returns to it.
+  const areaMemory = useRef<Partial<Record<FeedVertical, FeedBrowse>>>({});
+  const { show: showControls } = autoHide;
+  const rollOver = useCallback(
+    async (direction: 1 | -1) => {
+      if (busy) return;
+      const from = feed.browse;
+      areaMemory.current[from.vertical] = from;
+      let target = from.vertical;
+      // The other two areas, then this one again from the top: a loop that never ends.
+      for (let step = 0; step < AREA_ORDER.length; step += 1) {
+        target = nextArea(target, direction);
+        const next = rolloverBrowse(from, target, areaMemory.current[target]);
+        setBusy(target);
+        setBrowseError(false);
+        const ids = await feed.browseTo(next, { skipEmpty: true });
+        setBusy(null);
+        if (!ids) {
+          setBrowseError(true);
+          return;
+        }
+        if (ids.length === 0) continue;
+        if (!preview) rememberVertical(next.vertical);
+        setOnEnd(false);
+        setActive(
+          direction === 1
+            ? { id: ids[0], index: 0 }
+            : { id: ids[ids.length - 1], index: ids.length - 1 }
+        );
+        if (next.vertical !== from.vertical) {
+          setCue({ vertical: next.vertical, text: rolloverCue(next), key: Date.now() });
+        }
+        showControls();
+        return;
+      }
+    },
+    [busy, feed, preview, showControls]
+  );
+  useEffect(() => {
+    if (!cue) return;
+    const timer = window.setTimeout(() => setCue(null), CUE_MS);
+    return () => window.clearTimeout(timer);
+  }, [cue]);
+
   /* ── Moving between posts and media ── */
   const go = useCallback(
     (direction: 1 | -1) => {
@@ -529,8 +523,9 @@ export function VideoModeViewer({
         if (hint) dismissHint();
         if (activeIndex < posts.length - 1) {
           setActive({ id: posts[activeIndex + 1].id, index: activeIndex + 1 });
+          showControls();
         } else if (feed.terminal) {
-          setOnEnd(true);
+          void rollOver(1);
         }
         return;
       }
@@ -538,9 +533,25 @@ export function VideoModeViewer({
         setOnEnd(false);
         return;
       }
-      if (activeIndex > 0) setActive({ id: posts[activeIndex - 1].id, index: activeIndex - 1 });
+      if (activeIndex > 0) {
+        setActive({ id: posts[activeIndex - 1].id, index: activeIndex - 1 });
+        showControls();
+      } else if (posts.length > 0 && feed.status === "ready") {
+        void rollOver(-1);
+      }
     },
-    [activeIndex, dismissHint, ended, feed.terminal, hint, onEnd, posts]
+    [
+      activeIndex,
+      dismissHint,
+      ended,
+      feed.status,
+      feed.terminal,
+      hint,
+      onEnd,
+      posts,
+      rollOver,
+      showControls,
+    ]
   );
 
   const moveMedia = useCallback(
@@ -561,9 +572,9 @@ export function VideoModeViewer({
     async (next: FeedBrowse, cause: FeedVertical | "filters") => {
       setBusy(cause);
       setBrowseError(false);
-      const ok = await feed.browseTo(next);
+      const ids = await feed.browseTo(next);
       setBusy(null);
-      if (!ok) {
+      if (!ids) {
         setBrowseError(true);
         return;
       }
@@ -599,14 +610,6 @@ export function VideoModeViewer({
     else router.push(listHrefForBrowse(feed.browse));
   }, [feed.browse, router]);
 
-  function rememberSound(on: boolean) {
-    try {
-      window.sessionStorage.setItem(SOUND_KEY, on ? "on" : "off");
-    } catch {
-      // The choice still holds for this page.
-    }
-  }
-
   function toggleSound() {
     const next = !muted;
     // Set inside the tap itself: iOS only accepts sound that a gesture turned on.
@@ -616,7 +619,6 @@ export function VideoModeViewer({
       if (!next && video.paused) void video.play().catch(() => undefined);
     }
     setMuted(next);
-    rememberSound(!next);
   }
 
   /* ── Keyboard (tablets with keyboards, accessibility) ── */
@@ -650,7 +652,16 @@ export function VideoModeViewer({
   const trackRef = useRef<HTMLDivElement>(null);
   const gesture = useRef<Gesture | null>(null);
   const lastGestureAt = useRef(0);
-  const ignoreTap = useCallback(() => performance.now() - lastGestureAt.current < TAP_GUARD_MS, []);
+  // While the controls are hidden, a tap on the video brings them back instead of pausing.
+  const revealOnTap = useRef(autoHide.revealOnTap);
+  useEffect(() => {
+    revealOnTap.current = autoHide.revealOnTap;
+  });
+  /** True when a tap on the video is used up: a swipe just ended, or it showed the controls. */
+  const ignoreTap = useCallback(
+    () => performance.now() - lastGestureAt.current < TAP_GUARD_MS || revealOnTap.current(),
+    []
+  );
 
   const setTrackOffset = (px: number, animate: boolean) => {
     const track = trackRef.current;
@@ -696,10 +707,9 @@ export function VideoModeViewer({
       }
     }
     if (state.axis === "y") {
-      // Resistance past the first post and past the end.
-      const atStart = activeIndex === 0 && !onEnd && state.dy > 0;
+      // Resistance past the end card (the first and last posts roll over into the next area).
       const atEnd = ended && state.dy < 0;
-      setTrackOffset(atStart || atEnd ? state.dy * 0.25 : state.dy, false);
+      setTrackOffset(atEnd ? state.dy * 0.25 : state.dy, false);
     }
   };
 
@@ -730,6 +740,35 @@ export function VideoModeViewer({
     Boolean(feed.terminal || posts.length === 0) &&
     position >= posts.length - 1;
 
+  /* ── A video that leaves black space under it gets the title there ── */
+  const [captionAt, setCaptionAt] = useState<number | null>(null);
+  const activeVideoKey = activeSlide && !ended ? `${activeSlide.key}:${mediaIndex}` : null;
+  useEffect(() => {
+    const measure = () => {
+      const video = document.querySelector<HTMLVideoElement>("video[data-vm-active-video]");
+      setCaptionAt(
+        video
+          ? captionTop(window.innerWidth, window.innerHeight, video.videoWidth, video.videoHeight)
+          : null
+      );
+    };
+    const onMeta = (event: Event) => {
+      if (event.target instanceof Element && event.target.matches("video[data-vm-active-video]")) {
+        measure();
+      }
+    };
+    // After the new post's video element is on the page.
+    const frame = window.requestAnimationFrame(measure);
+    // Media events do not bubble; the capture phase still sees them.
+    document.addEventListener("loadedmetadata", onMeta, true);
+    window.addEventListener("resize", measure);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener("loadedmetadata", onMeta, true);
+      window.removeEventListener("resize", measure);
+    };
+  }, [activeVideoKey]);
+
   const browseValue = feed.browse;
   const filterCount = activeFilterCount(browseValue);
   const activeMedia = activeSlide?.media[Math.min(mediaIndex, activeSlide.media.length - 1)];
@@ -738,16 +777,18 @@ export function VideoModeViewer({
     ? posts.length === 0
       ? `No posts in ${describeBrowse(browseValue)} yet.`
       : "You have reached the end of this section."
-    : activeSlide
-      ? `Post ${activeIndex + 1} of ${posts.length}: ${activeSlide.title}`
-      : "Loading post";
+    : cue
+      ? `Now showing ${cue.text}`
+      : activeSlide
+        ? `Post ${activeIndex + 1} of ${posts.length}: ${activeSlide.title}`
+        : "Loading post";
 
   return (
     <div
       data-viewer-theme="dark"
       data-chrome={cleanView ? "hidden" : "shown"}
       onPointerDownCapture={noteActivity}
-      onKeyDownCapture={noteActivity}
+      onKeyDownCapture={autoHide.show}
       onPointerMoveCapture={noteSeekMove}
       onTouchMoveCapture={noteSeekMove}
       className="fixed inset-0 z-50 overflow-hidden bg-black text-white"
@@ -826,7 +867,7 @@ export function VideoModeViewer({
                     analytics={analytics}
                     ignoreTap={ignoreTap}
                     onPlayingChange={isActive ? setVideoPlaying : noop}
-                    onUserPause={() => setChromeHidden(false)}
+                    onUserPause={showControls}
                     onSoundBlocked={() => setMuted(true)}
                     onVideoViewRecorded={() =>
                       setViewCounts((counts) => ({
@@ -874,7 +915,7 @@ export function VideoModeViewer({
         />
         {activeSlide && !ended ? (
           <div
-            className="vm-chrome-fade pointer-events-none absolute inset-x-0 bottom-0 h-72 bg-gradient-to-t from-black/75 via-black/35 to-transparent"
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-72 bg-gradient-to-t from-black/75 via-black/35 to-transparent"
             aria-hidden="true"
           />
         ) : null}
@@ -891,7 +932,7 @@ export function VideoModeViewer({
               key={`${item.url}:${index}`}
               className={cn(
                 "h-0.5 flex-1 rounded-full",
-                index === mediaIndex ? "bg-brand-gold-300" : "bg-white/40"
+                index === mediaIndex ? "bg-white/80" : "bg-white/30"
               )}
             />
           ))}
@@ -910,13 +951,12 @@ export function VideoModeViewer({
         </div>
       ) : null}
 
-      {/* ── Top bar ── */}
+      {/* ── Top bar: logo; More and Close on the right ── */}
       <div
         data-vm-control
         data-vm-chrome
         inert={cleanView}
-        style={{ "--vm-order": 1 } as React.CSSProperties}
-        className="vm-chrome vm-chrome-up absolute inset-x-0 top-0 z-20 flex items-center gap-1 px-1.5 pt-[calc(env(safe-area-inset-top)+12px)]"
+        className="vm-chrome absolute inset-x-0 top-0 z-20 flex items-center gap-1 px-1.5 pt-[calc(env(safe-area-inset-top)+12px)]"
       >
         <BrandShield
           className="ml-1 h-8 w-8 shrink-0 text-brand-gold-300 drop-shadow"
@@ -924,44 +964,43 @@ export function VideoModeViewer({
         />
         <span className="sr-only">VerifyMzansi Video mode</span>
         <div className="ml-auto flex items-center gap-1">
-          {activeMedia?.kind === "video" && !ended ? (
-            <CircleButton
-              label={muted ? "Turn sound on" : "Turn sound off"}
-              pressed={!muted}
-              onClick={toggleSound}
-            >
-              {muted ? (
-                <VolumeX className={VM_GLYPH} aria-hidden="true" />
-              ) : (
-                <Volume2 className={VM_GLYPH} aria-hidden="true" />
-              )}
+          {activeSlide && !ended ? (
+            <CircleButton label="More options" onClick={() => setMoreOpen(true)}>
+              <MoreHorizontal className={VM_GLYPH} aria-hidden="true" />
             </CircleButton>
           ) : null}
-          <CircleButton
-            label={
-              filterCount > 0 || browseValue.province
-                ? `Province and filters: ${describeBrowse(browseValue)}`
-                : "Province and filters"
-            }
-            onClick={() => setFiltersOpen(true)}
-            disabled={busy !== null}
-            className="relative"
-          >
-            <SlidersHorizontal className={VM_GLYPH} aria-hidden="true" />
-            {filterCount + (browseValue.province ? 1 : 0) > 0 ? (
-              <span
-                className="absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-brand-gold-300 px-1 text-[10px] font-bold text-brand-gold-950"
-                aria-hidden="true"
-              >
-                {filterCount + (browseValue.province ? 1 : 0)}
-              </span>
-            ) : null}
-          </CircleButton>
           <CircleButton label="Close Video mode" onClick={close}>
             <X className={VM_GLYPH} aria-hidden="true" />
           </CircleButton>
         </div>
       </div>
+
+      {/* ── Sound, top centre: the same button as every other player; it stays while muted ── */}
+      {activeMedia?.kind === "video" && !ended ? (
+        <VideoSoundButton
+          muted={muted}
+          onToggle={toggleSound}
+          inert={cleanView && !muted}
+          className={cn("top-[calc(env(safe-area-inset-top)+12px)] z-30", !muted && "vm-chrome")}
+        />
+      ) : null}
+
+      {/* ── Roll-over cue: the new area's name for a moment ── */}
+      {cue ? (
+        <div
+          key={cue.key}
+          className="vm-cue pointer-events-none absolute inset-x-0 top-[calc(env(safe-area-inset-top)+64px)] z-30 flex justify-center"
+          aria-hidden="true"
+        >
+          <span className="flex items-center gap-2 rounded-full bg-brand-green-950/90 px-4 py-2 text-sm font-semibold text-white ring-2 ring-brand-gold-300">
+            {(() => {
+              const Icon = SECTION_ICONS[cue.vertical];
+              return <Icon className="h-4 w-4" aria-hidden="true" />;
+            })()}
+            {cue.text}
+          </span>
+        </div>
+      ) : null}
 
       {browseError ? (
         <p
@@ -972,46 +1011,68 @@ export function VideoModeViewer({
         </p>
       ) : null}
 
-      {/* ── Left: sections (the end card offers the other sections itself) ── */}
+      {/* ── Left, close to the edge: sections, then province and filters ── */}
       {!ended ? (
         <div
           data-vm-chrome
           inert={cleanView}
-          style={{ "--vm-order": 3 } as React.CSSProperties}
-          className="vm-sections vm-chrome vm-chrome-left absolute left-[max(4px,env(safe-area-inset-left))] top-[calc(env(safe-area-inset-top)+68px)] z-20"
+          className="vm-sections vm-chrome absolute left-[max(2px,env(safe-area-inset-left))] top-[calc(env(safe-area-inset-top)+68px)] z-20"
         >
           <SectionRail
             vertical={browseValue.vertical}
             tourismKind={browseValue.kind}
             busy={busy === "filters" ? null : busy}
             onSelect={selectSection}
+            filter={
+              <FilterButton
+                label={
+                  filterCount > 0 || browseValue.province
+                    ? `Province and filters: ${describeBrowse(browseValue)}`
+                    : "Province and filters"
+                }
+                count={filterCount + (browseValue.province ? 1 : 0)}
+                disabled={busy !== null}
+                onClick={() => setFiltersOpen(true)}
+              />
+            }
           />
         </div>
       ) : null}
 
-      {/* ── Right: like, views, enquire; bottom: the post and its actions ── */}
+      {/* ── Right: views, like, contact, share (never hidden); bottom: title, price, Details ── */}
       {activeSlide && !ended ? (
         <>
+          <div className="absolute bottom-[calc(env(safe-area-inset-bottom)+28px)] right-[max(8px,env(safe-area-inset-right))] z-20">
+            <ActionRail
+              key={activeSlide.key}
+              slide={activeSlide}
+              views={views}
+              analytics={analytics}
+            />
+          </div>
+          {/* Always shown, so people know what they are watching: under a video that
+              leaves black space, else at the bottom over it. */}
           <div
-            data-vm-chrome
-            inert={cleanView}
-            style={{ "--vm-order": 0 } as React.CSSProperties}
-            className="vm-chrome vm-chrome-right absolute bottom-[calc(env(safe-area-inset-bottom)+72px)] right-[max(8px,env(safe-area-inset-right))] z-20"
+            data-vm-caption={captionAt === null ? "over" : "under"}
+            style={captionAt === null ? undefined : { top: captionAt }}
+            className={cn(
+              "vm-info absolute left-[max(12px,env(safe-area-inset-left))] right-[calc(max(8px,env(safe-area-inset-right))+56px)] z-20 max-w-xl",
+              captionAt !== null
+                ? null
+                : cleanView
+                  ? "bottom-[calc(env(safe-area-inset-bottom)+28px)]"
+                  : "bottom-[calc(env(safe-area-inset-bottom)+84px)]"
+            )}
           >
-            <ActionRail key={activeSlide.key} slide={activeSlide} views={views} />
+            <PostSummary slide={activeSlide} headingLevel="h1" />
           </div>
           <div
             data-vm-chrome
             inert={cleanView}
-            style={{ "--vm-order": 2 } as React.CSSProperties}
-            className="vm-info vm-chrome vm-chrome-down absolute bottom-[calc(env(safe-area-inset-bottom)+12px)] left-[max(12px,env(safe-area-inset-left))] right-[calc(max(8px,env(safe-area-inset-right))+52px)] z-20 max-w-xl space-y-3"
+            className="vm-info vm-chrome absolute bottom-[calc(env(safe-area-inset-bottom)+28px)] left-[max(12px,env(safe-area-inset-left))] right-[calc(max(8px,env(safe-area-inset-right))+56px)] z-20 max-w-xl"
           >
-            <PostInfo slide={activeSlide} headingLevel="h1" />
-            <PostActionRow
-              key={activeSlide.key}
+            <DetailsRow
               slide={activeSlide}
-              analytics={analytics}
-              onMore={() => setMoreOpen(true)}
               onDetails={() => {
                 // Keep the exact spot in the address bar before leaving.
                 window.history.replaceState(
@@ -1025,19 +1086,19 @@ export function VideoModeViewer({
                 );
               }}
             />
-            {activeMedia?.kind === "video" ? (
-              <VideoModeSeek key={`${activeSlide.key}:${mediaIndex}`} />
-            ) : null}
           </div>
+          {/* The quiet progress line stays when the controls fade. */}
+          {activeMedia?.kind === "video" ? (
+            <div className="absolute inset-x-0 bottom-[env(safe-area-inset-bottom)] z-20">
+              <VideoModeSeek key={`${activeSlide.key}:${mediaIndex}`} />
+            </div>
+          ) : null}
           <MoreSheet
             key={`more:${activeSlide.key}`}
             slide={activeSlide}
             open={moreOpen}
             onOpenChange={setMoreOpen}
           />
-
-          {/* ── The edge tab: everything slides out through the walls and back ── */}
-          <EdgeTab hidden={cleanView} onToggle={toggleChrome} />
         </>
       ) : null}
 

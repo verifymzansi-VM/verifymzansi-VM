@@ -13,6 +13,7 @@ import { buildFixtureSlides } from "../../src/app/dev/immersive/fixtures";
 const slides = buildFixtureSlides();
 const market = slides.filter((slide) => slide.vertical === "market");
 const business = slides.filter((slide) => slide.vertical === "business");
+const events = slides.filter((slide) => slide.kind === "event");
 
 const sizes = [
   [360, 640],
@@ -132,7 +133,7 @@ test("swipes move between posts and media; the edge is left to the system", asyn
   await expect(heading(page)).toHaveText(market[0].title);
 });
 
-test("sections, Tourism choices and the end card", async ({ page }) => {
+test("sections, Tourism choices and the roll-over into the next area", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/dev/video-mode");
   await page.getByRole("button", { name: "Business", exact: true }).click();
@@ -143,46 +144,30 @@ test("sections, Tourism choices and the end card", async ({ page }) => {
   await page.getByRole("button", { name: /Tourism and events: showing tourism/ }).click();
   await page.getByRole("radio", { name: "Events" }).click();
   await expect(page).toHaveURL(/kind=events/);
+  await expect(heading(page)).toHaveText(events[0].title);
 
-  // One event in the demo: the next swipe reaches the end card, with ways onward.
+  // Past the last event the feed carries on into Business, with the area's filters reset.
+  for (let index = events.length - 1; index > 0; index--) {
+    await swipe(page, [195, 600], [195, 200]);
+  }
   await swipe(page, [195, 600], [195, 200]);
-  await expect(page.getByRole("heading", { name: "You’re all caught up" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Clear filters" })).toBeVisible();
-  // The card is centred; it offers the other sections, so the section rail steps away.
-  const margins = await page
-    .getByRole("heading", { name: "You’re all caught up" })
-    .evaluate((element) => {
-      const rect = element.closest("[role='status']")!.getBoundingClientRect();
-      return [rect.left, window.innerWidth - rect.right];
-    });
-  expect(Math.abs(margins[0] - margins[1])).toBeLessThanOrEqual(1);
-  await expect(page.locator(".vm-sections")).toHaveCount(0);
-  await page.getByRole("button", { name: "Mzansi Market" }).click();
-  await expect(heading(page)).toHaveText(market[0].title);
+  await expect(page.getByText("Now showing Business")).toBeAttached();
+  await expect(heading(page)).toHaveText(business[0].title);
+  await expect(page).toHaveURL(/v=business/);
+  await expect(page).not.toHaveURL(/kind=events/);
+  await expect(page.getByRole("button", { name: "Business", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true"
+  );
+
+  // Back past Business's first post returns to the events, filters and all.
+  await swipe(page, [195, 200], [195, 600]);
+  await expect(page).toHaveURL(/kind=events/);
 });
 
-test("the edge tab sends every control out and back; swiping still works", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/dev/video-mode");
-  await expect(heading(page)).toHaveText(market[0].title);
-  const root = page.locator("[data-chrome]");
-  await expect(root).toHaveAttribute("data-chrome", "shown");
-
-  await page.getByRole("button", { name: "Hide controls" }).click();
-  await expect(root).toHaveAttribute("data-chrome", "hidden");
-  // Hidden controls cannot be reached by touch, keyboard or screen readers.
-  await expect(page.locator("[data-vm-chrome][inert]")).toHaveCount(4);
-
-  await swipe(page, [195, 600], [195, 200]);
-  await expect(page).toHaveURL(new RegExp(`post=${market[1].id}`));
-  await expect(root).toHaveAttribute("data-chrome", "hidden");
-
-  await page.getByRole("button", { name: "Show post details and controls" }).click();
-  await expect(root).toHaveAttribute("data-chrome", "shown");
-  await expect(heading(page)).toHaveText(market[1].title);
-});
-
-test("controls step aside on their own after a quiet moment", async ({ page }) => {
+test("after 4 s of playback the left column, Details and top bar fade; the rest stays", async ({
+  page,
+}) => {
   await page.clock.install();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/dev/video-mode");
@@ -190,11 +175,54 @@ test("controls step aside on their own after a quiet moment", async ({ page }) =
   const root = page.locator("[data-chrome]");
   await page.clock.fastForward(3000);
   await expect(root).toHaveAttribute("data-chrome", "shown");
-  await page.clock.fastForward(3500);
+  await page.clock.fastForward(1500);
+  await expect(root).toHaveAttribute("data-chrome", "hidden");
+
+  // Hidden controls cannot be reached by touch, keyboard or screen readers.
+  await expect(page.locator("[data-vm-chrome][inert]")).toHaveCount(3);
+  for (const kept of [
+    page.getByRole("group", { name: "Post actions" }),
+    heading(page),
+    page.getByRole("slider", { name: "Seek playback" }),
+    page.getByRole("button", { name: "Turn sound on" }),
+  ]) {
+    await expect(kept).toBeVisible();
+    expect(await kept.evaluate((element) => Boolean(element.closest("[inert]")))).toBe(false);
+  }
+
+  // Swiping still works and shows the next post's controls again.
+  await swipe(page, [195, 600], [195, 200]);
+  await expect(page).toHaveURL(new RegExp(`post=${market[1].id}`));
+  await expect(root).toHaveAttribute("data-chrome", "shown");
+});
+
+test("a tap on hidden controls shows them and keeps playing; the next tap pauses", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/dev/video-mode");
+  await expect(heading(page)).toHaveText(market[0].title);
+  const root = page.locator("[data-chrome]");
+  const paused = () => page.locator("video").evaluate((video: HTMLVideoElement) => video.paused);
+  await page.clock.fastForward(4500);
+  await expect(root).toHaveAttribute("data-chrome", "hidden");
+
+  await page.getByRole("button", { name: "Pause video" }).click();
+  await expect(root).toHaveAttribute("data-chrome", "shown");
+  expect(await paused()).toBe(false);
+
+  await page.getByRole("button", { name: "Pause video" }).click();
+  await expect.poll(paused).toBe(true);
+  await expect(root).toHaveAttribute("data-chrome", "shown");
+
+  // Playing again, the controls fade 4 s later, as before.
+  await page.getByRole("button", { name: "Play video" }).click();
+  await page.clock.fastForward(4500);
   await expect(root).toHaveAttribute("data-chrome", "hidden");
 });
 
-test("controls stay while the seek bar is being dragged", async ({ page }) => {
+test("controls stay while the progress line is being dragged", async ({ page }) => {
   await page.clock.install();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/dev/video-mode");
@@ -205,15 +233,15 @@ test("controls stay while the seek bar is being dragged", async ({ page }) => {
   const x = (box?.x ?? 0) + (box?.width ?? 0) * 0.2;
   await page.mouse.move(x, y);
   await page.mouse.down();
-  // Moving along the bar counts as activity, so 6 s without a click never hides it mid-drag.
+  // Moving along the line counts as activity, so 4 s without a click never hides it mid-drag.
   for (const step of [1, 2, 3]) {
-    await page.clock.fastForward(2500);
+    await page.clock.fastForward(1500);
     await page.mouse.move(x + step * 20, y);
   }
   await expect(root).toHaveAttribute("data-chrome", "shown");
   await page.mouse.up();
-  await page.mouse.move(x + 60, y + 200);
-  await page.clock.fastForward(6500);
+  await page.mouse.move(x + 60, y - 300);
+  await page.clock.fastForward(4500);
   await expect(root).toHaveAttribute("data-chrome", "hidden");
 });
 
@@ -229,11 +257,15 @@ test("Back closes a sheet before it leaves Video mode", async ({ page }) => {
   await expect(heading(page)).toHaveText(market[0].title);
 });
 
-test("enquiry opens as a bottom sheet and holds the video", async ({ page }) => {
+test("enquiry opens as a bottom sheet from More and holds the video", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/dev/video-mode");
+  await expect(heading(page)).toHaveText(market[0].title);
+  // This post has WhatsApp, so the right column shows it and the enquiry moves to More.
+  await expect(page.getByRole("link", { name: /^WhatsApp / })).toBeVisible();
+  await page.getByRole("button", { name: "More options" }).click();
   await page.getByRole("button", { name: "Send a private enquiry" }).click();
-  const dialog = page.getByRole("dialog");
+  const dialog = page.getByRole("dialog").last();
   await expect(dialog).toBeVisible();
   const box = await dialog.boundingBox();
   expect(Math.round((box?.y ?? 0) + (box?.height ?? 0))).toBeGreaterThanOrEqual(843);
@@ -252,64 +284,18 @@ test("has no detectable accessibility violations", async ({ page }) => {
   expect(results.violations).toEqual([]);
 });
 
-test("pulling the liquid tab off the wall switches; a nudge does not", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/dev/video-mode");
-  await expect(heading(page)).toHaveText(market[0].title);
-  const root = page.locator("[data-chrome]");
-  const pull = (distance: number) =>
-    page.locator(".vm-edge-tab").evaluate(async (tab, length) => {
-      const rect = tab.getBoundingClientRect();
-      const x = rect.right - 10;
-      const y = rect.top + rect.height / 2;
-      const fire = (type: string, clientX: number) =>
-        tab.dispatchEvent(
-          new PointerEvent(type, {
-            pointerId: 31,
-            pointerType: "touch",
-            isPrimary: true,
-            clientX,
-            clientY: y,
-            bubbles: true,
-          })
-        );
-      fire("pointerdown", x);
-      for (let step = 1; step <= 8; step++) {
-        fire("pointermove", x - (length * step) / 8);
-        await new Promise((resolve) => setTimeout(resolve, 16));
-      }
-      fire("pointerup", x - length);
-      // The browser's own click after a drag is ignored by the tab.
-      (tab as HTMLButtonElement).click();
-    }, distance);
-
-  await pull(12);
-  await expect(root).toHaveAttribute("data-chrome", "shown");
-  await pull(70);
-  await expect(root).toHaveAttribute("data-chrome", "hidden");
-});
-
-test("pausing a video brings the post's details back", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/dev/video-mode");
-  await expect(heading(page)).toHaveText(market[0].title);
-  const root = page.locator("[data-chrome]");
-  await page.getByRole("button", { name: "Hide controls" }).click();
-  await expect(root).toHaveAttribute("data-chrome", "hidden");
-  await page.getByRole("button", { name: "Pause video" }).click();
-  await expect(root).toHaveAttribute("data-chrome", "shown");
-});
-
-test("the video's seek bar is easy to grab and shows the time and length", async ({ page }) => {
+test("the video's progress line is easy to grab and states the time and length", async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto("/dev/video-mode");
   await expect(heading(page)).toHaveText(market[0].title);
   const seek = page.getByRole("slider", { name: "Seek playback" });
-  await expect(seek).toBeVisible();
+  await expect(seek).toBeAttached();
   const box = await seek.boundingBox();
   expect(box?.height ?? 0).toBeGreaterThanOrEqual(24);
-  // A length is read from the video, so the label never stays at "/ 0:00".
-  await expect(page.getByText(/^\d+:\d{2} \/ \d+:\d{2}$/)).not.toHaveText(/\/ 0:00$/);
+  // A length is read from the video, so screen readers never hear "of 0:00".
+  await expect(seek).not.toHaveAttribute("aria-valuetext", /of 0:00$/);
   // A tap near the end of the bar seeks there and keeps the same post.
   await page.evaluate(() => document.querySelector<HTMLVideoElement>("video")?.pause());
   await page.touchscreen.tap((box?.x ?? 0) + (box?.width ?? 0) * 0.8, (box?.y ?? 0) + 12);
@@ -333,20 +319,18 @@ test("tickets stay in view and are not repeated under More", async ({ page }) =>
   await expect(page.getByRole("dialog").getByRole("link", { name: "Get tickets" })).toHaveCount(0);
 });
 
-test("after the visitor shows the details themselves, they no longer hide on their own", async ({
-  page,
-}) => {
+test("controls brought back with a tap fade again 4 s later", async ({ page }) => {
   await page.clock.install();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/dev/video-mode");
   await expect(heading(page)).toHaveText(market[0].title);
   const root = page.locator("[data-chrome]");
-  await page.clock.fastForward(6500);
+  await page.clock.fastForward(4500);
   await expect(root).toHaveAttribute("data-chrome", "hidden");
-  await page.getByRole("button", { name: "Show post details and controls" }).click();
+  await page.getByRole("button", { name: "Pause video" }).click();
   await expect(root).toHaveAttribute("data-chrome", "shown");
-  await page.clock.fastForward(20000);
-  await expect(root).toHaveAttribute("data-chrome", "shown");
+  await page.clock.fastForward(4500);
+  await expect(root).toHaveAttribute("data-chrome", "hidden");
 });
 
 for (const [path, label] of [
