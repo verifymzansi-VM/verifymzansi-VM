@@ -5,10 +5,11 @@ import { refKey } from "../feed/refs";
 import { presentBusinessSlide, presentEventSlide, presentListingSlide } from "../feed/presenters";
 import { foundationServerPublicApi } from "./server-public";
 import {
-  readRestoredCollection,
+  restoredCollectionSearch,
   restoredPublicRow,
   type PublicCollection,
 } from "./marketplace-read";
+import { searchFoundationPostIds } from "./post-search";
 import { restoredPostEngagement, restoredPublicDetailWithoutTotals } from "./marketplace-server";
 
 export async function foundationFeedSlides(refs: FeedRef[]) {
@@ -68,7 +69,7 @@ export async function foundationBrowseSequence(browse: FeedBrowse) {
             : ["businesses", "promotions"];
   const sequences = await Promise.all(
     collections.map(async (collection) => {
-      const params = new URLSearchParams({ limit: "50", sort: browse.sort });
+      const params = new URLSearchParams({ sort: browse.sort });
       if (browse.province) params.set("province", browse.province);
       if (browse.query) params.set("q", browse.query);
       if (browse.condition) params.set("condition", browse.condition);
@@ -77,22 +78,16 @@ export async function foundationBrowseSequence(browse: FeedBrowse) {
         if (browse.category) params.set("subcategory", browse.category);
       } else if (browse.category) params.set("category", browse.category);
       if (browse.eventType) params.set("event_type", browse.eventType);
-      const api = foundationServerPublicApi();
-      const refs: FeedRef[] = [];
-      let total = 0;
-      for (let page = 1; page <= 4; page++) {
-        params.set("page", String(page));
-        const result = await readRestoredCollection(api, collection, params);
-        total = result.total;
-        refs.push(
-          ...result.rows.map((row): FeedRef => ({
-            kind: collection === "listings" ? "l" : collection === "businesses" ? "b" : "p",
-            id: row.id,
-          }))
-        );
-        if (page * 50 >= total) break;
-      }
-      return { refs, total };
+      // The first 200 in the list's order, ids only, in one database read.
+      const { input } = restoredCollectionSearch(collection, params);
+      if (!input) return { refs: [], total: 0 };
+      const { ids, total } = await searchFoundationPostIds(foundationServerPublicApi(), {
+        ...input,
+        offset: 0,
+        limit: 200,
+      });
+      const kind = collection === "listings" ? "l" : collection === "businesses" ? "b" : "p";
+      return { refs: ids.map((id): FeedRef => ({ kind, id })), total };
     })
   );
   const refs: FeedRef[] = [];

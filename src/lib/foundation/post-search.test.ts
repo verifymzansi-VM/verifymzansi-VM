@@ -3,6 +3,7 @@ import { expect, it, vi } from "vitest";
 import {
   buildFoundationPostSearch,
   parseFoundationPostSearch,
+  searchFoundationPostIds,
   searchFoundationPosts,
 } from "./post-search";
 import { createFoundationPublicApi } from "./public-api";
@@ -143,4 +144,55 @@ it("preserves negotiated advertising on both amount and request-priced listings"
     });
     expect(value.items[0].price_negotiable).toBe(true);
   }
+});
+
+it("asks for up to 200 ids in one call and keeps 48 for full results", async () => {
+  const ids = [id, "00000000-0000-4000-8000-000000000002"];
+  const fetcher = vi.fn<typeof fetch>(
+    async () =>
+      new Response(JSON.stringify({ ...page(), items: ids, total: 300 }), {
+        headers: { "content-type": "application/json" },
+      })
+  );
+  const api = createFoundationPublicApi(config, fetcher);
+  expect(await searchFoundationPostIds(api, { area: "market", offset: 0, limit: 200 })).toEqual({
+    ids,
+    total: 300,
+  });
+  expect(JSON.parse(String(fetcher.mock.calls[0][1]?.body))).toEqual({
+    p_request: { area: "market", offset: 0, limit: 200, ids_only: true },
+  });
+  await expect(searchFoundationPostIds(api, { limit: 201 })).rejects.toThrow(
+    "Invalid foundation search request"
+  );
+  expect(() => buildFoundationPostSearch({ limit: 49 })).toThrow();
+  // Full results never come back as ids, nor ids as results.
+  fetcher.mockResolvedValueOnce(
+    new Response(JSON.stringify(page()), { headers: { "content-type": "application/json" } })
+  );
+  await expect(searchFoundationPostIds(api, {})).rejects.toThrow(
+    "Invalid foundation search response"
+  );
+  expect(fetcher).toHaveBeenCalledTimes(2);
+});
+
+it("sends organisation filters only as one organisation's slug", () => {
+  const programme = "00000000-0000-4000-8000-0000000000aa";
+  expect(
+    buildFoundationPostSearch({
+      organisation: "local-org",
+      programme,
+      sponsored: true,
+      kind: "business",
+    })
+  ).toEqual({
+    p_request: { organisation: "local-org", programme, sponsored: true, kind: "business" },
+  });
+  expect(() => buildFoundationPostSearch({ organisation: "Local Org" })).toThrow();
+  expect(() => buildFoundationPostSearch({ programme })).toThrow();
+  expect(() => buildFoundationPostSearch({ sponsored: true })).toThrow();
+  expect(() =>
+    buildFoundationPostSearch({ organisation: "local-org", sponsored: false })
+  ).toThrow();
+  expect(() => buildFoundationPostSearch({ kind: "person" })).toThrow();
 });

@@ -7,17 +7,25 @@ import {
   foundationDirectSequence,
   foundationFeedSlides,
 } from "./feed-read";
-import { readRestoredCollection, restoredPublicRow } from "./marketplace-read";
+import { restoredPublicRow } from "./marketplace-read";
 import { restoredPublicDetailWithoutTotals } from "./marketplace-server";
+import { searchFoundationPostIds } from "./post-search";
+import type * as MarketplaceRead from "./marketplace-read";
+import type * as PostSearch from "./post-search";
 
 vi.mock("./server-public", () => ({ foundationServerPublicApi: vi.fn(() => publicApi) }));
 vi.mock("./marketplace-server", () => ({
   restoredPublicDetailWithoutTotals: vi.fn(),
   restoredPostEngagement: vi.fn(async () => new Map()),
 }));
-vi.mock("./marketplace-read", () => ({
-  readRestoredCollection: vi.fn(),
+// The real filter translation, so each browse is checked down to the request.
+vi.mock("./marketplace-read", async (importOriginal) => ({
+  ...(await importOriginal<typeof MarketplaceRead>()),
   restoredPublicRow: vi.fn(),
+}));
+vi.mock("./post-search", async (importOriginal) => ({
+  ...(await importOriginal<typeof PostSearch>()),
+  searchFoundationPostIds: vi.fn(),
 }));
 vi.mock("../feed/presenters", () => ({
   presentListingSlide: vi.fn(() => ({ slide: "listing" })),
@@ -49,8 +57,11 @@ const browse = (overrides: Partial<FeedBrowse> = {}): FeedBrowse => ({
   query: null,
   ...overrides,
 });
-const rows = (start: number, count: number) =>
-  Array.from({ length: count }, (_, n) => ({ id: uuid(start + n) }));
+const ids = (start: number, count: number) =>
+  Array.from({ length: count }, (_, n) => uuid(start + n));
+/** The search requests the browse made, one per collection. */
+const requests = () =>
+  vi.mocked(searchFoundationPostIds).mock.calls.map((call) => call[1] as Record<string, unknown>);
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -133,92 +144,92 @@ describe("foundationFeedSlides", () => {
 
 describe("foundationBrowseSequence", () => {
   it.each([
-    [browse({ vertical: "market" }), ["listings"]],
-    [browse({ vertical: "business" }), ["businesses"]],
-    [browse({ vertical: "tourism" }), ["businesses", "promotions"]],
-    [browse({ vertical: "tourism", kind: "events" }), ["promotions"]],
-    [browse({ vertical: "tourism", eventType: "music" }), ["promotions"]],
-    [browse({ vertical: "tourism", kind: "stays" }), ["businesses"]],
-    [browse({ vertical: "tourism", category: "guest_house" }), ["businesses"]],
-  ])("reads the collections for %o", async (input, collections) => {
-    vi.mocked(readRestoredCollection).mockResolvedValue({ rows: [], total: 0 } as never);
+    [browse({ vertical: "market" }), [{ area: "market" }]],
+    [browse({ vertical: "business" }), [{ area: "business" }]],
+    [
+      browse({ vertical: "tourism" }),
+      [
+        { area: "tourism_events", category: "tourism_hospitality" },
+        { area: "tourism_events", category: "events" },
+      ],
+    ],
+    [browse({ vertical: "tourism", kind: "events" }), [{ category: "events" }]],
+    [browse({ vertical: "tourism", eventType: "music" }), [{ category: "events" }]],
+    [browse({ vertical: "tourism", kind: "stays" }), [{ category: "tourism_hospitality" }]],
+    [
+      browse({ vertical: "tourism", category: "guest_house" }),
+      [{ category: "tourism_hospitality", activity: "guest_house" }],
+    ],
+  ])("reads each section of %o in one ids-only call", async (input, sections) => {
+    vi.mocked(searchFoundationPostIds).mockResolvedValue({ ids: [], total: 0 });
     await foundationBrowseSequence(input);
-    expect(vi.mocked(readRestoredCollection).mock.calls.map((call) => call[1])).toEqual(
-      collections
-    );
-    expect(vi.mocked(readRestoredCollection).mock.calls[0]![0]).toBe(publicApi);
+    expect(searchFoundationPostIds).toHaveBeenCalledTimes(sections.length);
+    expect(vi.mocked(searchFoundationPostIds).mock.calls[0]![0]).toBe(publicApi);
+    requests().forEach((request, index) => {
+      expect(request).toMatchObject({ ...sections[index], offset: 0, limit: 200 });
+    });
   });
 
-  it("translates the market filters into public query parameters", async () => {
-    vi.mocked(readRestoredCollection).mockResolvedValue({ rows: [], total: 0 } as never);
+  it("translates the market filters into the database request", async () => {
+    vi.mocked(searchFoundationPostIds).mockResolvedValue({ ids: [], total: 0 });
     await foundationBrowseSequence(
       browse({
-        province: "gauteng",
+        province: "Gauteng",
         query: "bakkie",
-        condition: "used",
+        condition: "good",
         category: "vehicles",
-        sort: "newest",
+        sort: "price_asc",
       })
     );
-    const params = vi.mocked(readRestoredCollection).mock.calls[0]![2]!;
-    expect(Object.fromEntries(params)).toEqual({
-      limit: "50",
-      sort: "newest",
-      province: "gauteng",
-      q: "bakkie",
-      condition: "used",
-      category: "vehicles",
-      page: "1",
-    });
+    expect(requests()).toEqual([
+      {
+        area: "market",
+        category: "vehicles",
+        q: "bakkie",
+        sort: "price_asc",
+        province: "gp",
+        condition: "good",
+        offset: 0,
+        limit: 200,
+      },
+    ]);
   });
 
-  it("reads tourism stays as tourism businesses with the stay type as subcategory", async () => {
-    vi.mocked(readRestoredCollection).mockResolvedValue({ rows: [], total: 0 } as never);
-    await foundationBrowseSequence(browse({ vertical: "tourism", category: "guest_house" }));
-    const params = vi.mocked(readRestoredCollection).mock.calls[0]![2]!;
-    expect(params.get("category")).toBe("tourism_hospitality");
-    expect(params.get("subcategory")).toBe("guest_house");
+  it("finds tourism businesses in a business text search, in one call", async () => {
+    vi.mocked(searchFoundationPostIds).mockResolvedValue({ ids: [], total: 0 });
+    await foundationBrowseSequence(browse({ vertical: "business", query: "lodge" }));
+    expect(requests()).toEqual([
+      { kind: "business", q: "lodge", sort: "relevance", offset: 0, limit: 200 },
+    ]);
   });
 
-  it("passes the event type to the events collection", async () => {
-    vi.mocked(readRestoredCollection).mockResolvedValue({ rows: [], total: 0 } as never);
-    await foundationBrowseSequence(browse({ vertical: "tourism", eventType: "music" }));
-    const params = vi.mocked(readRestoredCollection).mock.calls[0]![2]!;
-    expect(params.get("event_type")).toBe("music");
-    expect(params.has("category")).toBe(false);
+  it("refuses an unknown filter before reading", async () => {
+    await expect(foundationBrowseSequence(browse({ category: "not_a_category" }))).rejects.toThrow(
+      "Invalid category"
+    );
+    expect(searchFoundationPostIds).not.toHaveBeenCalled();
   });
 
-  it("reads pages until the total is covered", async () => {
-    // The same parameters object is reused, so record each page as it is asked for.
-    const pages: string[] = [];
-    vi.mocked(readRestoredCollection).mockImplementation(async (_api, _collection, params) => {
-      const page = Number(params!.get("page"));
-      pages.push(String(page));
-      return { rows: rows((page - 1) * 50, page === 3 ? 20 : 50), total: 120 } as never;
-    });
+  it("keeps every ref when the total fits", async () => {
+    vi.mocked(searchFoundationPostIds).mockResolvedValue({ ids: ids(0, 120), total: 120 });
     const result = await foundationBrowseSequence(browse());
-    expect(pages).toEqual(["1", "2", "3"]);
     expect(result.refs).toHaveLength(120);
     expect(result.refs[0]).toEqual({ kind: "l", id: uuid(0) });
     expect(result.exhausted).toBe(true);
   });
 
-  it("stops after four pages and reports more posts remain", async () => {
-    let page = 0;
-    vi.mocked(readRestoredCollection).mockImplementation(
-      async () => ({ rows: rows(50 * page++, 50), total: 5000 }) as never
-    );
+  it("reports more posts remain past the first 200", async () => {
+    vi.mocked(searchFoundationPostIds).mockResolvedValue({ ids: ids(0, 200), total: 5000 });
     const result = await foundationBrowseSequence(browse());
-    expect(readRestoredCollection).toHaveBeenCalledTimes(4);
+    expect(searchFoundationPostIds).toHaveBeenCalledTimes(1);
     expect(result.refs).toHaveLength(200);
     expect(result.exhausted).toBe(false);
   });
 
   it("interleaves businesses and events and keeps at most 200 refs", async () => {
-    vi.mocked(readRestoredCollection).mockImplementation(async (_api, collection, params) => {
-      const page = Number(params!.get("page"));
-      const base = collection === "businesses" ? 1000 : 2000;
-      return { rows: rows(base + (page - 1) * 50, 50), total: 150 } as never;
+    vi.mocked(searchFoundationPostIds).mockImplementation(async (_api, input) => {
+      const base = (input as { category?: string }).category === "events" ? 2000 : 1000;
+      return { ids: ids(base, 150), total: 150 };
     });
     const result = await foundationBrowseSequence(browse({ vertical: "tourism" }));
     expect(result.refs.slice(0, 4)).toEqual([
@@ -241,7 +252,7 @@ describe("foundationDirectSequence", () => {
   ] as const)("refuses a %s link that resolves to a %o", async (kind, post) => {
     vi.mocked(restoredPublicDetailWithoutTotals).mockResolvedValueOnce(detail(post) as never);
     await expect(foundationDirectSequence({ kind, id: uuid(6) })).resolves.toBeNull();
-    expect(readRestoredCollection).not.toHaveBeenCalled();
+    expect(searchFoundationPostIds).not.toHaveBeenCalled();
   });
 
   it("returns null for a post that is not public", async () => {
@@ -250,17 +261,16 @@ describe("foundationDirectSequence", () => {
   });
 
   it.each([
-    [{ kind: "listing", area: "market" }, "l", ["listings"]],
-    [{ kind: "business", area: "business" }, "b", ["businesses"]],
-    [{ kind: "event", area: "tourism_events" }, "t", ["businesses", "promotions"]],
-  ] as const)("continues a %o in its own section", async (post, kind, collections) => {
+    [{ kind: "listing", area: "market" }, "l", ["market"]],
+    [{ kind: "business", area: "business" }, "b", ["business"]],
+    [{ kind: "event", area: "tourism_events" }, "t", ["tourism_events", "tourism_events"]],
+  ] as const)("continues a %o in its own section", async (post, kind, areas) => {
     vi.mocked(restoredPublicDetailWithoutTotals).mockResolvedValueOnce(detail(post) as never);
-    vi.mocked(readRestoredCollection).mockResolvedValue({ rows: [], total: 0 } as never);
+    vi.mocked(searchFoundationPostIds).mockResolvedValue({ ids: [], total: 0 });
     await foundationDirectSequence({ kind, id: uuid(8) });
-    expect(vi.mocked(readRestoredCollection).mock.calls.map((call) => call[1])).toEqual(
-      collections
-    );
-    expect(vi.mocked(readRestoredCollection).mock.calls[0]![2]!.get("sort")).toBe("recommended");
+    expect(requests().map((request) => request.area)).toEqual(areas);
+    // Recommended is the database's own order (no sort sent).
+    expect(requests()[0]!.sort).toBeUndefined();
   });
 
   it("leaves out the opened post and keeps at most 120 others", async () => {
@@ -268,10 +278,7 @@ describe("foundationDirectSequence", () => {
     vi.mocked(restoredPublicDetailWithoutTotals).mockResolvedValueOnce(
       detail({ kind: "listing", area: "market" }) as never
     );
-    let page = 0;
-    vi.mocked(readRestoredCollection).mockImplementation(
-      async () => ({ rows: rows(50 * page++, 50), total: 180 }) as never
-    );
+    vi.mocked(searchFoundationPostIds).mockResolvedValue({ ids: ids(0, 180), total: 180 });
     const result = await foundationDirectSequence({ kind: "l", id: opened });
     expect(result!.refs).toHaveLength(120);
     expect(result!.refs.some((ref) => ref.id === opened)).toBe(false);
@@ -283,10 +290,7 @@ describe("foundationDirectSequence", () => {
     vi.mocked(restoredPublicDetailWithoutTotals).mockResolvedValueOnce(
       detail({ kind: "listing", area: "market" }) as never
     );
-    vi.mocked(readRestoredCollection).mockResolvedValueOnce({
-      rows: rows(0, 3),
-      total: 3,
-    } as never);
+    vi.mocked(searchFoundationPostIds).mockResolvedValueOnce({ ids: ids(0, 3), total: 3 });
     await expect(foundationDirectSequence({ kind: "l", id: opened })).resolves.toEqual({
       refs: [
         { kind: "l", id: uuid(0) },
