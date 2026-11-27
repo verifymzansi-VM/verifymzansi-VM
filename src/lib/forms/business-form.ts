@@ -13,7 +13,6 @@ export interface BusinessFormValues {
   businessType: BusinessType | "";
   businessDetails: BusinessDetails | null;
   storeNumber: string;
-  serviceAreasInput: string;
   mapDirections: string;
   phone: string;
   whatsapp: string;
@@ -23,13 +22,6 @@ export interface BusinessFormValues {
   socialInstagram: string;
   socialTwitter: string;
   socialTiktok: string;
-}
-
-export function parseServiceAreas(serviceAreasInput: string): string[] {
-  return serviceAreasInput
-    .split(",")
-    .map((area) => area.trim())
-    .filter(Boolean);
 }
 
 function validateDetailsField(
@@ -80,13 +72,6 @@ export function validateBusinessForm(values: BusinessFormValues): Record<string,
 
   if (values.businessType === "mall_store" && !values.storeNumber.trim()) {
     errors.store_number = "Store number is required for mall stores.";
-  }
-
-  if (
-    values.businessType === "mobile_service" &&
-    parseServiceAreas(values.serviceAreasInput).length === 0
-  ) {
-    errors.service_areas = "Add at least one service area.";
   }
 
   if (

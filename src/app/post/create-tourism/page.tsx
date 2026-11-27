@@ -102,6 +102,11 @@ import {
   type PromotionAdvertiserRecord,
 } from "@/components/listings/promotion-detail-content";
 import { normalizeUserEnteredUrl } from "@/lib/utils/external-url";
+import {
+  TOURISM_FIELD_STEPS,
+  stepForField,
+  stepForFieldErrors,
+} from "@/app/post/_lib/post-field-steps";
 
 const SELECT_CLASS =
   "flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:h-10 sm:text-sm";
@@ -160,7 +165,11 @@ const FIELD_IDS: Record<string, string> = {
 };
 
 const FIELD_KEY_ALIASES: Record<string, string> = {
+  business_name: "title",
   listing_type: "listingType",
+  "event_details.event_type": "eventType",
+  "event_details.venue_name": "venueName",
+  "event_details.venue_capacity": "venueCapacity",
   event_type: "eventType",
   venue_capacity: "venueCapacity",
   booking_url: "bookingUrl",
@@ -248,63 +257,11 @@ function getFieldId(key: string | undefined): string | undefined {
 }
 
 function getStepForFieldKey(key: string): number {
-  const normalizedKey = FIELD_KEY_ALIASES[key] ?? key;
-
-  if (
-    normalizedKey === "images" ||
-    normalizedKey === "videos" ||
-    normalizedKey === "termsAccepted"
-  ) {
-    return 3;
-  }
-
-  if (
-    normalizedKey === "province" ||
-    normalizedKey === "city" ||
-    normalizedKey === "contactMethods" ||
-    normalizedKey === "joinMethods" ||
-    normalizedKey === "meetingPoint" ||
-    normalizedKey === "pickupAreas" ||
-    normalizedKey === "phone" ||
-    normalizedKey === "whatsapp" ||
-    normalizedKey === "email" ||
-    normalizedKey === "website" ||
-    normalizedKey === "socialFacebook" ||
-    normalizedKey === "socialInstagram" ||
-    normalizedKey === "socialTwitter" ||
-    normalizedKey === "socialTiktok" ||
-    normalizedKey === "mapDirections" ||
-    normalizedKey === "locationAddress" ||
-    normalizedKey === "locationTown"
-  ) {
-    return 2;
-  }
-
-  if (
-    normalizedKey === "subcategory" ||
-    normalizedKey === "eventType" ||
-    normalizedKey === "starRating" ||
-    normalizedKey === "numberOfRooms" ||
-    normalizedKey === "bookingUrl" ||
-    normalizedKey === "startDate" ||
-    normalizedKey === "endDate" ||
-    normalizedKey === "priceZar" ||
-    normalizedKey === "venueCapacity" ||
-    normalizedKey === "ticketsUrl"
-  ) {
-    return 1;
-  }
-
-  return 0;
+  return stepForField(FIELD_KEY_ALIASES[key] ?? key, TOURISM_FIELD_STEPS);
 }
 
 function getStepForServerErrors(errors: Record<string, string>): number {
-  const keys = Object.keys(errors);
-  if (keys.length === 0) {
-    return 0;
-  }
-
-  return keys.reduce((targetStep, key) => Math.min(targetStep, getStepForFieldKey(key)), 3);
+  return stepForFieldErrors(errors, TOURISM_FIELD_STEPS, 3);
 }
 
 export default function CreateTourismPage() {

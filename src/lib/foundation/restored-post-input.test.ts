@@ -56,6 +56,45 @@ it("distinguishes salary not provided from a free item and keeps salary assertio
     presentation: { source_attributes: { salary_min: 10000, salary_max: 20000 } },
   });
 });
+it("passes the seller's explicit price choice: Free, or Price on request with Negotiable", () => {
+  expect(
+    buildRestoredPostInput("listings", { ...listing, price_zar: 0, price_mode: "free" })
+  ).toMatchObject({ listing_terms: { price: { mode: "free" }, negotiable: false } });
+  expect(
+    buildRestoredPostInput("listings", {
+      ...listing,
+      price_zar: 0,
+      price_mode: "on_request",
+      negotiable: true,
+    })
+  ).toMatchObject({ listing_terms: { price: { mode: "on_request" }, negotiable: true } });
+  expect(
+    buildRestoredPostInput("listings", { ...listing, price_mode: "amount", negotiable: true })
+  ).toMatchObject({
+    listing_terms: { price: { mode: "amount", amount_cents: 123456 }, negotiable: true },
+  });
+});
+it("refuses an Amount without a price and Negotiable with Free", () => {
+  expect(() =>
+    buildRestoredPostInput("listings", { ...listing, price_zar: 0, price_mode: "amount" })
+  ).toThrow("Enter a valid price");
+  expect(() =>
+    buildRestoredPostInput("listings", {
+      ...listing,
+      price_zar: 0,
+      price_mode: "free",
+      negotiable: true,
+    })
+  ).toThrow("Negotiable");
+  expect(() =>
+    buildRestoredPostInput("listings", { ...listing, price_mode: "sometimes" })
+  ).toThrow();
+});
+it("keeps the older reading when no price choice is sent: zero is Free", () => {
+  expect(buildRestoredPostInput("listings", { ...listing, price_zar: 0 })).toMatchObject({
+    listing_terms: { price: { mode: "free" } },
+  });
+});
 it("does not accept an older unjournalled URL, forged cross-host media or absent explicit consent", () => {
   expect(() => restoredMediaKey("https://media.verifymzansi.com/media/listing/old.jpg")).toThrow(
     "older upload"

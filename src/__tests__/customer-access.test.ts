@@ -3,6 +3,7 @@ import {
   customerAccessSchema,
   cleanCustomerAccess,
   legacyAccessFromRecord,
+  serviceAreasFromAccess,
 } from "@/lib/forms/customer-access";
 import { businessSchema } from "@/lib/validations/business-unified";
 import { buildBusinessMutationPayload } from "@/lib/forms/business-mutation-payload";
@@ -202,5 +203,26 @@ describe("tour meeting point (server)", () => {
   it("accepts a meeting point or an address", () => {
     expect(tour({ meeting_point: "Outside the Hector Pieterson Museum" }).success).toBe(true);
     expect(tour({}, "8288 Vilakazi Street").success).toBe(true);
+  });
+});
+
+describe("serviceAreasFromAccess", () => {
+  it("returns the typed areas only when the business travels to customers", () => {
+    expect(
+      serviceAreasFromAccess({
+        version: 2,
+        methods: ["visit", "travel"],
+        serviceAreas: " Soweto, Sandton , ",
+        publishAddress: false,
+      })
+    ).toEqual({ areas: ["Soweto", "Sandton"] });
+    expect(
+      serviceAreasFromAccess({
+        version: 2,
+        methods: ["online"],
+        serviceAreas: "Soweto",
+        publishAddress: false,
+      })
+    ).toBeUndefined();
   });
 });

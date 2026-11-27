@@ -272,6 +272,61 @@ describe("CreateBusinessPage", () => {
     expect(screen.getAllByText("Add at least one service area.").length).toBeGreaterThan(0);
   });
 
+  async function completeTravelAccessStep() {
+    fireEvent.click(screen.getByRole("checkbox", { name: "I travel to customers" }));
+    fireEvent.change(screen.getByLabelText(/Service areas/), {
+      target: { value: "Soweto, Sandton" },
+    });
+    fireEvent.change(screen.getByLabelText(/Province/i), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText(/^City or town$/i), {
+      target: { value: "Johannesburg" },
+    });
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Next" })));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Phone calls" }));
+    fireEvent.change(screen.getByLabelText(/Phone Number/i), { target: { value: "0821234567" } });
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Next" })));
+  }
+
+  it("submits the service areas typed for a business that travels to customers", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ success: true }));
+    render(<CreateBusinessPage />);
+    await termsLoaded();
+    await completeStandaloneStepOne();
+    await completeTravelAccessStep();
+    acceptBusinessTerms();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+    });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const payload = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(payload.business_type).toBe("mobile_service");
+    expect(payload.service_areas).toEqual({ areas: ["Soweto", "Sandton"] });
+  });
+
+  it("names the location step and a plain label for a server service-area error", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(
+        {
+          error: "Add at least one service area.",
+          reason: "invalid_post",
+          issues: [{ path: "service_areas.areas", message: "Add at least one service area." }],
+        },
+        { ok: false, status: 422 }
+      )
+    );
+    render(<CreateBusinessPage />);
+    await termsLoaded();
+    await completeStandaloneStepOne();
+    await completeTravelAccessStep();
+    acceptBusinessTerms();
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    expect(await screen.findByText(/Please fix 1 field on Step 2/i)).toBeInTheDocument();
+    expect(screen.getByText(/Step 2 of 4/i)).toBeInTheDocument();
+    expect(screen.getByText("Service areas:")).toBeInTheDocument();
+    expect(screen.queryByText(/Service Areas\.areas/)).not.toBeInTheDocument();
+  });
+
   it("allows online consulting without a physical address or checkout URL", async () => {
     render(<CreateBusinessPage />);
     await completeStandaloneStepOne();
@@ -979,6 +1034,17 @@ describe("CreateBusinessPage", () => {
         expect(screen.getByLabelText(/Business Name/)).toHaveValue("Saved Boutique");
       });
       expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: "Draft restored" }));
+    });
+
+    it("restores service areas typed into an old draft's serviceAreasInput", async () => {
+      seedDraft({ businessType: "mobile_service", serviceAreasInput: "Soweto, Sandton" });
+      render(<CreateBusinessPage />);
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Business Name/)).toHaveValue("Saved Boutique");
+      });
+      await completeStandaloneStepOne();
+      expect(screen.getByRole("checkbox", { name: "I travel to customers" })).toBeChecked();
+      expect(screen.getByLabelText(/Service areas/)).toHaveValue("Soweto, Sandton");
     });
 
     it("clears restored fields when discard draft is clicked", async () => {
