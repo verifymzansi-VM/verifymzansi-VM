@@ -134,11 +134,14 @@ const PURGE_PREFIX_LIMIT = 100;
 const PURGE_ATTEMPTS = 3;
 /** Waits before the second and third purge requests. */
 const PURGE_RETRY_DELAYS_MS = [1_000, 3_000];
-/** One purge request; the three fit in a round that starts before runMs. */
+/** One purge request (a hanging request ends here). */
 const PURGE_ATTEMPT_TIMEOUT_MS = 5_000;
+/** Time kept after the last purge request for the round's acknowledgements. */
+const PURGE_ACK_MARGIN_MS = 5_000;
 
 /** A refused purge request; `status` is null when no reply came. */
 class EdgePurgeError extends Error {
+  override name = "EdgePurgeError";
   constructor(readonly status: number | null) {
     super(`Edge cache purge refused (HTTP ${status ?? "none"})`);
   }
@@ -634,7 +637,13 @@ async function cleanMedia({
       while (attempts < PURGE_ATTEMPTS && !purged && !setupError) {
         if (attempts > 0) {
           const wait = PURGE_RETRY_DELAYS_MS[attempts - 1];
-          if (signal.aborted || elapsed() + wait >= limits.runMs) break;
+          // Another request only if it and the acknowledgements still fit
+          // before the run's deadline (three tries take at most about 19 s).
+          if (
+            signal.aborted ||
+            elapsed() + wait + PURGE_ATTEMPT_TIMEOUT_MS + PURGE_ACK_MARGIN_MS > limits.deadlineMs
+          )
+            break;
           await pause(wait, signal);
           if (signal.aborted) break;
         }

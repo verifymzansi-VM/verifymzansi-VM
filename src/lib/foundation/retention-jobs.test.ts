@@ -907,7 +907,7 @@ describe("edge cache purge of removed media", () => {
     const world = createWorld({ media: 2 });
     const failing = recordingPurge(world, 503);
     failing.purge.mockImplementationOnce(async () => {
-      world.clock.at += CLEANUP_LIMITS.runMs;
+      world.clock.at += CLEANUP_LIMITS.deadlineMs - 10_000;
       throw refused(503);
     });
     await expect(runWith(world, failing)).rejects.toThrow("incomplete");
@@ -926,6 +926,37 @@ describe("edge cache purge of removed media", () => {
     expect(await runWith(world, edge)).toMatchObject({ deleted: 2 });
     expect(edge.purge).toHaveBeenCalledOnce();
     expect(world.objects.every((o) => o.acknowledged === 1)).toBe(true);
+  });
+
+  it("after a slow start-up, hanging purge requests still end in acknowledgements within the deadline", async () => {
+    const world = createWorld({ media: 3 });
+    // The sweeps take 7 s; every purge request hangs until its 5 s timeout.
+    world.overrides.run_retention = () => {
+      world.clock.at += 7_000;
+      return { data: {}, error: null };
+    };
+    const started = world.clock.at;
+    const edge = recordingPurge(world);
+    edge.purge.mockImplementation(async () => {
+      world.clock.at += 5_000;
+      throw new DOMException("The operation timed out.", "TimeoutError");
+    });
+    const run = runFoundationRetention(
+      { rpc: world.rpc } as unknown as FoundationServiceApi,
+      world.storage,
+      {
+        edgePurge: edge,
+        now: () => world.clock.at,
+        pause: async (ms) => {
+          world.clock.at += ms;
+        },
+      }
+    );
+    await expect(run).rejects.toThrow("incomplete");
+    expect(edge.purge).toHaveBeenCalledTimes(3);
+    expect(world.objects.every((o) => o.state === "deleted" && o.acknowledged === 1)).toBe(true);
+    expect(world.clock.at - started).toBeLessThan(CLEANUP_LIMITS.deadlineMs);
+    expect(logLine().line).toContain('"edgePurgeStatus":"none"');
   });
 
   it("keeps room for the purge requests when storage refuses the batch request", async () => {
