@@ -9,22 +9,11 @@ import {
   useState,
   type KeyboardEvent,
 } from "react";
-import {
-  AlertTriangle,
-  Maximize2,
-  Pause,
-  Play,
-  RotateCcw,
-  SkipBack,
-  SkipForward,
-  Volume1,
-  Volume2,
-  VolumeX,
-} from "lucide-react";
+import { AlertTriangle, Maximize2, Play, RotateCcw } from "lucide-react";
 import Image from "next/image";
-import { VideoSeekBar } from "@/components/ui/video-seek-bar";
+import { VideoProgressLine } from "@/components/ui/video-seek-bar";
+import { VideoSoundButton } from "@/components/ui/video-sound-button";
 import { cn } from "@/lib/utils";
-import { formatVideoProgress } from "@/lib/media/video-time";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { useGlobalMute } from "@/hooks/use-global-mute";
 import { useVideoPlaybackManager } from "@/contexts/video-playback-context";
@@ -91,40 +80,16 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
     const dataSaver = useDataSaver();
     const autoplayBlocked = reducedMotion || dataSaver;
 
-    const { isMuted, toggleMute, setMuted } = useGlobalMute(localVideoRef);
+    const { isMuted, toggleMute } = useGlobalMute(localVideoRef);
     const [isPlaying, setIsPlaying] = useState(false);
     const [duration, setDuration] = useState(0);
     const [currentTime, setCurrentTime] = useState(0);
-    const [volume, setVolume] = useState(1);
     const [errorSource, setErrorSource] = useState<string | null>(null);
     const [retryKey, setRetryKey] = useState(0);
-    const [isCompactLayout, setIsCompactLayout] = useState(false);
     const [fullscreenError, setFullscreenError] = useState(false);
     const videoError = showErrorState && errorSource === src;
     const mediaFitClassName = getMediaFitClassName(mediaFit);
     const nativePoster = poster ? normalizeMediaUrl(poster) : undefined;
-
-    useEffect(() => {
-      const video = localVideoRef.current;
-      if (!video) return;
-      video.volume = volume;
-    }, [volume]);
-
-    useEffect(() => {
-      const container = containerRef.current;
-      if (!container || typeof ResizeObserver === "undefined") {
-        return;
-      }
-
-      const observer = new ResizeObserver(([entry]) => {
-        const width = entry?.contentRect.width ?? 0;
-        setIsCompactLayout(width > 0 && width < 360);
-      });
-
-      observer.observe(container);
-
-      return () => observer.disconnect();
-    }, []);
 
     /* ---- Register with global playback manager ---- */
     useEffect(() => {
@@ -231,15 +196,6 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
         setFullscreenError(true);
       }
     }, []);
-
-    const onVolumeInput = useCallback(
-      (next: number) => {
-        const normalized = Math.min(Math.max(next, 0), 1);
-        setVolume(normalized);
-        setMuted(normalized === 0);
-      },
-      [setMuted]
-    );
 
     const handleVideoError = useCallback(() => {
       onError?.();
@@ -389,130 +345,41 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
           </>
         )}
 
+        {/* Tap the picture to play; while paused a quiet play icon stays in the centre. */}
         {!videoError && !isPlaying && (
           <button
             type="button"
             onClick={togglePlay}
-            className="absolute inset-0 z-10 flex items-center justify-center bg-black/25"
+            className="absolute inset-0 z-10 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-gold-300"
             aria-label="Play video"
           >
-            <div className="rounded-full bg-white/90 p-4 shadow-xl">
-              <Play className="h-8 w-8 fill-black text-black" />
-            </div>
+            <span className="flex h-14 w-14 items-center justify-center rounded-full bg-black/45">
+              <Play className="h-7 w-7 translate-x-0.5 fill-white text-white" aria-hidden="true" />
+            </span>
           </button>
         )}
 
+        {/* Only what controls the picture: sound (top centre), full screen and the thin line. */}
         {!videoError && (
           <>
+            <VideoSoundButton muted={isMuted} onToggle={toggleMute} />
             <button
               type="button"
               onClick={enterFullscreen}
-              className="absolute right-3 top-3 z-20 rounded-full bg-black/45 p-2 text-white/95 transition-colors hover:bg-black/65"
+              className="absolute right-1 top-1 z-20 flex h-11 w-11 items-center justify-center rounded-full text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold-300"
               aria-label="Fullscreen"
               data-carousel-control="true"
             >
-              <Maximize2 className="h-4 w-4" />
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-green-950/75 ring-1 ring-white/20">
+                <Maximize2 className="h-4 w-4" aria-hidden="true" />
+              </span>
             </button>
-            <div className="absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-3 sm:p-4">
-              {/* 24 px to grab; the margins keep the thin track and the buttons where they were. */}
-              <VideoSeekBar
-                currentTime={currentTime}
-                duration={duration}
-                onSeek={seekTo}
-                className="-mb-px mt-[3px] block accent-brand-red"
-              />
-
-              <div className="flex items-center justify-between gap-2 text-white">
-                <div
-                  className={cn(
-                    "flex min-w-0 items-center text-white",
-                    isCompactLayout ? "gap-1" : "gap-1.5 sm:gap-2"
-                  )}
-                >
-                  <button
-                    type="button"
-                    onClick={() => skipBy(-skipSeconds)}
-                    className={cn(
-                      "rounded-full transition-colors hover:bg-white/20",
-                      isCompactLayout ? "p-2" : "p-2.5 sm:p-2"
-                    )}
-                    aria-label={`Rewind ${skipSeconds} seconds`}
-                    data-carousel-control="true"
-                  >
-                    <SkipBack className="h-5 w-5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={togglePlay}
-                    className={cn(
-                      "rounded-full transition-colors hover:bg-white/20",
-                      isCompactLayout ? "p-2" : "p-2.5 sm:p-2"
-                    )}
-                    aria-label={isPlaying ? "Pause" : "Play"}
-                    data-carousel-control="true"
-                  >
-                    {isPlaying ? (
-                      <Pause className="h-5 w-5" />
-                    ) : (
-                      <Play className="h-5 w-5 fill-white" />
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => skipBy(skipSeconds)}
-                    className={cn(
-                      "rounded-full transition-colors hover:bg-white/20",
-                      isCompactLayout ? "p-2" : "p-2.5 sm:p-2"
-                    )}
-                    aria-label={`Forward ${skipSeconds} seconds`}
-                    data-carousel-control="true"
-                  >
-                    <SkipForward className="h-5 w-5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={toggleMute}
-                    className={cn(
-                      "rounded-full transition-colors hover:bg-white/20",
-                      isCompactLayout ? "p-2" : "p-2.5 sm:p-2"
-                    )}
-                    aria-label={isMuted ? "Unmute" : "Mute"}
-                    data-carousel-control="true"
-                  >
-                    {isMuted ? (
-                      <VolumeX className="h-5 w-5" />
-                    ) : volume <= 0.5 ? (
-                      <Volume1 className="h-5 w-5" />
-                    ) : (
-                      <Volume2 className="h-5 w-5" />
-                    )}
-                  </button>
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    value={isMuted ? 0 : volume}
-                    onChange={(event) => onVolumeInput(Number(event.target.value))}
-                    className={cn(
-                      "hidden h-1.5 w-20 cursor-pointer accent-white",
-                      !isCompactLayout && "sm:block"
-                    )}
-                    aria-label="Volume"
-                    data-carousel-control="true"
-                  />
-                  <span
-                    className={cn(
-                      "truncate text-xs tabular-nums text-white/90",
-                      isCompactLayout ? "max-w-[4.75rem]" : "sm:text-sm"
-                    )}
-                    data-carousel-control="true"
-                  >
-                    {formatVideoProgress(currentTime, duration)}
-                  </span>
-                </div>
-              </div>
-            </div>
+            <VideoProgressLine
+              currentTime={currentTime}
+              duration={duration}
+              onSeek={seekTo}
+              className="absolute inset-x-0 bottom-0 z-20"
+            />
           </>
         )}
       </div>

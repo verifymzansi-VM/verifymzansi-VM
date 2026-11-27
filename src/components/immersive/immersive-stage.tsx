@@ -22,7 +22,7 @@ const OPEN_DIALOG = '[role="dialog"]:not([data-state="closed"])';
 export type MediaChangeCause = "user" | "auto";
 
 const ARROW_CLASS =
-  "absolute top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-brand-green-950/70 text-white transition-colors hover:bg-brand-green-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold-300 disabled:pointer-events-none disabled:opacity-0";
+  "absolute top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-brand-green-950/70 text-white transition-colors hover:bg-brand-green-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold-300 disabled:pointer-events-none disabled:opacity-0 opacity-0 group-hover/stage:opacity-100 focus-visible:opacity-100";
 
 /**
  * The centre frame: one post's media at 9:16. Videos come first, then photos;
@@ -120,7 +120,7 @@ export function ImmersiveStage({
   }
 
   return (
-    <div className="relative h-full w-full" {...swipe}>
+    <div className="group/stage relative h-full w-full" {...swipe}>
       {item.kind === "video" ? (
         active ? (
           <VideoViewTracker
@@ -188,7 +188,7 @@ export function ImmersiveStage({
       {photoTimerRunning ? (
         <span
           key={`${index}-${runKey}`}
-          className="immersive-photo-timer pointer-events-none absolute inset-x-0 top-0 z-10 h-0.5 origin-left bg-brand-gold-300"
+          className="immersive-photo-timer pointer-events-none absolute inset-x-0 top-0 z-10 h-0.5 origin-left bg-white/75"
           style={{ animationDuration: `${PHOTO_SECONDS}s` }}
           aria-hidden="true"
         />
@@ -196,9 +196,23 @@ export function ImmersiveStage({
 
       {media.length > 1 ? (
         <>
-          <span className="absolute left-3 top-3 z-10 rounded-full bg-brand-green-950/70 px-2.5 py-1 text-xs font-semibold tabular-nums text-white">
-            {index + 1} / {media.length}
+          {/* One quiet segment per photo or video, instead of a "1 / 4" counter. */}
+          <span
+            className="pointer-events-none absolute inset-x-3 top-2 z-10 flex gap-1"
+            aria-hidden="true"
+            data-media-segments
+          >
+            {media.map((entry, position) => (
+              <span
+                key={`${entry.url}:${position}`}
+                className={cn(
+                  "h-0.5 flex-1 rounded-full",
+                  position === index ? "bg-white/80" : "bg-white/30"
+                )}
+              />
+            ))}
           </span>
+          <span className="sr-only">{`Photo or video ${index + 1} of ${media.length}`}</span>
           <button
             type="button"
             data-carousel-control="true"
@@ -230,7 +244,7 @@ export function ImmersiveStage({
           type="button"
           data-carousel-control="true"
           onClick={() => setLightboxOpen(true)}
-          className="absolute right-3 top-3 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-brand-green-950/70 text-white transition-colors hover:bg-brand-green-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold-300"
+          className="absolute right-3 top-3 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-brand-green-950/70 text-white opacity-0 transition-colors hover:bg-brand-green-950 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold-300 group-hover/stage:opacity-100"
           aria-label="View full screen"
           tabIndex={active ? 0 : -1}
         >

@@ -156,7 +156,7 @@ describe("VideoCardPlayer", () => {
     fireEvent.click(screen.getByRole("button", { name: "Pause video" }));
     expect(togglePlayback).toHaveBeenCalledOnce();
     expect(openProfile).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Unmute" }));
+    fireEvent.click(screen.getByRole("button", { name: "Turn sound on" }));
     expect(openProfile).not.toHaveBeenCalled();
     expect(togglePlayback).toHaveBeenCalledOnce();
   });
@@ -253,7 +253,7 @@ describe("VideoCardPlayer", () => {
     const video = document.querySelector("video");
     expect(video).toBeTruthy();
     expect((video as HTMLVideoElement).muted).toBe(true);
-    expect(screen.getByRole("button", { name: /unmute/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Turn sound on" })).toBeTruthy();
   });
 
   it("keeps the poster visible for reduced-motion users in ambient mode", () => {
@@ -323,7 +323,7 @@ describe("VideoCardPlayer", () => {
     );
 
     expect(useVideoHoverMock).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: /unmute/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Turn sound on" })).toBeTruthy();
   });
 
   it("renders a play/pause toggle for ambient videos when requested", () => {
@@ -514,7 +514,7 @@ describe("VideoCardPlayer", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /unmute/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Turn sound on" }));
     expect(toggleMute).toHaveBeenCalledTimes(1);
   });
 
@@ -535,7 +535,7 @@ describe("VideoCardPlayer", () => {
       />
     );
 
-    expect(screen.getByRole("button", { name: /^mute$/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Turn sound off" })).toBeTruthy();
   });
 
   it("shows poster overlay when ambient video is not playing", () => {
@@ -892,7 +892,7 @@ describe("mobile playback controls", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Pause video" }));
     expect(togglePlayback).toHaveBeenCalledOnce();
-    expect(screen.getByRole("button", { name: "Unmute" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Turn sound on" })).toBeTruthy();
   });
 });
 

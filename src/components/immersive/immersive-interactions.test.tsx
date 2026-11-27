@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ImmersiveActionRail } from "./immersive-action-rail";
 import { ImmersiveTopBar } from "./immersive-top-bar";
@@ -158,6 +158,35 @@ describe("the end of a browsed section", () => {
     expect(screen.getByText("Nothing here yet")).toBeInTheDocument();
     expect(screen.queryByText("You’re all caught up")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^(Next|Previous) profile$/ })).toBeNull();
+  });
+
+  it("rolls on from the last Business post into Market, keeping the province", async () => {
+    const browseTo = vi.fn().mockResolvedValue({ ok: true, firstId: null, lastId: null, count: 0 });
+    feed.current = {
+      ...sequence([
+        {
+          type: "post",
+          id: "opened",
+          ref: { kind: "b", id: "opened" },
+          slide: undefined,
+          failed: false,
+        },
+        { type: "end", terminal: "exhausted" },
+      ]),
+      browse: defaultBrowse("business", "Gauteng"),
+      browseTo,
+    };
+    render(<ImmersiveViewer initialSlide={opened} />);
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole("button", { name: "Next profile" })[0]);
+    });
+    // Market first; an empty area is skipped, then Tourism, then Business again from the top.
+    expect(browseTo.mock.calls.map(([browse]) => browse)).toEqual([
+      defaultBrowse("market", "Gauteng"),
+      defaultBrowse("tourism", "Gauteng"),
+      defaultBrowse("business", "Gauteng"),
+    ]);
+    expect(browseTo.mock.calls[0][1]).toEqual({ skipEmpty: true });
   });
 
   it("still ends a section that has posts with the end slide", () => {
