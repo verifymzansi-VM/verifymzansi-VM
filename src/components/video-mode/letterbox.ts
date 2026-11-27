@@ -1,5 +1,5 @@
 /** Room the title, price and Details need under a video before they leave the picture. */
-export const CAPTION_ROOM_PX = 150;
+const CAPTION_ROOM_PX = 150;
 
 /**
  * Where the title and price go when a video does not fill the screen (a

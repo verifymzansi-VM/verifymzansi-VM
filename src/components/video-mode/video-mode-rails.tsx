@@ -46,9 +46,9 @@ export const VM_CIRCLE =
 /** The symbol inside a circle. */
 export const VM_GLYPH = "h-[18px] w-[18px]";
 /** The left column: the logo's size (32px), still inside a 44px touch target. */
-export const VM_SMALL_CIRCLE =
+const VM_SMALL_CIRCLE =
   "flex h-8 w-8 items-center justify-center rounded-full bg-brand-green-950/75 text-white ring-1 ring-white/20 transition-colors";
-export const VM_SMALL_GLYPH = "h-4 w-4";
+const VM_SMALL_GLYPH = "h-4 w-4";
 const RAIL_TEXT = "vm-rail-text text-[11px] font-semibold leading-none text-white vm-shadow";
 const FOCUS = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold-300";
 
