@@ -25,6 +25,7 @@ import {
   type UploadSlotStatus,
 } from "@/components/ui/upload-progress-panel";
 import { VideoFrameSelector } from "@/components/ui/video-frame-selector";
+import { PHOTO_OR_VIDEO_RULE, photosWithVideoCover } from "@/lib/forms/video-cover-photo";
 import { MediaCropPreview, type CropPosition } from "@/components/ui/media-crop-preview";
 import {
   PlanGate,
@@ -942,7 +943,8 @@ function CreateTourismContent() {
         pickupAreas,
       },
       photoFiles.length,
-      videoFiles.length
+      videoFiles.length,
+      videoThumbnailFile.length
     );
 
     // Plan-based media limits
@@ -1124,6 +1126,11 @@ function CreateTourismContent() {
         ]);
 
       const mediaDimensions = await mediaDimensionsPromise;
+      const photoUrls = photosWithVideoCover(
+        imageUrls,
+        videoUrls.length > 0,
+        uploadedVideoThumbnailUrl
+      );
 
       if (listingType === "tourism_business") {
         setSubmitProgress("Saving tourism business...");
@@ -1168,10 +1175,10 @@ function CreateTourismContent() {
           category: "tourism_hospitality",
           subcategory: subcategory || undefined,
           logo_url: uploadedLogoUrl || undefined,
-          cover_photo: imageUrls[0] || undefined,
+          cover_photo: photoUrls[0] || undefined,
           cover_video: videoUrls[0] || undefined,
           video_thumbnail: uploadedVideoThumbnailUrl,
-          gallery_photos: imageUrls,
+          gallery_photos: photoUrls,
           media_width: mediaDimensions?.width,
           media_height: mediaDimensions?.height,
           focal_x: focalPoint.x,
@@ -1338,7 +1345,7 @@ function CreateTourismContent() {
           location_town: locationTown || undefined,
           location_address: locationAddress || undefined,
           contact_methods: contactMethods,
-          images: imageUrls,
+          images: photoUrls,
           videos: videoUrls,
           video_thumbnail: uploadedVideoThumbnailUrl,
           logo_url: uploadedLogoUrl || undefined,
@@ -3442,13 +3449,11 @@ function CreateTourismContent() {
                   <div className="space-y-6">
                     <PostFormSection
                       title="Photos and video"
-                      description="The first photo is the cover."
+                      description={`${PHOTO_OR_VIDEO_RULE} The first photo is the cover. With only a video, the frame you choose becomes the first photo.`}
                     >
                       {/* Photos */}
                       <div className="space-y-2">
-                        <p className="text-sm font-medium">
-                          {listingType === "event" ? "Photos or video *" : "Photos *"}
-                        </p>
+                        <p className="text-sm font-medium">Photos</p>
                         <MediaUpload
                           id="tourism-images-input"
                           label="Upload photos"
@@ -3481,7 +3486,7 @@ function CreateTourismContent() {
                       {/* Video */}
                       <div className="space-y-2">
                         <p className="text-sm font-medium">
-                          Video (optional)
+                          Video
                           {!videoAllowed ? " — Upgrade to unlock" : ""}
                         </p>
                         <MediaUpload

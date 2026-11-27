@@ -26,6 +26,11 @@ import { usePostDraftAutosave } from "@/hooks/use-post-draft-autosave";
 import { CategoryPicker } from "@/components/listings/category-picker";
 import { MediaUpload } from "@/components/ui/media-upload";
 import { VideoFrameSelector } from "@/components/ui/video-frame-selector";
+import {
+  PHOTO_OR_VIDEO_RULE,
+  VIDEO_COVER_NEEDED,
+  photosWithVideoCover,
+} from "@/lib/forms/video-cover-photo";
 import { MediaCropPreview, type CropPosition } from "@/components/ui/media-crop-preview";
 import {
   UploadProgressPanel,
@@ -775,8 +780,9 @@ function CreateListingForm() {
 
     if (targetStep === 2) {
       const photoCount = existingPhotos.length + photoFiles.length;
-      if (category !== "jobs_services" && photoCount === 0)
-        errors.images = "Upload at least one photo.";
+      const hasVideoCover = videoFile.length > 0 && videoCoverFile.length > 0;
+      if (category !== "jobs_services" && photoCount === 0 && !hasVideoCover)
+        errors.images = videoFile.length > 0 ? VIDEO_COVER_NEEDED : PHOTO_OR_VIDEO_RULE;
       if (photoCount > maxPhotos) {
         errors.images = `You can upload up to ${maxPhotos} photos on this plan.`;
       }
@@ -972,7 +978,11 @@ function CreateListingForm() {
         town,
         address,
         logo_url: logoUrls[0] || existingLogo || null,
-        images: [...existingPhotos, ...photoUrls],
+        images: photosWithVideoCover(
+          [...existingPhotos, ...photoUrls],
+          videoUrls.length > 0,
+          videoThumbnailUrl
+        ),
         videos: videoUrls,
         videoThumbnail: videoThumbnailUrl,
         contactMethods,
@@ -1617,7 +1627,11 @@ function CreateListingForm() {
                   <div className="space-y-6">
                     <PostFormSection
                       title="Photos and video"
-                      description="Your first photo is the cover."
+                      description={
+                        category === "jobs_services"
+                          ? "Your first photo is the cover."
+                          : `${PHOTO_OR_VIDEO_RULE} Your first photo is the cover.`
+                      }
                     >
                       <div id="listing-images" tabIndex={-1} className="space-y-2 rounded-lg">
                         <MediaUpload
@@ -1626,7 +1640,7 @@ function CreateListingForm() {
                           description={
                             category === "jobs_services"
                               ? "Optional for job vacancies."
-                              : "Required. Your first photo becomes the public cover."
+                              : "With only a video, the cover frame you choose becomes the first photo."
                           }
                           error={fieldErrors.images}
                           maxFiles={maxPhotos}
@@ -1666,7 +1680,7 @@ function CreateListingForm() {
                         <MediaUpload
                           id="listing-video-input"
                           label={`Video (max ${maxVideos})${!videoAllowed ? " — Upgrade to unlock" : ""}`}
-                          description={`Optional. Use clear portrait clips that show the item, property, or service honestly. ${VIDEO_GUIDANCE} ${VIDEO_SOUND_OFF_TIP}`}
+                          description={`${category === "jobs_services" ? "Optional. " : ""}Use clear portrait clips that show the item, property, or service honestly. ${VIDEO_GUIDANCE} ${VIDEO_SOUND_OFF_TIP}`}
                           error={fieldErrors.videos}
                           maxFiles={maxVideos}
                           files={videoFile}
@@ -1707,6 +1721,7 @@ function CreateListingForm() {
                             onFrameSelect={(frame) => {
                               setVideoCoverFile(frame ? [frame] : []);
                               clearErrors("videoThumbnail");
+                              clearErrors("images");
                             }}
                           />
                           <details

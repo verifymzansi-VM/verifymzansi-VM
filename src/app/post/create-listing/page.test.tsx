@@ -186,7 +186,15 @@ vi.mock("@/components/ui/media-upload", () => ({
 }));
 
 vi.mock("@/components/ui/video-frame-selector", () => ({
-  VideoFrameSelector: () => <div data-testid="video-frame-selector" />,
+  VideoFrameSelector: ({ onFrameSelect }: { onFrameSelect: (frame: File | null) => void }) => (
+    <button
+      type="button"
+      data-testid="video-frame-selector"
+      onClick={() => onFrameSelect(new File(["frame"], "clip_poster.jpg", { type: "image/jpeg" }))}
+    >
+      Pick cover frame
+    </button>
+  ),
 }));
 
 vi.mock("@/components/listings/listing-card", () => ({
@@ -705,6 +713,117 @@ describe("CreateListingPage", () => {
     const payload = JSON.parse(request[1].body as string);
     expect(payload.videos).toEqual(["https://media.verifymzansi.com/listings/clip.mp4"]);
     expectFoundationPostFields(payload);
+  });
+
+  it("submits a video-only listing with the chosen cover frame as photo 1", async () => {
+    const coverUrl = "https://media.verifymzansi.com/media/00000000-0000-4000-8000-000000000001";
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (input === "/api/media/upload") {
+        const area = init?.body instanceof FormData ? init.body.get("area") : null;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            urls: [
+              area === "listing_video"
+                ? "https://media.verifymzansi.com/listings/clip.mp4"
+                : coverUrl,
+            ],
+            errors: [],
+          }),
+        };
+      }
+      if (input === "/api/listings") return { ok: true, json: async () => ({ id: "listing-1" }) };
+      return { ok: true, json: async () => ({ success: true }) };
+    });
+
+    render(<CreateListingPage />);
+    await termsLoaded();
+    fireEvent.click(screen.getByText("Select Electronics"));
+    fireEvent.change(screen.getByLabelText("Title (Required)"), {
+      target: { value: "Used iPhone 15" },
+    });
+    fireEvent.change(screen.getByLabelText("Description (Required)"), {
+      target: { value: "A clean listing description with enough detail to continue." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.change(screen.getByLabelText(/^(Asking price|Monthly Rent) \(ZAR\)/i), {
+      target: { value: "1500" },
+    });
+    fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(screen.getByText(/Add at least one photo or video\./)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Video (max 1)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Pick cover frame" }));
+    acceptListingTerms();
+    fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
+
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some((call) => call[0] === "/api/listings")).toBe(true)
+    );
+    const request = fetchMock.mock.calls.find((call) => call[0] === "/api/listings")!;
+    const payload = JSON.parse(request[1].body as string);
+    expect(payload.images).toEqual([coverUrl]);
+    expect(payload.videoThumbnail).toBe(coverUrl);
+    expect(payload.videos).toEqual(["https://media.verifymzansi.com/listings/clip.mp4"]);
+  });
+
+  it("asks for a photo or video when the media step is empty", async () => {
+    render(<CreateListingPage />);
+    await termsLoaded();
+    fireEvent.click(screen.getByText("Select Electronics"));
+    fireEvent.change(screen.getByLabelText("Title (Required)"), {
+      target: { value: "Used iPhone 15" },
+    });
+    fireEvent.change(screen.getByLabelText("Description (Required)"), {
+      target: { value: "A clean listing description with enough detail to continue." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.change(screen.getByLabelText(/^(Asking price|Monthly Rent) \(ZAR\)/i), {
+      target: { value: "1500" },
+    });
+    fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    acceptListingTerms();
+    fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
+
+    // The field error, besides the step's own line.
+    expect((await screen.findAllByText("Add at least one photo or video.")).length).toBeGreaterThan(
+      0
+    );
+    expect(screen.getByText(/Please fix 1 field on Step 3/)).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some((call) => call[0] === "/api/listings")).toBe(false);
+  });
+
+  it("asks for a cover image when there is a video but no cover frame", async () => {
+    render(<CreateListingPage />);
+    await termsLoaded();
+    fireEvent.click(screen.getByText("Select Electronics"));
+    fireEvent.change(screen.getByLabelText("Title (Required)"), {
+      target: { value: "Used iPhone 15" },
+    });
+    fireEvent.change(screen.getByLabelText("Description (Required)"), {
+      target: { value: "A clean listing description with enough detail to continue." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.change(screen.getByLabelText(/^(Asking price|Monthly Rent) \(ZAR\)/i), {
+      target: { value: "1500" },
+    });
+    fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Video (max 1)" }));
+    acceptListingTerms();
+    fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
+
+    expect(
+      (await screen.findAllByText("Add a photo, or a cover image for the video.")).length
+    ).toBeGreaterThan(0);
+    expect(screen.queryByText("Add at least one photo or video.")).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls.some((call) => call[0] === "/api/listings")).toBe(false);
   });
 
   it("keeps users on the media step with a videos field error when listing video upload fails", async () => {

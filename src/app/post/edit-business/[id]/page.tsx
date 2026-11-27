@@ -6,6 +6,7 @@ import {
 } from "@/components/post/business-contact-fields";
 import { PostSelect } from "@/components/post/post-select";
 
+import { photosWithVideoCover } from "@/lib/forms/video-cover-photo";
 import { settleMediaUploads } from "@/app/post/_lib/settle-media-uploads";
 
 import { useState, useEffect, useMemo, useRef } from "react";
@@ -652,7 +653,12 @@ export default function EditBusinessPage() {
         whatsapp: publicContacts.whatsapp || undefined,
         website: publicContacts.website || undefined,
         logo_url: finalLogoUrl || undefined,
-        cover_photo: finalCoverPhoto || undefined,
+        // A video-only profile (no cover, no gallery): the chosen frame is the cover photo.
+        cover_photo:
+          finalCoverPhoto ||
+          (finalGalleryPhotos.length === 0
+            ? photosWithVideoCover([], !!finalCoverVideo, finalVideoThumbnail)[0]
+            : undefined),
         cover_video: finalCoverVideo || undefined,
         video_thumbnail: finalVideoThumbnail || undefined,
         gallery_photos: finalGalleryPhotos.length > 0 ? finalGalleryPhotos : [],

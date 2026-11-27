@@ -10,6 +10,11 @@ import {
   UNREADABLE_VIDEO_LENGTH_MESSAGE,
 } from "@/lib/media/video-length";
 import { checkPickedVideoLength } from "@/lib/media/video-length-client";
+import {
+  canBrowserShowVideo,
+  UNSUPPORTED_VIDEO_FORMAT_MESSAGE,
+} from "@/lib/media/video-decode-client";
+import { videoNeedsConversion } from "@/lib/media/compress-before-upload";
 import { cn } from "@/lib/utils";
 
 const IMAGE_TYPES = [
@@ -227,6 +232,7 @@ export function MediaUpload({
   const [isDragOver, setIsDragOver] = useState(false);
   const [failedPreviews, setFailedPreviews] = useState<Set<string>>(new Set());
   const [rejectedMessages, setRejectedMessages] = useState<string[]>([]);
+  const [checkingVideo, setCheckingVideo] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const isSingleFileMode = maxFiles === 1;
@@ -358,6 +364,20 @@ export function MediaUpload({
               `"${file.name}": ${problem}.`
             );
             continue;
+          }
+          // A video that goes up as it is (an MP4 that needs no conversion) and
+          // that the browser still cannot show is refused here, not at upload. A video that will be converted
+          // (MOV, WebM, a large or non-H.264 MP4) skips this: the converter decides.
+          if (!(await videoNeedsConversion(normalized))) {
+            setCheckingVideo(true);
+            const showable = await canBrowserShowVideo(normalized).finally(() =>
+              setCheckingVideo(false)
+            );
+            if (!showable) {
+              // Shown once, at the field (no pop-up as well).
+              rejected.push(UNSUPPORTED_VIDEO_FORMAT_MESSAGE);
+              continue;
+            }
           }
         }
 
@@ -769,9 +789,15 @@ export function MediaUpload({
         </div>
       )}
 
+      {checkingVideo && (
+        <p role="status" className="px-1 pt-2 text-xs text-muted-foreground">
+          Checking video…
+        </p>
+      )}
       {rejectedMessages.length > 0 && (
         <div
           id={rejectedId}
+          role="status"
           className="rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2"
         >
           <p className="text-xs font-medium text-destructive">Some files were not added</p>

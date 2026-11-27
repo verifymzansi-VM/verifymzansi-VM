@@ -17,6 +17,7 @@ import {
   serviceAreasFromAccess,
 } from "@/lib/forms/customer-access";
 import { BusinessCategoryPicker } from "@/components/post/business-category-picker";
+import { photosWithVideoCover } from "@/lib/forms/video-cover-photo";
 import { settleMediaUploads } from "@/app/post/_lib/settle-media-uploads";
 import {
   BUSINESS_FIELD_STEPS,
@@ -988,7 +989,12 @@ function CreateBusinessContent() {
         whatsapp: publicContacts.whatsapp || undefined,
         website: publicContacts.website || undefined,
         logo_url: logoUrls[0] || undefined,
-        cover_photo: finalCoverPhoto || undefined,
+        // A video-only profile (no cover, no gallery): the chosen frame is the cover photo.
+        cover_photo:
+          finalCoverPhoto ||
+          (galleryUrls.length === 0
+            ? photosWithVideoCover([], !!finalCoverVideo, finalVideoThumbnail)[0]
+            : undefined),
         cover_video: finalCoverVideo || undefined,
         video_thumbnail: finalVideoThumbnail || undefined,
         gallery_photos: galleryUrls.length > 0 ? galleryUrls : undefined,
