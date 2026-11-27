@@ -222,8 +222,8 @@ test("a business is submitted through its form", async ({ page }) => {
   await page.getByLabel("Province", { exact: true }).selectOption("Gauteng");
   await page.getByLabel("City or town", { exact: true }).selectOption("Johannesburg");
   await page.getByRole("button", { name: "Next", exact: true }).click();
-  await page.getByRole("checkbox", { name: "Email", exact: true }).check();
-  await page.getByLabel(/^Email Address/).fill("studio@example.com");
+  // Email is no longer a business contact; enquiries arrive in the inbox.
+  await page.getByRole("checkbox", { name: "VerifyMzansi inbox", exact: true }).check();
   await page.getByRole("button", { name: "Next", exact: true }).click();
   await uploaderFor(page, /^Profile photos/i).setInputFiles(IMAGE_FIXTURE);
   await acceptTermsIfShown(page);
