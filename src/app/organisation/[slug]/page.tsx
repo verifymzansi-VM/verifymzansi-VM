@@ -147,10 +147,7 @@ export default async function OrganisationPage({
   for (const key of ["q", "category", "subcategory", "province", "city"] as const)
     if (filters[key]) directoryParams.set(key, filters[key]);
   if (filters.sponsored) directoryParams.set("sponsored", "1");
-  if (filters.programme) {
-    const programme = org.programmes?.find((row) => row.id === filters.programme);
-    if (programme) directoryParams.set("programme_name", programme.name);
-  }
+  if (filters.programme) directoryParams.set("programme", filters.programme);
   const publicDirectory =
     filters.programme && !org.programmes?.some((row) => row.id === filters.programme)
       ? { rows: [], total: 0, page, limit: PAGE_SIZE }

@@ -10658,14 +10658,14 @@
     },
     {
       "id": "LIM-SQL-search-page-size",
-      "title": "Public search: 1 to 48 results per page",
-      "value": "1 to 48",
+      "title": "Public search: 1 to 48 results per page, or 1 to 200 post ids with ids_only",
+      "value": "1 to 48 (1 to 200 ids)",
       "category": "batch",
       "enforcedAt": [
         {
           "file": "database/foundation/current/functions/internal/search_posts.sql",
           "symbol": "internal.search_posts",
-          "contains": "or (req->>'limit')::integer not between 1 and 48 then"
+          "contains": "or (req->>'limit')::integer not between 1 and (case when v_ids then 200 else 48 end) then"
         }
       ],
       "tests": [
@@ -14398,6 +14398,11 @@
     }
   ],
   "notLimits": [
+    {
+      "file": "database/foundation/current/functions/internal/search_posts.sql",
+      "contains": "if req->>'organisation' !~ '^[a-z0-9]+(-[a-z0-9]+)*$' or length(req->>'organisation') > 60 then",
+      "reason": "the organisation slug format of private.organisations (organisations_slug_check, at most 60 characters); a malformed slug is refused as invalid, not counted against a limit"
+    },
     {
       "file": "database/foundation/current/functions/internal/za_business_day.sql",
       "contains": "select extract(isodow from p_day) < 6 and not internal.za_public_holiday(p_day);",
