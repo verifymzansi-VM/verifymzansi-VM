@@ -101,6 +101,16 @@ export function primaryBusinessType(access: CustomerAccess): BusinessType {
       ? "mobile_service"
       : "online_only";
 }
+/** The service areas a business that travels to customers typed, in the shape the API takes. */
+export function serviceAreasFromAccess(access: CustomerAccess): { areas: string[] } | undefined {
+  if (!access.methods.includes("travel")) return undefined;
+  return {
+    areas: (access.serviceAreas ?? "")
+      .split(",")
+      .map((area) => area.trim())
+      .filter(Boolean),
+  };
+}
 export function cleanCustomerAccess(access: CustomerAccess): CustomerAccess {
   return {
     version: 2,

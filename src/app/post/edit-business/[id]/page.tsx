@@ -63,8 +63,9 @@ import {
   customerAccessSchema,
   primaryBusinessType,
   cleanCustomerAccess,
+  serviceAreasFromAccess,
 } from "@/lib/forms/customer-access";
-import { parseServiceAreas, validateBusinessForm } from "@/lib/forms/business-form";
+import { validateBusinessForm } from "@/lib/forms/business-form";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import {
   coerceBusinessDetails,
@@ -158,7 +159,6 @@ export default function EditBusinessPage() {
   const [profileExtras, setProfileExtras] = useState<BusinessProfileExtras>(
     EMPTY_BUSINESS_PROFILE_EXTRAS
   );
-  const [serviceAreasInput, setServiceAreasInput] = useState("");
   const [mapDirections, setMapDirections] = useState("");
 
   // Contact & Social
@@ -331,11 +331,6 @@ export default function EditBusinessPage() {
           x: typeof b.focal_x === "number" ? (b.focal_x as number) : 0.5,
           y: typeof b.focal_y === "number" ? (b.focal_y as number) : 0.5,
         });
-
-        // Service areas
-        if (b.service_areas?.areas) {
-          setServiceAreasInput(b.service_areas.areas.join(", "));
-        }
       } catch {
         setError("Failed to load business");
       } finally {
@@ -444,7 +439,6 @@ export default function EditBusinessPage() {
         businessType,
         businessDetails,
         storeNumber: storeNumber.trim(),
-        serviceAreasInput,
         mapDirections: mapDirections.trim(),
         phone: publicContacts.phone.trim(),
         whatsapp: publicContacts.whatsapp.trim(),
@@ -460,7 +454,7 @@ export default function EditBusinessPage() {
         for (const key of Object.keys(validationErrors))
           if (
             key.startsWith("business_details.") ||
-            ["store_number", "service_areas"].includes(key) ||
+            key === "store_number" ||
             (key === "map_directions" && !mapPinPublishable)
           )
             delete validationErrors[key];
@@ -618,12 +612,9 @@ export default function EditBusinessPage() {
       }
 
       // Build service areas
-      const serviceAreas =
-        businessType === "mobile_service" && serviceAreasInput
-          ? {
-              areas: parseServiceAreas(serviceAreasInput),
-            }
-          : undefined;
+      const serviceAreas = serviceAreasFromAccess(
+        readCustomerAccess(categoryDetails.customer_access)
+      );
       const normalizedBusinessDetails = coerceBusinessDetails(businessType, businessDetails);
       const deliveryAvailable = deliveryOptions.length > 0;
       const finalBusinessDetails =
@@ -1530,9 +1521,9 @@ export default function EditBusinessPage() {
                       payment_methods_accepted: paymentMethods,
                       delivery_options: deliveryOptions,
                       service_areas:
-                        businessType === "mobile_service" && serviceAreasInput
-                          ? { areas: parseServiceAreas(serviceAreasInput) }
-                          : null,
+                        serviceAreasFromAccess(
+                          readCustomerAccess(categoryDetails.customer_access)
+                        ) ?? null,
                       location_city: city || null,
                       location_province: province || null,
                       location_town: locationTown || null,

@@ -55,7 +55,8 @@ export interface BusinessDraftData {
   locationTown: string;
   locationAddress: string;
   storeNumber: string;
-  serviceAreasInput: string;
+  /** Older drafts only; service areas now live in categoryDetails.customer_access. */
+  serviceAreasInput?: string;
   mapDirections: string;
   phone: string;
   whatsapp: string;

@@ -378,6 +378,30 @@ describe("EditBusinessPage", () => {
     expect(mockPush).not.toHaveBeenCalled();
   });
 
+  it("saves the service areas typed for a business that travels to customers", async () => {
+    render(<EditBusinessPage />);
+    await termsLoaded();
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("Nomsa Home Studio")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "I travel to customers" }));
+    fireEvent.change(screen.getByLabelText(/Service areas/), {
+      target: { value: "Soweto, Sandton" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+    const payload = JSON.parse(fetchMock.mock.calls[1][1].body as string);
+    expect(payload.service_areas).toEqual({ areas: ["Soweto", "Sandton"] });
+    expect(payload.category_details.customer_access).toMatchObject({
+      methods: expect.arrayContaining(["travel"]),
+      serviceAreas: "Soweto, Sandton",
+    });
+  });
+
   it("collapses legacy online delivery details into simple delivery availability on save", async () => {
     fetchMock.mockReset();
     fetchMock
