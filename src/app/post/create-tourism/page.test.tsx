@@ -1119,6 +1119,19 @@ describe("CreateTourismPage type switch behavior", () => {
     window.history.pushState({}, "", "/");
   });
 
+  it("names the first step of the event form for an event type server error", async () => {
+    await fillAndSubmitEvent({
+      status: 422,
+      body: {
+        error: "Choose one of the options.",
+        reason: "invalid_post",
+        issues: [{ path: "event_details.event_type", message: "Choose one of the options." }],
+      },
+    });
+
+    expect(await screen.findByText(/Please fix 1 field on Step 1/i)).toBeInTheDocument();
+  });
+
   it("does not follow an off-site event redirectUrl", async () => {
     await fillAndSubmitEvent({ status: 403, body: { redirectUrl: "//evil.example/phish" } });
 
