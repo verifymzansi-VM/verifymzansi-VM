@@ -80,6 +80,55 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Public post presentation limited to display fields, 27 November 2026
+
+`20261127044054_public_presentation_display_fields.sql` is pending (see the
+applied register).
+
+- **Display fields only.** The public card read (`api.search_post_cards` with
+  `frontend_presentation`, open to `anon` and `authenticated`) returns each
+  post's presentation through `internal.frontend_post_presentation`. Its `data`
+  now goes through `internal.public_post_presentation_data` (new): an allow-list
+  of the top-level keys the public pages render (`presentedFormFields` and
+  `presentedVideoLayout`, `restoredPublicRow`, the business and tourism layouts,
+  `public-enquiry.ts`), with `business_details`, `category_details` (and its
+  `customer_access` and `business_profile`) and `event_details` limited to their
+  listed inner keys. `source_attributes`, the Market form's attribute set
+  (unknown keys stripped by the form schema), is kept as it is. `email`,
+  `phone`, `whatsapp` and every other key are not returned. `media` and
+  `business_contacts` are unchanged.
+- **Addresses.** A Market listing never returns `location_address`. A business
+  (Business and Tourism) whose `category_details.customer_access` exists without
+  `publishAddress: true` returns no `location_address`, `store_number`,
+  `map_directions`, `business_details.street_address` or
+  `business_details.suite_or_unit`, the forms' own rule. A business saved before
+  customer access existed keeps its address; an event keeps its venue.
+- **Owner reads unchanged.** `internal.frontend_owner_post` (the owner's edit
+  forms and dashboard, staff review) replaces `data` with the full stored
+  presentation.
+- **One-off cleanup.** Every stored presentation loses its `email` key (the
+  forms no longer collect one). An approval snapshot of a changed post that
+  matched it before the cleanup is moved to the post after it, so the cleanup
+  never counts as an unreviewed edit. The rollback does not restore removed
+  emails.
+- **Guard.** The update refuses with 55000 unless
+  `internal.frontend_post_presentation` has its reviewed body (md5
+  `d57885ae409a1a91b5bc9a71d2a94730`) or this update's
+  (`9f279565fc4eca46f6b355313a2271a3`).
+
+Expand only: two new internal functions
+(`internal.public_post_presentation_data`, `internal.json_object_keys_only`, no
+grants) and one replaced body; no command, argument, grant or table changes.
+ORDER: **apply-first** (apply, then merge): the website asks nothing new and
+accepts any `data` record, so public pages stop receiving keys they discard or
+do not show. A website that still saves an email keeps it in the owner's view
+only. Read-only preflight (counts only):
+`../preflight/20261127044054_public_presentation_display_fields.check.sql`;
+rollback:
+`../rollback/20261127044054_public_presentation_display_fields.down.sql` (puts
+the earlier body back and drops the two functions). Behaviour checks:
+`scripts/test-foundation-public-presentation-fields.mjs`.
+
 ## Package running in the posting allowance, 26 November 2026
 
 `20261126202833_allowance_says_package_running.sql` is pending (see the applied
@@ -8933,5 +8982,6 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   UTC; apply-first; production fingerprint after it (fingerprint.sql, read-only,
   23:5x UTC) matched the full replay (except the known schema grant difference)
 - `20261126202833_allowance_says_package_running.sql`: pending; website-first
+- `20261127044054_public_presentation_display_fields.sql`: pending; apply-first
 
 <!-- applied-register:end -->
