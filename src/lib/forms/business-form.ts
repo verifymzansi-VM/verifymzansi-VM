@@ -6,8 +6,7 @@ import {
 import type { BusinessDetails } from "@/types/business-details";
 import type { BusinessType } from "@/types/enums";
 import { isValidUserEnteredUrl } from "@/lib/utils/external-url";
-
-const SA_PHONE_REGEX = /^(\+27|0)[6-8][0-9]{8}$/;
+import { businessNumber, WHATSAPP_NEEDS_MOBILE } from "@/lib/utils/phone";
 
 export interface BusinessFormValues {
   businessType: BusinessType | "";
@@ -111,13 +110,13 @@ export function validateBusinessForm(values: BusinessFormValues): Record<string,
     }
   }
 
-  if (values.phone && !SA_PHONE_REGEX.test(values.phone.trim())) {
+  if (values.phone && !businessNumber(values.phone.trim())) {
     errors.phone = "Enter a valid South African number.";
   }
 
-  if (values.whatsapp && !SA_PHONE_REGEX.test(values.whatsapp.trim())) {
-    errors.whatsapp = "Enter a valid South African WhatsApp number.";
-  }
+  const whatsapp = values.whatsapp ? businessNumber(values.whatsapp.trim()) : undefined;
+  if (whatsapp === null) errors.whatsapp = "Enter a valid South African WhatsApp number.";
+  else if (whatsapp?.kind === "landline") errors.whatsapp = WHATSAPP_NEEDS_MOBILE;
 
   if (values.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email.trim())) {
     errors.email = "Enter a valid email address.";

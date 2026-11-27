@@ -15,11 +15,13 @@
 -- - the channel must be ticked in data.category_details.contact_methods when
 --   the business has that list (a business saved before the list existed
 --   offers each number it has, as its form shows it);
--- - call: any South African number, landline or mobile (0 then 1-8, then 8
---   digits; also given as 27... or +27...); spaces, brackets and dashes are
---   ignored;
--- - whatsapp: a mobile number only: 06x, 071-074, 076-079 or 081-084 (not 080
---   toll-free or 086 share-call);
+-- - the number is 0 then nine digits (also given as 27... or +27...);
+--   spaces, brackets and dashes are ignored;
+-- - call: a landline (01x-05x area codes) or a mobile (06x, 071-074, 076-079
+--   or 081-084), the business form's rule (businessNumber in
+--   src/lib/utils/phone.ts);
+-- - whatsapp: a mobile only (not a landline, 080 toll-free, 086 share-call
+--   or 087);
 -- - anything else, or no number, gives null.
 --
 -- internal.reveal_post_phone, full body: for a publicly live Business or
@@ -64,7 +66,7 @@ begin
     from (values
       ('internal.reveal_post_phone(uuid,text)',array['98baceb9be415a5ba2150793263e58e1','a30f22dd9c40c95cdc35abb9dcf5e204']),
       ('internal.frontend_post_presentation(uuid)',array['9f279565fc4eca46f6b355313a2271a3','c679983dbb6c63714de6be71c459ee85']),
-      ('internal.business_contact_number(jsonb,jsonb,text)',array['absent','c0441e9dea4f583bdc4bc68e712ce993'])
+      ('internal.business_contact_number(jsonb,jsonb,text)',array['absent','a8c5205effcf3619be14645e2ce26cf7'])
     ) v(sig,allowed) loop
     if not coalesce(r.body,'absent')=any(r.allowed) then
       raise exception 'business contacts reveal precondition: % is not the reviewed body (%)',r.sig,coalesce(r.body,'absent')
@@ -83,12 +85,9 @@ AS $function$
    when p_channel is null or p_channel not in('call','whatsapp') then null
    when jsonb_typeof(p_data#>'{category_details,contact_methods}')='array'
      and not (p_data#>'{category_details,contact_methods}') ? p_channel then null
-   when p_channel='whatsapp' and n !~ '^[+]27(6[0-9]|7[1-46-9]|8[1-4])' then null
-   else n end
- from (select case
-     when v ~ '^0[1-8][0-9]{8}$' then '+27'||substr(v,2)
-     when v ~ '^27[1-8][0-9]{8}$' then '+'||v
-     when v ~ '^[+]27[1-8][0-9]{8}$' then v end as n
+   when n ~ '^[+]27(6[0-9]|7[1-46-9]|8[1-4])' then n
+   when p_channel='call' and n ~ '^[+]27[1-5]' then n end
+ from (select case when v ~ '^(0|27|[+]27)[1-9][0-9]{8}$' then '+27'||right(v,9) end as n
    from (select regexp_replace(case when jsonb_typeof(p_contacts)='object'
        then p_contacts->>(case p_channel when 'call' then 'phone' else 'whatsapp' end) end,'[ ()-]','','g') as v) s) t;
 $function$;

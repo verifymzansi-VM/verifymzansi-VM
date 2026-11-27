@@ -92,10 +92,11 @@ register).
   normalised to `+27` and nine digits, or null. The channel must be ticked in
   `data.category_details.contact_methods` when the business has that list (one
   saved before the list existed offers each number it has, as its form shows
-  it). Call accepts any South African number, landline or mobile; WhatsApp only
-  a 06x, 071-074, 076-079 or 081-084 mobile (not 080 toll-free or 086
-  share-call). Spaces, brackets and dashes are ignored; any other value gives
-  null.
+  it). Call accepts a landline (01x-05x area codes) or a mobile (06x, 071-074,
+  076-079 or 081-084), the business form's rule (`businessNumber` in
+  `src/lib/utils/phone.ts`); WhatsApp only the mobile (not a landline, 080
+  toll-free, 086 share-call or 087). Spaces, brackets and dashes are ignored;
+  any other value gives null.
 - **Business numbers on request.** `internal.reveal_post_phone` (behind the
   service-only `api.reveal_post_phone`, which the website's "Show number" route
   `/api/contact/reveal` calls after its Turnstile and per-visitor checks) now
@@ -118,7 +119,7 @@ register).
   `internal.frontend_post_presentation` its reviewed body
   (`9f279565fc4eca46f6b355313a2271a3`) or this update's
   (`c679983dbb6c63714de6be71c459ee85`), and `internal.business_contact_number`
-  is absent or has this update's body (`c0441e9dea4f583bdc4bc68e712ce993`).
+  is absent or has this update's body (`a8c5205effcf3619be14645e2ce26cf7`).
 
 Expand only: one new internal function and two replaced bodies; no command,
 argument, grant or table changes (the removed key is a field inside a jsonb

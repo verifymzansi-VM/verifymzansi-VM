@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  businessNumber,
   sanitizeSaPhoneInput,
   normalizeSaPhone,
   buildAccountPhoneFields,
@@ -61,5 +62,35 @@ describe("buildAccountPhoneFields", () => {
 describe("buildSellerPhoneFields", () => {
   it("is an alias for buildAccountPhoneFields", () => {
     expect(buildSellerPhoneFields).toBe(buildAccountPhoneFields);
+  });
+});
+
+describe("businessNumber", () => {
+  it("takes a 01x-05x landline or a 06x, 071-074, 076-079, 081-084 mobile", () => {
+    expect(businessNumber("031 123 4567")).toEqual({ number: "+27311234567", kind: "landline" });
+    expect(businessNumber("(011) 123-4567")).toEqual({ number: "+27111234567", kind: "landline" });
+    expect(businessNumber("27511234567")).toEqual({ number: "+27511234567", kind: "landline" });
+    expect(businessNumber("+27821234567")).toEqual({ number: "+27821234567", kind: "mobile" });
+    for (const prefix of ["060", "069", "071", "074", "076", "079", "081", "084"])
+      expect(businessNumber(`${prefix}1234567`)?.kind, prefix).toBe("mobile");
+    for (const prefix of ["010", "021", "031", "041", "058"])
+      expect(businessNumber(`${prefix}1234567`)?.kind, prefix).toBe("landline");
+  });
+  it("refuses toll-free, share-call, other numbers and anything else", () => {
+    for (const value of [
+      "0701234567",
+      "0751234567",
+      "0801234567",
+      "0851234567",
+      "0861234567",
+      "0871234567",
+      "0911234567",
+      "082123456",
+      "082 *** 4567",
+      "",
+      null,
+      undefined,
+    ])
+      expect(businessNumber(value), String(value)).toBeNull();
   });
 });

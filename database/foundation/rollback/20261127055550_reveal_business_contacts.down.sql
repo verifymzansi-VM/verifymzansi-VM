@@ -23,7 +23,7 @@ begin
     from (values
       ('internal.reveal_post_phone(uuid,text)','a30f22dd9c40c95cdc35abb9dcf5e204'),
       ('internal.frontend_post_presentation(uuid)','c679983dbb6c63714de6be71c459ee85'),
-      ('internal.business_contact_number(jsonb,jsonb,text)','c0441e9dea4f583bdc4bc68e712ce993')
+      ('internal.business_contact_number(jsonb,jsonb,text)','a8c5205effcf3619be14645e2ce26cf7')
     ) v(sig,applied) loop
     if r.body is distinct from r.applied then
       raise exception 'rollback precondition: the business contacts reveal update is not applied as reviewed (% %)',r.sig,coalesce(r.body,'absent')

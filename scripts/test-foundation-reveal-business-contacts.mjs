@@ -2,8 +2,8 @@
 // Behaviour checks for 20261127055550_reveal_business_contacts.sql: the
 // click-to-view command (api.reveal_post_phone, service only) answers for a
 // publicly live business with the number the business chose for a ticked
-// channel, in +27 form (any South African number for a call, a 06x, 071-074,
-// 076-079 or 081-084 mobile for WhatsApp), while listings and events keep the
+// channel, in +27 form (a 01x-05x landline or a 06x, 071-074, 076-079 or
+// 081-084 mobile for a call, the mobile only for WhatsApp), while listings and events keep the
 // owner's verified number for a chosen channel. The public card read
 // (api.search_post_cards with presentation flags, open to visitors and
 // members) carries no business number, only business_contact_options
@@ -170,7 +170,7 @@ try {
       { phone: "0825550003", whatsapp: "0835550004" },
       { methods: ["call", "whatsapp"] }
     );
-    // 080 (toll-free) and 086 (share-call) are not WhatsApp numbers.
+    // 080 (toll-free) and 086 (share-call) are neither landlines nor mobiles.
     tollFree = post("business", { phone: "0805550005", whatsapp: "0865550006" });
     STORED.push(
       ...json(`select jsonb_agg(v) from private.post_presentations d
@@ -250,21 +250,28 @@ try {
       for (const channel of ["call", "whatsapp"]) assert.notEqual(reveal(id, channel), OWNER_PHONE);
   });
 
-  await check("only ticked channels; WhatsApp only for 06x, 071-074, 076-079, 081-084", () => {
+  await check("only ticked channels; calls: landline or mobile; WhatsApp: mobile only", () => {
     assert.equal(reveal(tickedCall, "call"), "+27315550001");
     assert.equal(reveal(tickedCall, "whatsapp"), "");
     assert.equal(reveal(tickedBoth, "call"), "+27825550003");
     assert.equal(reveal(tickedBoth, "whatsapp"), "+27835550004");
-    assert.equal(reveal(tollFree, "call"), "+27805550005");
+    assert.equal(reveal(tollFree, "call"), "");
     assert.equal(reveal(tollFree, "whatsapp"), "");
-    const whatsapp = (number) =>
+    const served = (channel, prefix) =>
       q(
-        `select coalesce(internal.business_contact_number('{}','{"whatsapp":"${number}"}','whatsapp'),'');`
+        `select coalesce(internal.business_contact_number('{}',${sqlJsonb({
+          [channel === "call" ? "phone" : "whatsapp"]: `${prefix}1234567`,
+        })},'${channel}'),'');`
       );
-    for (const prefix of ["060", "069", "071", "074", "076", "079", "081", "084"])
-      assert.equal(whatsapp(`${prefix}1234567`), `+27${prefix.slice(1)}1234567`, prefix);
-    for (const prefix of ["070", "075", "080", "085", "086", "087"])
-      assert.equal(whatsapp(`${prefix}1234567`), "", prefix);
+    const mobiles = ["060", "069", "071", "074", "076", "079", "081", "084"];
+    const neither = ["070", "075", "080", "085", "086", "087", "090"];
+    for (const prefix of ["010", "021", "031", "041", "051", "058", ...mobiles])
+      assert.equal(served("call", prefix), `+27${prefix.slice(1)}1234567`, prefix);
+    for (const prefix of mobiles)
+      assert.equal(served("whatsapp", prefix), `+27${prefix.slice(1)}1234567`, prefix);
+    for (const prefix of ["011", "031", "051", ...neither])
+      assert.equal(served("whatsapp", prefix), "", prefix);
+    for (const prefix of neither) assert.equal(served("call", prefix), "", prefix);
   });
 
   await check("the public card read carries channel booleans and no business number", () => {
@@ -277,7 +284,7 @@ try {
       [none, { call: false, whatsapp: false }],
       [tickedCall, { call: true, whatsapp: false }],
       [tickedBoth, { call: true, whatsapp: true }],
-      [tollFree, { call: true, whatsapp: false }],
+      [tollFree, { call: false, whatsapp: false }],
     ]);
     for (const [id, value] of expected) assert.deepEqual(options(id), value, id);
     // A listing has no business options.

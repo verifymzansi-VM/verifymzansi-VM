@@ -11,12 +11,9 @@ AS $function$
    when p_channel is null or p_channel not in('call','whatsapp') then null
    when jsonb_typeof(p_data#>'{category_details,contact_methods}')='array'
      and not (p_data#>'{category_details,contact_methods}') ? p_channel then null
-   when p_channel='whatsapp' and n !~ '^[+]27(6[0-9]|7[1-46-9]|8[1-4])' then null
-   else n end
- from (select case
-     when v ~ '^0[1-8][0-9]{8}$' then '+27'||substr(v,2)
-     when v ~ '^27[1-8][0-9]{8}$' then '+'||v
-     when v ~ '^[+]27[1-8][0-9]{8}$' then v end as n
+   when n ~ '^[+]27(6[0-9]|7[1-46-9]|8[1-4])' then n
+   when p_channel='call' and n ~ '^[+]27[1-5]' then n end
+ from (select case when v ~ '^(0|27|[+]27)[1-9][0-9]{8}$' then '+27'||right(v,9) end as n
    from (select regexp_replace(case when jsonb_typeof(p_contacts)='object'
        then p_contacts->>(case p_channel when 'call' then 'phone' else 'whatsapp' end) end,'[ ()-]','','g') as v) s) t;
 $function$;

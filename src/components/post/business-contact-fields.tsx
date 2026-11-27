@@ -1,6 +1,7 @@
 "use client";
 
 import { FieldHelp } from "./field-help";
+import { businessNumber } from "@/lib/utils/phone";
 import { Input } from "@/components/ui/input";
 import { PostLabel } from "./post-label";
 
@@ -144,9 +145,12 @@ export function BusinessContactFields({
                   placeholder={choice.example}
                   aria-invalid={Boolean(errors[choice.field])}
                 />
-                {errors[choice.field] && (
+                {errors[choice.field] ? (
                   <p className="inline-form-error">{errors[choice.field]}</p>
-                )}
+                ) : choice.field === "phone" &&
+                  businessNumber(values.phone)?.kind === "landline" ? (
+                  <p className="mt-1 text-sm text-muted-foreground">Landline: calls only</p>
+                ) : null}
               </div>
             )
         )}

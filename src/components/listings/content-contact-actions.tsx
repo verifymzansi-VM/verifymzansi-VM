@@ -4,7 +4,12 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { Phone, Share2, Flag, Loader2, CheckCircle, Check, type LucideIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { contactCallPhone, contactPhone, whatsappLink } from "@/lib/utils/contact-links";
+import {
+  contactCallPhone,
+  contactPhone,
+  landlineDisplay,
+  whatsappLink,
+} from "@/lib/utils/contact-links";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
@@ -112,6 +117,8 @@ function ContactActionsForTarget({
   }
 
   const phoneNumber = contactCallPhone(phone);
+  // A business landline is labelled as one (it takes calls only).
+  const landline = landlineDisplay(phone);
   const whatsappUrl = whatsappLink(whatsapp, config.shareTitle, config.sharePath);
   // One number is shown once: on the call button when both buttons use it.
   const whatsappNumberShown = !(
@@ -268,7 +275,8 @@ function ContactActionsForTarget({
         {showPhoneButton && phoneNumber && (
           <Button variant="outline" className="w-full gap-2" size="lg" asChild>
             <a href={`tel:${phoneNumber}`}>
-              <Phone className="h-4 w-4" /> Call {phoneNumber}
+              <Phone className="h-4 w-4" />{" "}
+              {landline ? `Call (landline) ${landline}` : `Call ${phoneNumber}`}
             </a>
           </Button>
         )}

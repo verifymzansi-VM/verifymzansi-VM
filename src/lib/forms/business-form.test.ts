@@ -106,4 +106,30 @@ describe("business-form helpers", () => {
       })
     ).toEqual({});
   });
+
+  it("takes a landline for calls but needs a mobile for WhatsApp", () => {
+    const contacts = (phone: string, whatsapp: string) =>
+      validateBusinessForm({
+        businessType: "online_only",
+        businessDetails: getDefaultBusinessDetails("online_only"),
+        storeNumber: "",
+        serviceAreasInput: "",
+        mapDirections: "",
+        phone,
+        whatsapp,
+        email: "",
+        website: "",
+        socialFacebook: "",
+        socialInstagram: "",
+        socialTwitter: "",
+        socialTiktok: "",
+      });
+    expect(contacts("031 123 4567", "082 123 4567")).not.toHaveProperty("phone");
+    expect(contacts("031 123 4567", "082 123 4567")).not.toHaveProperty("whatsapp");
+    expect(contacts("", "031 123 4567").whatsapp).toBe("WhatsApp needs a mobile number.");
+    expect(contacts("0861234567", "0801234567")).toMatchObject({
+      phone: "Enter a valid South African number.",
+      whatsapp: "Enter a valid South African WhatsApp number.",
+    });
+  });
 });

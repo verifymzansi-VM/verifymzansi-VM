@@ -13,9 +13,9 @@
 -- three have the update's bodies (already applied), and counts, over
 -- businesses (Business and Tourism) that are publicly live: those with a
 -- phone number, those with a WhatsApp number, and those with a phone or
--- WhatsApp number the update will not serve (not a South African number, a
--- WhatsApp number that is not a mobile, or a channel not ticked in the
--- business's contact methods). Empty and null values are not counted.
+-- WhatsApp number the update will not serve (not a South African landline
+-- or mobile, a WhatsApp number that is not a mobile, or a channel not ticked
+-- in the business's contact methods). Empty and null values are not counted.
 do $$begin
   set transaction read only;
 end$$;
@@ -25,7 +25,7 @@ with bodies as (
   from (values
     ('internal.reveal_post_phone(uuid,text)', '98baceb9be415a5ba2150793263e58e1', 'a30f22dd9c40c95cdc35abb9dcf5e204'),
     ('internal.frontend_post_presentation(uuid)', '9f279565fc4eca46f6b355313a2271a3', 'c679983dbb6c63714de6be71c459ee85'),
-    ('internal.business_contact_number(jsonb,jsonb,text)', null, 'c0441e9dea4f583bdc4bc68e712ce993')
+    ('internal.business_contact_number(jsonb,jsonb,text)', null, 'a8c5205effcf3619be14645e2ce26cf7')
   ) v(sig, reviewed, updated)
 ),
 state as (
@@ -53,7 +53,7 @@ select 'summary' as kind,
     || '; live businesses with a phone number: ' || (select count(*) from numbers where phone is not null)
     || '; with a WhatsApp number: ' || (select count(*) from numbers where whatsapp is not null)
     || '; with a number not served: ' || (select count(*) from numbers
-         where (phone is not null and (phone !~ '^(0|27|[+]27)[1-8][0-9]{8}$'
+         where (phone is not null and (phone !~ '^(0|27|[+]27)([1-5][0-9]|6[0-9]|7[1-46-9]|8[1-4])[0-9]{7}$'
                  or (methods is not null and not methods ? 'call')))
             or (whatsapp is not null and (whatsapp !~ '^(0|27|[+]27)(6[0-9]|7[1-46-9]|8[1-4])[0-9]{7}$'
                  or (methods is not null and not methods ? 'whatsapp')))) as detail

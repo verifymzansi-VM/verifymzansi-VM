@@ -241,4 +241,26 @@ describe("businessSchema", () => {
       expect(paths).toContain("bbbee_level");
     }
   });
+
+  it("takes a landline for calls, but WhatsApp needs a mobile", () => {
+    const issues = (phone: string, whatsapp: string) => {
+      const result = businessSchema.safeParse({
+        ...base,
+        business_type: "online_only",
+        phone,
+        whatsapp,
+        contact_methods: ["call", "whatsapp"],
+      });
+      return result.success
+        ? {}
+        : Object.fromEntries(result.error.issues.map((i) => [i.path.join("."), i.message]));
+    };
+    expect(issues("031 123 4567", "0821234567")).not.toHaveProperty("phone");
+    expect(issues("031 123 4567", "0821234567")).not.toHaveProperty("whatsapp");
+    expect(issues("0821234567", "0311234567").whatsapp).toBe("WhatsApp needs a mobile number.");
+    expect(issues("0801234567", "0861234567")).toMatchObject({
+      phone: "Enter a valid SA number",
+      whatsapp: "Enter a valid SA number",
+    });
+  });
 });
