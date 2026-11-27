@@ -45,12 +45,10 @@ const [PREFLIGHT, ROLLBACK] = [
 const REVEAL = "internal.reveal_post_phone(uuid,text)";
 const PRESENTATION = "internal.frontend_post_presentation(uuid)";
 const NUMBER = "internal.business_contact_number(jsonb,jsonb,text)";
-const summary = (state) =>
-  new RegExp(
-    `^business contacts reveal: ${state}; live businesses with a phone number: \\d+; with a WhatsApp number: \\d+; with a number not served: \\d+$`
-  );
-const NOT_APPLIED = summary("update not applied");
-const APPLIED = summary("already applied");
+const NOT_APPLIED =
+  /^business contacts reveal: update not applied; live businesses with a phone number: \d+; with a WhatsApp number: \d+; with a number not served: \d+$/;
+const APPLIED =
+  /^business contacts reveal: already applied; live businesses with a phone number: \d+; with a WhatsApp number: \d+; with a number not served: \d+$/;
 
 // A statement run as a visitor.
 const anon = (sql) => `set role anon;\n${sql}`;
