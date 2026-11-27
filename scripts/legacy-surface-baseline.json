@@ -3,8 +3,8 @@
   "counts": {
     "backendSwitches": 0,
     "legacyClientImports": 3,
-    "retiredCommandNames": 9,
-    "retiredCommandCalls": 9,
+    "retiredCommandNames": 8,
+    "retiredCommandCalls": 8,
     "retiredTableReads": 1
   },
   "legacyClientImporters": [
@@ -13,7 +13,6 @@
     "src/lib/utils/admin-queries.ts"
   ],
   "retiredCommandNames": [
-    "get_showroom_exposure_report",
     "get_site_visit_stats",
     "intro_trial_offer",
     "is_organisation_admin",
