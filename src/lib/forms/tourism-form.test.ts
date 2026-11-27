@@ -20,7 +20,6 @@ describe("validateTourismStep event compatibility", () => {
         languagesSpoken: "",
         phone: "",
         whatsapp: "",
-        email: "",
         website: "",
         socialFacebook: "",
         socialInstagram: "",
@@ -75,7 +74,6 @@ describe("validateTourismStep event compatibility", () => {
         languagesSpoken: "",
         phone: "",
         whatsapp: "",
-        email: "",
         website: "",
         socialFacebook: "",
         socialInstagram: "",
@@ -131,7 +129,6 @@ describe("validateTourismStep tours and experiences", () => {
       languagesSpoken: "",
       phone: "",
       whatsapp: "",
-      email: "",
       website: "",
       socialFacebook: "",
       socialInstagram: "",
@@ -164,6 +161,25 @@ describe("validateTourismStep tours and experiences", () => {
       ticketsUrl: "",
       ...overrides,
     }) as Parameters<typeof validateTourismStep>[1];
+
+  it.each(["guest_house_bnb", "spa_wellness_retreat", "cultural_heritage"])(
+    "lets a %s post without a street address or suburb",
+    (subcategory) => {
+      const errors = validateTourismStep(2, tour({ subcategory, joinMethods: [] }), 0);
+      expect(errors.locationAddress).toBeUndefined();
+      expect(errors.locationTown).toBeUndefined();
+    }
+  );
+
+  it("still requires a province and city", () => {
+    const errors = validateTourismStep(
+      2,
+      tour({ subcategory: "guest_house_bnb", province: "", city: "" }),
+      0
+    );
+    expect(errors.province).toBeDefined();
+    expect(errors.city).toBeDefined();
+  });
 
   it("takes a landline for calls but needs a mobile for WhatsApp", () => {
     const contacts = (phone: string, whatsapp: string) =>
