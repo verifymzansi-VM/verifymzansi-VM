@@ -3,6 +3,7 @@ import { createLogger } from "@/lib/utils/logger";
 import type { NavBadge } from "@/lib/admin/nav";
 import type { StaffRole } from "@/types/enums";
 import { readFoundationStaffDashboard } from "@/lib/foundation/staff-dashboard";
+import { readStaffHomeSummary } from "@/lib/foundation/staff-home-summary";
 
 /**
  * The staff home and sidebar counts, read from the foundation staff
@@ -32,33 +33,36 @@ export interface StaffDashboard {
       claimed: Count;
     } | null;
   };
+  /** A read was refused because the staff member needs to confirm their authenticator again. */
+  needs_reverify?: boolean;
   shift?: {
     claims: Array<{
       item_type: string;
       item_id: string;
       queue: "reports" | "kyc" | "content" | "business_kyc";
       expires_at: string;
-      renewals: number;
+      renewals?: number;
     }>;
     escalations_open: Count;
     actions_today: Count;
   } | null;
   decisions?: {
     escalated: Count;
-    pending_approval: Count;
+    /** Not read yet; the escalations card then counts them together. */
+    pending_approval?: Count;
     expiring_24h: Count;
     oldest_at: Timestamp;
-    failed_executions: Count;
-    role_changes_pending: Count;
-    appeals_open: Count;
-    appeals_oldest_at: Timestamp;
+    failed_executions?: Count;
+    role_changes_pending?: Count;
+    appeals_open?: Count;
+    appeals_oldest_at?: Timestamp;
   } | null;
   restrictions?: { suspensions: Count; bans: Count; emergency: Count } | null;
   dsar?: {
     open: Count;
     overdue: Count;
     due_7d: Count;
-    unassigned: Count;
+    unassigned?: Count;
     next_due_at: Timestamp;
   } | null;
   oversight?: {
@@ -86,15 +90,16 @@ export const getStaffDashboard = cache(async (actorId: string): Promise<StaffDas
   try {
     const current = await readFoundationStaffDashboard(actorId);
     if (!current.restored_queues) throw new Error("Staff presentation contract unavailable");
+    const summary = await readStaffHomeSummary(actorId, current).catch(() => ({
+      shift: null,
+      ...(current.role === "moderator" ? {} : { decisions: null }),
+      ...(current.role === "admin" ? { platform: null } : {}),
+    }));
     return {
       role: current.role === "governor" ? "governance_controller" : current.role,
       generated_at: current.generated_at,
       queues: { ...current.restored_queues, support: current.support ?? null },
-      // These summaries have no foundation equivalent yet.
-      // The preserved cards already render null as Unavailable.
-      shift: null,
-      ...(current.role === "moderator" ? {} : { decisions: null }),
-      ...(current.role === "admin" ? { platform: null } : {}),
+      ...summary,
     };
   } catch {
     log.error("Staff dashboard read failed");

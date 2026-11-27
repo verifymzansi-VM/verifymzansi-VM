@@ -87,20 +87,51 @@ describe("useAutoHide", () => {
     expect(result.current.hidden).toBe(true);
   });
 
-  it("keeps the controls while a keyboard user is on one", () => {
+  it("a tap in the moment the controls fade only brings them back", () => {
+    const { result } = renderHook(() => useAutoHide(true));
+    // The old callback, still held by the video before the next render.
+    const staleReveal = result.current.revealOnTap;
+    act(() => {
+      vi.advanceTimersByTime(AUTO_HIDE_MS);
+    });
+    let used = false;
+    act(() => {
+      used = staleReveal();
+    });
+    expect(used).toBe(true);
+    expect(result.current.hidden).toBe(false);
+  });
+
+  it("keeps the controls while keyboard or screen reader focus is on one", () => {
     const button = document.createElement("button");
     const chrome = document.createElement("div");
     chrome.setAttribute("data-vm-chrome", "");
     chrome.append(button);
     document.body.append(chrome);
     button.focus();
-    const matches = vi.spyOn(button, "matches").mockReturnValue(true);
     const { result } = renderHook(() => useAutoHide(true));
     act(() => {
       vi.advanceTimersByTime(AUTO_HIDE_MS * 2);
     });
     expect(result.current.hidden).toBe(false);
-    matches.mockRestore();
+    chrome.remove();
+  });
+
+  it("focus left on a control by a tap does not hold the controls", () => {
+    const button = document.createElement("button");
+    const chrome = document.createElement("div");
+    chrome.setAttribute("data-vm-chrome", "");
+    chrome.append(button);
+    document.body.append(chrome);
+    const { result } = renderHook(() => useAutoHide(true));
+    act(() => {
+      button.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+      button.focus();
+    });
+    act(() => {
+      vi.advanceTimersByTime(AUTO_HIDE_MS);
+    });
+    expect(result.current.hidden).toBe(true);
     chrome.remove();
   });
 });

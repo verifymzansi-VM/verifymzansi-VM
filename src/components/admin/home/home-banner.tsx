@@ -43,12 +43,15 @@ export function HomeBanner({
   description,
   firstName,
   items,
+  incomplete = false,
 }: {
   title: string;
   description: string;
   firstName: string | null;
   /** Null when the dashboard could not be read; the banner then makes no claim. */
   items: AttentionItem[] | null;
+  /** Some figures could not be read, so an empty list is not "all clear". */
+  incomplete?: boolean;
 }) {
   const now = new Date();
   const urgent = items?.filter((item) => item.severity === "urgent").length ?? 0;
@@ -91,14 +94,19 @@ export function HomeBanner({
             role="status"
             className={cn(
               "mt-5 inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-sm font-semibold",
-              items.length === 0
+              items.length === 0 && !incomplete
                 ? "bg-brand-green-300/15 text-brand-green-200 ring-1 ring-brand-green-300/30"
                 : urgent > 0
                   ? "bg-brand-gold-300 text-brand-gold-950"
                   : "bg-white/10 text-white ring-1 ring-white/20"
             )}
           >
-            {items.length === 0 ? (
+            {items.length === 0 && incomplete ? (
+              <>
+                <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+                Some figures could not be loaded. Check the cards below.
+              </>
+            ) : items.length === 0 ? (
               <>
                 <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
                 All clear. Nothing needs you right now.

@@ -655,14 +655,13 @@ export function VideoModeViewer({
   const gesture = useRef<Gesture | null>(null);
   const lastGestureAt = useRef(0);
   // While the controls are hidden, a tap on the video brings them back instead of pausing.
-  const revealOnTap = useRef(autoHide.revealOnTap);
-  useEffect(() => {
-    revealOnTap.current = autoHide.revealOnTap;
-  });
+  // A keyboard or screen reader press of "Pause video" always pauses.
+  const { revealOnTap } = autoHide;
   /** True when a tap on the video is used up: a swipe just ended, or it showed the controls. */
   const ignoreTap = useCallback(
-    () => performance.now() - lastGestureAt.current < TAP_GUARD_MS || revealOnTap.current(),
-    []
+    (fromPointer: boolean) =>
+      performance.now() - lastGestureAt.current < TAP_GUARD_MS || (fromPointer && revealOnTap()),
+    [revealOnTap]
   );
 
   const setTrackOffset = (px: number, animate: boolean) => {
@@ -750,7 +749,15 @@ export function VideoModeViewer({
       const video = document.querySelector<HTMLVideoElement>("video[data-vm-active-video]");
       setCaptionAt(
         video
-          ? captionTop(window.innerWidth, window.innerHeight, video.videoWidth, video.videoHeight)
+          ? captionTop(
+              window.innerWidth,
+              window.innerHeight,
+              video.videoWidth,
+              video.videoHeight,
+              // The top of Details (it counts the phone's bottom safe area).
+              document.querySelector("[data-vm-details]")?.getBoundingClientRect().top ??
+                window.innerHeight - 72
+            )
           : null
       );
     };
@@ -1068,6 +1075,7 @@ export function VideoModeViewer({
             <PostSummary slide={activeSlide} headingLevel="h1" />
           </div>
           <div
+            data-vm-details
             data-vm-chrome
             inert={cleanView}
             className="vm-info vm-chrome absolute bottom-[calc(env(safe-area-inset-bottom)+28px)] left-[max(12px,env(safe-area-inset-left))] right-[calc(max(8px,env(safe-area-inset-right))+64px)] z-20 max-w-xl"
