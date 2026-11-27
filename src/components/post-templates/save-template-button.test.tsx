@@ -26,12 +26,10 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe("Save as template", () => {
   it("names and saves the form's template fields while the package runs", async () => {
-    fetchMock.mockImplementation((_url: string, init?: RequestInit) =>
-      init?.method === "POST"
-        ? answer({ id: "00000000-0000-4000-8000-0000000000e1", name: "Bakkie", replaced: false })
-        : answer({ package_running: true, templates: [] })
+    fetchMock.mockImplementation(() =>
+      answer({ id: "00000000-0000-4000-8000-0000000000e1", name: "Bakkie", replaced: false })
     );
-    render(<SaveTemplateButton defaultName="Demo bakkie 2.4" data={() => data} />);
+    render(<SaveTemplateButton defaultName="Demo bakkie 2.4" data={() => data} packageRunning />);
     fireEvent.click(await screen.findByRole("button", { name: "Save as template" }));
     expect(screen.getByRole("heading", { name: "Save as a template" })).toBeInTheDocument();
     expect(screen.getByText("Title, price, year and mileage")).toBeInTheDocument();
@@ -43,34 +41,32 @@ describe("Save as template", () => {
     await waitFor(() =>
       expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Template saved" }))
     );
-    const [url, init] = fetchMock.mock.calls.find(([, i]) => i?.method === "POST")!;
+    // The save is the only request: the button reads packageRunning, not the network.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(init.method).toBe("POST");
     expect(url).toBe("/api/post-templates");
     expect(JSON.parse(init.body as string)).toEqual({ name: "Used bakkie", data });
     expect(screen.queryByRole("heading", { name: "Save as a template" })).not.toBeInTheDocument();
   });
 
   it("shows the refusal and stays open", async () => {
-    fetchMock.mockImplementation((_url: string, init?: RequestInit) =>
-      init?.method === "POST"
-        ? answer({ error: "You can keep up to 20 templates." }, 409)
-        : answer({ package_running: true, templates: [] })
-    );
-    render(<SaveTemplateButton defaultName="Bakkie" data={() => data} />);
+    fetchMock.mockImplementation(() => answer({ error: "You can keep up to 20 templates." }, 409));
+    render(<SaveTemplateButton defaultName="Bakkie" data={() => data} packageRunning />);
     fireEvent.click(await screen.findByRole("button", { name: "Save as template" }));
     fireEvent.click(screen.getByRole("button", { name: "Save template" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("You can keep up to 20 templates.");
     expect(screen.getByRole("heading", { name: "Save as a template" })).toBeInTheDocument();
   });
 
-  it("is not shown without a running package or with the switch off", async () => {
-    fetchMock.mockImplementation(() => answer({ package_running: false, templates: [] }));
-    const { unmount } = render(<SaveTemplateButton defaultName="" data={() => data} />);
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+  it("is not shown without a running package or with the switch off, and sends nothing", () => {
+    const { unmount } = render(
+      <SaveTemplateButton defaultName="" data={() => data} packageRunning={false} />
+    );
     expect(screen.queryByRole("button", { name: "Save as template" })).not.toBeInTheDocument();
     unmount();
-    fetchMock.mockClear();
     switches.SHOW_POST_TEMPLATES = false;
-    render(<SaveTemplateButton defaultName="" data={() => data} />);
+    render(<SaveTemplateButton defaultName="" data={() => data} packageRunning />);
     expect(screen.queryByRole("button", { name: "Save as template" })).not.toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
   });
