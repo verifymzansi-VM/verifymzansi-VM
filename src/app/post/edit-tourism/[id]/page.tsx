@@ -20,6 +20,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { PackageRulesNote } from "@/components/posting/package-rules-note";
 import { editLimitReachedMessage } from "@/lib/posting/package-rules";
 import { MediaUpload } from "@/components/ui/media-upload";
+import { PHOTO_OR_VIDEO_RULE, photosWithVideoCover } from "@/lib/forms/video-cover-photo";
 import { OnlinePresenceFields } from "@/components/post/online-presence-fields";
 import { PostingTermsConsent } from "@/components/post/posting-terms-consent";
 import { UploadProgressPanel, type UploadSlotStatus } from "@/components/ui/upload-progress-panel";
@@ -358,7 +359,7 @@ export default function EditPromotionPage() {
           ? newVideoFiles.length
           : existingVideos.length + newVideoFiles.length;
       if (totalImageCount === 0 && totalVideoCount === 0) {
-        validationErrors.images = "Upload at least one photo or video.";
+        validationErrors.images = PHOTO_OR_VIDEO_RULE;
       }
       if (totalImageCount > maxPhotos) {
         validationErrors.images = `You can upload up to ${maxPhotos} photos on this plan.`;
@@ -511,7 +512,11 @@ export default function EditPromotionPage() {
         location_address: locationAddress || undefined,
         contact_methods: contactMethods,
         logo_url: uploadedLogoUrl || existingLogoUrl || undefined,
-        images: allImages,
+        images: photosWithVideoCover(
+          allImages,
+          allVideos.length > 0,
+          uploadedVideoThumbnailUrl || videoThumbnail
+        ),
         videos: allVideos,
         // No video left means no poster; a new pick replaces the saved one.
         video_thumbnail:
@@ -1190,10 +1195,11 @@ export default function EditPromotionPage() {
                 )}
               </div>
 
+              <p className="text-sm font-medium">{PHOTO_OR_VIDEO_RULE}</p>
               <MediaUpload
                 id="edit-event-photos-input"
                 label="Photos"
-                description="Your first photo is the cover on cards."
+                description="Your first photo is the cover on cards. With only a video, its thumbnail becomes the first photo."
                 maxFiles={maxPhotos}
                 files={newPhotoFiles}
                 existing={existingImages.map((url, i) => ({

@@ -4,6 +4,7 @@ import type {
 } from "@/types/tourism-details";
 import { TOURISM_SUBCATEGORY_FIELD_GROUPS } from "@/lib/constants/categories";
 import { eventTimeToIso } from "./event-time";
+import { PHOTO_OR_VIDEO_RULE } from "./video-cover-photo";
 import { isValidUserEnteredUrl } from "@/lib/utils/external-url";
 import { BUSINESS_TEXT_LIMITS } from "@/lib/validations/business-limits";
 
@@ -278,21 +279,10 @@ function validateOnlinePresence(v: TourismFormValues, errors: Record<string, str
 
 /* ── Step 3: Media & Review ──────────────────────────────── */
 
-function validateStep3(
-  v: TourismFormValues,
-  errors: Record<string, string>,
-  imageCount: number,
-  videoCount: number
-) {
-  if (v.listingType === "event") {
-    if (imageCount < 1 && videoCount < 1) {
-      errors.images = "Upload at least 1 photo or video.";
-    }
-    return;
-  }
-
-  if (imageCount < 1) {
-    errors.images = "Upload at least 1 photo.";
+function validateStep3(errors: Record<string, string>, imageCount: number, videoCount: number) {
+  // A video alone is enough: its chosen cover frame becomes the first photo.
+  if (imageCount < 1 && videoCount < 1) {
+    errors.images = PHOTO_OR_VIDEO_RULE;
   }
 }
 
@@ -326,7 +316,7 @@ export function validateTourismStep(
       validateStep2(values, errors);
       break;
     case 3:
-      validateStep3(values, errors, imageCount, videoCount);
+      validateStep3(errors, imageCount, videoCount);
       break;
   }
 

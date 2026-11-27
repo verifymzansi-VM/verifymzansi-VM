@@ -12,6 +12,11 @@ import { Input } from "@/components/ui/input";
 import { PostLabel as Label } from "@/components/post/post-label";
 import { Textarea } from "@/components/ui/textarea";
 import { PostEditActionBar, PostFormSection } from "@/components/post/post-form-scaffold";
+import {
+  PHOTO_OR_VIDEO_RULE,
+  VIDEO_COVER_NEEDED,
+  photosWithVideoCover,
+} from "@/lib/forms/video-cover-photo";
 import { PostingTermsConsent } from "@/components/post/posting-terms-consent";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
@@ -390,8 +395,10 @@ export default function EditListingPage() {
     }
 
     const totalPhotos = existingPhotos.length + newPhotoFiles.length;
-    if (category !== "jobs_services" && totalPhotos === 0)
-      errors.images = "Upload at least one photo.";
+    const hasVideo = existingVideos.length > 0 || newVideoFile.length > 0;
+    const hasVideoCover = newVideoCoverFile.length > 0 || !!existingVideoThumbnail;
+    if (category !== "jobs_services" && totalPhotos === 0 && !(hasVideo && hasVideoCover))
+      errors.images = hasVideo ? VIDEO_COVER_NEEDED : PHOTO_OR_VIDEO_RULE;
     if (totalPhotos > maxPhotos) {
       errors.images = `You can upload up to ${maxPhotos} photos on this plan.`;
     }
@@ -519,7 +526,7 @@ export default function EditListingPage() {
           city: city || "",
           town: town || "",
           address: locationAddress || "",
-          images: allPhotos,
+          images: photosWithVideoCover(allPhotos, allVideos.length > 0, videoThumbnail),
           videos: allVideos,
           videoThumbnail,
           logo_url: finalLogoUrl,
@@ -816,11 +823,14 @@ export default function EditListingPage() {
                   />
                 </PostFormSection>
 
-                <PostFormSection title="Photos and video">
+                <PostFormSection
+                  title="Photos and video"
+                  description={category === "jobs_services" ? undefined : PHOTO_OR_VIDEO_RULE}
+                >
                   <MediaUpload
                     id="edit-listing-photos-input"
                     label="Photos"
-                    description="Your first photo is the cover on cards."
+                    description="Your first photo is the cover on cards. With only a video, its cover image becomes the first photo."
                     maxFiles={maxPhotos}
                     files={newPhotoFiles}
                     existing={existingPhotos.map((url, i) => ({

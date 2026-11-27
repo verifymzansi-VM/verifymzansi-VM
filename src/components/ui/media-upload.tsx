@@ -10,6 +10,10 @@ import {
   UNREADABLE_VIDEO_LENGTH_MESSAGE,
 } from "@/lib/media/video-length";
 import { checkPickedVideoLength } from "@/lib/media/video-length-client";
+import {
+  canBrowserShowVideo,
+  UNSUPPORTED_VIDEO_FORMAT_MESSAGE,
+} from "@/lib/media/video-decode-client";
 import { cn } from "@/lib/utils";
 
 const IMAGE_TYPES = [
@@ -357,6 +361,12 @@ export function MediaUpload({
                 : "Video too long",
               `"${file.name}": ${problem}.`
             );
+            continue;
+          }
+          // A video the browser cannot show (e.g. HEVC in Chrome) is refused here,
+          // not at upload.
+          if (!(await canBrowserShowVideo(normalized))) {
+            rejectFile("Video format not supported", UNSUPPORTED_VIDEO_FORMAT_MESSAGE);
             continue;
           }
         }
