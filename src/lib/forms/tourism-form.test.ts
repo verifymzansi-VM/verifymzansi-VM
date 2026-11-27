@@ -165,6 +165,25 @@ describe("validateTourismStep tours and experiences", () => {
       ...overrides,
     }) as Parameters<typeof validateTourismStep>[1];
 
+  it("takes a landline for calls but needs a mobile for WhatsApp", () => {
+    const contacts = (phone: string, whatsapp: string) =>
+      validateTourismStep(2, tour({ contactMethods: ["call", "whatsapp"], phone, whatsapp }), 0);
+    expect(contacts("021 123 4567", "0821234567")).not.toHaveProperty("phone");
+    expect(contacts("021 123 4567", "0821234567")).not.toHaveProperty("whatsapp");
+    expect(contacts("0821234567", "0211234567").whatsapp).toBe("WhatsApp needs a mobile number.");
+    // 087, 0800, 0860 and 0861 take calls only.
+    for (const number of ["0871234567", "0800123456", "0860123456", "0861123456"]) {
+      expect(contacts(number, "0821234567"), number).not.toHaveProperty("phone");
+      expect(contacts("0821234567", number).whatsapp, number).toBe(
+        "WhatsApp needs a mobile number."
+      );
+    }
+    expect(contacts("0862123456", "0801234567")).toMatchObject({
+      phone: "Enter a valid South African number.",
+      whatsapp: "Enter a valid South African WhatsApp number.",
+    });
+  });
+
   it("asks how visitors join without requiring an office address", () => {
     const errors = validateTourismStep(2, tour({}), 0);
     expect(errors.joinMethods).toBeDefined();

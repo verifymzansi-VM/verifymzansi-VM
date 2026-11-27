@@ -19,15 +19,15 @@
     ],
     "notYetCompared": [],
     "howToCompare": "In the Supabase SQL editor (read-only), run `set search_path to \"$user\", public;` first, so pg_get_indexdef prints `extensions.gin_trgm_ops` as the replay does, then run database/foundation/fingerprint.sql unchanged and compare each row with categories below.",
-    "matchedThroughUpdate": "20261127044054_public_presentation_display_fields.sql",
+    "matchedThroughUpdate": "20261127055550_reveal_business_contacts.sql",
     "matchedFingerprints": {
       "column_grants": "5e5623672e80b927048d8553487d5442",
       "columns": "d2f5b1993710928c743beee66d8bf414",
       "constraints": "a340bf5a21277c1e08ac581cafd03c31",
       "event_triggers": "821f7d069c595c075754fad9309136ac",
-      "function_bodies": "5064196966c1e4df401a3a0a7df2b9ea",
+      "function_bodies": "f978c48a7e457293bf8b5f59d35957f7",
       "function_grants": "426a8006e974a14c3579ed9243809bf6",
-      "function_metadata": "f6aa030599a51492ab1a9e489d3406f5",
+      "function_metadata": "020a7e14e1ce91e15ee42f80e4591f22",
       "indexes": "2f19c47ab5c875caf360ea831259afd1",
       "policies": "085a305fbc41d38d34eb40c3748c0793",
       "row_level_security": "833c95cfe0709cc6ab0ed86504463fef",
@@ -39,8 +39,8 @@
     "Reference data is not fingerprinted. candidate.sql seeds posting-terms version posting-v2, which production does not hold: production has posting-v1 and posting-v3 (current since 20261109173012_posting_terms_v3.sql), and posting-v4 once 20261112122001_publish_posting_terms_v4.sql is applied (current from 20261112173841_switch_posting_terms_v4.sql).",
     "schema_grants: production has 8 items (d397fed9c8bd9d4fc50ebdd777899d93) and the replay 7 (categories below). The extra production item is `internal supabase_auth_admin:USAGE`, which Supabase grants when the Auth \"Before user created\" hook is switched on; no repository file creates it (see replay/hosted-auth-hook-grants.sql)."
   ],
-  "updateCount": 132,
-  "lastUpdate": "20261127044054_public_presentation_display_fields.sql",
+  "updateCount": 133,
+  "lastUpdate": "20261127055550_reveal_business_contacts.sql",
   "categories": {
     "column_grants": {
       "items": 10,
@@ -59,16 +59,16 @@
       "fingerprint": "821f7d069c595c075754fad9309136ac"
     },
     "function_bodies": {
-      "items": 1230,
-      "fingerprint": "5064196966c1e4df401a3a0a7df2b9ea"
+      "items": 1231,
+      "fingerprint": "f978c48a7e457293bf8b5f59d35957f7"
     },
     "function_grants": {
       "items": 890,
       "fingerprint": "426a8006e974a14c3579ed9243809bf6"
     },
     "function_metadata": {
-      "items": 1230,
-      "fingerprint": "f6aa030599a51492ab1a9e489d3406f5"
+      "items": 1231,
+      "fingerprint": "020a7e14e1ce91e15ee42f80e4591f22"
     },
     "indexes": {
       "items": 620,

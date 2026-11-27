@@ -22,7 +22,11 @@ import { editLimitReachedMessage } from "@/lib/posting/package-rules";
 import { MediaUpload } from "@/components/ui/media-upload";
 import { OnlinePresenceFields } from "@/components/post/online-presence-fields";
 import { PostingTermsConsent } from "@/components/post/posting-terms-consent";
-import { UploadProgressPanel, type UploadSlotStatus } from "@/components/ui/upload-progress-panel";
+import {
+  UploadProgressPanel,
+  useUploadProgress,
+  type UploadSlotStatus,
+} from "@/components/ui/upload-progress-panel";
 import { LocationSelector } from "@/components/ui/location-selector";
 import { type BusinessCategory, type PromotionType } from "@/types/enums";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
@@ -35,6 +39,7 @@ import { normalizeCreatePostRuntimeError } from "@/app/post/_lib/create-post-err
 import { validatePromotionForm } from "@/lib/forms/promotion-form";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { fetchWithRetry } from "@/lib/utils/fetch-retry";
+import { xhrFetch } from "@/lib/utils/xhr-upload";
 import { useToast } from "@/hooks/use-toast";
 import {
   getPromotionMediaUploadErrorState,
@@ -75,6 +80,7 @@ export default function EditPromotionPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submissionInFlightRef = useRef(false);
   const [submitProgress, setSubmitProgress] = useState<string | null>(null);
+  const uploadProgress = useUploadProgress();
   const [uploadStatuses, setUploadStatuses] = useState<Record<string, UploadSlotStatus>>({
     logo: "idle",
     photos: "idle",
@@ -287,6 +293,7 @@ export default function EditPromotionPage() {
     submissionInFlightRef.current = true;
     setIsSubmitting(true);
     setSubmitProgress("Uploading media...");
+    uploadProgress.reset();
     setUploadStatuses({
       logo: newLogoFile.length > 0 ? "uploading" : "skipped",
       photos: newPhotoFiles.length > 0 ? "uploading" : "skipped",
@@ -407,11 +414,18 @@ export default function EditPromotionPage() {
               const uploadData = new FormData();
               uploadData.append("area", "promotion");
               for (const f of newPhotoFiles) uploadData.append("files", f);
-              const uploadRes = await fetchWithRetry("/api/media/upload", {
-                method: "POST",
-                headers: withCsrfHeaders(),
-                body: uploadData,
-              });
+              const trackPhotos = uploadProgress.track("photos", newPhotoFiles);
+              const uploadRes = await fetchWithRetry(
+                "/api/media/upload",
+                {
+                  method: "POST",
+                  headers: withCsrfHeaders(),
+                  body: uploadData,
+                },
+                undefined,
+                undefined,
+                (input, init) => xhrFetch(input, init, trackPhotos)
+              );
               if (!uploadRes.ok) {
                 throw new Error(await readUploadError(uploadRes, "Failed to upload photos"));
               }
@@ -429,6 +443,7 @@ export default function EditPromotionPage() {
                 files: newVideoFiles,
                 area: "promotion",
                 maxSeconds: MAX_EVENT_VIDEO_SECONDS,
+                onProgress: uploadProgress.trackVideo("videos", newVideoFiles),
               });
               setUploadStatuses((c) => ({ ...c, videos: "done" }));
               return result;
@@ -1357,6 +1372,7 @@ export default function EditPromotionPage() {
               )}
               <UploadProgressPanel
                 visible={isSubmitting}
+                progress={uploadProgress.values}
                 slots={[
                   {
                     key: "logo",

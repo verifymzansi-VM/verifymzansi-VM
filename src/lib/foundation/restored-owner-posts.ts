@@ -124,7 +124,7 @@ export function restoredOwnerPostRow(post: RestoredOwnerPost, owner: string) {
       delete attrs[field.key];
     }
   }
-  const extras = presentedFormFields(post.frontend, post.kind === "business");
+  const extras = presentedFormFields(post.frontend);
   const city =
     reference.cities.find((c) => c.id === post.content.city_id)?.label ??
     post.content.locality_label ??

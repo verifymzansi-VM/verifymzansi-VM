@@ -19,6 +19,11 @@ const { businessLayoutRouterSpy } = vi.hoisted(() => ({
 }));
 
 // Has its own tests; here it would take a fetch response meant for the form.
+// Uploads with a progress bar use XHR; these tests stub fetch, so send them there.
+vi.mock("@/lib/utils/xhr-upload", () => ({
+  xhrFetch: (input: RequestInfo | URL, init?: RequestInit) => fetch(input, init),
+}));
+
 vi.mock("@/components/business-verification/use-registered-office", () => ({
   UseRegisteredOffice: () => null,
 }));
@@ -376,6 +381,86 @@ describe("EditBusinessPage", () => {
     });
     expect(mockToast).not.toHaveBeenCalled();
     expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it("saves the service areas typed for a business that travels to customers", async () => {
+    render(<EditBusinessPage />);
+    await termsLoaded();
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("Nomsa Home Studio")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "I travel to customers" }));
+    fireEvent.change(screen.getByLabelText(/Service areas/), {
+      target: { value: "Soweto, Sandton" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+    const payload = JSON.parse(fetchMock.mock.calls[1][1].body as string);
+    expect(payload.service_areas).toEqual({ areas: ["Soweto", "Sandton"] });
+    expect(payload.category_details.customer_access).toMatchObject({
+      methods: expect.arrayContaining(["travel"]),
+      serviceAreas: "Soweto, Sandton",
+    });
+  });
+
+  it("keeps the saved service areas when an edit leaves them untouched", async () => {
+    fetchMock.mockReset();
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          business: {
+            id: "business-3",
+            status: "live",
+            revision: 4,
+            business_type: "mobile_service",
+            business_name: "Thando Mobile Salon",
+            slug: "thando-mobile-salon",
+            description: "A salon that comes to you.",
+            category: "health_beauty",
+            location_province: "Gauteng",
+            location_city: "Johannesburg",
+            store_number: null,
+            map_directions: null,
+            phone: "0821234567",
+            whatsapp: "",
+            email: "hello@example.com",
+            website: "",
+            logo_url: "",
+            cover_photo: "",
+            cover_video: "",
+            video_thumbnail: "",
+            gallery_photos: [],
+            services_offered: [],
+            payment_methods_accepted: [],
+            delivery_options: [],
+            social_links: {},
+            operating_hours: {},
+            service_areas: { areas: ["Soweto", "Sandton"] },
+            business_details: null,
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ success: true, pendingReview: true }),
+      });
+
+    render(<EditBusinessPage />);
+    await termsLoaded();
+    await waitFor(() =>
+      expect(screen.getByDisplayValue("Thando Mobile Salon")).toBeInTheDocument()
+    );
+    expect(screen.getByLabelText(/Service areas/)).toHaveValue("Soweto, Sandton");
+
+    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    const payload = JSON.parse(fetchMock.mock.calls[1][1].body as string);
+    expect(payload.service_areas).toEqual({ areas: ["Soweto", "Sandton"] });
   });
 
   it("collapses legacy online delivery details into simple delivery availability on save", async () => {

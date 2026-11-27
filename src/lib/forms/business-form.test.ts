@@ -1,23 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { parseServiceAreas, validateBusinessForm } from "./business-form";
+import { validateBusinessForm } from "./business-form";
 import { getDefaultBusinessDetails } from "./business-type-details";
 
 describe("business-form helpers", () => {
-  it("normalizes service areas into a trimmed list", () => {
-    expect(parseServiceAreas(" Sandton, Midrand , Soweto ")).toEqual([
-      "Sandton",
-      "Midrand",
-      "Soweto",
-    ]);
-  });
-
-  it("requires service areas for mobile services and validates social URLs", () => {
+  it("validates social URLs", () => {
     expect(
       validateBusinessForm({
         businessType: "mobile_service",
         businessDetails: getDefaultBusinessDetails("mobile_service"),
         storeNumber: "",
-        serviceAreasInput: " , ",
         mapDirections: "",
         phone: "",
         whatsapp: "",
@@ -29,7 +20,6 @@ describe("business-form helpers", () => {
         socialTiktok: "",
       })
     ).toMatchObject({
-      service_areas: "Add at least one service area.",
       socialFacebook: "Enter a valid Facebook URL.",
     });
   });
@@ -40,7 +30,6 @@ describe("business-form helpers", () => {
         businessType: "standalone_shop",
         businessDetails: getDefaultBusinessDetails("standalone_shop"),
         storeNumber: "",
-        serviceAreasInput: "",
         mapDirections: "",
         phone: "",
         whatsapp: "",
@@ -68,7 +57,6 @@ describe("business-form helpers", () => {
           support_response_time: "",
         },
         storeNumber: "",
-        serviceAreasInput: "",
         mapDirections: "",
         phone: "",
         whatsapp: "",
@@ -93,7 +81,6 @@ describe("business-form helpers", () => {
           support_response_time: "",
         },
         storeNumber: "",
-        serviceAreasInput: "",
         mapDirections: "",
         phone: "",
         whatsapp: "",
@@ -105,5 +92,35 @@ describe("business-form helpers", () => {
         socialTiktok: "",
       })
     ).toEqual({});
+  });
+
+  it("takes a landline for calls but needs a mobile for WhatsApp", () => {
+    const contacts = (phone: string, whatsapp: string) =>
+      validateBusinessForm({
+        businessType: "online_only",
+        businessDetails: getDefaultBusinessDetails("online_only"),
+        storeNumber: "",
+        mapDirections: "",
+        phone,
+        whatsapp,
+        email: "",
+        website: "",
+        socialFacebook: "",
+        socialInstagram: "",
+        socialTwitter: "",
+        socialTiktok: "",
+      });
+    expect(contacts("031 123 4567", "082 123 4567")).not.toHaveProperty("phone");
+    expect(contacts("031 123 4567", "082 123 4567")).not.toHaveProperty("whatsapp");
+    expect(contacts("", "031 123 4567").whatsapp).toBe("WhatsApp needs a mobile number.");
+    // 087, 0800, 0860 and 0861 take calls only.
+    for (const number of ["087 123 4567", "0800 123 456", "0860 123 456", "0861 123 456"]) {
+      expect(contacts(number, ""), number).not.toHaveProperty("phone");
+      expect(contacts("", number).whatsapp, number).toBe("WhatsApp needs a mobile number.");
+    }
+    expect(contacts("0862123456", "0801234567")).toMatchObject({
+      phone: "Enter a valid South African number.",
+      whatsapp: "Enter a valid South African WhatsApp number.",
+    });
   });
 });
