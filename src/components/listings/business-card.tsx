@@ -1,6 +1,5 @@
 "use client";
 
-import { Store } from "lucide-react";
 import { AffiliationBadge } from "@/components/organisations/affiliation-badges";
 import { PosterCardShell } from "@/components/listings/poster-card-shell";
 import { BusinessStickers } from "@/components/trust/business-stickers";
@@ -127,11 +126,6 @@ export function BusinessCard({
       focalY={focalY}
       mediaWidth={mediaWidth}
       mediaHeight={mediaHeight}
-      fallback={
-        <div className="flex h-full w-full items-center justify-center text-brand-blue/35">
-          <Store className="h-16 w-16" />
-        </div>
-      }
     />
   );
 }
