@@ -18,7 +18,6 @@ vi.mock("@/components/listings/poster-card-shell", () => ({
     description,
     videoMode,
     mediaUrl,
-    mediaFallbackUrl,
     showPlaybackControl,
     stickyAutoplay,
     makeEntireCardClickable,
@@ -29,7 +28,6 @@ vi.mock("@/components/listings/poster-card-shell", () => ({
     description?: string;
     videoMode?: string;
     mediaUrl?: string;
-    mediaFallbackUrl?: string;
     showPlaybackControl?: boolean;
     stickyAutoplay?: boolean;
     makeEntireCardClickable?: boolean;
@@ -39,7 +37,6 @@ vi.mock("@/components/listings/poster-card-shell", () => ({
       data-testid="poster-card"
       data-video-mode={videoMode}
       data-media-url={mediaUrl}
-      data-fallback-media-url={mediaFallbackUrl}
       data-defer={deferVideoLoadUntilPlay ? "yes" : "no"}
       data-sticky-autoplay={stickyAutoplay ? "yes" : "no"}
     >
@@ -414,11 +411,12 @@ describe("ShowroomCardCarousel", () => {
 
     const sideCards = realCards.filter((c) => c.getAttribute("data-video-mode") !== "ambient");
     expect(sideCards).toHaveLength(2);
-    expect(sideCards[0].getAttribute("data-media-url")).toBe("/images/fallbacks/hero-listing.svg");
+    // No media URL: the card shows its logo placeholder.
+    expect(sideCards[0].getAttribute("data-media-url")).toBeNull();
     expect(sideCards[1].getAttribute("data-media-url")).toBe("https://cdn.example.com/side2.jpg");
   });
 
-  it("uses branded artwork for active video cards without a poster", () => {
+  it("shows the logo placeholder for active video cards without a poster", () => {
     const videoItems: CarouselItem[] = [
       {
         id: "v1",
@@ -434,29 +432,10 @@ describe("ShowroomCardCarousel", () => {
     const cards = screen.getAllByTestId("poster-card");
     const center = cards.slice(1).find((c) => c.getAttribute("data-video-mode") === "ambient");
 
-    expect(center).toHaveAttribute("data-media-url", "/images/fallbacks/hero-listing.svg");
+    expect(center).not.toHaveAttribute("data-media-url");
   });
 
-  it("passes type-aware branded fallback artwork to hero cards", () => {
-    render(<ShowroomCardCarousel items={mockItems} />);
-    const cards = screen.getAllByTestId("poster-card");
-    const realCards = cards.slice(1); // skip invisible placeholder card
-
-    expect(realCards[0]).toHaveAttribute(
-      "data-fallback-media-url",
-      "/images/fallbacks/hero-listing.svg"
-    );
-    expect(realCards[1]).toHaveAttribute(
-      "data-fallback-media-url",
-      "/images/fallbacks/hero-business.svg"
-    );
-    expect(realCards[2]).toHaveAttribute(
-      "data-fallback-media-url",
-      "/images/fallbacks/hero-shop.svg"
-    );
-  });
-
-  it("uses branded fallback artwork for side video cards without posters", () => {
+  it("shows the logo placeholder for side video cards without posters", () => {
     const videoItems: CarouselItem[] = [
       {
         id: "v1",
@@ -480,7 +459,7 @@ describe("ShowroomCardCarousel", () => {
       .slice(1)
       .filter((card) => card.getAttribute("data-video-mode") !== "ambient");
 
-    expect(sideCards[0]).toHaveAttribute("data-media-url", "/images/fallbacks/hero-business.svg");
+    expect(sideCards[0]).not.toHaveAttribute("data-media-url");
   });
 
   it("keeps arrow controls desktop-only while mobile relies on swipe and keyboard", () => {
