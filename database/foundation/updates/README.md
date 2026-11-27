@@ -82,15 +82,16 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Catalogue filters run in the database, 26 November 2026
 
-`20261126062428_catalogue_filters_in_database.sql` is pending (see the applied
-register). Launch checklist item 29. No table, column, index, trigger, command,
-argument or grant is added or removed; two existing function bodies are
-replaced. Three public lists filtered, merged or paged in the website after
-reading far more cards than they showed: an organisation's supported businesses
-(`/organisation/<slug>` and `/mzansi-business?org=`, which missed any business
-past position 4,800), a text search under Businesses without a category (two
-reads merged in the website, up to 480 results) and Video mode (four pages of 50
-full cards per section, only to use their ids).
+`20261126062428_catalogue_filters_in_database.sql` was applied on 26 November
+2026 at 23:48 UTC (see the applied register). Launch checklist item 29. No
+table, column, index, trigger, command, argument or grant is added or removed;
+two existing function bodies are replaced. Three public lists filtered, merged
+or paged in the website after reading far more cards than they showed: an
+organisation's supported businesses (`/organisation/<slug>` and
+`/mzansi-business?org=`, which missed any business past position 4,800), a text
+search under Businesses without a category (two reads merged in the website, up
+to 480 results) and Video mode (four pages of 50 full cards per section, only to
+use their ids).
 
 - **`internal.search_posts`** (full body; behind `api.search_posts` and
   `internal.search_post_cards`) gains five optional request keys, so each list
@@ -8902,6 +8903,8 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   (fingerprint.sql, 20:31 UTC) matched the full replay (except the known schema
   grant difference)
 
-- `20261126062428_catalogue_filters_in_database.sql`: pending; apply-first
+- `20261126062428_catalogue_filters_in_database.sql`: applied 2026-11-26 23:48
+  UTC; apply-first; production fingerprint after it (fingerprint.sql, read-only,
+  23:5x UTC) matched the full replay (except the known schema grant difference)
 
 <!-- applied-register:end -->
