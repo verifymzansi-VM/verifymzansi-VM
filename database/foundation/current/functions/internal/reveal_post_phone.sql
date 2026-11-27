@@ -14,14 +14,9 @@ begin
     where p.id=p_post_id;
   if post_kind is null then return null; end if;
   if post_kind='business' then
-    -- The business's own number, as chosen on its form, in +27 form.
-    select regexp_replace(d.contacts->>(case p_channel when 'call' then 'phone' else 'whatsapp' end),'[ ()-]','','g')
+    -- The business's own number for a ticked channel, in +27 form.
+    select internal.business_contact_number(d.data,d.contacts,p_channel)
       into number from private.post_presentations d where d.post_id=p_post_id;
-    number:=case
-      when number ~ '^0[1-8][0-9]{8}$' then '+27'||substr(number,2)
-      when number ~ '^27[1-8][0-9]{8}$' then '+'||number
-      when number ~ '^[+]27[1-8][0-9]{8}$' then number end;
-    if p_channel='whatsapp' and number !~ '^[+]27[6-8]' then return null; end if;
     return number;
   end if;
   select f.phone into number from private.public_eligible_posts eligible join private.posts p on p.id=eligible.id

@@ -3,16 +3,13 @@ import { foundationMediaUrl } from "./public-media-url";
 // Only explicit owner assertions are presented. This projection contains no
 // private contact numbers, owner identity, verification or funding authority.
 export const frontendPostPresentationSchema = z.strictObject({
+  // Accepted only from a database without update 20261127055550 and never
+  // read: business numbers reach a page only through the click-to-view route.
   business_contacts: z
     .strictObject({
       phone: z.string().nullable().optional(),
       whatsapp: z.string().nullable().optional(),
     })
-    .optional(),
-  // Whether the click-to-view route has a business number per channel; the
-  // numbers themselves never enter the public read.
-  business_contact_options: z
-    .strictObject({ phone: z.boolean(), whatsapp: z.boolean() })
     .optional(),
   data: z
     .record(z.string(), z.unknown())
@@ -71,7 +68,6 @@ export function presentedFormFields(frontend: FrontendPostPresentation | undefin
     "location_address",
     "store_number",
     "map_directions",
-    "email",
     "website",
     "social_links",
     "services_offered",
@@ -102,29 +98,22 @@ export function presentedFormFields(frontend: FrontendPostPresentation | undefin
   return fields;
 }
 
-/** A South African number in +27 form, as the click-to-view route serves it
- * (internal.reveal_post_phone): any landline or mobile for a call, a mobile
- * only for WhatsApp; null for anything else. */
-export function revealableBusinessNumber(
-  value: string | null | undefined,
-  channel: "call" | "whatsapp"
-) {
-  const number = (value ?? "").replace(/[ ()-]/g, "");
-  const match = /^(?:0|27|[+]27)([1-8][0-9]{8})$/.exec(number);
-  if (!match || (channel === "whatsapp" && !/^[6-8]/.test(match[1]!))) return null;
-  return `+27${match[1]}`;
-}
+// Which channels the click-to-view route can serve for a business
+// (data.business_contact_options, internal.frontend_post_presentation): the
+// business's ticked contact methods with a number the route accepts. Never
+// the numbers.
+const businessContactOptionsSchema = z.strictObject({
+  call: z.boolean(),
+  whatsapp: z.boolean(),
+});
 
-/** Which business numbers a visitor can ask for with "Show number". Never the
- * numbers: a public page receives them only from the click-to-view route. */
+/** Which business numbers a visitor can ask for with "Show number". Without
+ * the database's answer (a reply from before update 20261127055550) none. */
 export function businessContactAvailability(frontend: FrontendPostPresentation | undefined) {
-  const options = frontend?.business_contact_options;
-  const contacts = frontend?.business_contacts;
-  const phone = options
-    ? options.phone
-    : revealableBusinessNumber(contacts?.phone, "call") !== null;
-  const whatsapp = options
-    ? options.whatsapp
-    : revealableBusinessNumber(contacts?.whatsapp, "whatsapp") !== null;
-  return { phone, whatsapp, email: false };
+  const options = businessContactOptionsSchema.safeParse(frontend?.data.business_contact_options);
+  return {
+    phone: options.success && options.data.call,
+    whatsapp: options.success && options.data.whatsapp,
+    email: false,
+  };
 }

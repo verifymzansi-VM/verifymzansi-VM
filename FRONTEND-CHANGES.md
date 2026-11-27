@@ -4813,11 +4813,16 @@ were shown on business pages and slides straight away (from the public card
 read); they now come only from the click-to-view route (/api/contact/reveal,
 human check and per-visitor limits), the same as Market listings. Database
 update `20261127055550_reveal_business_contacts.sql` (pending, apply first)
-lets that route answer with a business's own numbers (call: landline or
-mobile; WhatsApp: mobile only). Data changes in `src/lib/foundation/`
-(post-presentation.ts, marketplace-read.ts, contact-reveal-route.ts) are
-outside the checked scope; `src/lib/utils/contact-links.ts` adds a call
-number that accepts landlines.
+lets that route answer with a business's own numbers, only for a channel
+ticked on its form (call: landline or mobile; WhatsApp: a 06x, 071-074,
+076-079 or 081-084 mobile, not 080 or 086), and the public card read then
+says only which channels exist, never the numbers. Data changes in
+`src/lib/foundation/` (post-presentation.ts, marketplace-read.ts,
+contact-reveal-route.ts) are outside the checked scope;
+`src/lib/utils/contact-links.ts` adds a call number that accepts landlines,
+and WhatsApp links use the same mobile rule as the database (an 080, 086,
+070, 075 or 085 number gets no WhatsApp button). Between the database update
+and the website deploy, business pages briefly show no number buttons.
 
 What a visitor sees: the contact card shows 'Show contact number' instead of
 'Call 0xx…' / 'WhatsApp 0xx…'; after the check, the same call and WhatsApp

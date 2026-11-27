@@ -85,28 +85,51 @@ preflight then reports the database ahead, and a forward fix is preferred.
 `20261127055550_reveal_business_contacts.sql` is pending (see the applied
 register).
 
+- **One rule for a business's numbers.** New
+  `internal.business_contact_number(data, contacts, channel)` gives the number a
+  business serves for a channel from its stored presentation
+  (`post_presentations.contacts`: `phone` for call, `whatsapp` for whatsapp),
+  normalised to `+27` and nine digits, or null. The channel must be ticked in
+  `data.category_details.contact_methods` when the business has that list (one
+  saved before the list existed offers each number it has, as its form shows
+  it). Call accepts any South African number, landline or mobile; WhatsApp only
+  a 06x, 071-074, 076-079 or 081-084 mobile (not 080 toll-free or 086
+  share-call). Spaces, brackets and dashes are ignored; any other value gives
+  null.
 - **Business numbers on request.** `internal.reveal_post_phone` (behind the
   service-only `api.reveal_post_phone`, which the website's "Show number" route
   `/api/contact/reveal` calls after its Turnstile and per-visitor checks) now
-  answers for a publicly live business (Business and Tourism) with the number
-  the business chose on its form (`post_presentations.contacts`): `phone` for
-  call, `whatsapp` for whatsapp, normalised to `+27` and nine digits. Call
-  accepts any South African number, landline or mobile; WhatsApp only a mobile
-  (06, 07, 08). Spaces, brackets and dashes are ignored; any other value gives
-  null.
+  answers for a publicly live business (Business and Tourism) with
+  `internal.business_contact_number`.
+- **No number in the public card read.** `internal.frontend_post_presentation`
+  (the presentation in `api.search_post_cards` with `frontend_presentation`,
+  open to anon and authenticated) no longer returns `business_contacts`. For a
+  business, `data` carries `business_contact_options` `{call, whatsapp}`:
+  booleans, true when `internal.business_contact_number` has a number for that
+  channel. The key sits inside `data` because the current website's parser
+  accepts any key there and rejects unknown keys beside it. The owner's own read
+  and staff review (`internal.frontend_owner_post`, unchanged) keep their
+  `contacts` with the numbers.
 - **Listings and events unchanged**: the owner's verified number, only for a
   channel the owner chose.
 - **Guard.** The update refuses with 55000 unless `internal.reveal_post_phone`
   has its reviewed body (md5 `98baceb9be415a5ba2150793263e58e1`) or this
-  update's (`3c71cc40436dfcc792ecea4ed0d0db3f`).
+  update's (`a30f22dd9c40c95cdc35abb9dcf5e204`),
+  `internal.frontend_post_presentation` its reviewed body
+  (`9f279565fc4eca46f6b355313a2271a3`) or this update's
+  (`c679983dbb6c63714de6be71c459ee85`), and `internal.business_contact_number`
+  is absent or has this update's body (`c0441e9dea4f583bdc4bc68e712ce993`).
 
-Expand only: one replaced body; no command, argument, grant or table changes.
-ORDER: **apply-first** (apply, then merge): the current website never asks for a
-business number, so nothing changes until the website that shows business
-numbers behind "Show number" is deployed. Read-only preflight (counts only):
-`../preflight/20261127055550_reveal_business_contacts.check.sql`; rollback:
-`../rollback/20261127055550_reveal_business_contacts.down.sql` (puts the earlier
-body back). Behaviour checks:
+Expand only: one new internal function and two replaced bodies; no command,
+argument, grant or table changes (the removed key is a field inside a jsonb
+value, which the contract steps do not compare). ORDER: **apply-first** (apply,
+then merge). The current website never asks the reveal for a business number and
+ignores the new `data` key; without `business_contacts` it shows no business
+number buttons until the new website is deployed. A website deployed before the
+update would answer 404 to every business "Show number". Read-only preflight
+(counts only): `../preflight/20261127055550_reveal_business_contacts.check.sql`;
+rollback: `../rollback/20261127055550_reveal_business_contacts.down.sql` (puts
+both earlier bodies back and drops the new function). Behaviour checks:
 `scripts/test-foundation-reveal-business-contacts.mjs`.
 
 ## Public post presentation limited to display fields, 27 November 2026
@@ -9012,6 +9035,7 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   23:5x UTC) matched the full replay (except the known schema grant difference)
 - `20261126202833_allowance_says_package_running.sql`: pending; website-first
 - `20261127044054_public_presentation_display_fields.sql`: pending; apply-first
-- `20261127055550_reveal_business_contacts.sql`: pending; apply-first
+- `20261127055550_reveal_business_contacts.sql`: pending; apply-first (apply,
+  then merge)
 
 <!-- applied-register:end -->

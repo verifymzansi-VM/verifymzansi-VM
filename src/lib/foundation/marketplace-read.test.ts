@@ -368,17 +368,31 @@ describe("restored marketplace reads", () => {
       business_type: "physical",
       event_window: null,
       frontend: {
-        data: { website: "https://example.invalid" },
+        data: {
+          website: "https://example.invalid",
+          business_contact_options: { call: true, whatsapp: false },
+        },
         media: [],
-        business_contacts: { phone: "031 123 4567", whatsapp: "0821234567" },
       },
     };
     const result = restoredPublicRow(core as never, undefined, presentation as never);
     expect(result.phone).toBeNull();
     expect(result.whatsapp).toBeNull();
-    expect(result.contact_available).toEqual({ phone: true, whatsapp: true, email: false });
+    expect(result.contact_available).toEqual({ phone: true, whatsapp: false, email: false });
     expect(result.website).toBe("https://example.invalid");
-    const text = JSON.stringify(result);
+    expect(result).not.toHaveProperty("business_contact_options");
+    // A reply from a database before the update still carries the numbers:
+    // they never reach the row, and no buttons are offered.
+    const older = restoredPublicRow(core as never, undefined, {
+      ...presentation,
+      frontend: {
+        data: { website: "https://example.invalid" },
+        media: [],
+        business_contacts: { phone: "031 123 4567", whatsapp: "0821234567" },
+      },
+    } as never);
+    expect(older.contact_available).toEqual({ phone: false, whatsapp: false, email: false });
+    const text = JSON.stringify(older);
     expect(text).not.toContain("1234567");
     expect(text).not.toContain("+27");
     // A Market listing has no business numbers to ask for.

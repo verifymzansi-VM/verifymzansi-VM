@@ -1,9 +1,13 @@
 #!/usr/bin/env node
 // Behaviour checks for 20261127055550_reveal_business_contacts.sql: the
 // click-to-view command (api.reveal_post_phone, service only) answers for a
-// publicly live business with the number the business chose, in +27 form
-// (any South African number for a call, a mobile only for WhatsApp), while
-// listings and events keep the owner's verified number for a chosen channel.
+// publicly live business with the number the business chose for a ticked
+// channel, in +27 form (any South African number for a call, a 06x, 071-074,
+// 076-079 or 081-084 mobile for WhatsApp), while listings and events keep the
+// owner's verified number for a chosen channel. The public card read
+// (api.search_post_cards with presentation flags, open to visitors and
+// members) carries no business number, only business_contact_options
+// booleans, and the owner's own read keeps the numbers.
 //
 // Replays database/foundation (prelude, candidate.sql, every update before this
 // one) into the throwaway, network-less Postgres 17 container of the SQL lint
@@ -11,7 +15,8 @@
 // owner. It checks the read-only preflight (counts only), a drifted body and a
 // premature rollback, applies the update and proves apply -> rollback -> apply
 // (a repeated run changes nothing), then checks the answers per post and
-// channel, that visitors and members still cannot run the command, and that no
+// channel, the public card read as a visitor and as a member, the owner's own
+// read, that visitors and members still cannot run the command, and that no
 // grant changed.
 //
 //   node --import tsx scripts/test-foundation-reveal-business-contacts.mjs
@@ -38,6 +43,8 @@ const [PREFLIGHT, ROLLBACK] = [
   readFileSync(`database/foundation/${folder}/${UPDATE.replace(/\.sql$/, suffix)}`, "utf8")
 );
 const REVEAL = "internal.reveal_post_phone(uuid,text)";
+const PRESENTATION = "internal.frontend_post_presentation(uuid)";
+const NUMBER = "internal.business_contact_number(jsonb,jsonb,text)";
 const summary = (state) =>
   new RegExp(
     `^business contacts reveal: ${state}; live businesses with a phone number: \\d+; with a WhatsApp number: \\d+; with a number not served: \\d+$`
@@ -68,9 +75,10 @@ try {
       insert into private.entitlements(owner_id,source,granted_by,slot_capacity,max_photos,max_videos,starts_at,ends_at)
         values(p_owner,'staff_grant',p_owner,1000,10,1,now()-interval '1 day',now()+interval '60 days') returning id $$;
     -- A post of p_kind (live unless p_live is false) with business numbers
-    -- p_contacts and contact choices p_channels (listings and events).
-    create or replace function vmtest.post(p_owner uuid,p_slot uuid,p_kind text,p_contacts jsonb,p_channels text[],p_live boolean)
-      returns uuid language plpgsql as $$
+    -- p_contacts, presentation p_data and contact choices p_channels
+    -- (listings and events).
+    create or replace function vmtest.post(p_owner uuid,p_slot uuid,p_kind text,p_contacts jsonb,p_channels text[],p_live boolean,
+      p_data jsonb) returns uuid language plpgsql as $$
     declare pid uuid:=gen_random_uuid(); cat text; begin
       if p_kind='business' then
         select c.category_key into cat from private.post_category_contracts c
@@ -98,7 +106,7 @@ try {
         insert into private.listing_details(post_id,price_mode,price_cents) values(pid,'amount',12000);
         insert into private.post_contacts(post_id,post_kind,channels) values(pid,'listing',p_channels);
       end if;
-      insert into private.post_presentations(post_id,data,contacts) values(pid,'{}'::jsonb,p_contacts);
+      insert into private.post_presentations(post_id,data,contacts) values(pid,p_data,p_contacts);
       if p_live then
         insert into private.post_activations(post_id,entitlement_id,owner_id) values(pid,p_slot,p_owner);
         update private.posts set status='live',published_at=now()-interval '1 minute',visible_until=now()+interval '30 days'
@@ -108,16 +116,40 @@ try {
       return pid;
     end$$;`);
   const slot = q(`select vmtest.slot('${owner.id}');`);
-  const post = (kind, contacts, { channels = ["form"], live = true } = {}) =>
+  const post = (kind, contacts, { channels = ["form"], live = true, methods } = {}) =>
     q(
       `select vmtest.post('${owner.id}','${slot}','${kind}',${sqlJsonb(contacts)},array[${channels
         .map((c) => `'${c}'`)
-        .join(",")}]::text[],${live});`
+        .join(",")}]::text[],${live},${sqlJsonb(
+        methods ? { category_details: { contact_methods: methods } } : {}
+      )});`
     );
   const revealSql = (id, channel) => `select api.reveal_post_phone('${id}','${channel}');`;
   const reveal = (id, channel) => q(service(revealSql(id, channel)));
 
+  // The public card read of one post (or of every live post) as `as`.
+  const cards = (as, id) =>
+    json(
+      as(
+        `select api.search_post_cards(${sqlJsonb({
+          ...(id ? { post_id: id } : {}),
+          limit: 48,
+          offset: 0,
+          presentation: true,
+          frontend_presentation: true,
+        })});`
+      )
+    ).items;
+  const options = (id) => cards(anon, id)[0].presentation.frontend.data.business_contact_options;
+  // Every stored business number, as stored and as its last seven digits.
+  const STORED = [];
+  const shows = (text) =>
+    STORED.filter(
+      (value) => text.includes(value) || text.includes(value.replace(/\D/g, "").slice(-7))
+    );
+
   let landline, mobile, spaced, international, landlineOnWhatsapp, odd, none, draft, listing, event;
+  let tickedCall, tickedBoth, tollFree;
   await check("before the update: the world, and businesses answer nothing", () => {
     landline = post("business", { phone: "0311234567", whatsapp: null });
     mobile = post("business", { phone: null, whatsapp: "0821234567" });
@@ -127,12 +159,32 @@ try {
     odd = post("business", { phone: "0911234567", whatsapp: "12345" });
     none = post("business", { phone: "", whatsapp: null });
     draft = post("business", { phone: "0311234567", whatsapp: "0821234567" }, { live: false });
+    // Contact methods ticked on the form: WhatsApp unticked, then both.
+    tickedCall = post(
+      "business",
+      { phone: "0315550001", whatsapp: "0825550002" },
+      { methods: ["call", "form"] }
+    );
+    tickedBoth = post(
+      "business",
+      { phone: "0825550003", whatsapp: "0835550004" },
+      { methods: ["call", "whatsapp"] }
+    );
+    // 080 (toll-free) and 086 (share-call) are not WhatsApp numbers.
+    tollFree = post("business", { phone: "0805550005", whatsapp: "0865550006" });
+    STORED.push(
+      ...json(`select jsonb_agg(v) from private.post_presentations d
+        cross join lateral (values(d.contacts->>'phone'),(d.contacts->>'whatsapp')) n(v)
+        where length(regexp_replace(coalesce(v,''),'[^0-9]','','g'))>=7;`)
+    );
     listing = post("listing", {}, { channels: ["call", "form"] });
     event = post("event", {}, { channels: ["whatsapp", "form"] });
     for (const id of [landline, mobile, spaced])
       for (const channel of ["call", "whatsapp"]) assert.equal(reveal(id, channel), "", id);
     assert.equal(reveal(listing, "call"), OWNER_PHONE);
     assert.equal(reveal(event, "whatsapp"), OWNER_PHONE);
+    // Before the update a visitor's card read carries the stored numbers.
+    assert.ok(shows(JSON.stringify(cards(anon, tickedBoth))).length > 0);
   });
 
   await check("preflight: read only, summary only, counts only, before the update", () => {
@@ -145,7 +197,7 @@ try {
     // Live businesses only; the empty phone and the draft are not counted.
     assert.equal(
       rows[0][1],
-      "business contacts reveal: update not applied; live businesses with a phone number: 5; with a WhatsApp number: 5; with a number not served: 2"
+      "business contacts reveal: update not applied; live businesses with a phone number: 8; with a WhatsApp number: 8; with a number not served: 4"
     );
     assert.match(rows[0][1], NOT_APPLIED);
     assertReadOnlyPreflight(database, PREFLIGHT);
@@ -157,8 +209,9 @@ try {
       {
         rollback: ROLLBACK,
         updateSql: step.sql,
-        signatures: [REVEAL],
-        drift: /business contacts reveal precondition: internal\.reveal_post_phone/,
+        signatures: [REVEAL, PRESENTATION],
+        drift:
+          /business contacts reveal precondition: internal\.(reveal_post_phone|frontend_post_presentation)/,
       }
     )
   );
@@ -197,6 +250,56 @@ try {
       for (const channel of ["call", "whatsapp"]) assert.notEqual(reveal(id, channel), OWNER_PHONE);
   });
 
+  await check("only ticked channels; WhatsApp only for 06x, 071-074, 076-079, 081-084", () => {
+    assert.equal(reveal(tickedCall, "call"), "+27315550001");
+    assert.equal(reveal(tickedCall, "whatsapp"), "");
+    assert.equal(reveal(tickedBoth, "call"), "+27825550003");
+    assert.equal(reveal(tickedBoth, "whatsapp"), "+27835550004");
+    assert.equal(reveal(tollFree, "call"), "+27805550005");
+    assert.equal(reveal(tollFree, "whatsapp"), "");
+    const whatsapp = (number) =>
+      q(
+        `select coalesce(internal.business_contact_number('{}','{"whatsapp":"${number}"}','whatsapp'),'');`
+      );
+    for (const prefix of ["060", "069", "071", "074", "076", "079", "081", "084"])
+      assert.equal(whatsapp(`${prefix}1234567`), `+27${prefix.slice(1)}1234567`, prefix);
+    for (const prefix of ["070", "075", "080", "085", "086", "087"])
+      assert.equal(whatsapp(`${prefix}1234567`), "", prefix);
+  });
+
+  await check("the public card read carries channel booleans and no business number", () => {
+    const expected = new Map([
+      [landline, { call: true, whatsapp: false }],
+      [mobile, { call: false, whatsapp: true }],
+      [spaced, { call: true, whatsapp: true }],
+      [landlineOnWhatsapp, { call: true, whatsapp: false }],
+      [odd, { call: false, whatsapp: false }],
+      [none, { call: false, whatsapp: false }],
+      [tickedCall, { call: true, whatsapp: false }],
+      [tickedBoth, { call: true, whatsapp: true }],
+      [tollFree, { call: true, whatsapp: false }],
+    ]);
+    for (const [id, value] of expected) assert.deepEqual(options(id), value, id);
+    // A listing has no business options.
+    assert.equal(options(listing), undefined);
+    for (const as of [anon, (sql) => member(stranger, sql)]) {
+      const items = cards(as);
+      assert.ok(items.length >= expected.size, `${items.length} cards`);
+      for (const id of [...expected.keys(), undefined]) {
+        const text = JSON.stringify(id ? cards(as, id) : items);
+        assert.deepEqual(shows(text), [], id);
+        assert.doesNotMatch(text, /(?<![0-9])(?:[+]?27|0)[1-8][0-9]{8}(?![0-9])/);
+        assert.doesNotMatch(text, /business_contacts|"(?:phone|whatsapp)":"/);
+      }
+    }
+  });
+
+  await check("the owner's own read keeps the business's numbers", () => {
+    const own = json(member(owner, `select api.get_my_frontend_post('${tickedCall}');`));
+    assert.deepEqual(own.contacts, { phone: "0315550001", whatsapp: "0825550002" });
+    assert.deepEqual(own.frontend.data.category_details.contact_methods, ["call", "form"]);
+  });
+
   await check("a business that is not publicly live answers nothing", () => {
     assert.equal(reveal(draft, "call"), "");
     assert.equal(reveal(draft, "whatsapp"), "");
@@ -217,10 +320,17 @@ try {
   );
 
   await check("grants unchanged; visitors and members cannot ask for a number", () => {
-    assert.deepEqual(executeGrants(json, ["api.reveal_post_phone(uuid,text)", REVEAL]), {
-      "api.reveal_post_phone(uuid,text)": { anon: false, authenticated: false, service_role: true },
-      [REVEAL]: { anon: false, authenticated: false, service_role: true },
-    });
+    const serviceOnly = { anon: false, authenticated: false, service_role: true };
+    const nobody = { anon: false, authenticated: false, service_role: false };
+    assert.deepEqual(
+      executeGrants(json, ["api.reveal_post_phone(uuid,text)", REVEAL, PRESENTATION, NUMBER]),
+      {
+        "api.reveal_post_phone(uuid,text)": serviceOnly,
+        [REVEAL]: serviceOnly,
+        [PRESENTATION]: nobody,
+        [NUMBER]: nobody,
+      }
+    );
     fails(anon(revealSql(mobile, "whatsapp")), "42501");
     fails(member(stranger, revealSql(mobile, "whatsapp")), "42501");
   });
@@ -234,7 +344,7 @@ try {
     );
     assert.equal(
       rows[0][1],
-      "business contacts reveal: already applied; live businesses with a phone number: 4; with a WhatsApp number: 5; with a number not served: 2"
+      "business contacts reveal: already applied; live businesses with a phone number: 7; with a WhatsApp number: 8; with a number not served: 4"
     );
   });
 
