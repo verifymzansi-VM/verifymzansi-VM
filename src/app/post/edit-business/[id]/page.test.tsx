@@ -400,7 +400,7 @@ describe("EditBusinessPage", () => {
             phone: "",
             whatsapp: "",
             email: "hello@orders.example.com",
-            website: "",
+            website: "https://orders.example.com",
             logo_url: "",
             cover_photo: "",
             cover_video: "",

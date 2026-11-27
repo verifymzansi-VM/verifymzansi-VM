@@ -22,14 +22,6 @@ const BUSINESS_CONTACT_CHOICES = [
     hint: "Publish a number registered on WhatsApp.",
   },
   {
-    method: "email",
-    field: "email",
-    label: "Email",
-    inputLabel: "Email Address",
-    example: "hello@example.co.za",
-    hint: "Publish an email address for enquiries.",
-  },
-  {
     method: "website",
     field: "website",
     label: "Website",
@@ -50,7 +42,7 @@ const BUSINESS_CONTACT_CHOICES = [
 /** Website has its own always-visible field; the rest are opt-in checkboxes. */
 const CHECKBOX_CHOICES = BUSINESS_CONTACT_CHOICES.filter((choice) => choice.method !== "website");
 
-export type ContactValues = { phone: string; whatsapp: string; email: string; website: string };
+export type ContactValues = { phone: string; whatsapp: string; website: string };
 /**
  * The website is entered in the always-visible "Website, social media &
  * location pin" section, so it counts as a contact method whenever it is
@@ -73,7 +65,6 @@ export function selectedContacts(methods: string[], values: ContactValues) {
   return {
     phone: methods.includes("call") ? values.phone : "",
     whatsapp: methods.includes("whatsapp") ? values.whatsapp : "",
-    email: methods.includes("email") ? values.email : "",
     website: methods.includes("website") ? values.website : "",
   };
 }
@@ -99,8 +90,8 @@ export function BusinessContactFields({
         Your website goes in the website and social media section below.
       </p>
       <FieldHelp label="contact methods">
-        Use a number or email address you check regularly. The VerifyMzansi inbox sends enquiries to
-        your account. If you deselect a method, its details will not appear on your profile.
+        Use a number you check regularly. The VerifyMzansi inbox sends enquiries to your account. If
+        you deselect a method, its details will not appear on your profile.
       </FieldHelp>
       <div className="grid gap-2 sm:grid-cols-2">
         {CHECKBOX_CHOICES.map((choice) => (

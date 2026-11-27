@@ -17,7 +17,6 @@ export interface BusinessFormValues {
   mapDirections: string;
   phone: string;
   whatsapp: string;
-  email: string;
   website: string;
   socialFacebook: string;
   socialInstagram: string;
@@ -117,10 +116,6 @@ export function validateBusinessForm(values: BusinessFormValues): Record<string,
 
   if (values.whatsapp && !SA_PHONE_REGEX.test(values.whatsapp.trim())) {
     errors.whatsapp = "Enter a valid South African WhatsApp number.";
-  }
-
-  if (values.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email.trim())) {
-    errors.email = "Enter a valid email address.";
   }
 
   if (values.website && !isValidUserEnteredUrl(values.website)) {

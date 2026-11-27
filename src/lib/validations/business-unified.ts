@@ -196,7 +196,6 @@ export const businessSchema = z
       .regex(saPhoneRegex, "Enter a valid SA number")
       .optional()
       .or(z.literal("")),
-    email: z.string().email().optional().or(z.literal("")),
     website: externalUrlOrEmptySchema("Enter a valid URL"),
 
     // Media
@@ -216,7 +215,7 @@ export const businessSchema = z
 
     // Details
     contact_methods: z
-      .array(z.enum(["call", "whatsapp", "email", "website", "form"]))
+      .array(z.enum(["call", "whatsapp", "website", "form"]))
       .min(1)
       .optional(),
     services_offered: z.array(z.string().max(200)).max(30).optional().default([]),
@@ -344,18 +343,16 @@ export const businessSchema = z
         });
       if (data.contact_methods?.includes("whatsapp") && !data.whatsapp?.trim())
         ctx.addIssue({ code: "custom", path: ["whatsapp"], message: "Add a WhatsApp number." });
-      if (data.contact_methods?.includes("email") && !data.email?.trim())
-        ctx.addIssue({ code: "custom", path: ["email"], message: "Add an email address." });
       if (data.contact_methods?.includes("website") && !data.website?.trim())
         ctx.addIssue({ code: "custom", path: ["website"], message: "Add a website address." });
       if (
         !data.contact_methods?.includes("form") &&
-        ![data.phone, data.whatsapp, data.email, data.website].some((v) => v?.trim())
+        ![data.phone, data.whatsapp, data.website].some((v) => v?.trim())
       )
         ctx.addIssue({
           code: "custom",
           path: ["phone"],
-          message: "Add at least one contact method: phone, WhatsApp, email or website.",
+          message: "Add at least one contact method: phone, WhatsApp or website.",
         });
       return;
     }

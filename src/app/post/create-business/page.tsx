@@ -146,7 +146,6 @@ const FIELD_IDS: Record<string, string> = {
   map_directions: "mapDirections",
   phone: "phone",
   whatsapp: "whatsapp",
-  email: "email",
   website: "website",
   socialFacebook: "socialFacebook",
   socialInstagram: "socialInstagram",
@@ -160,7 +159,7 @@ const FIELD_IDS: Record<string, string> = {
   termsAccepted: "business-terms-checkbox",
 };
 
-const STEP_CONTACT_FIELDS = ["phone", "whatsapp", "email", "website"] as const;
+const STEP_CONTACT_FIELDS = ["phone", "whatsapp", "website"] as const;
 const STEP_SOCIAL_FIELDS = [
   "map_directions",
   "socialFacebook",
@@ -183,7 +182,6 @@ const BUSINESS_FIELD_LABELS: Record<string, string> = {
   map_directions: "Map / directions",
   phone: "Phone",
   whatsapp: "WhatsApp",
-  email: "Email",
   website: "Website",
   socialFacebook: "Facebook",
   socialInstagram: "Instagram",
@@ -320,9 +318,8 @@ function CreateBusinessContent() {
   const [mapDirections, setMapDirections] = useState("");
   const [phone, setPhone] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
-  const [email, setEmail] = useState("");
   const [website, setWebsite] = useState("");
-  const contactValues = { phone, whatsapp, email, website };
+  const contactValues = { phone, whatsapp, website };
   const contactMethods = readContactMethods(categoryDetails.contact_methods, contactValues);
   const publicContacts = selectedContacts(contactMethods, contactValues);
   const [hoursMonFri, setHoursMonFri] = useState({ open: "", close: "", closed: false });
@@ -477,14 +474,6 @@ function CreateBusinessContent() {
   }, [profile, province, city, phone, whatsapp]);
 
   useEffect(() => {
-    if (!email && user?.email) {
-      queueMicrotask(() => {
-        setEmail(user.email);
-      });
-    }
-  }, [email, user?.email]);
-
-  useEffect(() => {
     if (!user?.id || isLoading || submitSucceeded) return;
 
     void Promise.resolve(restoreDraft()).then((restored) => {
@@ -534,7 +523,6 @@ function CreateBusinessContent() {
         setMapDirections(restoredData.mapDirections ?? "");
         setPhone(restoredData.phone ?? "");
         setWhatsapp(restoredData.whatsapp ?? "");
-        setEmail(restoredData.email ?? "");
         setWebsite(restoredData.website ?? "");
         setHoursMonFri(
           restoredData.hoursMonFri
@@ -603,7 +591,6 @@ function CreateBusinessContent() {
       mapDirections,
       phone,
       whatsapp,
-      email,
       website,
       hoursMonFri: formatHoursValue(hoursMonFri.open, hoursMonFri.close, hoursMonFri.closed),
       hoursSat: formatHoursValue(hoursSat.open, hoursSat.close, hoursSat.closed),
@@ -646,7 +633,6 @@ function CreateBusinessContent() {
     mapDirections,
     phone,
     whatsapp,
-    email,
     website,
     hoursMonFri,
     hoursSat,
@@ -734,7 +720,6 @@ function CreateBusinessContent() {
       mapDirections: mapDirections.trim(),
       phone: publicContacts.phone.trim(),
       whatsapp: publicContacts.whatsapp.trim(),
-      email: publicContacts.email.trim(),
       website: publicContacts.website.trim(),
       socialFacebook: socialFacebook.trim(),
       socialInstagram: socialInstagram.trim(),
@@ -771,7 +756,6 @@ function CreateBusinessContent() {
       for (const [method, field] of [
         ["call", "phone"],
         ["whatsapp", "whatsapp"],
-        ["email", "email"],
         ["website", "website"],
       ] as const) {
         if (contactMethods.includes(method) && !publicContacts[field].trim())
@@ -1006,7 +990,6 @@ function CreateBusinessContent() {
           : undefined,
         phone: publicContacts.phone || undefined,
         whatsapp: publicContacts.whatsapp || undefined,
-        email: publicContacts.email || undefined,
         website: publicContacts.website || undefined,
         logo_url: logoUrls[0] || undefined,
         cover_photo: finalCoverPhoto || undefined,
@@ -1177,7 +1160,6 @@ function CreateBusinessContent() {
     setMapDirections("");
     setPhone(profile?.phone ?? "");
     setWhatsapp(profile?.phone ?? "");
-    setEmail(user?.email ?? "");
     setWebsite("");
     setHoursMonFri({ open: "", close: "", closed: false });
     setHoursSat({ open: "", close: "", closed: false });
@@ -1277,7 +1259,6 @@ function CreateBusinessContent() {
         : null,
       phone: publicContacts.phone || null,
       whatsapp: publicContacts.whatsapp || null,
-      email: publicContacts.email || null,
       website: publicContacts.website || null,
       store_number: storeNumber || null,
       map_directions: readCustomerAccess(categoryDetails.customer_access).publishAddress
@@ -1899,7 +1880,6 @@ function CreateBusinessContent() {
                         ({
                           phone: setPhone,
                           whatsapp: setWhatsapp,
-                          email: setEmail,
                           website: setWebsite,
                         })[field](value)
                       }

@@ -39,7 +39,6 @@ export interface TourismFormValues extends TourismCategorySpecificFormFields {
   languagesSpoken: string;
   phone: string;
   whatsapp: string;
-  email: string;
   website: string;
   socialFacebook: string;
   socialInstagram: string;
@@ -192,24 +191,6 @@ function validateStep2(v: TourismFormValues, errors: Record<string, string>) {
 
   if (
     v.listingType === "tourism_business" &&
-    ![
-      "travel_agency",
-      "car_rental_tourism",
-      "tour_operator",
-      "safari_wildlife",
-      "adventure_activities",
-    ].includes(v.subcategory)
-  ) {
-    if (!v.locationAddress?.trim()) {
-      errors.locationAddress = "Street address is required for tourism businesses.";
-    }
-    if (!v.locationTown?.trim()) {
-      errors.locationTown = "Suburb / town is required for tourism businesses.";
-    }
-  }
-
-  if (
-    v.listingType === "tourism_business" &&
     TOURISM_SUBCATEGORY_FIELD_GROUPS[v.subcategory] === "C"
   ) {
     const methods = v.joinMethods ?? [];
@@ -244,10 +225,6 @@ function validateStep2(v: TourismFormValues, errors: Record<string, string>) {
 
   if (v.whatsapp && !SA_PHONE_REGEX.test(v.whatsapp.trim())) {
     errors.whatsapp = "Enter a valid South African WhatsApp number.";
-  }
-
-  if (v.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.email.trim())) {
-    errors.email = "Enter a valid email address.";
   }
 }
 

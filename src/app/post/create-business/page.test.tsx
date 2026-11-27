@@ -935,7 +935,6 @@ describe("CreateBusinessPage", () => {
         mapDirections: "",
         phone: "",
         whatsapp: "",
-        email: "",
         website: "",
         hoursMonFri: "",
         hoursSat: "",

@@ -69,7 +69,6 @@ export function presentedFormFields(
     "location_address",
     "store_number",
     "map_directions",
-    "email",
     "website",
     "social_links",
     "services_offered",

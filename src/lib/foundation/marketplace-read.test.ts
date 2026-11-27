@@ -299,6 +299,35 @@ describe("restored marketplace reads", () => {
     }
   });
 
+  it("publishes no stored email and no Market street address", () => {
+    const stored = {
+      business_type: null,
+      event_window: null,
+      frontend: {
+        data: {
+          email: "owner@example.com",
+          location_address: "12 Kloof Road",
+          location_town: "Orlando West",
+        },
+        media: [],
+      },
+    };
+    const listing = restoredPublicRow(card() as never, undefined, stored as never);
+    expect(listing.location_address).toBeNull();
+    expect(listing.location_town).toBe("Orlando West");
+    expect(JSON.stringify(listing)).not.toContain("owner@example.com");
+    expect(JSON.stringify(listing)).not.toContain("Kloof");
+    // A business address reaches the public only when its form saved it, which
+    // happens only when the poster chose to show it.
+    const business = restoredPublicRow(
+      card(2, { kind: "business", area: "business" }) as never,
+      undefined,
+      stored as never
+    );
+    expect(business.location_address).toBe("12 Kloof Road");
+    expect(JSON.stringify(business)).not.toContain("owner@example.com");
+  });
+
   it("keeps Free separate from a price on request", () => {
     expect(
       restoredPublicRow(card(1, { price_mode: "free", price_cents: "0" }) as never).price_cents
