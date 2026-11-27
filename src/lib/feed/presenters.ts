@@ -645,7 +645,7 @@ export function presentBusinessSlide(
       },
     },
     contact: {
-      // A business's chosen numbers are public, like any business page.
+      // Business numbers stay out of public rows (null here); "Show number" reveals them.
       phone: business.phone ?? null,
       whatsapp: business.whatsapp ?? null,
       revealable: business.contact_available

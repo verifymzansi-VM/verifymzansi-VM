@@ -16,6 +16,7 @@ import reference from "../domains/taxonomy/reference.json";
 import { buildFoundationPostSearch } from "./post-search";
 import { SEARCH_MAX_OFFSET, searchLastPage } from "./search-depth";
 import {
+  businessContactAvailability,
   presentedFormFields,
   presentedVideoLayout,
   type FrontendPostPresentation,
@@ -85,7 +86,7 @@ export function restoredPublicRow(
     videos.push(foundationMediaUrl(post.preview.video_key)!);
   const eventWindow = detail?.event_window ?? presentation?.event_window;
   const frontend = detail?.frontend ?? presentation?.frontend;
-  const formFields = presentedFormFields(frontend, post.kind === "business");
+  const formFields = presentedFormFields(frontend);
   const videoLayout = videos.length ? presentedVideoLayout(frontend) : null;
   const firstVideo = media.find((row) => row.kind === "video" && row.position === 0);
   if (post.kind === "listing") delete formFields.location_address;
@@ -174,6 +175,11 @@ export function restoredPublicRow(
     website: null,
     store_number: null,
     ...formFields,
+    // Business numbers are served only by the click-to-view route
+    // (/api/contact/reveal); the page knows which channels it can ask for.
+    phone: null,
+    whatsapp: null,
+    contact_available: post.kind === "business" ? businessContactAvailability(frontend) : undefined,
   };
 }
 
