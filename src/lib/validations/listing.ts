@@ -30,6 +30,8 @@ const listingBase = z.object({
     .max(5000, "Description cannot exceed 5000 characters"),
   price_zar: priceSchema,
   negotiable: z.boolean().default(false),
+  /** Explicit price choice; absent on older callers, which keep the amount/zero reading. */
+  price_mode: z.enum(["amount", "free", "on_request"]).optional(),
   province: z.string().min(1, "Province is required").max(50),
   city: z.string().min(1, "City is required").max(80),
   category: z.enum([
