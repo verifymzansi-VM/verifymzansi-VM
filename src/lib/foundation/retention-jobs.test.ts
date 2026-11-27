@@ -756,15 +756,28 @@ it("skips partner deletions without the partner key, and fails the run when the 
 });
 
 describe("edge cache purge of removed media", () => {
-  /** An edge purge that records each request (one subrequest each). */
-  const recordingPurge = (world: ReturnType<typeof createWorld>, fail = false) => {
+  /** A refused purge as the Cloudflare client reports it; null status: no reply. */
+  const refused = (status: number | null) =>
+    status === null
+      ? new TypeError("fetch failed")
+      : Object.assign(new Error(`Edge cache purge refused (HTTP ${status})`), { status });
+  /**
+   * An edge purge that records each request (one subrequest each). `fail`
+   * refuses every request with that status (null: no reply).
+   */
+  const recordingPurge = (world: ReturnType<typeof createWorld>, fail?: number | null) => {
     const purge = vi.fn<EdgePurge["purge"]>(async (keys) => {
       // Purged only after storage deleted every key of every object.
       for (const key of keys) expect(world.stored.has(key)).toBe(false);
-      if (fail) throw new Error("Edge cache purge refused (HTTP 403)");
+      if (fail !== undefined) throw refused(fail);
     });
     return { purge };
   };
+  const error = vi.spyOn(console, "error");
+  beforeEach(() => error.mockImplementation(() => {}));
+  const alerts = () =>
+    error.mock.calls.map(([line]) => String(line)).filter((line) => line.includes("ALERT"));
+  const pause = vi.fn(async (_ms: number, _signal: AbortSignal) => {});
   const runWith = (
     world: ReturnType<typeof createWorld>,
     edgePurge: EdgePurge | null,
@@ -778,6 +791,7 @@ describe("edge cache purge of removed media", () => {
       edgePurge,
       limits,
       now: () => world.clock.at,
+      pause,
     });
 
   afterEach(() => {
@@ -817,15 +831,92 @@ describe("edge cache purge of removed media", () => {
     expect(logLine().line).toContain('"edgePurge":"purged"');
   });
 
-  it("acknowledges nothing when the purge fails, fails the run, and finishes on a later run", async () => {
+  it("sends a failed purge again in the round, and acknowledges once it goes through", async () => {
     const world = createWorld({ media: 2 });
-    await expect(runWith(world, recordingPurge(world, true))).rejects.toThrow("incomplete");
+    const edge = recordingPurge(world);
+    edge.purge.mockRejectedValueOnce(refused(429)).mockRejectedValueOnce(refused(503));
+    expect(await runWith(world, edge)).toMatchObject({ deleted: 2, retrying: 0 });
+    expect(edge.purge).toHaveBeenCalledTimes(3);
+    expect(pause.mock.calls.map(([ms]) => ms)).toEqual([1_000, 3_000]);
+    expect(logLine().line).toContain('"edgePurge":"purged"');
+    expect(alerts()).toEqual([]);
+  });
+
+  it("after a setup error (HTTP 403) acknowledges the deletions at once, so a revoked token cannot stop media cleanup", async () => {
+    const world = createWorld({ media: 80 });
+    for (let run = 1; run <= 3; run++) {
+      info.mockClear();
+      warn.mockClear();
+      error.mockClear();
+      const edge = recordingPurge(world, 403);
+      // The run still fails, so the owner sees it, but only after acknowledging.
+      await expect(runWith(world, edge)).rejects.toThrow("incomplete");
+      expect(edge.purge).toHaveBeenCalledOnce();
+      expect(logLine()).toMatchObject({ level: "warn" });
+      expect(logLine().line).toContain("edge_purge");
+      expect(logLine().line).toContain('"edgePurgeStatus":403');
+      expect(alerts()).toHaveLength(1);
+      expect(alerts()[0]).toContain("ALERT edge purge failing (HTTP 403)");
+    }
+    expect(pause).not.toHaveBeenCalled();
+    // Each run took newer objects: 3 runs x 32 = all 80 (no lease wait needed).
+    expect(world.objects.every((o) => o.state === "deleted" && o.acknowledged === 1)).toBe(true);
+    expect(world.stored.size).toBe(0);
+  });
+
+  it("acknowledges after three failed purges (HTTP 429), with the status in the run line", async () => {
+    const world = createWorld({ media: 50 });
+    for (let run = 1; run <= 2; run++) {
+      info.mockClear();
+      warn.mockClear();
+      error.mockClear();
+      const edge = recordingPurge(world, 429);
+      await expect(runWith(world, edge)).rejects.toThrow("incomplete");
+      expect(edge.purge).toHaveBeenCalledTimes(3);
+      expect(logLine().line).toContain('"edgePurgeStatus":429');
+      expect(logLine().line).toMatch(/"unpurged":\d+/);
+      expect(alerts()).toEqual([expect.stringContaining("ALERT edge purge failing (HTTP 429)")]);
+    }
+    expect(world.objects.every((o) => o.state === "deleted")).toBe(true);
+  });
+
+  it("names a purge that got no reply, and never logs the token", async () => {
+    process.env.MEDIA_CACHE_PURGE_TOKEN = "purge-token-fixture";
+    process.env.MEDIA_CACHE_ZONE_ID = "0123456789abcdef0123456789abcdef";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("fetch failed");
+      })
+    );
+    const world = createWorld({ media: 2 });
+    await expect(
+      runFoundationRetention({ rpc: world.rpc } as unknown as FoundationServiceApi, world.storage, {
+        now: () => world.clock.at,
+        pause,
+      })
+    ).rejects.toThrow("incomplete");
+    expect(logLine().line).toContain('"edgePurgeStatus":"none"');
+    expect(alerts()).toEqual([expect.stringContaining("ALERT edge purge failing (HTTP none)")]);
+    expect(world.objects.every((o) => o.state === "deleted")).toBe(true);
+    const everything = [...info.mock.calls, ...warn.mock.calls, ...error.mock.calls].join("\n");
+    expect(everything).not.toContain("purge-token-fixture");
+  });
+
+  it("acknowledges nothing when the run has no time left to try three times, and finishes on a later run", async () => {
+    const world = createWorld({ media: 2 });
+    const failing = recordingPurge(world, 503);
+    failing.purge.mockImplementationOnce(async () => {
+      world.clock.at += CLEANUP_LIMITS.runMs;
+      throw refused(503);
+    });
+    await expect(runWith(world, failing)).rejects.toThrow("incomplete");
+    expect(failing.purge).toHaveBeenCalledOnce();
     expect(world.objects.every((o) => o.state === "cleanup_required" && !o.acknowledged)).toBe(
       true
     );
-    expect(logLine()).toMatchObject({ level: "warn" });
-    expect(logLine().line).toContain("edge_purge");
     expect(logLine().line).toContain('"edgePurge":"failed"');
+    expect(alerts()).toEqual([]);
     // After the lease the objects are claimed again: deleting a missing key is
     // harmless, the purge is sent again and the objects are acknowledged.
     world.clock.at += LEASE_MS;
@@ -835,6 +926,25 @@ describe("edge cache purge of removed media", () => {
     expect(await runWith(world, edge)).toMatchObject({ deleted: 2 });
     expect(edge.purge).toHaveBeenCalledOnce();
     expect(world.objects.every((o) => o.acknowledged === 1)).toBe(true);
+  });
+
+  it("keeps room for the purge requests when storage refuses the batch request", async () => {
+    for (const fail of [undefined, 429] as const) {
+      info.mockClear();
+      warn.mockClear();
+      const world = createWorld({ media: 9 });
+      world.storage.deleteMany.mockRejectedValue(new Error("batch reply names no requested key"));
+      const edge = recordingPurge(world, fail);
+      const run = runWith(world, edge);
+      if (fail) await expect(run).rejects.toThrow("incomplete");
+      else await run;
+      // The run reached its single log line instead of overrunning its budget.
+      expect(logLine().line).toContain('"batchFallback":true');
+      expect(world.subrequests() + edge.purge.mock.calls.length).toBeLessThanOrEqual(
+        CLEANUP_LIMITS.subrequests
+      );
+      expect(world.objects.filter((o) => o.state === "deleted").length).toBeGreaterThan(0);
+    }
   });
 
   it("claims at most 100 objects a round (Cloudflare's prefix limit) and counts the purge in the budget", async () => {
@@ -847,9 +957,9 @@ describe("edge cache purge of removed media", () => {
     const small = createWorld({ media: 500 });
     const smallEdge = recordingPurge(small);
     await runWith(small, smallEdge);
-    // 40 - 2 sweeps - evidence claim - media claim - batch delete - purge
-    // = 34 acknowledgements (one fewer than without the purge).
-    expect(small.rpc).toHaveBeenCalledWith("claim_media_cleanup", { p_limit: 34 });
+    // 40 - 2 sweeps - evidence claim - media claim - batch delete - 3 purge
+    // requests = 32 acknowledgements (three fewer than without the purge).
+    expect(small.rpc).toHaveBeenCalledWith("claim_media_cleanup", { p_limit: 32 });
     expect(small.subrequests() + smallEdge.purge.mock.calls.length).toBeLessThanOrEqual(
       CLEANUP_LIMITS.subrequests
     );
@@ -883,7 +993,12 @@ describe("edge cache purge of removed media", () => {
       Response.json({ success: false, errors: [{ code: 10000 }] }, { status: 403 })
     );
     vi.stubGlobal("fetch", fetchMock);
-    await expect(createWorld({ media: 1 }).run()).rejects.toThrow("incomplete");
+    const refusedWorld = createWorld({ media: 1 });
+    await expect(refusedWorld.run()).rejects.toThrow("incomplete");
+    // A 403 is a setup error: not sent again, and the deletion is acknowledged.
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(refusedWorld.objects[0]!.state).toBe("deleted");
+    expect(alerts()).toEqual([expect.stringContaining("(HTTP 403)")]);
 
     fetchMock.mockClear();
     info.mockClear();
