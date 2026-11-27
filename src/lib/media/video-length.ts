@@ -76,6 +76,14 @@ const MAX_PLAUSIBLE_SECONDS = 24 * 60 * 60;
 /** A movie header with its sample tables; 2 minutes of phone video needs far less. */
 const MAX_MOOV_BYTES = 32 * 1024 * 1024;
 const MAX_TOP_LEVEL_BOXES = 1024;
+/**
+ * Boxes collected from one parent inside `moov`. Real files have a handful per
+ * parent (and a few tracks); a crafted file packing millions of 8-byte boxes
+ * would otherwise cost seconds of CPU and more memory than a Worker has.
+ */
+const MAX_CHILD_BOXES = 10_000;
+/** Sample entries in one `stsd`; real files have one. */
+const MAX_SAMPLE_ENTRIES = 16;
 
 function u32(bytes: Uint8Array, offset: number): number {
   return (
@@ -112,7 +120,7 @@ function plausible(seconds: number | null): number | null {
     : null;
 }
 
-/** Child boxes of [start, end) inside an in-memory `moov`; null when malformed. */
+/** Child boxes of [start, end) inside an in-memory `moov`; null when malformed or too many. */
 function children(
   bytes: Uint8Array,
   start: number,
@@ -131,6 +139,7 @@ function children(
       header = 16;
     } else if (size === 0) size = end - offset;
     if (size < header || offset + size > end) return null;
+    if (found.length >= MAX_CHILD_BOXES) return null;
     found.push({ type: fourcc(bytes, offset + 4), data: offset + header, end: offset + size });
     offset += size;
   }
@@ -227,8 +236,10 @@ export type VideoFileFacts = {
 /** Sample entries of an `stsd` box; null when malformed. */
 function sampleEntries(bytes: Uint8Array, stsd: Box | undefined): Box[] | null {
   if (!stsd || stsd.data + 8 > stsd.end) return null;
+  const count = u32(bytes, stsd.data + 4);
+  if (!count || count > MAX_SAMPLE_ENTRIES) return null;
   const found = children(bytes, stsd.data + 8, stsd.end);
-  return found && found.length === u32(bytes, stsd.data + 4) && found.length ? found : null;
+  return found && found.length === count ? found : null;
 }
 
 /**

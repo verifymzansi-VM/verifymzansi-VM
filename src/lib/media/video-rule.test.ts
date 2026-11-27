@@ -192,6 +192,27 @@ describe("stored facts", () => {
     });
   });
 
+  it("keeps crafted values inside the ranges the database accepts, so logging never refuses", async () => {
+    const facts = await factsOf(clip());
+    const crafted: VideoFileFacts = {
+      ...facts,
+      video: {
+        ...facts.video,
+        codec: String.fromCharCode(0, 118, 233, 10),
+        width: 65_535,
+        height: 40_000,
+        fps: 3_010_000,
+      },
+    };
+    const stored = videoUploadFacts(crafted, "video_codec");
+    expect(stored).toMatchObject({ codec: "?v??", width: 20_000, height: 20_000, fps: 1000 });
+    expect(stored.codec).toMatch(/^[ -~]{1,8}$/);
+    expect(JSON.stringify(stored)).not.toMatch(/[^ -~]/);
+    expect(videoUploadFacts({ ...facts, video: { ...facts.video, codec: "" } }, null).codec).toBe(
+      "?"
+    );
+  });
+
   it("tells the member what to do", () => {
     expect(VIDEO_RULE_MESSAGE).toBe(
       "This video can't be stored as it is. Pick it again in the posting form so it can be prepared, or export it as MP4 (H.264, up to 1080p)."

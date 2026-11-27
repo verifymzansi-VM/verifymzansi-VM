@@ -63,6 +63,19 @@ export function videoRuleProblem(
 }
 
 /**
+ * Ranges the database accepts for stored facts (update 20261127114113): a
+ * crafted file can claim more (16-bit sizes, any frame rate, any four bytes as
+ * the codec), and the store must never refuse what the rule only logs.
+ */
+const MAX_STORED_EDGE = 20_000;
+const MAX_STORED_FPS = 1000;
+
+/** At most 8 printable ASCII characters; anything else becomes `?`. */
+function printableCodec(codec: string): string {
+  return codec.slice(0, 8).replace(/[^ -~]/g, "?") || "?";
+}
+
+/**
  * The facts stored with an uploaded video (`video_facts` on its media row):
  * what the file is, and which rule it broke (null when none). Length, size
  * and so bitrate are already stored on the row.
@@ -70,12 +83,14 @@ export function videoRuleProblem(
 export function videoUploadFacts(facts: VideoFileFacts, problem: VideoRuleProblem | null) {
   const { video } = facts;
   return {
-    codec: video.codec.slice(0, 8),
+    codec: printableCodec(video.codec),
     ...(video.profile === null ? {} : { profile: video.profile }),
     ...(video.level === null ? {} : { level: video.level }),
-    width: video.width,
-    height: video.height,
-    ...(Number.isFinite(video.fps) ? { fps: Math.round(video.fps * 100) / 100 } : {}),
+    width: Math.min(video.width, MAX_STORED_EDGE),
+    height: Math.min(video.height, MAX_STORED_EDGE),
+    ...(Number.isFinite(video.fps)
+      ? { fps: Math.min(Math.round(video.fps * 100) / 100, MAX_STORED_FPS) }
+      : {}),
     faststart: facts.faststart,
     audio: facts.audio,
     problem,
