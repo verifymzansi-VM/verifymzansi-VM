@@ -33,6 +33,8 @@ export interface StaffDashboard {
       claimed: Count;
     } | null;
   };
+  /** A read was refused because the staff member needs to confirm their authenticator again. */
+  needs_reverify?: boolean;
   shift?: {
     claims: Array<{
       item_type: string;

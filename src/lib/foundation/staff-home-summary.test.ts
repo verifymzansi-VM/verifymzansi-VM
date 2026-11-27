@@ -22,6 +22,7 @@ vi.mock("./staff-claims-server", () => ({ readMyFrontendStaffClaims: m.claims })
 vi.mock("./area-activity-server", () => ({ readNativeAreaActivity: m.activity }));
 
 import { readStaffHomeSummary } from "./staff-home-summary";
+import { FoundationStaffReadError } from "./staff-read";
 
 const id = "11111111-1111-4111-8111-111111111111";
 
@@ -123,6 +124,23 @@ describe("readStaffHomeSummary", () => {
     expect(out.retention).toBeNull();
     expect(out.dsar).toMatchObject({ open: 2 });
     expect(out.decisions?.role_changes_pending).toBe(2);
+  });
+
+  it("flags a read refused for an old authenticator code, so the page can ask to re-verify", async () => {
+    m.privacy.mockRejectedValue(new FoundationStaffReadError(403, true));
+    const out = await readStaffHomeSummary(id, { role: "governor", counts: { decisions: 0 } });
+    expect(out.needs_reverify).toBe(true);
+    m.privacy.mockRejectedValue(new Error("down"));
+    const other = await readStaffHomeSummary(id, { role: "governor", counts: { decisions: 0 } });
+    expect(other.needs_reverify).toBeUndefined();
+  });
+
+  it("leaves a failed appeals or staff-roles figure out of the decisions card", async () => {
+    m.appeals.mockRejectedValue(new Error("down"));
+    m.roles.mockRejectedValue(new Error("down"));
+    const out = await readStaffHomeSummary(id, { role: "governor", counts: { decisions: 4 } });
+    expect(out.decisions).not.toHaveProperty("appeals_open");
+    expect(out.decisions).not.toHaveProperty("role_changes_pending");
   });
 
   it("refuses a changed account", async () => {

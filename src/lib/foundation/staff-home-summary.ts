@@ -7,6 +7,8 @@ import { readRestoredStaffRoles } from "./staff-role-review";
 import { readStaffOperationsHealth } from "./operations-health";
 import { readMyFrontendStaffClaims } from "./staff-claims-server";
 import { readNativeAreaActivity } from "./area-activity-server";
+import { FoundationStaffCommandError } from "./staff-command";
+import { FoundationStaffReadError } from "./staff-read";
 import type { StaffDashboard } from "../services/staff-dashboard";
 
 /**
@@ -19,8 +21,18 @@ import type { StaffDashboard } from "../services/staff-dashboard";
 type Staff = { role: "moderator" | "governor" | "admin"; counts: { decisions: number } };
 type Summary = Pick<
   StaffDashboard,
-  "shift" | "decisions" | "restrictions" | "dsar" | "platform" | "retention"
+  "shift" | "decisions" | "restrictions" | "dsar" | "platform" | "retention" | "needs_reverify"
 >;
+
+/** A read refused because the staff member's authenticator code is too old. */
+function needsReverify(result: PromiseSettledResult<unknown>): boolean {
+  return (
+    result.status === "rejected" &&
+    (result.reason instanceof FoundationStaffCommandError ||
+      result.reason instanceof FoundationStaffReadError) &&
+    result.reason.mfaRequired
+  );
+}
 
 function value<T>(result: PromiseSettledResult<T>): T | null {
   return result.status === "fulfilled" ? result.value : null;
@@ -43,9 +55,13 @@ export async function readStaffHomeSummary(actorId: string, current: Staff): Pro
     isAdmin ? readStaffOperationsHealth(api) : idle,
   ]);
 
+  const reverify = [claims, today, enforcement, privacy, appeals, roles, health].some(
+    needsReverify
+  );
   const claimsRead = value(claims);
   const todayRead = value(today);
   const summary: Summary = {
+    ...(reverify ? { needs_reverify: true } : {}),
     shift:
       claimsRead && todayRead
         ? {

@@ -83,7 +83,15 @@ describe("admin-queries", () => {
       readStaffModerationQueue.mockResolvedValue({ allItems: queue });
       const result = await getPendingContent(area);
       expect(result.map((i) => i.id)).toEqual(ids);
-      expect(readStaffModerationQueue).toHaveBeenCalledWith({}, "staff-1");
+      // The area is asked of the database, so the 50-row limit applies per area.
+      expect(readStaffModerationQueue.mock.calls.at(-1)?.[2]).toBe(
+        {
+          MZANSI_MARKET: "market",
+          MZANSI_BUSINESS: "business",
+          PROMOTIONS_EVENTS: "tourism_events",
+        }[area]
+      );
+      expect(readStaffModerationQueue).toHaveBeenCalledWith({}, "staff-1", expect.any(String));
     });
 
     it("says so when the queue cannot be read, instead of showing an empty queue", async () => {

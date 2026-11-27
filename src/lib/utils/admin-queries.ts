@@ -107,8 +107,9 @@ export async function getAreaReports(area: MarketplaceArea) {
 export async function getPendingContent(area: MarketplaceArea) {
   const { readFoundationServerSession } = await import("@/lib/foundation/server-session");
   const { readStaffModerationQueue } = await import("@/lib/foundation/staff-moderation-queue");
+  const { foundationArea } = await import("@/lib/foundation/areas");
   const { api, user } = await readFoundationServerSession();
-  const { allItems } = await readStaffModerationQueue(api, user.id);
+  const { allItems } = await readStaffModerationQueue(api, user.id, foundationArea(area));
   return allItems.filter((item) => item.area === area);
 }
 
