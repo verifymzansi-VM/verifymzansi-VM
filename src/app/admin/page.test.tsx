@@ -187,7 +187,12 @@ describe("Admin home", () => {
         content: { pending: 0, oldest_at: null, claimed: 0 },
         support: { new: 0, oldest_at: null },
       },
-      ...decisionSections,
+      decisions: {
+        escalated: 0,
+        expiring_24h: 0,
+        oldest_at: null,
+      },
+      restrictions: { suspensions: 0, bans: 0, emergency: 0 },
       dsar: null,
     });
 
@@ -215,7 +220,7 @@ describe("Admin home", () => {
     expect(screen.getByRole("status")).toHaveTextContent(/things need you · \d+ urgent/);
   });
 
-  it("says all clear and folds empty decision lists into one row", async () => {
+  it("folds empty decision lists into one row and flags the unread one", async () => {
     staffGuard.as("governance_controller");
     getStaffDashboard.mockResolvedValue({
       role: "governance_controller",
@@ -243,7 +248,8 @@ describe("Admin home", () => {
 
     render(await AdminHomePage());
 
-    expect(screen.getByRole("status")).toHaveTextContent("All clear. Nothing needs you right now.");
+    // One list could not be read, so the banner must not claim all clear.
+    expect(screen.getByRole("status")).toHaveTextContent("Some figures could not be loaded");
     expect(screen.queryByRole("navigation", { name: "Needs you now" })).not.toBeInTheDocument();
     const clear = screen.getByRole("list", { name: "Lists with nothing waiting" });
     expect(within(clear).getByRole("link", { name: /Appeals/ })).toHaveAttribute(
