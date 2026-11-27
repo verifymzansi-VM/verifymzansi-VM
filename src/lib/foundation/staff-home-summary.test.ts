@@ -24,7 +24,6 @@ vi.mock("./area-activity-server", () => ({ readNativeAreaActivity: m.activity })
 import { readStaffHomeSummary } from "./staff-home-summary";
 
 const id = "11111111-1111-4111-8111-111111111111";
-const staff = { moderator: 0, governor: 1, admin: 2 };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -74,7 +73,12 @@ describe("readStaffHomeSummary", () => {
     const out = await readStaffHomeSummary(id, { role: "moderator", counts: { decisions: 0 } });
     expect(out.shift).toEqual({
       claims: [
-        { item_type: "listing", item_id: "a", queue: "content", expires_at: "2026-11-27T10:00:00Z" },
+        {
+          item_type: "listing",
+          item_id: "a",
+          queue: "content",
+          expires_at: "2026-11-27T10:00:00Z",
+        },
       ],
       escalations_open: 0,
       actions_today: 3,
