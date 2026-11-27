@@ -14,10 +14,16 @@ import {
   customerAccessSchema,
   primaryBusinessType,
   cleanCustomerAccess,
+  serviceAreasFromAccess,
 } from "@/lib/forms/customer-access";
 import { BusinessCategoryPicker } from "@/components/post/business-category-picker";
 import { photosWithVideoCover } from "@/lib/forms/video-cover-photo";
 import { settleMediaUploads } from "@/app/post/_lib/settle-media-uploads";
+import {
+  BUSINESS_FIELD_STEPS,
+  stepForField,
+  stepForFieldErrors,
+} from "@/app/post/_lib/post-field-steps";
 
 import { Suspense, useEffect, useMemo, useState, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -49,7 +55,11 @@ import { OnlinePresenceFields } from "@/components/post/online-presence-fields";
 import { BusinessProfileExtrasFields } from "@/components/post/business-profile-extras-fields";
 import { VideoFrameSelector } from "@/components/ui/video-frame-selector";
 import { MediaCropPreview, type CropPosition } from "@/components/ui/media-crop-preview";
-import { UploadProgressPanel, type UploadSlotStatus } from "@/components/ui/upload-progress-panel";
+import {
+  UploadProgressPanel,
+  useUploadProgress,
+  type UploadSlotStatus,
+} from "@/components/ui/upload-progress-panel";
 import { PlanGate, usePlanVideoAllowed, usePlanMaxPhotos } from "@/components/billing/plan-gate";
 import { LocationSelector, type LocationValue } from "@/components/ui/location-selector";
 import {
@@ -86,7 +96,7 @@ import {
   uploadRequiredBusinessVideo,
 } from "@/app/post/_lib/business-media-upload";
 import { prewarmVideosForFastUpload } from "@/app/post/_lib/video-fast-upload";
-import { parseServiceAreas, validateBusinessForm } from "@/lib/forms/business-form";
+import { validateBusinessForm } from "@/lib/forms/business-form";
 import {
   coerceBusinessDetails,
   getNormalizedDeliveryOptions,
@@ -143,11 +153,9 @@ const FIELD_IDS: Record<string, string> = {
   location_province: "province",
   location_city: "city",
   store_number: "storeNumber",
-  service_areas: "serviceAreas",
   map_directions: "mapDirections",
   phone: "phone",
   whatsapp: "whatsapp",
-  email: "email",
   website: "website",
   socialFacebook: "socialFacebook",
   socialInstagram: "socialInstagram",
@@ -161,7 +169,7 @@ const FIELD_IDS: Record<string, string> = {
   termsAccepted: "business-terms-checkbox",
 };
 
-const STEP_CONTACT_FIELDS = ["phone", "whatsapp", "email", "website"] as const;
+const STEP_CONTACT_FIELDS = ["phone", "whatsapp", "website"] as const;
 const STEP_SOCIAL_FIELDS = [
   "map_directions",
   "socialFacebook",
@@ -181,10 +189,14 @@ const BUSINESS_FIELD_LABELS: Record<string, string> = {
   location_city: "City",
   store_number: "Store number",
   service_areas: "Service areas",
+  "customer_access.methods": "How you serve customers",
+  "customer_access.premises": "Where customers visit you",
+  "customer_access.venue": "Shopping centre or market name",
+  "customer_access.serviceAreas": "Service areas",
+  "customer_access.deliveryAreas": "Delivery areas",
   map_directions: "Map / directions",
   phone: "Phone",
   whatsapp: "WhatsApp",
-  email: "Email",
   website: "Website",
   socialFacebook: "Facebook",
   socialInstagram: "Instagram",
@@ -219,41 +231,24 @@ function getFieldId(key: string | undefined): string | undefined {
   return undefined;
 }
 
+/** Server paths for customer access use the same keys as the form's own checks. */
+function normalizeBusinessFieldErrors(errors: Record<string, string>): Record<string, string> {
+  const normalized: Record<string, string> = {};
+  for (const [key, message] of Object.entries(errors)) {
+    const formKey = key.startsWith("service_areas")
+      ? "customer_access.serviceAreas"
+      : key.replace(/^category_details\.customer_access/, "customer_access");
+    normalized[formKey] ??= message;
+  }
+  return normalized;
+}
+
 function getStepForFieldKey(key: string): number {
-  if (
-    [
-      "logo_url",
-      "cover_photo",
-      "gallery_photos",
-      "cover_video",
-      "video_thumbnail",
-      "termsAccepted",
-    ].includes(key)
-  )
-    return 3;
-  if (
-    key.startsWith("location_") ||
-    key.startsWith("customer_access") ||
-    key.startsWith("category_details.customer_access")
-  )
-    return 1;
-  if (key === "contact_methods") return 2;
-  if (
-    [...STEP_CONTACT_FIELDS, ...STEP_SOCIAL_FIELDS].includes(
-      key as (typeof STEP_CONTACT_FIELDS)[number]
-    )
-  )
-    return 2;
-  return 0;
+  return stepForField(key, BUSINESS_FIELD_STEPS);
 }
 
 function getStepForServerErrors(errors: Record<string, string>): number {
-  const keys = Object.keys(errors);
-  if (keys.length === 0) {
-    return 0;
-  }
-
-  return keys.reduce((targetStep, key) => Math.min(targetStep, getStepForFieldKey(key)), 3);
+  return stepForFieldErrors(errors, BUSINESS_FIELD_STEPS, 3);
 }
 
 function generateSlug(name: string): string {
@@ -317,13 +312,11 @@ function CreateBusinessContent() {
   const [locationTown, setLocationTown] = useState("");
   const [locationAddress, setLocationAddress] = useState("");
   const [storeNumber, setStoreNumber] = useState("");
-  const [serviceAreasInput, setServiceAreasInput] = useState("");
   const [mapDirections, setMapDirections] = useState("");
   const [phone, setPhone] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
-  const [email, setEmail] = useState("");
   const [website, setWebsite] = useState("");
-  const contactValues = { phone, whatsapp, email, website };
+  const contactValues = { phone, whatsapp, website };
   const contactMethods = readContactMethods(categoryDetails.contact_methods, contactValues);
   const publicContacts = selectedContacts(contactMethods, contactValues);
   const [hoursMonFri, setHoursMonFri] = useState({ open: "", close: "", closed: false });
@@ -354,6 +347,7 @@ function CreateBusinessContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submissionInFlightRef = useRef(false);
   const [submitProgress, setSubmitProgress] = useState<string | null>(null);
+  const uploadProgress = useUploadProgress();
   const [uploadStatuses, setUploadStatuses] = useState<Record<string, UploadSlotStatus>>({
     logo: "idle",
     photos: "idle",
@@ -478,14 +472,6 @@ function CreateBusinessContent() {
   }, [profile, province, city, phone, whatsapp]);
 
   useEffect(() => {
-    if (!email && user?.email) {
-      queueMicrotask(() => {
-        setEmail(user.email);
-      });
-    }
-  }, [email, user?.email]);
-
-  useEffect(() => {
     if (!user?.id || isLoading || submitSucceeded) return;
 
     void Promise.resolve(restoreDraft()).then((restored) => {
@@ -531,11 +517,9 @@ function CreateBusinessContent() {
         setLocationTown(restoredData.locationTown ?? "");
         setLocationAddress(restoredData.locationAddress ?? "");
         setStoreNumber(restoredData.storeNumber ?? "");
-        setServiceAreasInput(restoredData.serviceAreasInput ?? "");
         setMapDirections(restoredData.mapDirections ?? "");
         setPhone(restoredData.phone ?? "");
         setWhatsapp(restoredData.whatsapp ?? "");
-        setEmail(restoredData.email ?? "");
         setWebsite(restoredData.website ?? "");
         setHoursMonFri(
           restoredData.hoursMonFri
@@ -600,11 +584,9 @@ function CreateBusinessContent() {
       locationTown,
       locationAddress,
       storeNumber,
-      serviceAreasInput,
       mapDirections,
       phone,
       whatsapp,
-      email,
       website,
       hoursMonFri: formatHoursValue(hoursMonFri.open, hoursMonFri.close, hoursMonFri.closed),
       hoursSat: formatHoursValue(hoursSat.open, hoursSat.close, hoursSat.closed),
@@ -643,11 +625,9 @@ function CreateBusinessContent() {
     locationTown,
     locationAddress,
     storeNumber,
-    serviceAreasInput,
     mapDirections,
     phone,
     whatsapp,
-    email,
     website,
     hoursMonFri,
     hoursSat,
@@ -731,11 +711,9 @@ function CreateBusinessContent() {
       businessType,
       businessDetails,
       storeNumber: storeNumber.trim(),
-      serviceAreasInput,
       mapDirections: mapDirections.trim(),
       phone: publicContacts.phone.trim(),
       whatsapp: publicContacts.whatsapp.trim(),
-      email: publicContacts.email.trim(),
       website: publicContacts.website.trim(),
       socialFacebook: socialFacebook.trim(),
       socialInstagram: socialInstagram.trim(),
@@ -772,7 +750,6 @@ function CreateBusinessContent() {
       for (const [method, field] of [
         ["call", "phone"],
         ["whatsapp", "whatsapp"],
-        ["email", "email"],
         ["website", "website"],
       ] as const) {
         if (contactMethods.includes(method) && !publicContacts[field].trim())
@@ -866,6 +843,7 @@ function CreateBusinessContent() {
     submissionInFlightRef.current = true;
     setIsSubmitting(true);
     setSubmitProgress("Checking upload service...");
+    uploadProgress.reset();
     setUploadStatuses({
       logo: logoFile.length > 0 ? "uploading" : "skipped",
       photos:
@@ -898,6 +876,7 @@ function CreateBusinessContent() {
             files: logoFile,
             area: "business_logo",
             field: "logo_url",
+            onProgress: uploadProgress.track("logo", logoFile),
           }).then((urls) => {
             if (logoFile.length > 0) setUploadStatuses((c) => ({ ...c, logo: "done" }));
             return urls;
@@ -907,16 +886,19 @@ function CreateBusinessContent() {
               files: coverFile,
               area: "business_cover",
               field: "cover_photo",
+              onProgress: uploadProgress.track("photos:cover", coverFile),
             }),
             uploadRequiredBusinessMedia({
               files: galleryFiles,
               area: "business_gallery",
               field: "gallery_photos",
+              onProgress: uploadProgress.track("photos:gallery", galleryFiles),
             }),
             uploadRequiredBusinessMedia({
               files: mallPhotoFiles,
               area: "business_gallery",
               field: "gallery_photos",
+              onProgress: uploadProgress.track("photos:mall", mallPhotoFiles),
             }),
           ]).then((urls) => {
             if (coverFile.length || galleryFiles.length || mallPhotoFiles.length) {
@@ -928,6 +910,7 @@ function CreateBusinessContent() {
             ? uploadRequiredBusinessVideo({
                 file: promoVideoFile[0],
                 area: "business_cover",
+                onProgress: uploadProgress.trackVideo("video", promoVideoFile),
               }).then((url) => {
                 setUploadStatuses((c) => ({ ...c, video: "done" }));
                 return url;
@@ -978,12 +961,9 @@ function CreateBusinessContent() {
         if (satVal) operatingHours.Sat = satVal;
         if (sunVal) operatingHours.Sun = sunVal;
       }
-      const serviceAreas =
-        businessType === "mobile_service"
-          ? {
-              areas: parseServiceAreas(serviceAreasInput),
-            }
-          : undefined;
+      const serviceAreas = serviceAreasFromAccess(
+        readCustomerAccess(categoryDetails.customer_access)
+      );
       const deliveryAvailable = readCustomerAccess(
         categoryDetails.customer_access
       ).methods.includes("delivery");
@@ -1007,7 +987,6 @@ function CreateBusinessContent() {
           : undefined,
         phone: publicContacts.phone || undefined,
         whatsapp: publicContacts.whatsapp || undefined,
-        email: publicContacts.email || undefined,
         website: publicContacts.website || undefined,
         logo_url: logoUrls[0] || undefined,
         // A video-only profile (no cover, no gallery): the chosen frame is the cover photo.
@@ -1108,19 +1087,20 @@ function CreateBusinessContent() {
         }
 
         const normalized = normalizeCreatePostError(payload, "Failed to create business.");
-        const targetStep = getStepForServerErrors(normalized.fieldErrors);
-        const count = Object.keys(normalized.fieldErrors).length;
+        const serverFieldErrors = normalizeBusinessFieldErrors(normalized.fieldErrors);
+        const targetStep = getStepForServerErrors(serverFieldErrors);
+        const count = Object.keys(serverFieldErrors).length;
         if (count > 0) {
           setStep(targetStep);
         }
-        setFieldErrors(normalized.fieldErrors);
+        setFieldErrors(serverFieldErrors);
         setFormError(
           count > 0
             ? `Please fix ${count} field${count > 1 ? "s" : ""} on Step ${targetStep + 1} - ${STEPS[targetStep].label}.`
             : normalized.formError
         );
         if (count > 0) {
-          focusFirstError(normalized.fieldErrors, targetStep);
+          focusFirstError(serverFieldErrors, targetStep);
         }
         return;
       }
@@ -1179,11 +1159,9 @@ function CreateBusinessContent() {
     setLocationTown("");
     setLocationAddress("");
     setStoreNumber("");
-    setServiceAreasInput("");
     setMapDirections("");
     setPhone(profile?.phone ?? "");
     setWhatsapp(profile?.phone ?? "");
-    setEmail(user?.email ?? "");
     setWebsite("");
     setHoursMonFri({ open: "", close: "", closed: false });
     setHoursSat({ open: "", close: "", closed: false });
@@ -1215,7 +1193,8 @@ function CreateBusinessContent() {
 
   function renderReview() {
     const selectedType = BUSINESS_TYPE_OPTIONS.find((option) => option.value === businessType);
-    const serviceAreas = parseServiceAreas(serviceAreasInput);
+    const serviceAreas =
+      serviceAreasFromAccess(readCustomerAccess(categoryDetails.customer_access))?.areas ?? [];
     const socialLinks = Object.fromEntries(
       Object.entries({
         facebook: socialFacebook,
@@ -1283,7 +1262,6 @@ function CreateBusinessContent() {
         : null,
       phone: publicContacts.phone || null,
       whatsapp: publicContacts.whatsapp || null,
-      email: publicContacts.email || null,
       website: publicContacts.website || null,
       store_number: storeNumber || null,
       map_directions: readCustomerAccess(categoryDetails.customer_access).publishAddress
@@ -1394,6 +1372,7 @@ function CreateBusinessContent() {
 
                     <UploadProgressPanel
                       visible={isSubmitting}
+                      progress={uploadProgress.values}
                       slots={[
                         {
                           key: "logo",
@@ -1905,7 +1884,6 @@ function CreateBusinessContent() {
                         ({
                           phone: setPhone,
                           whatsapp: setWhatsapp,
-                          email: setEmail,
                           website: setWebsite,
                         })[field](value)
                       }

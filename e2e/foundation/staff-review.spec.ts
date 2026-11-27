@@ -13,7 +13,7 @@ import {
   takeSelfieForManualReview,
   withSyntheticCamera,
 } from "./support/synthetic-camera";
-import { characterise, KnownBreak, requireOnlyKnownBreak } from "./support/known-break";
+import { requireOnlyKnownBreak } from "./support/known-break";
 import { isMultipartForm } from "./support/multipart";
 import { endedWithTest } from "./support/route-teardown";
 import {
@@ -87,7 +87,6 @@ import {
 const APP_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.appPort}`;
 const API_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.apiPort}`;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const D3B02 = "D3B-02, fixed by M6.3";
 const TWO_STEP_PATH = "/staff/two-step";
 /** The identity viewer's three confirmations (foundation mode). */
 const REVIEW_CHECKS = [
@@ -1135,42 +1134,20 @@ test.describe("staff review with an authenticator", () => {
   });
 
   test("the per-section review queue lists the waiting post", async ({ context, page }) => {
-    test.fail(true, D3B02);
-    await characterise(D3B02, async () => {
-      const mark = readOutboundAttempts().length;
-      const { outside, failures } = await guard(context);
-      expect(postStatus(posts.waiting.id)).toBe("pending_moderation");
-      await signInBrowser(context, "moderator");
-      await page.goto("/admin/businesses");
-      await expect(page.getByRole("heading", { name: "Mzansi Business", level: 1 })).toBeVisible({
-        timeout: 20_000,
-      });
-      const broken = page.getByRole("alert").filter({
-        hasText:
-          "The content review queue could not be loaded. Refresh to try again. This does not mean there is nothing waiting.",
-      });
-      if (await broken.isVisible()) {
-        // D3B-02 as recorded: only the content queue fails (it reads the
-        // retired backend; the page's other panels load), and the overview
-        // counts no waiting content although a post waits for review.
-        await expect(page.getByRole("alert").filter({ hasText: /\S/ })).toHaveCount(1);
-        const tile = page
-          .locator("div")
-          .filter({ hasText: /^\s*\d+\s*Pending Content\s*$/ })
-          .last();
-        await expect(tile).toHaveText(/^\s*0\s*Pending Content\s*$/);
-        expect(failures).toEqual([]);
-        expect(outside).toEqual([]);
-        expectNoOutboundSince(mark);
-        throw new KnownBreak(
-          `${D3B02}: the business section page could not load its content review queue while a post was waiting`
-        );
-      }
-      // Promised (M6.3): the waiting post is listed for review.
-      await expect(page.getByText(posts.waiting.name).first()).toBeVisible();
-      expect(failures).toEqual([]);
-      expect(outside).toEqual([]);
-      expectNoOutboundSince(mark);
+    const mark = readOutboundAttempts().length;
+    const { outside, failures } = await guard(context);
+    expect(postStatus(posts.waiting.id)).toBe("pending_moderation");
+    await signInBrowser(context, "moderator");
+    await page.goto("/admin/businesses");
+    await expect(page.getByRole("heading", { name: "Mzansi Business", level: 1 })).toBeVisible({
+      timeout: 20_000,
     });
+    // The waiting post is listed, with no "could not be loaded" notice.
+    await expect(page.getByRole("alert").filter({ hasText: /\S/ })).toHaveCount(0);
+    await page.getByRole("tab", { name: /Verification/ }).click();
+    await expect(page.getByText(posts.waiting.name).first()).toBeVisible();
+    expect(failures).toEqual([]);
+    expect(outside).toEqual([]);
+    expectNoOutboundSince(mark);
   });
 });

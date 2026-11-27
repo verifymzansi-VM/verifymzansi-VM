@@ -40,6 +40,14 @@ const post = {
   media: [],
   seller: { public_name: "Tester T.", avatar_object_key: null, identity_verified: true },
 };
+const business = {
+  ...post,
+  kind: "business",
+  area: "business",
+  price_mode: null,
+  price_cents: null,
+  condition: null,
+};
 const request = (
   body: object = { targetType: "listing", targetId: id, turnstileToken: "single-use-token" }
 ) =>
@@ -136,4 +144,37 @@ it("rechecks availability in the service command and hides internal failures", a
   const response = await revealFoundationContact(request());
   expect(response.status).toBe(503);
   expect(await response.text()).not.toContain("private diagnostic");
+});
+
+it("asks the database for a business's own numbers, which has no contact choices", async () => {
+  mocks.publicRpc.mockImplementation(async (name: string) => ({
+    data: name === "get_public_post" ? business : [],
+    error: null,
+  }));
+  mocks.serviceRpc.mockImplementation(async (_name: string, args: { p_channel: string }) => ({
+    data: args.p_channel === "call" ? "+27311234567" : null,
+    error: null,
+  }));
+  const response = await revealFoundationContact(
+    request({ targetType: "business", targetId: id, turnstileToken: "single-use-token" })
+  );
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ phone: "+27311234567", whatsapp: null, email: null });
+  expect(mocks.captcha).toHaveBeenCalledTimes(1);
+  expect(mocks.serviceRpc.mock.calls.map(([, args]) => args.p_channel)).toEqual([
+    "call",
+    "whatsapp",
+  ]);
+});
+
+it("answers 404 when a business has no number to serve", async () => {
+  mocks.publicRpc.mockImplementation(async (name: string) => ({
+    data: name === "get_public_post" ? business : [],
+    error: null,
+  }));
+  mocks.serviceRpc.mockResolvedValue({ data: null, error: null });
+  const response = await revealFoundationContact(
+    request({ targetType: "business", targetId: id, turnstileToken: "single-use-token" })
+  );
+  expect(response.status).toBe(404);
 });

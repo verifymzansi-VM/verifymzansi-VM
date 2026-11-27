@@ -24,6 +24,11 @@ const { listingDetailPreviewSpy } = vi.hoisted(() => ({
   listingDetailPreviewSpy: vi.fn(),
 }));
 
+// Uploads with a progress bar use XHR; these tests stub fetch, so send them there.
+vi.mock("@/lib/utils/xhr-upload", () => ({
+  xhrFetch: (input: RequestInfo | URL, init?: RequestInit) => fetch(input, init),
+}));
+
 // The one allowance read the page makes (media limits and Save as template).
 const { entitlements } = vi.hoisted(() => ({
   entitlements: { maxPhotos: 5, maxVideos: 1, videoAllowed: true, packageRunning: false },

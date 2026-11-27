@@ -48,6 +48,14 @@ const ACTION_LABELS: Record<string, string> = {
   flag_suspend: "Account suspended",
   flag_ban: "Account banned",
   flag_dismiss: "Report dismissed",
+  report_dismissed: "Report dismissed",
+};
+
+const TARGET_LABELS: Record<string, string> = {
+  listing: "Listing",
+  business: "Business",
+  promotion: "Event",
+  report: "Report",
 };
 
 function getActionLabel(action: string): string {
@@ -77,12 +85,12 @@ export function ActivityFeed({ entries, emptyMessage }: ActivityFeedProps) {
               <span className="text-sm font-medium">{getActionLabel(entry.action)}</span>
               {entry.target_type && (
                 <Badge variant="outline" className="text-[10px]">
-                  {entry.target_type}
+                  {TARGET_LABELS[entry.target_type] ?? entry.target_type}
                 </Badge>
               )}
             </div>
             <p className="text-xs text-muted-foreground">
-              {entry.actor_id ? `${entry.actor_id.slice(0, 8)}...` : "System"} &middot;{" "}
+              {entry.actor_id ? "A staff member" : "System"} &middot;{" "}
               {formatRelativeTime(entry.created_at)}
             </p>
           </div>

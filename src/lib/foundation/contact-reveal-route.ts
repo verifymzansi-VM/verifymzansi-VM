@@ -52,7 +52,9 @@ export async function revealFoundationContact(request: NextRequest) {
     const channels = await readFoundationPublicContactChannels(api, { id: post.id });
     const service = createFoundationServiceApi();
     const reveal = async (channel: "call" | "whatsapp") => {
-      if (!channels.includes(channel)) return null;
+      // A business has no contact choices of its own: the database answers
+      // with the number the business chose, if any.
+      if (post.kind !== "business" && !channels.includes(channel)) return null;
       const { data, error } = await service.rpc("reveal_post_phone", {
         p_post_id: post.id,
         p_channel: channel,

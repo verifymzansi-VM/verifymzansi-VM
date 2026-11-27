@@ -1071,6 +1071,7 @@ export type FoundationRuntimeServiceDatabase = {
           p_sha256: string;
           p_mime: string;
           p_duration_ms: number;
+          p_facts?: Json;
         };
         Returns: Json;
       };

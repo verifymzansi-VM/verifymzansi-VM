@@ -27,6 +27,7 @@ vi.mock("@/components/admin/home/traffic-panel", () => ({
   TrafficPanelSkeleton: () => null,
 }));
 
+import { redirect } from "next/navigation";
 import AdminHomePage from "./page";
 
 const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString();
@@ -176,6 +177,69 @@ describe("Admin home", () => {
     expect(within(card("Identity checks")).getByText("5")).toBeInTheDocument();
   });
 
+  it("does not say all clear when a section could not be read", async () => {
+    staffGuard.as("governance_controller");
+    getStaffDashboard.mockResolvedValue({
+      role: "governance_controller",
+      generated_at: "",
+      queues: {
+        reports: { open: 0, oldest_at: null, breached: 0, claimed: 0 },
+        kyc: { pending: 0, oldest_at: null, high_risk: 0, claimed: 0 },
+        content: { pending: 0, oldest_at: null, claimed: 0 },
+        support: { new: 0, oldest_at: null },
+      },
+      decisions: {
+        escalated: 0,
+        expiring_24h: 0,
+        oldest_at: null,
+      },
+      restrictions: { suspensions: 0, bans: 0, emergency: 0 },
+      dsar: null,
+    });
+
+    render(await AdminHomePage());
+
+    expect(screen.getByRole("status")).toHaveTextContent("Some figures could not be loaded");
+    expect(screen.queryByText(/All clear/)).not.toBeInTheDocument();
+  });
+
+  it("does not say all clear when only the appeals or staff-roles figure is missing", async () => {
+    staffGuard.as("governance_controller");
+    getStaffDashboard.mockResolvedValue({
+      role: "governance_controller",
+      generated_at: "",
+      queues: {
+        reports: { open: 0, oldest_at: null, breached: 0, claimed: 0 },
+        kyc: { pending: 0, oldest_at: null, high_risk: 0, claimed: 0 },
+        content: { pending: 0, oldest_at: null, claimed: 0 },
+        support: { new: 0, oldest_at: null },
+      },
+      decisions: { escalated: 0, expiring_24h: 0, oldest_at: null },
+      restrictions: { suspensions: 0, bans: 0, emergency: 0 },
+      dsar: { open: 0, overdue: 0, due_7d: 0, next_due_at: null },
+    });
+
+    render(await AdminHomePage());
+
+    expect(screen.getByRole("status")).toHaveTextContent("Some figures could not be loaded");
+    expect(screen.queryByText(/All clear/)).not.toBeInTheDocument();
+  });
+
+  it("sends staff to confirm their authenticator again when a read needs it", async () => {
+    staffGuard.as("governance_controller");
+    getStaffDashboard.mockResolvedValue({
+      role: "governance_controller",
+      generated_at: "",
+      queues,
+      needs_reverify: true,
+    });
+
+    await AdminHomePage();
+
+    expect(redirect).toHaveBeenCalledWith(expect.stringContaining("/staff/two-step?confirm=1"));
+    expect(vi.mocked(redirect).mock.calls[0][0]).toContain("next=%2Fadmin");
+  });
+
   it("lists what needs a person in the banner, urgent work first", async () => {
     staffGuard.as("governance_controller");
     getStaffDashboard.mockResolvedValue({
@@ -194,7 +258,7 @@ describe("Admin home", () => {
     expect(screen.getByRole("status")).toHaveTextContent(/things need you · \d+ urgent/);
   });
 
-  it("says all clear and folds empty decision lists into one row", async () => {
+  it("folds empty decision lists into one row and flags the unread one", async () => {
     staffGuard.as("governance_controller");
     getStaffDashboard.mockResolvedValue({
       role: "governance_controller",
@@ -222,7 +286,8 @@ describe("Admin home", () => {
 
     render(await AdminHomePage());
 
-    expect(screen.getByRole("status")).toHaveTextContent("All clear. Nothing needs you right now.");
+    // One list could not be read, so the banner must not claim all clear.
+    expect(screen.getByRole("status")).toHaveTextContent("Some figures could not be loaded");
     expect(screen.queryByRole("navigation", { name: "Needs you now" })).not.toBeInTheDocument();
     const clear = screen.getByRole("list", { name: "Lists with nothing waiting" });
     expect(within(clear).getByRole("link", { name: /Appeals/ })).toHaveAttribute(

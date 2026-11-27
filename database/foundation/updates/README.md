@@ -80,6 +80,61 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Business numbers through the click-to-view route, 27 November 2026
+
+`20261127055550_reveal_business_contacts.sql` was applied on 27 November 2026 at
+12:24 UTC (see the applied register).
+
+- **One rule for a business's numbers.** New
+  `internal.business_contact_number(data, contacts, channel)` gives the number a
+  business serves for a channel from its stored presentation
+  (`post_presentations.contacts`: `phone` for call, `whatsapp` for whatsapp),
+  normalised to `+27` and nine digits, or null. The channel must be ticked in
+  `data.category_details.contact_methods` when the business has that list (one
+  saved before the list existed offers each number it has, as its form shows
+  it). Call accepts a landline (01x-05x area codes), a mobile (06x, 071-074,
+  076-079 or 081-084) or a call-only number in ICASA's non-geographic ranges:
+  087 (VoIP), 0800 (toll-free) or 0860/0861 (share-call), never another 080 or
+  086 range (0862-0869 hold fax-to-email and premium numbers). That is the
+  business form's rule (`businessNumber` in `src/lib/utils/phone.ts`). WhatsApp
+  takes only the mobile (not a landline, 087, 080 or 086). Spaces, brackets and
+  dashes are ignored; any other value gives null.
+- **Business numbers on request.** `internal.reveal_post_phone` (behind the
+  service-only `api.reveal_post_phone`, which the website's "Show number" route
+  `/api/contact/reveal` calls after its Turnstile and per-visitor checks) now
+  answers for a publicly live business (Business and Tourism) with
+  `internal.business_contact_number`.
+- **No number in the public card read.** `internal.frontend_post_presentation`
+  (the presentation in `api.search_post_cards` with `frontend_presentation`,
+  open to anon and authenticated) no longer returns `business_contacts`. For a
+  business, `data` carries `business_contact_options` `{call, whatsapp}`:
+  booleans, true when `internal.business_contact_number` has a number for that
+  channel. The key sits inside `data` because the current website's parser
+  accepts any key there and rejects unknown keys beside it. The owner's own read
+  and staff review (`internal.frontend_owner_post`, unchanged) keep their
+  `contacts` with the numbers.
+- **Listings and events unchanged**: the owner's verified number, only for a
+  channel the owner chose.
+- **Guard.** The update refuses with 55000 unless `internal.reveal_post_phone`
+  has its reviewed body (md5 `98baceb9be415a5ba2150793263e58e1`) or this
+  update's (`a30f22dd9c40c95cdc35abb9dcf5e204`),
+  `internal.frontend_post_presentation` its reviewed body
+  (`9f279565fc4eca46f6b355313a2271a3`) or this update's
+  (`c679983dbb6c63714de6be71c459ee85`), and `internal.business_contact_number`
+  is absent or has this update's body (`fd668f7973bcc89a2d139ab4e3d24af8`).
+
+Expand only: one new internal function and two replaced bodies; no command,
+argument, grant or table changes (the removed key is a field inside a jsonb
+value, which the contract steps do not compare). ORDER: **apply-first** (apply,
+then merge). The current website never asks the reveal for a business number and
+ignores the new `data` key; without `business_contacts` it shows no business
+number buttons until the new website is deployed. A website deployed before the
+update would answer 404 to every business "Show number". Read-only preflight
+(counts only): `../preflight/20261127055550_reveal_business_contacts.check.sql`;
+rollback: `../rollback/20261127055550_reveal_business_contacts.down.sql` (puts
+both earlier bodies back and drops the new function). Behaviour checks:
+`scripts/test-foundation-reveal-business-contacts.mjs`.
+
 ## Public post presentation limited to display fields, 27 November 2026
 
 `20261127044054_public_presentation_display_fields.sql` was applied on 27
@@ -9032,5 +9087,11 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   06:13 UTC; apply-first; production fingerprint after it (fingerprint.sql,
   read-only, 06:14 UTC) matched the full replay (except the known schema grant
   difference)
+- `20261127055550_reveal_business_contacts.sql`: applied 2026-11-27 12:24 UTC;
+  apply-first; production fingerprint after it (fingerprint.sql, read-only,
+  12:27 UTC) matched the full replay (except the known schema grant difference)
+- `20261127114113_video_upload_facts.sql`: applied 2026-11-27 16:10 UTC;
+  apply-first; production fingerprint after it (fingerprint.sql, read-only)
+  matched the full replay (except the known schema grant difference)
 
 <!-- applied-register:end -->

@@ -65,6 +65,8 @@ type VideoPreparationOptions = {
    * a phone's trailer after the last box), and the converted MP4 can be.
    */
   forceConversion?: boolean;
+  /** Conversion progress (0-100), from the encoder. */
+  onProgress?: (percent: number) => void;
 };
 
 export function compressVideoForUpload(
@@ -107,7 +109,11 @@ async function prepareVideo(file: File, options?: VideoPreparationOptions): Prom
 
   try {
     result = await Promise.race([
-      compressVideo(file, { signal: timeout.signal, forceTranscode: needsConversion }),
+      compressVideo(file, {
+        signal: timeout.signal,
+        forceTranscode: needsConversion,
+        ...(options?.onProgress ? { onProgress: options.onProgress } : {}),
+      }),
       timeout.promise,
     ]);
   } catch (error) {

@@ -288,6 +288,16 @@ describe("readStaffModerationQueue", () => {
     );
   });
 
+  it("asks the database for one area when given, so its limit is per area", async () => {
+    rpc.mockResolvedValueOnce({ data: queue([]), error: null });
+    await readStaffModerationQueue(api, staff, "business");
+    expect(rpc).toHaveBeenLastCalledWith(
+      "get_frontend_staff_moderation_queue",
+      { p_area: "business", p_limit: 50 },
+      { get: false }
+    );
+  });
+
   it("asks for copy facts only of the listings the reviewer holds, and attaches them", async () => {
     const facts = {
       copied_from: { id: uuid(50), title: "Source", status: "live" },

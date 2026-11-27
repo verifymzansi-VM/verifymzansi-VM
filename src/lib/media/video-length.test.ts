@@ -7,6 +7,7 @@ import {
   MAX_EVENT_VIDEO_SECONDS,
   MAX_VIDEO_SECONDS,
   readVideoBlobSeconds,
+  readVideoBytesFacts,
   readVideoBytesSeconds,
   UNREADABLE_VIDEO_LENGTH_MESSAGE,
   VIDEO_GUIDANCE,
@@ -141,5 +142,106 @@ describe("reading the length from the file", () => {
     expect(await readVideoBytesSeconds(new Uint8Array(4))).toBeNull();
     const truncated = syntheticMp4(100).slice(0, 60);
     expect(await readVideoBytesSeconds(truncated)).toBeNull();
+  });
+});
+
+/** A box around already-built parts, written straight into one buffer (big crafted files). */
+function rawBox(type: string, parts: Uint8Array[]): Uint8Array {
+  const size = 8 + parts.reduce((sum, part) => sum + part.length, 0);
+  const out = new Uint8Array(size);
+  new DataView(out.buffer).setUint32(0, size);
+  out.set(
+    Array.from(type, (c) => c.charCodeAt(0)),
+    4
+  );
+  let at = 8;
+  for (const part of parts) {
+    out.set(part, at);
+    at += part.length;
+  }
+  return out;
+}
+
+/** `count` empty 8-byte `free` boxes back to back, after an optional prefix. */
+function tinyBoxes(count: number, prefix: number[] = []): Uint8Array {
+  const out = new Uint8Array(prefix.length + count * 8);
+  out.set(prefix, 0);
+  const view = new DataView(out.buffer);
+  for (let i = 0, at = prefix.length; i < count; i++, at += 8) {
+    view.setUint32(at, 8);
+    view.setUint32(at + 4, 0x66726565); // "free"
+  }
+  return out;
+}
+
+/** A faststart MP4 whose `moov` is `ftyp`, then `moov`, then a little media data. */
+function faststartFile(moov: Uint8Array): Uint8Array {
+  const ftyp = rawBox("ftyp", [new Uint8Array([0x69, 0x73, 0x6f, 0x6d, 0, 0, 2, 0])]);
+  const mdat = rawBox("mdat", [new Uint8Array(64)]);
+  const file = new Uint8Array(ftyp.length + moov.length + mdat.length);
+  file.set(ftyp, 0);
+  file.set(moov, ftyp.length);
+  file.set(mdat, ftyp.length + moov.length);
+  return file;
+}
+
+/** The video track of a real synthetic file, with its `stsd` swapped for `stsd`. */
+function trackWithStsd(stsd: Uint8Array): Uint8Array {
+  const u32 = (value: number) => {
+    const out = new Uint8Array(4);
+    new DataView(out.buffer).setUint32(0, value);
+    return out;
+  };
+  const full = (type: string, payload: number[]) =>
+    rawBox(type, [new Uint8Array([0, 0, 0, 0, ...payload])]);
+  const mdhd = full("mdhd", [...u32(0), ...u32(0), ...u32(30_000), ...u32(300_000), 0, 0, 0, 0]);
+  const hdlr = full("hdlr", [...u32(0), 0x76, 0x69, 0x64, 0x65, ...new Array(12).fill(0)]);
+  const stts = full("stts", [...u32(1), ...u32(300), ...u32(1000)]);
+  const stsz = full("stsz", [...u32(100), ...u32(300)]);
+  return rawBox("trak", [
+    rawBox("mdia", [mdhd, hdlr, rawBox("minf", [rawBox("stbl", [stsd, stts, stsz])])]),
+  ]);
+}
+
+function mvhd(): Uint8Array {
+  const payload = new Uint8Array(4 + 16 + 80);
+  const view = new DataView(payload.buffer);
+  view.setUint32(12, 600);
+  view.setUint32(16, 6000);
+  return rawBox("mvhd", [payload]);
+}
+
+describe("crafted files stay cheap to read (a Worker has 128 MB and little CPU)", () => {
+  const MILLIONS = 4_000_000;
+
+  it("ignores an stsd claiming millions of sample entries without collecting them", async () => {
+    // 4 million 8-byte entries with the count field set to match: about 32 MB.
+    const stsd = rawBox("stsd", [tinyBoxes(MILLIONS, [0, 0, 0, 0, 0x00, 0x3d, 0x09, 0x00])]);
+    const file = faststartFile(rawBox("moov", [mvhd(), trackWithStsd(stsd)]));
+    const started = performance.now();
+    // The track still has a length; its description is unreadable, so the rule refuses it.
+    expect((await readVideoBytesFacts(file))?.video.codec).toBe("unknown");
+    expect(await readVideoBytesSeconds(file)).toBeCloseTo(10, 3);
+    expect(performance.now() - started).toBeLessThan(1500);
+  });
+
+  it("ignores an stsd claiming more sample entries than a real file has", async () => {
+    const stsd = rawBox("stsd", [tinyBoxes(17, [0, 0, 0, 0, 0, 0, 0, 17])]);
+    const file = faststartFile(rawBox("moov", [mvhd(), trackWithStsd(stsd)]));
+    expect((await readVideoBytesFacts(file))?.video.codec).toBe("unknown");
+  });
+
+  it("stops collecting boxes inside the movie after a bounded number (millions of tiny boxes)", async () => {
+    const file = faststartFile(rawBox("moov", [mvhd(), tinyBoxes(MILLIONS)]));
+    const started = performance.now();
+    expect(await readVideoBytesSeconds(file)).toBeNull();
+    expect(await readVideoBytesFacts(file)).toBeNull();
+    expect(performance.now() - started).toBeLessThan(1500);
+  });
+
+  it("still reads a movie with a few thousand small boxes beside its track", async () => {
+    const stsd = rawBox("stsd", [new Uint8Array([0, 0, 0, 0, 0, 0, 0, 0])]);
+    const file = faststartFile(rawBox("moov", [mvhd(), trackWithStsd(stsd), tinyBoxes(5000)]));
+    expect(await readVideoBytesSeconds(file)).toBeCloseTo(10, 3);
   });
 });
