@@ -225,11 +225,24 @@ describe("public search", () => {
     );
   });
 
-  test("LIM-SQL-search-page-size: 1 to 48 results per page", async () => {
+  test("LIM-SQL-search-page-size: 1 to 48 results per page, 1 to 200 ids", async () => {
     await search({ area: "market", limit: 48 });
     await search({ area: "market", limit: 1 });
     await refused(search({ area: "market", limit: 49 }), "22023");
     await refused(search({ area: "market", limit: 0 }), "22023");
+    await search({ area: "market", limit: 200, ids_only: true });
+    await search({ area: "market", limit: 1, ids_only: true });
+    await refused(search({ area: "market", limit: 201, ids_only: true }), "22023");
+    await refused(search({ area: "market", limit: 0, ids_only: true }), "22023");
+    await refused(search({ area: "market", limit: 49, ids_only: false }), "22023");
+    // A card page never takes ids_only, so it stays at 48 cards.
+    await refused(
+      asVisitor(
+        `select api.search_post_cards(${lit(JSON.stringify({ limit: 48, ids_only: true }))}::jsonb)`
+      ),
+      "22023",
+      /ids_only is not a card option/
+    );
   });
 
   test("LIM-SQL-search-offset: nothing beyond position 4,800", async () => {

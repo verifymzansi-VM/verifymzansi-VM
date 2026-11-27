@@ -95,16 +95,57 @@ register). Launch checklist item 80.
   `GET /api/post-templates`.
 
 Expand only: one replaced body
-(`internal.get_my_frontend_posting_allowance_v2(text)`); no command, argument
-or grant changes. ORDER: **website-first** (merge and deploy, then apply): the
+(`internal.get_my_frontend_posting_allowance_v2(text)`); no command, argument or
+grant changes. ORDER: **website-first** (merge and deploy, then apply): the
 website's allowance parser is strict, so the release that accepts the key (as
-optional) must be live first. Until the update is applied, the new website
-reads a missing key as no package and does not show Save as template on Edit
-listing. Read-only preflight:
+optional) must be live first. Until the update is applied, the new website reads
+a missing key as no package and does not show Save as template on Edit listing.
+Read-only preflight:
 `../preflight/20261126202833_allowance_says_package_running.check.sql`;
 rollback: `../rollback/20261126202833_allowance_says_package_running.down.sql`
 (puts the earlier body back). Behaviour checks:
 `scripts/test-foundation-allowance-package-running.mjs`.
+
+## Catalogue filters run in the database, 26 November 2026
+
+`20261126062428_catalogue_filters_in_database.sql` is pending (see the applied
+register). Launch checklist item 29. No table, column, index, trigger, command,
+argument or grant is added or removed; two existing function bodies are
+replaced. Three public lists filtered, merged or paged in the website after
+reading far more cards than they showed: an organisation's supported businesses
+(`/organisation/<slug>` and `/mzansi-business?org=`, which missed any business
+past position 4,800), a text search under Businesses without a category (two
+reads merged in the website, up to 480 results) and Video mode (four pages of 50
+full cards per section, only to use their ids).
+
+- **`internal.search_posts`** (full body; behind `api.search_posts` and
+  `internal.search_post_cards`) gains five optional request keys, so each list
+  is one filtered, ordered, counted and paged call: `organisation` (a slug of a
+  listed organisation; an unknown or unlisted slug matches nothing), `programme`
+  (a uuid, needs `organisation`), `sponsored` (true or false, needs
+  `organisation`; only posts with a sponsorship by that organisation running
+  now), `kind` (listing, business or event; business without an area is the
+  Business area plus the tourism businesses) and `ids_only` (true or false:
+  `items` is then a list of post ids in the same order, and a page may hold 1 to
+  200 instead of 1 to 48). Filters, order, totals, offsets (at most 4,800),
+  cursors and replies to requests without the new keys are unchanged.
+- **`internal.search_post_cards`** (full body) refuses `ids_only` (22023), so a
+  card page stays at most 48 cards.
+- **Guards.** The update refuses with 55000 unless both functions have a
+  reviewed body (or this update's), by md5 of the body with line ends
+  normalised: `internal.search_posts` `590ffdf23439ddbf6772f70afd199740` becomes
+  `3084bc16bb1a0fe19ed94f19a3e23089`; `internal.search_post_cards`
+  `6bb60ea1828671af6f73e785d217c8ba` becomes `4d8eb454d3e5650e8bf9f553ae0c0b50`.
+
+ORDER: **apply-first** (apply, then merge). The website release from the same
+pull request sends the new keys, which the earlier body refuses as unknown; the
+earlier website never sends them and gets the same replies as before. Read-only
+preflight: `../preflight/20261126062428_catalogue_filters_in_database.check.sql`
+(expect "update not applied" as the only row; run it again after the update,
+expecting "already applied"); rollback:
+`../rollback/20261126062428_catalogue_filters_in_database.down.sql` (puts the
+earlier bodies back byte for byte; undo the website release first, and it
+refuses with 55000 when a later update changed either function).
 
 ## Invoice payment link, 26 November 2026
 
@@ -8887,6 +8928,7 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   (fingerprint.sql, 20:31 UTC) matched the full replay (except the known schema
   grant difference)
 
+- `20261126062428_catalogue_filters_in_database.sql`: pending; apply-first
 - `20261126202833_allowance_says_package_running.sql`: pending; website-first
 
 <!-- applied-register:end -->
