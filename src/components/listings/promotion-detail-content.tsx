@@ -547,14 +547,17 @@ export function PromotionDetailContent({
                 </button>
               )}
 
-              <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
-                <Badge className="bg-black/50 text-white border-0">Event</Badge>
-                {eventState && (
-                  <Badge className={`${EVENT_STATE_BADGE[eventState].className} border-0`}>
-                    {EVENT_STATE_BADGE[eventState].label}
-                  </Badge>
-                )}
-              </div>
+              {/* Over a video nothing but its controls: the chips follow under it, by the title. */}
+              {activeMedia.kind !== "video" ? (
+                <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
+                  <Badge className="bg-black/50 text-white border-0">Event</Badge>
+                  {eventState && (
+                    <Badge className={`${EVENT_STATE_BADGE[eventState].className} border-0`}>
+                      {EVENT_STATE_BADGE[eventState].label}
+                    </Badge>
+                  )}
+                </div>
+              ) : null}
 
               <PostMediaCaption
                 eyebrow={captionPrice}
@@ -567,7 +570,7 @@ export function PromotionDetailContent({
               />
 
               {/* On phones the logo sits in the caption, as on the showroom card. */}
-              {(promotion.logo_url || linkedBusiness?.logo_url) && (
+              {activeMedia.kind !== "video" && (promotion.logo_url || linkedBusiness?.logo_url) && (
                 <div className="absolute bottom-4 left-4 h-12 w-12 overflow-hidden rounded-xl border border-white/20 bg-white shadow-md max-md:hidden">
                   <Image
                     src={normalizeMediaUrl((promotion.logo_url ?? linkedBusiness?.logo_url)!)}
@@ -683,9 +686,33 @@ export function PromotionDetailContent({
             <CardContent className="space-y-4 p-5">
               {/* Without media the title bar above already shows the title. */}
               {activeMedia ? (
-                <TitleTag className="break-words font-display text-2xl font-bold leading-tight tracking-tight sm:text-3xl">
-                  {promotion.title}
-                </TitleTag>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3">
+                    {/* The logo leaves the video, so it sits beside the title here. */}
+                    {activeMedia.kind === "video" && captionLogoUrl ? (
+                      <Image
+                        src={normalizeMediaUrl(captionLogoUrl)}
+                        alt=""
+                        width={48}
+                        height={48}
+                        className="h-12 w-12 shrink-0 rounded-xl border border-border bg-white object-contain p-1"
+                      />
+                    ) : null}
+                    <TitleTag className="min-w-0 break-words font-display text-2xl font-bold leading-tight tracking-tight sm:text-3xl">
+                      {promotion.title}
+                    </TitleTag>
+                  </div>
+                  {activeMedia.kind === "video" ? (
+                    <div className="flex flex-wrap gap-1.5" data-event-chips>
+                      <Badge variant="secondary">Event</Badge>
+                      {eventState && (
+                        <Badge className={`${EVENT_STATE_BADGE[eventState].className} border-0`}>
+                          {EVENT_STATE_BADGE[eventState].label}
+                        </Badge>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
               ) : null}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {whenLabel ? (

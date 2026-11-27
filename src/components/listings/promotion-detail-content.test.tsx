@@ -252,6 +252,53 @@ describe("PromotionDetailContent", () => {
     expect(screen.getAllByText(/CIPC registered · checked/).length).toBeGreaterThan(0);
   });
 
+  it("keeps a video clear: the Event chip and the logo follow under it, beside the title", () => {
+    const { container } = render(
+      <PromotionDetailContent
+        promotion={{
+          id: "promotion-video",
+          owner_id: "owner-1",
+          business_id: null,
+          title: "Zululand Craft Market",
+          description: "Crafts and food.",
+          promotion_type: "event",
+          category: null,
+          category_key: null,
+          photos: [],
+          videos: ["https://example.com/video.mp4"],
+          video_thumbnail: null,
+          logo_url: "https://example.com/logo.png",
+          price_cents: 0,
+          price_negotiable: false,
+          location_province: "KwaZulu-Natal",
+          location_city: "Richards Bay",
+          location_town: null,
+          location_address: null,
+          contact_methods: ["form"],
+          start_date: "2099-03-10T08:00:00.000Z",
+          end_date: "2099-03-10T15:00:00.000Z",
+          boost_until: null,
+          featured_until: null,
+          view_count: 0,
+          created_at: "2099-03-01T08:00:00.000Z",
+        }}
+        advertiserProfile={null}
+        linkedBusiness={null}
+        showContactActions={false}
+        trackView={false}
+      />
+    );
+
+    expect(container.querySelector("[data-post-caption]")).toBeNull();
+    const heading = screen.getByRole("heading", { name: "Zululand Craft Market" });
+    const chips = container.querySelector("[data-event-chips]");
+    expect(chips).toHaveTextContent("Event");
+    // The chips and the logo sit with the title, not over the video.
+    expect(heading.closest(".space-y-2")?.contains(chips)).toBe(true);
+    expect(heading.parentElement?.querySelector("img")).toBeTruthy();
+    expect(screen.queryByAltText("Zululand Craft Market logo")).toBeNull();
+  });
+
   // Roadmap M10.6: the showroom card's caption on the main photo (phones only).
   it.each([
     {

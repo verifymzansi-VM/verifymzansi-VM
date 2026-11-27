@@ -241,7 +241,6 @@ function MuteButton({
 }: {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   showMuteControl: boolean;
-  controlVariant?: MediaControlVariant;
 }) {
   const { isMuted, toggleMute } = useGlobalMute(videoRef);
 
@@ -672,7 +671,6 @@ function VideoCardPlayerInner({
   mediaHeight,
   muteControlVisibility,
   showPlaybackControl,
-  controlVariant,
   deferVideoLoadUntilPlay,
   onPlaybackStateChange,
   stickyAutoplay,
@@ -1096,11 +1094,7 @@ function VideoCardPlayerInner({
           onDragStart={disableNativeDrag ? handleNativeDragStart : undefined}
         />
 
-        <MuteButton
-          videoRef={videoRef}
-          showMuteControl={showMuteControl}
-          controlVariant={controlVariant}
-        />
+        <MuteButton videoRef={videoRef} showMuteControl={showMuteControl} />
         {hasError && fallback ? (
           <MediaFallback fallback={fallback} className="z-20 bg-black/25 backdrop-blur-sm" />
         ) : hasError && showPlaybackToggle ? (

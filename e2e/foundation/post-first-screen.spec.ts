@@ -55,6 +55,15 @@ for (const viewport of PHONES) {
         const response = await page.goto(`/dev/post-first-screen?type=${type}`);
         expect(response?.status()).toBe(200);
         const caption = page.locator("main [data-post-caption]");
+        if (type === "listing-video") {
+          // Nothing is drawn over a video: its heading and price follow under it, heard once.
+          await expect(page.locator("main video")).toBeVisible();
+          await expect(caption).toHaveCount(0);
+          await expect(
+            page.getByRole("heading", { name: expected.title, exact: true })
+          ).toHaveCount(1);
+          return;
+        }
         await expect(caption).toBeVisible();
         const band = await clearBand(page);
 
