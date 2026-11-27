@@ -120,6 +120,42 @@ describe("ListingDetailPage", () => {
     expect(String(readCollection.mock.calls[0][2])).toBe("category=electronics&limit=5");
   });
 
+  describe("search-engine offer price", () => {
+    const offerOf = async (fields: Record<string, unknown>) => {
+      listingDetail.mockResolvedValue({
+        id: "listing-9",
+        owner_id: "",
+        title: "Item",
+        description: "Description",
+        status: "live",
+        category: "electronics",
+        photos: [],
+        ...fields,
+      });
+      publicDetail.mockResolvedValue(null);
+      readCollection.mockResolvedValue({ rows: [], total: 0 });
+      const { container } = render(
+        await ListingDetailPage({ params: Promise.resolve({ id: "listing-9" }) })
+      );
+      const script = container.querySelector('script[type="application/ld+json"]');
+      return JSON.parse(script?.textContent ?? "{}").offers;
+    };
+
+    it("leaves the price out for a Price on request post", async () => {
+      expect(await offerOf({ price_mode: "on_request", price_cents: null })).toBeUndefined();
+    });
+
+    it("keeps price 0 for a Free post", async () => {
+      expect(await offerOf({ price_mode: "free", price_cents: 0 })).toMatchObject({ price: "0" });
+    });
+
+    it("states the amount for an amount post", async () => {
+      expect(await offerOf({ price_mode: "amount", price_cents: 150000 })).toMatchObject({
+        price: "1500.00",
+      });
+    });
+  });
+
   it("calls notFound when the listing is missing", async () => {
     listingDetail.mockResolvedValue(null);
 
