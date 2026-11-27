@@ -57,6 +57,13 @@ await runTwoAdminUpdateCheck(SETUP, async ({ database, check, kit, world, admin 
   const thandi = world.verified("pkg-thandi", admin);
   ozowPurchase(kit, thandi, P30, 1);
   const nomsa = world.verified("pkg-nomsa", admin);
+  // A member of Sipho's package: she can use its places, but it is not hers.
+  const mara = world.verified("pkg-mara", admin);
+  q(
+    `insert into private.entitlement_members(entitlement_id,member_id,added_by)
+       select id,'${mara.id}','${sipho.id}' from private.entitlements
+       where owner_id='${sipho.id}' and package_id is not null;`
+  );
   const people = { sipho, thandi, nomsa };
   const before = {};
 
@@ -75,7 +82,10 @@ await runTwoAdminUpdateCheck(SETUP, async ({ database, check, kit, world, admin 
       ["summary"],
       JSON.stringify(rows)
     );
-    assert.equal(rows[0][1], "package running in the allowance: update not applied; packages running: 1");
+    assert.equal(
+      rows[0][1],
+      "package running in the allowance: update not applied; packages running: 1"
+    );
     assertReadOnlyPreflight(database, kit.preflightSql);
   });
   await check("a premature rollback and a drifted body are refused", () => {
@@ -104,6 +114,14 @@ await runTwoAdminUpdateCheck(SETUP, async ({ database, check, kit, world, admin 
   await check("a running package shows in every posting area", () => {
     for (const area of ["market", "business", "tourism_events"])
       assert.equal(allowance(sipho, area).package_running, true, area);
+  });
+
+  await check("a member of someone else's package: false; the owner: true", () => {
+    const asMember = allowance(mara);
+    assert.ok(Number(asMember.capacity) > 0, "the member can use the package's places");
+    assert.equal(asMember.package_running, false);
+    assert.equal(templatesSay(mara), false);
+    assert.equal(allowance(sipho).package_running, true);
   });
 
   await check("after the package ends: false, like the template list", () => {

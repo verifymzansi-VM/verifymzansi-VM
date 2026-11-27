@@ -19,13 +19,20 @@ vi.mock("@/lib/foundation/restored-browser-client", () => ({
   getRestoredFoundationBrowserClient: () => ({ auth: { onAuthStateChange } }),
 }));
 
+vi.mock("@/lib/hidden-features", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  SHOW_POST_TEMPLATES: true,
+}));
+
 vi.mock("next/link", () => ({
   default: ({ children, href }: { children: React.ReactNode; href: string }) => (
     <a href={href}>{children}</a>
   ),
 }));
 
-const { PlanGate, usePlanEntitlements, usePlanMaxPhotos } = await import("@/components/billing/plan-gate");
+const { PlanGate, usePlanEntitlements, usePlanMaxPhotos } =
+  await import("@/components/billing/plan-gate");
+const { SaveTemplateButton } = await import("@/components/post-templates/save-template-button");
 
 const OWNER = "11111111-1111-4111-8111-111111111111";
 
@@ -231,5 +238,32 @@ describe("usePlanEntitlements", () => {
     fetchPostingAllowance.mockResolvedValue(allowance({ max_photos: 8, package_running: false }));
     render(<Entitlements />);
     expect(await screen.findByText("8 photos, package not running")).toBeInTheDocument();
+  });
+
+  it("reports no package and hides Save as template when the allowance cannot be loaded", async () => {
+    function WithButton() {
+      const { packageRunning } = usePlanEntitlements("MZANSI_MARKET");
+      return (
+        <div>
+          <p>package {packageRunning ? "running" : "not running"}</p>
+          <SaveTemplateButton
+            defaultName="Demo"
+            data={() => ({ category: "vehicles" })}
+            packageRunning={packageRunning}
+          />
+        </div>
+      );
+    }
+    // With a running package the button shows, so its absence below is the failure's doing.
+    fetchPostingAllowance.mockResolvedValue(allowance({ package_running: true }));
+    const { unmount } = render(<WithButton />);
+    expect(await screen.findByText("package running")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /save as template/i })).toBeInTheDocument();
+    unmount();
+
+    fetchPostingAllowance.mockRejectedValue(new Error("failed"));
+    render(<WithButton />);
+    expect(await screen.findByText("package not running")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /save as template/i })).toBeNull();
   });
 });
