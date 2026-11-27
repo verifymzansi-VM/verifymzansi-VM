@@ -28,7 +28,7 @@ create table private.frontend_business_checks (
   constraint frontend_business_checks_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES auth.users(id) ON DELETE SET NULL,
   constraint frontend_business_checks_business_id_fkey FOREIGN KEY (business_id) REFERENCES private.posts(id) ON DELETE CASCADE,
   constraint frontend_business_checks_check CHECK (kind <> 'seen'::text OR seen_method IS NOT NULL AND screenshots_consent_at IS NOT NULL AND available_slots IS NOT NULL AND cardinality(available_slots) >= 1 AND cardinality(available_slots) <= 3),
-  constraint frontend_business_checks_check1 CHECK (seen_method <> 'visit'::text OR visit_address IS NOT NULL),
+  constraint frontend_business_checks_check1 CHECK (seen_method <> 'visit'::text OR visit_address IS NOT NULL OR decided_at IS NOT NULL),
   constraint frontend_business_checks_check2 CHECK ((status = ANY (ARRAY['pending'::text, 'info_requested'::text])) = (decided_at IS NULL)),
   constraint frontend_business_checks_check3 CHECK ((status = 'approved'::text) = (expires_at IS NOT NULL)),
   constraint frontend_business_checks_check4 CHECK (revoked_at IS NULL OR status = 'withdrawn'::text),
