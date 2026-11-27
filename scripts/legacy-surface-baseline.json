@@ -5,7 +5,7 @@
     "legacyClientImports": 3,
     "retiredCommandNames": 9,
     "retiredCommandCalls": 9,
-    "retiredTableReads": 2
+    "retiredTableReads": 1
   },
   "legacyClientImporters": [
     "src/app/api/organisations/[id]/report/route.ts",
@@ -23,5 +23,5 @@
     "release_intro_trial",
     "reserve_intro_trial"
   ],
-  "retiredTableNames": ["content_edit_requests", "organisations"]
+  "retiredTableNames": ["organisations"]
 }

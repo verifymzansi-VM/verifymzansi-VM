@@ -112,7 +112,9 @@ export function DecisionsPanel({
             dsar && (
               <>
                 {formatCount(dsar.open)} open · {formatCount(dsar.due_7d)} due within 7 days
-                {dsar.unassigned !== undefined && dsar.unassigned > 0 && ` · ${formatCount(dsar.unassigned)} unassigned`}
+                {dsar.unassigned !== undefined &&
+                  dsar.unassigned > 0 &&
+                  ` · ${formatCount(dsar.unassigned)} unassigned`}
                 {dsar.next_due_at && <p>Next deadline {formatSaShortDate(dsar.next_due_at)}</p>}
               </>
             )

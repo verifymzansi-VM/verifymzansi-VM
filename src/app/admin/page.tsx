@@ -36,10 +36,8 @@ const DESCRIPTIONS = {
 
 /** True when a summary section the viewer should see could not be read. */
 function hasUnreadSection(dashboard: NonNullable<Awaited<ReturnType<typeof getStaffDashboard>>>) {
-  return (
-    (["shift", "decisions", "restrictions", "dsar", "platform", "retention"] as const).some(
-      (key) => key in dashboard && dashboard[key] === null
-    )
+  return (["shift", "decisions", "restrictions", "dsar", "platform", "retention"] as const).some(
+    (key) => key in dashboard && dashboard[key] === null
   );
 }
 
