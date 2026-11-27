@@ -19,7 +19,10 @@
 --      sticker expired or was revoked; a refusal or withdrawal ends at its
 --      decision), with its CIPC review, photo and file rows. A CIPC link
 --      sticker shows while its root business's sticker runs, so it ends when
---      that root sticker ends, not at its own expiry date.
+--      that root sticker ends, not at its own expiry date. A business's
+--      results go oldest first (a result waits while an older approved or
+--      revoked one of the same kind, seen or CIPC, is left), so deleting a
+--      record never changes the sticker a business shows.
 --    An open legal hold on the owner or an open fraud hold on the case keeps
 --    everything. Each check is handled under the owner's verification lock,
 --    which revocations and hold writers also take.
@@ -44,7 +47,7 @@ declare shape text;
 begin
   select coalesce((select md5(replace(p.prosrc,E'\r\n',E'\n')) from pg_proc p
     where p.oid=to_regprocedure('internal.retention_verification(integer)')),'absent') into shape;
-  if shape not in ('56e4f71f0ad4ecb994e79ea9b0d695b8','fb71d0e909923fd4b50d622647450ce7') then
+  if shape not in ('56e4f71f0ad4ecb994e79ea9b0d695b8','87ae0ad18adf7104720d88bb0dc3d922') then
     raise exception 'business check retention precondition: internal.retention_verification(integer) % is not a reviewed body', shape using errcode='55000';
   end if;
   select coalesce((select pg_get_constraintdef(c.oid,true) from pg_constraint c
@@ -196,8 +199,13 @@ begin
   -- months after it ended (the sticker expired or was revoked, or the
   -- decision). A CIPC link sticker runs as long as its root business's
   -- sticker (frontend_current_cipc_stickers), so while it is the latest
-  -- result of its business it ends when that root ends. An open legal hold
-  -- on the owner or fraud hold on the case keeps everything.
+  -- result of its business it ends when that root ends. Every reader shows
+  -- the latest result of a business (approved or revoked, by decided_at then
+  -- id; seen and CIPC apart), so results go oldest first: a result waits
+  -- while an older one of the same business is left, and deleting one never
+  -- changes what a business shows. The oldest is never kept waiting, and one
+  -- that is not the latest ends at its own date, so every record goes. An
+  -- open legal hold on the owner or fraud hold on the case keeps everything.
   for candidate in
     select x.id,x.owner_id from private.frontend_business_checks x
     where x.decided_at is not null
@@ -206,6 +214,10 @@ begin
             join private.frontend_cipc_latest_result root on root.business_id=l.linked_business_id and root.owner_id=l.owner_id
               and root.kind='cipc' and root.registration_number=l.registration_number
             where l.business_id=x.business_id and l.id=x.id and l.status='approved') end)<statement_timestamp()-interval '12 months'
+          and (not (x.status='approved' or x.revoked_at is not null)
+            or not exists(select 1 from private.frontend_business_checks o where o.business_id=x.business_id
+              and (o.kind='seen')=(x.kind='seen') and (o.status='approved' or o.revoked_at is not null)
+              and (o.decided_at,o.id)<(x.decided_at,x.id)))
         or (coalesce(x.revoked_at,x.decided_at)<statement_timestamp()-interval '30 days'
           and (x.visit_address is not null or x.visit_report is not null
             or exists(select 1 from private.frontend_business_seen_photos p where p.check_id=x.id
@@ -230,7 +242,11 @@ begin
             join private.frontend_cipc_latest_result root on root.business_id=l.linked_business_id and root.owner_id=l.owner_id
               and root.kind='cipc' and root.registration_number=l.registration_number
             where l.business_id=business_check.business_id and l.id=business_check.id and l.status='approved') end)
-        <statement_timestamp()-interval '12 months' then
+        <statement_timestamp()-interval '12 months'
+      and (not (business_check.status='approved' or business_check.revoked_at is not null)
+        or not exists(select 1 from private.frontend_business_checks o where o.business_id=business_check.business_id
+          and (o.kind='seen')=(business_check.kind='seen') and (o.status='approved' or o.revoked_at is not null)
+          and (o.decided_at,o.id)<(business_check.decided_at,business_check.id))) then
       delete from private.frontend_business_checks where id=candidate.id;
       business_checks:=business_checks+1;
     elsif coalesce(business_check.revoked_at,business_check.decided_at)<statement_timestamp()-interval '30 days' then

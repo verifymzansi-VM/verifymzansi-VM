@@ -96,11 +96,14 @@ is added or removed; one function body is replaced and one check rule relaxed.
   after it ended (the sticker expired or was revoked; a refusal or withdrawal
   ends at its decision), with its CIPC review, photo and file rows. A CIPC link
   sticker shows while its root business's sticker runs, so it ends when that
-  root sticker ends. The sticker, its date and town, the CIPC sticker details on
-  the profile, the outcome and the staff note stay until then. An open legal
-  hold on the owner or fraud hold on the case keeps everything. Each check is
-  handled under the owner's verification lock, which revocations and hold
-  writers also take.
+  root sticker ends. A business's results go oldest first: a result waits while
+  an older approved or revoked result of the same kind (seen, or CIPC and CIPC
+  link) is left, so deleting a record never changes the sticker a business
+  shows. The sticker, its date and town, the CIPC sticker details on the
+  profile, the outcome and the staff note stay until then. An open legal hold on
+  the owner or fraud hold on the case keeps everything. Each check is handled
+  under the owner's verification lock, which revocations and hold writers also
+  take.
 - **`frontend_business_checks_check1`**: a visit check needs a visit address
   only until it is decided (was: always), so the sweep can delete it.
 

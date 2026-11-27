@@ -18,7 +18,9 @@
 // from its own date); the sticker, its date and town, the CIPC sticker details,
 // the outcome and the staff note survive; the record is kept 11 months after it
 // ended and gone at 13; an open legal hold or fraud hold keeps everything; a
-// second sweep changes nothing; who may run it is unchanged. Any later updates
+// second sweep changes nothing; a business's results go oldest first, so
+// deleting a record never brings back an older sticker (a revoked CIPC link
+// stays hidden) and every record still goes; who may run it is unchanged. Any later updates
 // are applied at the end.
 //
 //   node --import tsx scripts/test-foundation-business-check-retention.mjs
@@ -40,7 +42,7 @@ const UPDATE = "20261126210022_business_check_retention.sql";
 const SIGNATURE = "internal.retention_verification(integer)";
 const [REVIEWED, UPDATED] = [
   "56e4f71f0ad4ecb994e79ea9b0d695b8",
-  "fb71d0e909923fd4b50d622647450ce7",
+  "87ae0ad18adf7104720d88bb0dc3d922",
 ];
 const OLD_RULE = "CHECK (seen_method <> 'visit'::text OR visit_address IS NOT NULL)";
 const NEW_RULE =
@@ -228,6 +230,23 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
       "23514",
       /frontend_business_checks_check1/
     );
+  });
+
+  await check("preflight: a NOT VALID copy of the update's rule is an unexpected state", () => {
+    asOwner(`alter table private.frontend_business_checks drop constraint frontend_business_checks_check1,
+      add constraint frontend_business_checks_check1
+        check (seen_method<>'visit' or visit_address is not null or decided_at is not null) not valid;`);
+    assert.equal(rule(), `${NEW_RULE} NOT VALID`);
+    const [summary, ...problems] = preflight();
+    assert.match(summary[1], /^business check retention: unexpected state; /);
+    assert.equal(problems.length, 1, JSON.stringify(problems));
+    assert.match(problems[0][1], /^frontend_business_checks_check1 is neither/);
+    assert.match(fails(kit.step.sql, "55000"), /frontend_business_checks_check1/);
+    q(
+      "alter table private.frontend_business_checks validate constraint frontend_business_checks_check1;"
+    );
+    assert.equal(rule(), NEW_RULE);
+    assert.match(preflight()[0][1], APPLIED);
   });
 
   await check("day 29 keeps the details, day 31 clears them; the sticker stays", () => {
@@ -448,6 +467,92 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
       state
     );
     assert.match(preflight()[0][1], /; details due: 0; records due: 0; held: 1$/);
+  });
+
+  /** The latest result of business `id` in a family, as every reader picks it: id|status. */
+  const latest = (id, seen) =>
+    q(`select concat_ws('|',x.id,x.status) from private.frontend_business_checks x
+      where x.business_id='${id}' and x.kind ${seen ? "=" : "<>"} 'seen' and (x.status='approved' or x.revoked_at is not null)
+      order by x.decided_at desc,x.id desc limit 1;`);
+
+  await check("a revoked CIPC link never brings back an older link sticker", () => {
+    const w = linkWorld("bcr-link-revoked");
+    // L1 was approved against the root's first sticker, which (with L1's own
+    // expiry) ended 11 months ago. L2 on the same business was approved
+    // later and revoked 13 months ago. The root renewed 70 days ago.
+    const rootOld = cipcIn(w, "cipc", "365 days 11 months");
+    const l1 = cipcIn(w, "cipc_link", "365 days 11 months", expiryOf(rootOld.id));
+    const l2 = businessCheck("", "cipc_link", {
+      decided: "14 months",
+      revoked: "13 months",
+      owner: w.owner,
+      business: w.link,
+      linked: w.root,
+    });
+    cipcIn(w, "cipc", "70 days");
+    assert.ok(showsCipc(w.root));
+    assert.ok(!showsCipc(w.link), "the revoked link shows no sticker");
+    assert.equal(latest(w.link, false), `${l2.id}|withdrawn`);
+    assert.match(preflight()[0][1], /; records due: 0; held: 1$/);
+    const first = sweep();
+    assert.equal(first.business_checks, 0, JSON.stringify(first));
+    assert.ok(exists(l1.id) && exists(l2.id), "L2 waits while the older L1 is left");
+    assert.ok(!showsCipc(w.link), "still hidden after the sweep");
+    assert.equal(latest(w.link, false), `${l2.id}|withdrawn`);
+    // L1, not the latest result, ends at its own expiry: 13 months ago now.
+    asOwner(
+      `update private.frontend_business_checks set expires_at=${ago("13 months")} where id='${l1.id}';`
+    );
+    assert.match(preflight()[0][1], /; records due: 1; held: 1$/);
+    const second = sweep();
+    assert.equal(second.business_checks, 1, JSON.stringify(second));
+    assert.ok(!exists(l1.id) && exists(l2.id), "the older L1 goes first");
+    assert.ok(!showsCipc(w.link));
+    const third = sweep();
+    assert.equal(third.business_checks, 1, JSON.stringify(third));
+    assert.ok(!exists(l2.id), "then L2");
+    assert.ok(!showsCipc(w.link) && showsCipc(w.root));
+    assert.equal(sweep().business_checks, 0);
+  });
+
+  await check("one record per run, oldest first; what the business shows never changes", () => {
+    const owner = world.reviewedId("bcr-oldest", admin);
+    const business = world.post(owner, "business", "business");
+    const on = { owner, business };
+    // Two approvals (expired 2 years and 18 months ago), then one revoked 11
+    // months ago: the latest result, not yet due.
+    const s1 = businessCheck("", "seen", { decided: "365 days 24 months", ...on });
+    const s2 = businessCheck("", "seen", { decided: "365 days 18 months", ...on });
+    const s3 = businessCheck("", "seen", { decided: "13 months", revoked: "11 months", ...on });
+    const shown = () => [
+      latest(business, true),
+      q(`select internal.get_public_frontend_business_seen(array['${business}']::uuid[])::text;`),
+    ];
+    const before = shown();
+    assert.equal(before[0], `${s3.id}|withdrawn`);
+    assert.equal(before[1], "[]");
+    const one = () => json(service("select api.run_retention(1);")).verification;
+    const runs = [];
+    for (const left of [[s2, s3], [s3], [s3]]) {
+      runs.push(one());
+      for (const c of [s1, s2, s3])
+        assert.equal(exists(c.id), left.includes(c), `run ${runs.length} ${c.id}`);
+      assert.deepEqual(shown(), before, `run ${runs.length}`);
+    }
+    assert.deepEqual(
+      runs.map((r) => r.business_checks),
+      [1, 1, 0],
+      JSON.stringify(runs)
+    );
+    assert.deepEqual(details(s3.id), cleared, "the latest kept its record, not its details");
+    // Once the revocation is 13 months old, the last record goes.
+    asOwner(
+      `update private.frontend_business_checks set revoked_at=${ago("13 months")} where id='${s3.id}';`
+    );
+    assert.equal(one().business_checks, 1);
+    assert.ok(!exists(s3.id));
+    assert.equal(latest(business, true), "");
+    assert.equal(shown()[1], "[]");
   });
 
   await check("who may run the sweep is unchanged", () => {

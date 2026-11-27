@@ -20,7 +20,7 @@ declare shape text;
 begin
   select coalesce((select md5(replace(p.prosrc,E'\r\n',E'\n')) from pg_proc p
     where p.oid=to_regprocedure('internal.retention_verification(integer)')),'absent') into shape;
-  if shape<>'fb71d0e909923fd4b50d622647450ce7' then
+  if shape<>'87ae0ad18adf7104720d88bb0dc3d922' then
     raise exception 'rollback precondition: internal.retention_verification(integer) % is not this update''s body', shape using errcode='55000';
   end if;
 end$$;
