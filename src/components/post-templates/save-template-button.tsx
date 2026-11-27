@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { FilePlus2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SHOW_POST_TEMPLATES } from "@/lib/hidden-features";
@@ -9,32 +9,19 @@ import { SaveTemplateDialog } from "./save-template-dialog";
 
 /**
  * "Save as template" on a post form (SHOW_POST_TEMPLATES). Shown only while
- * the member's Multi-listing package runs (read from GET /api/post-templates);
- * Individual members never see it.
+ * the member's Multi-listing package runs (`packageRunning`, from the posting
+ * allowance the page already loads); Individual members never see it.
  */
 export function SaveTemplateButton({
   defaultName,
   data,
+  packageRunning,
 }: {
   defaultName: string;
   data: () => PostTemplateData;
+  packageRunning: boolean;
 }) {
-  const [packageRunning, setPackageRunning] = useState(false);
   const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    if (!SHOW_POST_TEMPLATES) return;
-    let cancelled = false;
-    void fetch("/api/post-templates", { cache: "no-store" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((body: { package_running?: unknown } | null) => {
-        if (!cancelled) setPackageRunning(body?.package_running === true);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   if (!SHOW_POST_TEMPLATES || !packageRunning) return null;
   return (

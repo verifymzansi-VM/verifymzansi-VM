@@ -729,12 +729,14 @@ function PlanPickerWithTrial({
 }
 
 /* ─────────────────────────────────────────────────────────────
-   Shared entitlement fetch for the media-limit hooks.
+   Shared entitlement fetch for the media-limit hooks (and, on Edit listing,
+   whether a Multi-listing package runs, for Save as template).
    ───────────────────────────────────────────────────────────── */
 interface PlanEntitlementInfo {
   maxPhotos: number;
   maxVideos: number;
   videoAllowed: boolean;
+  packageRunning: boolean;
 }
 
 function fetchSharedEntitlements(area: MarketplaceArea): Promise<PlanEntitlementInfo> {
@@ -742,14 +744,16 @@ function fetchSharedEntitlements(area: MarketplaceArea): Promise<PlanEntitlement
     maxPhotos: facts.max_photos,
     maxVideos: facts.max_videos,
     videoAllowed: facts.max_videos > 0,
+    packageRunning: facts.package_running === true,
   }));
 }
 
-function usePlanEntitlements(area: MarketplaceArea): PlanEntitlementInfo {
+export function usePlanEntitlements(area: MarketplaceArea): PlanEntitlementInfo {
   const [info, setInfo] = useState<PlanEntitlementInfo>(() => ({
     maxPhotos: FREE_POST_CONFIG.maxPhotos,
     maxVideos: isPlaywrightTestMode() ? FREE_POST_CONFIG.maxVideos : FREE_POST_CONFIG.maxVideos,
     videoAllowed: FREE_POST_CONFIG.videoAllowed,
+    packageRunning: false,
   }));
 
   useEffect(() => {
@@ -765,7 +769,7 @@ function usePlanEntitlements(area: MarketplaceArea): PlanEntitlementInfo {
           error: error instanceof Error ? error.message : String(error),
         });
         if (!cancelled) {
-          setInfo({ maxPhotos: 0, maxVideos: 0, videoAllowed: false });
+          setInfo({ maxPhotos: 0, maxVideos: 0, videoAllowed: false, packageRunning: false });
         }
       });
     return () => {
