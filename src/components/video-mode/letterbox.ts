@@ -24,3 +24,12 @@ export function captionTop(
   if (pictureBottom + CAPTION_PX + CLEARANCE_PX > floor) return null;
   return Math.round(pictureBottom + 12);
 }
+
+/**
+ * Over the video, the title and price sit just above Details (and Book or
+ * Tickets), measured from the row's real top: on a narrow phone the row wraps
+ * onto two lines and the title moves up with it. In px from the bottom.
+ */
+export function captionBottom(stageHeight: number, detailsTop: number): number {
+  return Math.max(0, Math.round(stageHeight - detailsTop + 12));
+}

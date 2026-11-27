@@ -130,6 +130,32 @@ describe("Video mode auto-hide", () => {
     expect(root.getAttribute("data-chrome")).toBe("shown");
   });
 
+  it.each([
+    { width: 360, height: 780 },
+    { width: 320, height: 568 },
+  ])(
+    "at $width px the title sits above a Details row that wrapped onto two lines",
+    async ({ width, height }) => {
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
+      Object.defineProperty(window, "innerHeight", { configurable: true, value: height });
+      const twoRowsTop = height - 28 - (44 + 8 + 44);
+      const original = Element.prototype.getBoundingClientRect;
+      vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (
+        this: Element
+      ) {
+        return this.hasAttribute("data-vm-details")
+          ? ({ top: twoRowsTop, bottom: height - 28, left: 12, right: width - 72 } as DOMRect)
+          : original.call(this);
+      });
+      await renderPlaying();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(50);
+      });
+      const caption = document.querySelector<HTMLElement>("[data-vm-caption='over']")!;
+      expect(caption.style.bottom).toBe(`${height - twoRowsTop + 12}px`);
+    }
+  );
+
   it("lists the areas in roll-over order with the filter under them", async () => {
     await renderPlaying();
     const nav = screen.getByRole("navigation", { name: "Sections" });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { captionTop } from "./letterbox";
+import { captionBottom, captionTop } from "./letterbox";
 
 // A 375 x 812 phone: Details is 44 px tall, 28 px above the bottom edge (plus the safe area).
 const DETAILS_TOP = 812 - 28 - 44;
@@ -36,5 +36,24 @@ describe("captionTop", () => {
   it("waits until the video's size is known", () => {
     expect(captionTop(375, 812, 0, 0, DETAILS_TOP)).toBeNull();
     expect(captionTop(0, 0, 1920, 1080, DETAILS_TOP)).toBeNull();
+  });
+});
+
+describe("captionBottom", () => {
+  it("sits the title just above Details on one row", () => {
+    expect(captionBottom(812, DETAILS_TOP)).toBe(28 + 44 + 12);
+  });
+
+  it.each([
+    // Details and 'Book appointment' wrap at 360 px; Details and 'Get tickets' at 320 px.
+    { width: 360, height: 780 },
+    { width: 320, height: 568 },
+  ])("moves the title up with a row that wraps onto two lines at $width px", ({ height }) => {
+    const twoRows = 44 + 8 + 44;
+    const detailsTop = height - 28 - twoRows;
+    const bottom = captionBottom(height, detailsTop);
+    // The title's lower edge stays 12 px above the top of the wrapped row.
+    expect(height - bottom).toBe(detailsTop - 12);
+    expect(bottom).toBeGreaterThan(captionBottom(height, height - 28 - 44));
   });
 });
