@@ -248,6 +248,22 @@ try {
     );
   });
 
+  await check("a business under a moderation hold, or archived, answers nothing", () => {
+    // Before: both serve their numbers.
+    assert.equal(reveal(spaced, "call"), "+27111234567");
+    assert.equal(reveal(international, "call"), "+27311234567");
+    q(`do $$begin
+        perform set_config('session_replication_role','replica',true);
+        insert into private.frontend_content_holds(id,post_id,account_id,reason,applied_at)
+          values(gen_random_uuid(),'${spaced}','${owner.id}','Synthetic moderation hold.',now());
+        update private.posts set status='archived',ended_at=now(),deletes_at=now()+interval '30 days'
+          where id='${international}';
+        perform set_config('session_replication_role','origin',true);
+      end$$;`);
+    for (const id of [spaced, international])
+      for (const channel of ["call", "whatsapp"]) assert.equal(reveal(id, channel), "", id);
+  });
+
   // ---------------------------------------------------------- later steps
   applySteps(database, steps.slice(index + 1));
   console.log(
