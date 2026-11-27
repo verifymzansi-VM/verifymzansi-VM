@@ -350,7 +350,7 @@ describe("ProfilePage", () => {
       for (const text of [
         "Your account closes as soon as you confirm. You can't undo this or reopen the account yourself.",
         "Your posts leave the site at once and are deleted with your account.",
-        "As our Terms say, closing your account counts as a request to cancel all your slots. If you are an individual or sole trader, we work out any credit for unused days after the 20-business-day notice period, minus a R50 fee; a 30-day slot usually returns nothing. Companies and other buyers that are not individuals get no credit.",
+        "As our Terms say, closing your account counts as a request to cancel all your slots and your Multi-listing package. If you are an individual or sole trader, we work out any credit for unused days after the 20-business-day notice period, minus a R50 fee; a 30-day slot usually returns nothing. Companies and other buyers that are not individuals get no credit.",
         "You are signed out on every device and can't sign in again.",
         "Erasing your profile, posts, enquiries, photos and videos is planned for 17 December 2026, 30 days after closing. If a payment, refund, invoice, report or legal hold is still open, erasure waits until it is settled.",
         /^Payment records and invoices are kept for 7 years, as company and tax law require\. Some other records, such as ID-check history, are kept as our/,

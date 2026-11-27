@@ -126,3 +126,15 @@ it("explains that a reported post can be hidden but not deleted until staff have
     "post_changed"
   );
 });
+it("says when resubmitting waits for the current posting terms (the dashboard links to Edit)", async () => {
+  rpc.mockResolvedValueOnce({
+    data: null,
+    error: { code: "PT409", details: "posting_terms_required" },
+  });
+  const response = await handleRestoredPostAction(request(), "resubmit");
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({
+    error: "Review and accept the current posting terms before continuing",
+    reason: "posting_terms_required",
+  });
+});

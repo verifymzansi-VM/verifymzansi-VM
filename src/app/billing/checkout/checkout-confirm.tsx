@@ -37,7 +37,7 @@ import {
   usePendingPayment,
   type PendingPayment,
 } from "@/components/billing/pending-payment-actions";
-import { CheckoutTermsLinks } from "@/components/billing/checkout-terms-links";
+import { CheckoutTermsLinks, NoVatCharged } from "@/components/billing/checkout-terms-links";
 
 export interface CheckoutSummary {
   planId: string;
@@ -449,6 +449,7 @@ export function CheckoutConfirm({
                 >
                   {formatPlanPrice(totalCents)}
                 </p>
+                <NoVatCharged />
               </div>
               <p className="pb-0.5 text-right text-xs font-medium text-muted-foreground">
                 {term && slots > 1

@@ -15,8 +15,6 @@ import type { FoundationPublicPostCore } from "./public-post-contract";
 import reference from "../domains/taxonomy/reference.json";
 import { buildFoundationPostSearch } from "./post-search";
 import { SEARCH_MAX_OFFSET, searchLastPage } from "./search-depth";
-import { readFoundationPostAffiliations } from "./organisations";
-import { readFoundationPostSponsorships } from "./organisation-sponsorships";
 import {
   presentedFormFields,
   presentedVideoLayout,
@@ -229,14 +227,9 @@ type PresentedCard = Awaited<ReturnType<typeof searchFoundationPresentedCards>>[
 
 /** The tourism area's business category (stays, restaurants, tours). */
 const TOURISM_BUSINESS_CATEGORY = "tourism_hospitality";
-/** Deepest result a merged search reads from each scope (ten card reads). Its
- * reported total is capped to the whole pages within this depth, so page links
- * never point past what can be served. */
-const MERGED_SEARCH_DEPTH = 480;
-
-/** Cards of one search scope from `start`, at most `want` of them, in bounded
- * reads of 48, never from past the deepest offset the database serves.
- * Refuses a card of another kind. */
+/** Cards from `start`, at most `want` (up to 50) of them, in reads of up to 48,
+ * never from past the deepest offset the database serves. Refuses a card of
+ * another kind. */
 async function readCards(
   api: FoundationPublicApi,
   input: Record<string, unknown>,
@@ -245,14 +238,9 @@ async function readCards(
 ) {
   const cards: PresentedCard[] = [];
   let total = 0;
-  for (let count = 0; ; count++) {
-    if (count >= 200) throw new Error("Public collection is too large to paginate safely");
+  for (;;) {
     const requested = Math.min(48, want - cards.length);
     const offset = start + cards.length;
-    // TODO(per-organisation read): the org= filter reads its area from offset
-    // 0 and keeps only the organisation's businesses, so past offset 4,800 it
-    // silently stops and misses later ones. Replace it with a database read of
-    // one organisation's affiliated businesses before an area grows that large.
     if (offset > SEARCH_MAX_OFFSET) break;
     const result = await searchFoundationPresentedCards(api, {
       ...input,
@@ -273,28 +261,6 @@ async function readCards(
   return { cards, total };
 }
 
-/** The database's result order (internal.search_posts), used to merge scopes:
- * relevance score, then price (missing prices last), then newest, then id. */
-function databaseOrder(sort: unknown) {
-  return (a: PresentedCard, b: PresentedCard) => {
-    if (sort === "relevance") {
-      const score = Number(b.score ?? 0) - Number(a.score ?? 0);
-      if (score) return score;
-    }
-    if (sort === "price_asc" || sort === "price_desc") {
-      if (a.price_cents === null || b.price_cents === null) {
-        if (a.price_cents !== b.price_cents) return a.price_cents === null ? 1 : -1;
-      } else {
-        const price = Number(a.price_cents) - Number(b.price_cents);
-        if (price) return sort === "price_asc" ? price : -price;
-      }
-    }
-    const published = Date.parse(b.published_at) - Date.parse(a.published_at);
-    if (published) return published;
-    return a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
-  };
-}
-
 /**
  * View and like totals for public cards and pages, only while
  * SHOW_ENGAGEMENT_TOTALS is on (no read otherwise). Counts are never worth a
@@ -313,9 +279,10 @@ export async function readPublicEngagement(
 }
 
 /** Translate the selected frontend's filters, never send legacy table names,
- * SQL expressions or private fields to the replacement database. */
-export async function readRestoredCollection(
-  api: FoundationPublicApi,
+ * SQL expressions or private fields to the replacement database. The search
+ * request for one page of a collection; `input` is null when a filter can
+ * match nothing (an unknown city). */
+export function restoredCollectionSearch(
   collection: PublicCollection,
   params = new URLSearchParams()
 ) {
@@ -357,7 +324,7 @@ export async function readRestoredCollection(
         (!input.province || row.province === input.province) &&
         [row.id, row.label, ...row.aliases].some((value) => normalized(value) === normalized(city))
     );
-    if (!match) return { rows: [], total: 0, page, limit };
+    if (!match) return { input: null, page, limit };
     input.city = match.id;
     input.province = match.province;
   }
@@ -413,9 +380,21 @@ export async function readRestoredCollection(
     }
   }
   if (params.get("type") && collection === "businesses") input.business_type = params.get("type");
+  // One organisation's supported businesses, optionally one of its
+  // programmes or its sponsored businesses.
   const organisation = params.get("org");
-  if (organisation && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(organisation))
-    throw new MarketplaceQueryError("Invalid organisation");
+  if (organisation) {
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(organisation))
+      throw new MarketplaceQueryError("Invalid organisation");
+    input.organisation = organisation;
+    const programme = params.get("programme");
+    if (programme) {
+      if (!z.uuid().safeParse(programme).success)
+        throw new MarketplaceQueryError("Invalid programme");
+      input.programme = programme;
+    }
+    if (params.get("sponsored") === "1") input.sponsored = true;
+  }
   const sort = params.get("sort") || "recommended";
   if (!["recommended", "newest", "price_asc", "price_desc", "popular"].includes(sort))
     throw new MarketplaceQueryError("Invalid sort");
@@ -426,73 +405,38 @@ export async function readRestoredCollection(
     if (params.get("event_order")) input.event_order = params.get("event_order");
   }
   input.offset = (page - 1) * limit;
-  const kind =
-    collection === "listings" ? "listing" : collection === "businesses" ? "business" : "event";
   // A text search under Businesses also finds tourism businesses (stays,
   // restaurants, tours), as the chosen frontend's search did. The database
-  // keeps them in the tourism area, so both scopes are read and merged in the
-  // database's own order (map 03a C8).
-  const scopes: Array<Record<string, unknown>> =
-    collection === "businesses" && q && !category
-      ? [input, { ...input, area: "tourism_events", category: TOURISM_BUSINESS_CATEGORY }]
-      : [input];
-  const merged = scopes.length > 1;
-  const mergedDepth = merged && !organisation ? Math.floor(MERGED_SEARCH_DEPTH / limit) * limit : 0;
-  // A page past the served depth is empty, like any page past the end. Its
-  // total comes from one one-card read per scope.
-  const tooDeep = mergedDepth > 0 && page * limit > mergedDepth;
-  for (const scope of scopes) {
-    try {
-      buildFoundationPostSearch(scope);
-    } catch {
-      throw new MarketplaceQueryError("Invalid marketplace filters");
-    }
+  // keeps them in the tourism area, so the search asks for every business
+  // instead of one area (map 03a C8).
+  if (collection === "businesses" && q && !category) {
+    delete input.area;
+    input.kind = "business";
   }
-  let cards: PresentedCard[] = [];
-  let total = 0;
-  // Ordinary pages use SQL filtering, ordering, counts and offsets. At most two
-  // bounded card reads serve the legacy 50-card viewer batch; no detail fan-out.
-  // Organisation relationships remain public, bounded batches until their
-  // dedicated directory read gains the same filter contract. A merged search
-  // reads each scope from its start up to the requested page.
-  for (const scope of scopes) {
-    const read = await readCards(api, scope, kind, {
-      start: organisation || merged ? 0 : (page - 1) * limit,
-      want: organisation ? Number.POSITIVE_INFINITY : tooDeep ? 1 : merged ? page * limit : limit,
-    });
-    cards.push(...read.cards);
-    total += read.total;
+  try {
+    buildFoundationPostSearch(input);
+  } catch {
+    throw new MarketplaceQueryError("Invalid marketplace filters");
   }
-  if (mergedDepth) total = Math.min(total, mergedDepth);
-  if (tooDeep) return { rows: [], total, page, limit };
-  if (merged) cards.sort(databaseOrder(input.sort));
-  if (organisation) {
-    const affiliated = new Set<string>();
-    for (let offset = 0; offset < cards.length; offset += 100) {
-      const post_ids = cards.slice(offset, offset + 100).map((row) => row.id);
-      const badges = await readFoundationPostAffiliations(api, { post_ids });
-      for (const badge of badges)
-        if (
-          badge.organisation_slug === organisation &&
-          (!params.get("programme_name") || badge.programme_name === params.get("programme_name"))
-        )
-          affiliated.add(badge.post_id);
-    }
-    cards = cards.filter((row) => affiliated.has(row.id));
-    if (params.get("sponsored") === "1") {
-      const sponsored = new Set<string>();
-      for (let offset = 0; offset < cards.length; offset += 100) {
-        const badges = await readFoundationPostSponsorships(api, {
-          post_ids: cards.slice(offset, offset + 100).map((row) => row.id),
-        });
-        for (const badge of badges)
-          if (badge.organisation_slug === organisation) sponsored.add(badge.post_id);
-      }
-      cards = cards.filter((row) => sponsored.has(row.id));
-    }
-  }
-  if (organisation) total = cards.length;
-  const selected = organisation || merged ? cards.slice((page - 1) * limit, page * limit) : cards;
+  return { input, page, limit };
+}
+
+/** One page of a public collection: its cards from one filtered, ordered and
+ * counted database read, with their stickers and totals. */
+export async function readRestoredCollection(
+  api: FoundationPublicApi,
+  collection: PublicCollection,
+  params = new URLSearchParams()
+) {
+  const { input, page, limit } = restoredCollectionSearch(collection, params);
+  if (!input) return { rows: [], total: 0, page, limit };
+  const kind =
+    collection === "listings" ? "listing" : collection === "businesses" ? "business" : "event";
+  // At most two bounded card reads serve a 50-card page; no detail fan-out.
+  const { cards: selected, total } = await readCards(api, input, kind, {
+    start: (page - 1) * limit,
+    want: limit,
+  });
   const stickers = await readPublicBusinessStickers(
     api,
     selected.filter((row) => row.kind === "business").map((row) => row.id)
