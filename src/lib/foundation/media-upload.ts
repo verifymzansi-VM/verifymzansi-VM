@@ -25,10 +25,11 @@ import { openImagesAllowance, type ImagesAllowance } from "../media/images-allow
 import { createLogger } from "../utils/logger";
 import {
   MAX_VIDEO_SECONDS,
-  readVideoBytesSeconds,
+  readVideoBytesFacts,
   UNREADABLE_VIDEO_LENGTH_MESSAGE,
   videoLengthProblem,
 } from "../media/video-length";
+import { VIDEO_RULE_MESSAGE, videoRuleProblem, videoUploadFacts } from "../media/video-rule";
 
 const log = createLogger("FoundationMediaUpload");
 const IMMUTABLE_CACHE = "public, max-age=31536000, immutable";
@@ -58,7 +59,8 @@ export type FoundationUploadedMedia = z.infer<typeof foundationUploadedMediaSche
  * month (Cloudflare Images error 9422); routes tell the member so.
  * `video_length`: the video is longer than any post allows, or its length
  * cannot be read from the file (roadmap M4.4); `video_format`: a video that is
- * not MP4. `detail` holds the message the member sees. */
+ * not MP4, or an MP4 outside the keep rule (src/lib/media/video-rule.ts).
+ * `detail` holds the message the member sees. */
 export type FoundationMediaRefusal = "images_allowance_exhausted" | "video_length" | "video_format";
 /** Stored videos are MP4 (H.264/AAC); the posting forms convert others first. */
 const VIDEO_FORMAT_MESSAGE = "Videos are stored as MP4; please export it as MP4 and try again";
@@ -222,15 +224,17 @@ async function uploadCheckedMedia(
     !scanForMalware(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength), file.type).safe
   )
     throw new FoundationMediaError(400);
-  // A video's length in whole milliseconds; its upload completes with it.
+  // A video's length in whole milliseconds and its facts; its upload completes with both.
   let videoMs = 0;
+  let videoFacts: ReturnType<typeof videoUploadFacts> | null = null;
   if (kind === "video") {
     // Every video on the platform is at most 2 minutes (whole seconds, so the
     // phone's rounding passes). The event limit (1 minute) needs the post's
     // kind, which this upload does not carry (a file may be reused by any of
     // the member's posts): the database stores the length read here and
     // checks each post kind's limit at submit.
-    const seconds = await readVideoBytesSeconds(bytes);
+    const facts = await readVideoBytesFacts(bytes);
+    const seconds = facts?.seconds ?? null;
     const problem = videoLengthProblem(seconds, MAX_VIDEO_SECONDS);
     if (problem) {
       log.info("Video refused at upload", {
@@ -238,8 +242,20 @@ async function uploadCheckedMedia(
       });
       throw new FoundationMediaError(400, "video_length", problem);
     }
-    // videoLengthProblem refuses an unreadable length, so seconds is a number.
-    videoMs = videoDurationMs(seconds!);
+    // videoLengthProblem refuses an unreadable length, so the facts exist.
+    videoMs = videoDurationMs(facts!.seconds);
+    // The keep rule (src/lib/media/video-rule.ts). VIDEO_UPLOAD_RULE=log
+    // stores a video that breaks it and records which rule it broke.
+    const broken = videoRuleProblem(facts!, bytes.length);
+    videoFacts = videoUploadFacts(facts!, broken);
+    const enforce = environment.VIDEO_UPLOAD_RULE !== "log";
+    log.info("Video upload rule", {
+      result: broken ?? "pass",
+      mode: enforce ? "enforce" : "log",
+      ...videoFacts,
+      bitrate: Math.round((bytes.length * 8) / facts!.seconds),
+    });
+    if (broken && enforce) throw new FoundationMediaError(400, "video_format", VIDEO_RULE_MESSAGE);
   }
   if (isReencodableImageType(file.type)) {
     usage.allowance = await openImagesAllowance();
@@ -341,6 +357,7 @@ async function uploadCheckedMedia(
           p_sha256: digest,
           p_mime: file.type,
           p_duration_ms: videoMs,
+          p_facts: videoFacts,
         })
       : await service.rpc("complete_frontend_media_upload", {
           p_object_id: reserved.object_id,

@@ -35,9 +35,9 @@ beforeEach(() => {
 });
 const objectId = "00000000-0000-4000-8000-000000000001";
 const key = "media/00000000-0000-4000-8000-000000000002";
-/** A 30 s phone MP4 carrying a location in its user data. */
+/** A 30 s web-ready phone MP4 carrying a location in its user data. */
 function fixture() {
-  return syntheticMp4(30, { location: "PRIVATE GPS=-33.9,18.4" });
+  return syntheticMp4(30, { faststart: true, location: "PRIVATE GPS=-33.9,18.4" });
 }
 it("stores and attests scrubbed bytes, rather than the original MP4 location", async () => {
   const bytes = fixture();
@@ -82,6 +82,18 @@ it("stores and attests scrubbed bytes, rather than the original MP4 location", a
     p_sha256: createHash("sha256").update(stored).digest("hex"),
     p_mime: "video/mp4",
     p_duration_ms: 30_000,
+    // What the file is, stored with it (src/lib/media/video-rule.ts).
+    p_facts: {
+      codec: "avc1",
+      profile: 100,
+      level: 30,
+      width: 640,
+      height: 360,
+      fps: 30,
+      faststart: true,
+      audio: "none",
+      problem: null,
+    },
   });
 });
 it("refuses WebM (stored videos are MP4 only) before reserving quota or storing any bytes", async () => {
@@ -398,7 +410,9 @@ describe("video length and stored size at upload (M4.4)", () => {
   it("stores a 119 s video with its length", async () => {
     const rpc = videoIntent();
     const attest = attested();
-    await expect(send(syntheticMp4(119), rpc, attest)).resolves.toMatchObject({ kind: "video" });
+    await expect(send(syntheticMp4(119, { faststart: true }), rpc, attest)).resolves.toMatchObject({
+      kind: "video",
+    });
     expect(rpc).toHaveBeenCalledWith(
       "reserve_frontend_media_upload",
       expect.objectContaining({ p_kind: "video" })
@@ -418,7 +432,9 @@ describe("video length and stored size at upload (M4.4)", () => {
         message: "video length outside the limit",
       },
     });
-    await expect(send(syntheticMp4(60), videoIntent(), attest)).rejects.toMatchObject({
+    await expect(
+      send(syntheticMp4(60, { faststart: true }), videoIntent(), attest)
+    ).rejects.toMatchObject({
       status: 400,
     });
   });
@@ -437,6 +453,52 @@ describe("video length and stored size at upload (M4.4)", () => {
       await expect(send(forged, rpc)).rejects.toMatchObject({ reason: "video_length" });
     }
     expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("refuses a video outside the keep rule before reserving storage, with what to do", async () => {
+    const rpc = videoIntent();
+    for (const bytes of [
+      syntheticMp4(30),
+      syntheticMp4(30, { faststart: true, video: { codec: "hvc1" } }),
+    ]) {
+      await expect(send(bytes, rpc)).rejects.toMatchObject({
+        status: 400,
+        reason: "video_format",
+        detail:
+          "This video can't be stored as it is. Pick it again in the posting form so it can be prepared, or export it as MP4 (H.264, up to 1080p).",
+      });
+    }
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("in log mode stores a video outside the rule and records the rule it broke", async () => {
+    const rpc = videoIntent();
+    const attest = attested();
+    await expect(
+      uploadFoundationMedia(
+        { rpc } as unknown as FoundationAuthenticatedApi,
+        { rpc: attest } as unknown as FoundationServiceApi,
+        new File([syntheticMp4(30, { audioSeconds: 30 }).slice().buffer], "clip.mp4", {
+          type: "video/mp4",
+        }),
+        vi.fn(async (input: { key: string }) => ({
+          key: input.key,
+          url: `https://media.verifymzansi.com/${input.key}`,
+        })),
+        { VIDEO_UPLOAD_RULE: "log" } as unknown as NodeJS.ProcessEnv
+      )
+    ).resolves.toMatchObject({ kind: "video" });
+    expect(attest).toHaveBeenCalledWith(
+      "complete_frontend_video_upload",
+      expect.objectContaining({
+        p_duration_ms: 30_000,
+        p_facts: expect.objectContaining({
+          faststart: false,
+          audio: "aac",
+          problem: "not_faststart",
+        }),
+      })
+    );
   });
 
   it("refuses a converted file over 50 MB before reserving storage", async () => {

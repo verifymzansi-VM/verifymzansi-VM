@@ -85,10 +85,58 @@ describe("customer access", () => {
         description: "Advice by video call",
         category: "professional_services",
         business_type: "online_only",
-        email: "hello@example.com",
+        website: "https://consult.example.com",
         category_details: { customer_access: { version: 2, methods: ["online"] } },
       }).success
     ).toBe(true);
+  });
+  it("keeps a tourism address private unless the poster shows it, and never stores an email", () => {
+    const tourism = (publishAddress: boolean) =>
+      buildBusinessMutationPayload(
+        businessSchema.parse({
+          business_name: "Kloof Guest House",
+          slug: "kloof-guest-house",
+          description: "Quiet rooms near the river",
+          category: "tourism_hospitality",
+          subcategory: "guest_house_bnb",
+          business_type: "standalone_shop",
+          phone: "0821234567",
+          email: "owner@example.com",
+          location_province: "Gauteng",
+          location_city: "Johannesburg",
+          location_address: "12 Kloof Road",
+          map_directions: "https://maps.app.goo.gl/kloof",
+          contact_methods: ["call"],
+          category_details: {
+            customer_access: {
+              version: 2,
+              methods: ["visit"],
+              premises: "standalone_shop",
+              publishAddress,
+            },
+          },
+        })
+      );
+    const hidden = tourism(false);
+    expect(hidden.location_address).toBeNull();
+    expect(hidden.map_directions).toBeNull();
+    expect(hidden).not.toHaveProperty("email");
+    const shown = tourism(true);
+    expect(shown.location_address).toBe("12 Kloof Road");
+    expect(shown.map_directions).toBe("https://maps.app.goo.gl/kloof");
+  });
+  it("refuses email as a business contact method", () => {
+    expect(
+      businessSchema.safeParse({
+        business_name: "Corner tailor",
+        slug: "corner-tailor",
+        description: "Alterations while you wait",
+        category: "professional_services",
+        business_type: "online_only",
+        contact_methods: ["email"],
+        category_details: { customer_access: { version: 2, methods: ["online"] } },
+      }).success
+    ).toBe(false);
   });
   it("requires a venue for a stall but no stall number", () => {
     expect(

@@ -20,7 +20,6 @@ describe("validateTourismStep event compatibility", () => {
         languagesSpoken: "",
         phone: "",
         whatsapp: "",
-        email: "",
         website: "",
         socialFacebook: "",
         socialInstagram: "",
@@ -75,7 +74,6 @@ describe("validateTourismStep event compatibility", () => {
         languagesSpoken: "",
         phone: "",
         whatsapp: "",
-        email: "",
         website: "",
         socialFacebook: "",
         socialInstagram: "",
@@ -131,7 +129,6 @@ describe("validateTourismStep tours and experiences", () => {
       languagesSpoken: "",
       phone: "",
       whatsapp: "",
-      email: "",
       website: "",
       socialFacebook: "",
       socialInstagram: "",
@@ -164,6 +161,41 @@ describe("validateTourismStep tours and experiences", () => {
       ticketsUrl: "",
       ...overrides,
     }) as Parameters<typeof validateTourismStep>[1];
+
+  it("needs at least one photo or video, and a video alone is enough", () => {
+    expect(validateTourismStep(3, tour({}), 0, 0).images).toBe("Add at least one photo or video.");
+    expect(validateTourismStep(3, tour({}), 0, 1, 1).images).toBeUndefined();
+    expect(validateTourismStep(3, tour({}), 1, 0).images).toBeUndefined();
+    const event = tour({ listingType: "event" });
+    expect(validateTourismStep(3, event, 0, 0).images).toBe("Add at least one photo or video.");
+    expect(validateTourismStep(3, event, 0, 1).images).toBeUndefined();
+  });
+
+  it("asks a tourism business with a video but no cover frame to pick one", () => {
+    const errors = validateTourismStep(3, tour({}), 0, 1, 0);
+    expect(errors.video_thumbnail).toBe("Add a photo, or a cover image for the video.");
+    expect(validateTourismStep(3, tour({}), 0, 1, 1).video_thumbnail).toBeUndefined();
+    expect(validateTourismStep(3, tour({}), 1, 1, 0).video_thumbnail).toBeUndefined();
+  });
+
+  it.each(["guest_house_bnb", "spa_wellness_retreat", "cultural_heritage"])(
+    "lets a %s post without a street address or suburb",
+    (subcategory) => {
+      const errors = validateTourismStep(2, tour({ subcategory, joinMethods: [] }), 0);
+      expect(errors.locationAddress).toBeUndefined();
+      expect(errors.locationTown).toBeUndefined();
+    }
+  );
+
+  it("still requires a province and city", () => {
+    const errors = validateTourismStep(
+      2,
+      tour({ subcategory: "guest_house_bnb", province: "", city: "" }),
+      0
+    );
+    expect(errors.province).toBeDefined();
+    expect(errors.city).toBeDefined();
+  });
 
   it("takes a landline for calls but needs a mobile for WhatsApp", () => {
     const contacts = (phone: string, whatsapp: string) =>

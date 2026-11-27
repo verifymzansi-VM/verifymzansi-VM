@@ -80,8 +80,6 @@ export function buildBusinessMutationPayload(
       data.contact_methods && !data.contact_methods.includes("whatsapp")
         ? null
         : data.whatsapp || null,
-    email:
-      data.contact_methods && !data.contact_methods.includes("email") ? null : data.email || null,
     website:
       data.contact_methods && !data.contact_methods.includes("website")
         ? null
