@@ -11,6 +11,10 @@ type PostTransportFields = {
   expectedRevision?: number;
 };
 
+/** A network failure while accepting the posting terms on a form. */
+const POSTING_TERMS_UNREACHABLE =
+  "We couldn't reach VerifyMzansi to accept the posting terms. Check your connection and try again.";
+
 /** Hidden transport state for the existing forms. Consent identifies the terms
  * loaded for this form, and retries identify the same owner command. */
 export function usePostTransport() {
@@ -60,16 +64,22 @@ export function usePostTransport() {
    * itself when the current terms are not accepted yet. */
   const acceptTerms = useCallback(async () => {
     if (!terms) throw new Error("Posting terms are still loading. Refresh this form.");
-    const response = await fetch("/api/foundation/posting-terms", {
-      method: "POST",
-      credentials: "same-origin",
-      headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({
-        version: terms.version,
-        document_hash: terms.document_hash,
-        accepted: true,
-      }),
-    });
+    let response: Response;
+    try {
+      response = await fetch("/api/foundation/posting-terms", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({
+          version: terms.version,
+          document_hash: terms.document_hash,
+          accepted: true,
+        }),
+      });
+    } catch {
+      // Not the upload service: the forms would otherwise say so.
+      throw new Error(POSTING_TERMS_UNREACHABLE);
+    }
     const accepted = response.ok
       ? parseFoundationOwnerPostingTerms(await response.json().catch(() => null))
       : null;

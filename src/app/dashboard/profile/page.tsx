@@ -1257,10 +1257,11 @@ export default function ProfilePage() {
                           </li>
                           <li>
                             As our Terms say, closing your account counts as a request to cancel all
-                            your slots. If you are an individual or sole trader, we work out any
-                            credit for unused days after the 20-business-day notice period, minus a
-                            R50 fee; a 30-day slot usually returns nothing. Companies and other
-                            buyers that are not individuals get no credit.
+                            your slots and your Multi-listing package. If you are an individual or
+                            sole trader, we work out any credit for unused days after the
+                            20-business-day notice period, minus a R50 fee; a 30-day slot usually
+                            returns nothing. Companies and other buyers that are not individuals get
+                            no credit.
                           </li>
                           <li>You are signed out on every device and can&apos;t sign in again.</li>
                           <li>

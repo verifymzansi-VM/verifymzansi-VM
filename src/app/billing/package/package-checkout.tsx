@@ -30,7 +30,7 @@ import {
   usePendingPayment,
   type PendingPayment,
 } from "@/components/billing/pending-payment-actions";
-import { CheckoutTermsLinks } from "@/components/billing/checkout-terms-links";
+import { CheckoutTermsLinks, NoVatCharged } from "@/components/billing/checkout-terms-links";
 
 /** One package term: its plan (api.get_slot_package_offer) while packages
  * are on sale, or null while the owner's sales switch is off, when the page
@@ -42,6 +42,10 @@ export interface PackageCheckoutTerm {
 
 /** Shown while packages are not on sale (the checkout route answers the same). */
 const PACKAGES_NOT_ON_SALE = "Multi-listing packages are not on sale yet.";
+
+/** Shown when the offer could not be read (not the same as not on sale). */
+const OFFER_UNAVAILABLE =
+  "We couldn't load package prices just now. Refresh the page or try again in a few minutes.";
 
 /** Why the member cannot buy a package now. */
 export type PackageCheckoutBlock = "id_review" | "has_package";
@@ -80,6 +84,7 @@ export function PackageCheckout({
   block = null,
   onlineMaxCents = null,
   unpaidInvoices = [],
+  offerUnavailable = false,
 }: {
   terms: PackageCheckoutTerm[];
   initialSlots?: number;
@@ -91,6 +96,8 @@ export function PackageCheckout({
   /** The member's unpaid Individual slot invoices (their numbers), which can
    * still be paid by bank transfer once the package runs (D6). */
   unpaidInvoices?: string[];
+  /** The offer could not be read: nothing can be bought until it loads. */
+  offerUnavailable?: boolean;
 }) {
   const ids = useId();
   const firstTerm = terms.find((term) => term.days === initialDays) ?? terms[0];
@@ -132,9 +139,19 @@ export function PackageCheckout({
     setText(String(next));
   };
   const canPay =
-    !block && quote.kind === "online" && consent && state === "idle" && term !== undefined;
+    !offerUnavailable &&
+    !block &&
+    quote.kind === "online" &&
+    consent &&
+    state === "idle" &&
+    term !== undefined;
   const canAskInvoice =
-    !block && quote.kind === "invoice" && invoiceConsent && state === "idle" && term !== undefined;
+    !offerUnavailable &&
+    !block &&
+    quote.kind === "invoice" &&
+    invoiceConsent &&
+    state === "idle" &&
+    term !== undefined;
   const requestedThisOrder =
     invoiceRequested !== null &&
     invoiceRequested.slots === slots &&
@@ -255,6 +272,7 @@ export function PackageCheckout({
               >
                 {totalCents === null ? "—" : formatPlanPrice(totalCents)}
               </p>
+              <NoVatCharged />
             </div>
             <p className="pb-0.5 text-right text-xs font-medium text-muted-foreground">
               {`${formatPlanPrice(PACKAGE_SLOT_PRICE_CENTS_PER_30_DAYS)} per slot per 30 days`}
@@ -406,12 +424,12 @@ export function PackageCheckout({
         </section>
 
         <div className="sticky bottom-0 flex flex-col gap-3 rounded-b-3xl border-t border-border/60 bg-card/95 px-5 pb-4 pt-3 backdrop-blur sm:static sm:border-0 sm:bg-transparent sm:px-7 sm:pb-7 sm:pt-5 sm:backdrop-blur-none lg:col-start-1 lg:row-start-2 lg:pt-6">
-          {error ? (
+          {error || offerUnavailable ? (
             <p
               role="alert"
               className="rounded-xl border border-destructive/30 bg-destructive/5 px-3.5 py-3 text-sm text-destructive"
             >
-              {error}
+              {error ?? OFFER_UNAVAILABLE}
               {needsSignIn ? (
                 <>
                   {" "}
