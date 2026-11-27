@@ -82,8 +82,8 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Public post presentation limited to display fields, 27 November 2026
 
-`20261127044054_public_presentation_display_fields.sql` is pending (see the
-applied register).
+`20261127044054_public_presentation_display_fields.sql` was applied on 27
+November 2026 at 06:13 UTC (see the applied register).
 
 - **Display fields only.** The public card read (`api.search_post_cards` with
   `frontend_presentation`, open to `anon` and `authenticated`) returns each
@@ -157,9 +157,10 @@ rollback: `../rollback/20261126202833_allowance_says_package_running.down.sql`
 
 ## Business-check details deleted as the Privacy page says, 26 November 2026
 
-`20261126210022_business_check_retention.sql` is pending (see the applied
-register). Launch checklist item 79. No table, column, trigger, command or grant
-is added or removed; one function body is replaced and one check rule relaxed.
+`20261126210022_business_check_retention.sql` was applied on 27 November 2026 at
+06:11 UTC (see the applied register). Launch checklist item 79. No table,
+column, trigger, command or grant is added or removed; one function body is
+replaced and one check rule relaxed.
 
 - **`internal.retention_verification`** (the daily retention sweep,
   `api.run_retention`, service only) adds two counts. `business_check_details`:
@@ -9023,7 +9024,13 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   UTC; website-first; production fingerprint after it (fingerprint.sql,
   read-only, 04:53 UTC) matched the full replay (except the known schema grant
   difference)
-- `20261126210022_business_check_retention.sql`: pending; apply-first
-- `20261127044054_public_presentation_display_fields.sql`: pending; apply-first
+- `20261126210022_business_check_retention.sql`: applied 2026-11-27 06:11 UTC;
+  apply-first; production fingerprint after it and the next update
+  (fingerprint.sql, read-only, 06:14 UTC) matched the full replay (except the
+  known schema grant difference)
+- `20261127044054_public_presentation_display_fields.sql`: applied 2026-11-27
+  06:13 UTC; apply-first; production fingerprint after it (fingerprint.sql,
+  read-only, 06:14 UTC) matched the full replay (except the known schema grant
+  difference)
 
 <!-- applied-register:end -->
