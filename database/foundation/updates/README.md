@@ -82,8 +82,8 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Business numbers through the click-to-view route, 27 November 2026
 
-`20261127055550_reveal_business_contacts.sql` is pending (see the applied
-register).
+`20261127055550_reveal_business_contacts.sql` was applied on 27 November 2026 at
+12:24 UTC (see the applied register).
 
 - **One rule for a business's numbers.** New
   `internal.business_contact_number(data, contacts, channel)` gives the number a
@@ -9087,7 +9087,8 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   06:13 UTC; apply-first; production fingerprint after it (fingerprint.sql,
   read-only, 06:14 UTC) matched the full replay (except the known schema grant
   difference)
-- `20261127055550_reveal_business_contacts.sql`: pending; apply-first (apply,
-  then merge)
+- `20261127055550_reveal_business_contacts.sql`: applied 2026-11-27 12:24 UTC;
+  apply-first; production fingerprint after it (fingerprint.sql, read-only,
+  12:27 UTC) matched the full replay (except the known schema grant difference)
 
 <!-- applied-register:end -->
