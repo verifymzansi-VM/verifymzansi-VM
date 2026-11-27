@@ -34,6 +34,15 @@ const DESCRIPTIONS = {
   admin: "Platform health, the team, and everything waiting for a decision.",
 } as const;
 
+/** True when a summary section the viewer should see could not be read. */
+function hasUnreadSection(dashboard: NonNullable<Awaited<ReturnType<typeof getStaffDashboard>>>) {
+  return (
+    (["shift", "decisions", "restrictions", "dsar", "platform", "retention"] as const).some(
+      (key) => key in dashboard && dashboard[key] === null
+    )
+  );
+}
+
 export default async function AdminHomePage() {
   const { user, role } = await requireStaff();
   const dashboard = await getStaffDashboard(user.id);
@@ -48,6 +57,7 @@ export default async function AdminHomePage() {
         description={DESCRIPTIONS[role]}
         firstName={firstName}
         items={dashboard ? attentionItems(dashboard, role) : null}
+        incomplete={dashboard ? hasUnreadSection(dashboard) : false}
       />
 
       {!dashboard ? (

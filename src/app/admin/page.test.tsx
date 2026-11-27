@@ -176,6 +176,27 @@ describe("Admin home", () => {
     expect(within(card("Identity checks")).getByText("5")).toBeInTheDocument();
   });
 
+  it("does not say all clear when a section could not be read", async () => {
+    staffGuard.as("governance_controller");
+    getStaffDashboard.mockResolvedValue({
+      role: "governance_controller",
+      generated_at: "",
+      queues: {
+        reports: { open: 0, oldest_at: null, breached: 0, claimed: 0 },
+        kyc: { pending: 0, oldest_at: null, high_risk: 0, claimed: 0 },
+        content: { pending: 0, oldest_at: null, claimed: 0 },
+        support: { new: 0, oldest_at: null },
+      },
+      ...decisionSections,
+      dsar: null,
+    });
+
+    render(await AdminHomePage());
+
+    expect(screen.getByRole("status")).toHaveTextContent("Some figures could not be loaded");
+    expect(screen.queryByText(/All clear/)).not.toBeInTheDocument();
+  });
+
   it("lists what needs a person in the banner, urgent work first", async () => {
     staffGuard.as("governance_controller");
     getStaffDashboard.mockResolvedValue({
