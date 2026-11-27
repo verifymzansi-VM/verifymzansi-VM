@@ -183,8 +183,8 @@ the earlier body back and drops the two functions). Behaviour checks:
 
 ## Package running in the posting allowance, 26 November 2026
 
-`20261126202833_allowance_says_package_running.sql` is pending (see the applied
-register). Launch checklist item 80.
+`20261126202833_allowance_says_package_running.sql` was applied on 27 November
+2026 at 04:53 UTC (see the applied register). Launch checklist item 80.
 
 - **One key added.** `api.get_my_frontend_posting_allowance_v2`, which every
   post form already reads, also answers `package_running` (boolean): true while
@@ -206,6 +206,45 @@ Read-only preflight:
 rollback: `../rollback/20261126202833_allowance_says_package_running.down.sql`
 (puts the earlier body back). Behaviour checks:
 `scripts/test-foundation-allowance-package-running.mjs`.
+
+## Business-check details deleted as the Privacy page says, 26 November 2026
+
+`20261126210022_business_check_retention.sql` is pending (see the applied
+register). Launch checklist item 79. No table, column, trigger, command or grant
+is added or removed; one function body is replaced and one check rule relaxed.
+
+- **`internal.retention_verification`** (the daily retention sweep,
+  `api.run_retention`, service only) adds two counts. `business_check_details`:
+  30 days after a business check's decision, or its revocation (a later
+  decision), the visit address, the visit report, the photo locations, the
+  messages, the CIPC document records (the parsed copy of each CIPC PDF), the
+  representative's email and the call notes are deleted. The files already go 30
+  days after the decision. `business_checks`: the check record goes 12 months
+  after it ended (the sticker expired or was revoked; a refusal or withdrawal
+  ends at its decision), with its CIPC review, photo and file rows. A CIPC link
+  sticker shows while its root business's sticker runs, so it ends when that
+  root sticker ends. A business's results go oldest first: a result waits while
+  an older approved or revoked result of the same kind (seen, or CIPC and CIPC
+  link) is left, so deleting a record never changes the sticker a business
+  shows. The sticker, its date and town, the CIPC sticker details on the
+  profile, the outcome and the staff note stay until then. An open legal hold on
+  the owner or fraud hold on the case keeps everything. Each check is handled
+  under the owner's verification lock, which revocations and hold writers also
+  take.
+- **`frontend_business_checks_check1`**: a visit check needs a visit address
+  only until it is decided (was: always), so the sweep can delete it.
+
+ORDER: apply first, then merge (safe either way: no API command changes, and the
+readers already accept the cleared fields as missing). The website release adds
+to the Privacy page row 'Business verification files' that the check record is
+deleted 12 months after the sticker ends. Read-only preflight:
+`../preflight/20261126210022_business_check_retention.check.sql` (expect one
+summary row reading "update not applied"; its counts show what the next sweep
+would clear, delete and keep under a hold); rollback:
+`../rollback/20261126210022_business_check_retention.down.sql` (the earlier rule
+comes back NOT VALID if a decided visit check has no address any more; deleted
+details stay deleted). Behaviour test:
+`scripts/test-foundation-business-check-retention.mjs`.
 
 ## Catalogue filters run in the database, 26 November 2026
 
@@ -9029,11 +9068,14 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   production fingerprint after it and 20261126053631_keep_for_periods.sql
   (fingerprint.sql, 20:31 UTC) matched the full replay (except the known schema
   grant difference)
-
 - `20261126062428_catalogue_filters_in_database.sql`: applied 2026-11-26 23:48
   UTC; apply-first; production fingerprint after it (fingerprint.sql, read-only,
   23:5x UTC) matched the full replay (except the known schema grant difference)
-- `20261126202833_allowance_says_package_running.sql`: pending; website-first
+- `20261126202833_allowance_says_package_running.sql`: applied 2026-11-27 04:53
+  UTC; website-first; production fingerprint after it (fingerprint.sql,
+  read-only, 04:53 UTC) matched the full replay (except the known schema grant
+  difference)
+- `20261126210022_business_check_retention.sql`: pending; apply-first
 - `20261127044054_public_presentation_display_fields.sql`: pending; apply-first
 - `20261127055550_reveal_business_contacts.sql`: pending; apply-first (apply,
   then merge)
