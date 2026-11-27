@@ -463,7 +463,7 @@ export default function EditListingPage() {
           files: newLogoFile,
           area: "listing_logo",
           field: "logo_url",
-          onProgress: uploadProgress.track("logo"),
+          onProgress: uploadProgress.track("logo", newLogoFile),
         }).then((urls) => {
           if (newLogoFile.length > 0) setUploadStatuses((c) => ({ ...c, logo: "done" }));
           return urls;
@@ -472,7 +472,7 @@ export default function EditListingPage() {
           files: newPhotoFiles,
           area: "listing",
           field: "images",
-          onProgress: uploadProgress.track("photos"),
+          onProgress: uploadProgress.track("photos", newPhotoFiles),
         }).then((urls) => {
           if (newPhotoFiles.length > 0) setUploadStatuses((c) => ({ ...c, photos: "done" }));
           return urls;
@@ -483,7 +483,7 @@ export default function EditListingPage() {
               const urls = await uploadListingVideoFiles({
                 files: newVideoFile,
                 area: "listing_video",
-                onProgress: uploadProgress.trackVideo("video"),
+                onProgress: uploadProgress.trackVideo("video", newVideoFile),
               });
               const publicUrl = urls[0] ?? null;
               if (!publicUrl) {

@@ -24,7 +24,12 @@ const preparationProgress = new Map<
 >();
 
 /** The video's progress on the submit screen: converting first, then sending. */
-export type VideoUploadProgress = { phase: "preparing" | "uploading"; percent: number };
+export type VideoUploadProgress = {
+  phase: "preparing" | "uploading";
+  percent: number;
+  /** The file this reading is for, so several videos can share one progress bar. */
+  file?: File;
+};
 
 /** How many preparations are still reporting progress (for tests). */
 export function pendingVideoPreparationCount(): number {
@@ -156,7 +161,7 @@ export async function uploadVideoWithFastPath({
   entry.promise = (async () => {
     const preparing = prepareVideoForUpload(file);
     const stopWatching = watchPreparation(file, (percent) =>
-      onProgress?.({ phase: "preparing", percent })
+      onProgress?.({ phase: "preparing", percent, file })
     );
     let uploadFile: File;
     try {
@@ -169,9 +174,9 @@ export async function uploadVideoWithFastPath({
     // Every video goes through the server-validated /api/media/upload route;
     // the direct-to-storage routes it once tried first are retired.
     const url = await withUploadSlot(() => {
-      onProgress?.({ phase: "uploading", percent: 0 });
+      onProgress?.({ phase: "uploading", percent: 0, file });
       return uploadViaServer(uploadFile, (percent) =>
-        onProgress?.({ phase: "uploading", percent })
+        onProgress?.({ phase: "uploading", percent, file })
       );
     });
     if (!url) throw new Error("Video upload returned no URL. Please retry.");

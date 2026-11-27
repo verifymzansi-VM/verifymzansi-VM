@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { fetchWithRetry } from "./fetch-retry";
 import { xhrFetch } from "./xhr-upload";
 
 class FakeXhr {
@@ -92,5 +93,33 @@ describe("xhrFetch", () => {
     controller.abort(reason);
     await expect(pending).rejects.toBe(reason);
     expect(FakeXhr.last.aborted).toBe(true);
+  });
+
+  it("resolves an error status with its body so callers can read the message", async () => {
+    const pending = xhrFetch("/api/media/upload", { method: "POST" });
+    FakeXhr.last.respond(413, '{"error":"Too large"}');
+    const response = await pending;
+    expect(response.ok).toBe(false);
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual({ error: "Too large" });
+  });
+
+  it("gives an AbortError when fetchWithRetry's timeout fires", async () => {
+    vi.useFakeTimers();
+    try {
+      const pending = fetchWithRetry(
+        "/api/media/upload",
+        { method: "POST" },
+        0,
+        1000,
+        (input, init) => xhrFetch(input, init)
+      );
+      const assertion = expect(pending).rejects.toMatchObject({ name: "AbortError" });
+      await vi.advanceTimersByTimeAsync(1000);
+      await assertion;
+      expect(FakeXhr.last.aborted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -398,7 +398,7 @@ describe("video upload progress", () => {
       file,
       area: "listing",
       uploadViaServer,
-      onProgress: (value) => progress.push(value),
+      onProgress: ({ phase, percent }) => progress.push({ phase, percent }),
     });
     await vi.waitFor(() => expect(progress).toContainEqual({ phase: "preparing", percent: 40 }));
     reportConversion?.(75);

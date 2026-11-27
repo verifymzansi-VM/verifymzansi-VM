@@ -522,7 +522,7 @@ export default function EditBusinessPage() {
             files: newLogoFile,
             area: "business_logo",
             field: "logo_url",
-            onProgress: uploadProgress.track("logo"),
+            onProgress: uploadProgress.track("logo", newLogoFile),
           }).then((urls) => {
             if (newLogoFile.length > 0) setUploadStatuses((c) => ({ ...c, logo: "done" }));
             return urls;
@@ -532,19 +532,19 @@ export default function EditBusinessPage() {
               files: newCoverFile,
               area: "business_cover",
               field: "cover_photo",
-              onProgress: uploadProgress.track("photos:cover"),
+              onProgress: uploadProgress.track("photos:cover", newCoverFile),
             }),
             uploadRequiredBusinessMedia({
               files: newGalleryFiles,
               area: "business_gallery",
               field: "gallery_photos",
-              onProgress: uploadProgress.track("photos:gallery"),
+              onProgress: uploadProgress.track("photos:gallery", newGalleryFiles),
             }),
             uploadRequiredBusinessMedia({
               files: newMallPhotoFiles,
               area: "business_gallery",
               field: "gallery_photos",
-              onProgress: uploadProgress.track("photos:mall"),
+              onProgress: uploadProgress.track("photos:mall", newMallPhotoFiles),
             }),
           ]).then((urls) => {
             if (newCoverFile.length || newGalleryFiles.length || newMallPhotoFiles.length) {
@@ -556,7 +556,7 @@ export default function EditBusinessPage() {
             ? uploadRequiredBusinessVideo({
                 file: newPromoVideoFile[0],
                 area: "business_cover",
-                onProgress: uploadProgress.trackVideo("video"),
+                onProgress: uploadProgress.trackVideo("video", newPromoVideoFile),
               }).then((url) => {
                 setUploadStatuses((c) => ({ ...c, video: "done" }));
                 return url;

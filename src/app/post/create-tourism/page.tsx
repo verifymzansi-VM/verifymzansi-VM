@@ -1124,7 +1124,7 @@ function CreateTourismContent() {
             files: photoFiles,
             area: uploadArea,
             field: "images",
-            onProgress: uploadProgress.track("photos"),
+            onProgress: uploadProgress.track("photos", photoFiles),
           }).then((urls) => {
             if (photoFiles.length > 0) {
               setUploadStatuses((current) => ({ ...current, photos: "done" }));
@@ -1135,7 +1135,7 @@ function CreateTourismContent() {
             files: videoFiles,
             area: uploadArea,
             maxSeconds: videoLimitSeconds(listingType === "event" ? "event" : "other"),
-            onProgress: uploadProgress.trackVideo("videos"),
+            onProgress: uploadProgress.trackVideo("videos", videoFiles),
           }).then((urls) => {
             if (videoFiles.length > 0) {
               setUploadStatuses((current) => ({ ...current, videos: "done" }));
@@ -1151,7 +1151,7 @@ function CreateTourismContent() {
             files: logoFiles,
             area: listingType === "tourism_business" ? "business_logo" : "promotion",
             field: "logo_url",
-            onProgress: uploadProgress.track("logo"),
+            onProgress: uploadProgress.track("logo", logoFiles),
           }).then((urls) => {
             if (logoFiles.length > 0) {
               setUploadStatuses((current) => ({ ...current, logo: "done" }));

@@ -903,7 +903,7 @@ function CreateBusinessContent() {
             files: logoFile,
             area: "business_logo",
             field: "logo_url",
-            onProgress: uploadProgress.track("logo"),
+            onProgress: uploadProgress.track("logo", logoFile),
           }).then((urls) => {
             if (logoFile.length > 0) setUploadStatuses((c) => ({ ...c, logo: "done" }));
             return urls;
@@ -913,19 +913,19 @@ function CreateBusinessContent() {
               files: coverFile,
               area: "business_cover",
               field: "cover_photo",
-              onProgress: uploadProgress.track("photos:cover"),
+              onProgress: uploadProgress.track("photos:cover", coverFile),
             }),
             uploadRequiredBusinessMedia({
               files: galleryFiles,
               area: "business_gallery",
               field: "gallery_photos",
-              onProgress: uploadProgress.track("photos:gallery"),
+              onProgress: uploadProgress.track("photos:gallery", galleryFiles),
             }),
             uploadRequiredBusinessMedia({
               files: mallPhotoFiles,
               area: "business_gallery",
               field: "gallery_photos",
-              onProgress: uploadProgress.track("photos:mall"),
+              onProgress: uploadProgress.track("photos:mall", mallPhotoFiles),
             }),
           ]).then((urls) => {
             if (coverFile.length || galleryFiles.length || mallPhotoFiles.length) {
@@ -937,7 +937,7 @@ function CreateBusinessContent() {
             ? uploadRequiredBusinessVideo({
                 file: promoVideoFile[0],
                 area: "business_cover",
-                onProgress: uploadProgress.trackVideo("video"),
+                onProgress: uploadProgress.trackVideo("video", promoVideoFile),
               }).then((url) => {
                 setUploadStatuses((c) => ({ ...c, video: "done" }));
                 return url;

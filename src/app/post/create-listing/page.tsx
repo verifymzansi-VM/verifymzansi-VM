@@ -936,7 +936,7 @@ function CreateListingForm() {
           files: logoFile,
           area: "listing_logo",
           field: "logo_url",
-          onProgress: uploadProgress.track("logo"),
+          onProgress: uploadProgress.track("logo", logoFile),
         }).then((urls) => {
           if (logoFile.length) setUploadStatuses((current) => ({ ...current, logo: "done" }));
           return urls;
@@ -945,7 +945,7 @@ function CreateListingForm() {
           files: photoFiles,
           area: "listing",
           field: "images",
-          onProgress: uploadProgress.track("photos"),
+          onProgress: uploadProgress.track("photos", photoFiles),
         }).then((urls) => {
           if (photoFiles.length) setUploadStatuses((current) => ({ ...current, photos: "done" }));
           return urls;
@@ -953,7 +953,7 @@ function CreateListingForm() {
         uploadListingVideoFiles({
           files: videoFile,
           area: "listing_video",
-          onProgress: uploadProgress.trackVideo("video"),
+          onProgress: uploadProgress.trackVideo("video", videoFile),
         }).then((urls) => {
           if (videoFile.length) setUploadStatuses((current) => ({ ...current, video: "done" }));
           return urls;

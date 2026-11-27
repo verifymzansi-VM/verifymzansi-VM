@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
-import { UploadProgressPanel, type UploadSlot } from "./upload-progress-panel";
+import { act, render, renderHook, screen } from "@testing-library/react";
+import { UploadProgressPanel, useUploadProgress, type UploadSlot } from "./upload-progress-panel";
 
 const slots: UploadSlot[] = [
   {
@@ -50,5 +50,47 @@ describe("UploadProgressPanel", () => {
 
     expect(screen.queryByText("Keep this page open until it finishes.")).not.toBeInTheDocument();
     expect(screen.queryByText(/%$/)).not.toBeInTheDocument();
+  });
+});
+
+describe("useUploadProgress", () => {
+  const file = (bytes: number) => new File([new Uint8Array(bytes)], "f.bin");
+
+  it("weights a slot by the bytes of every queued file and never goes back", () => {
+    const { result } = renderHook(() => useUploadProgress());
+    const cover = [file(100)];
+    const gallery = [file(900)];
+    let trackCover!: (p: number) => void;
+    let trackGallery!: (p: number) => void;
+    act(() => {
+      trackCover = result.current.track("photos:cover", cover);
+      trackGallery = result.current.track("photos:gallery", gallery);
+    });
+    const percent = () => result.current.values.photos?.percent;
+
+    act(() => trackCover(100));
+    expect(percent()).toBe(10);
+    act(() => trackGallery(50));
+    expect(percent()).toBe(55);
+    // A retry restarts the gallery request at 0: the bar holds.
+    act(() => trackGallery(0));
+    expect(percent()).toBe(55);
+    act(() => trackGallery(40));
+    expect(percent()).toBe(55);
+    act(() => trackGallery(100));
+    expect(percent()).toBe(100);
+  });
+
+  it("combines several videos into one slot by bytes", () => {
+    const { result } = renderHook(() => useUploadProgress());
+    const videos = [file(300), file(100)];
+    let track!: ReturnType<typeof result.current.trackVideo>;
+    act(() => {
+      track = result.current.trackVideo("videos", videos);
+    });
+    act(() => track({ phase: "uploading", percent: 100, file: videos[1] }));
+    expect(result.current.values.videos?.percent).toBe(25);
+    act(() => track({ phase: "uploading", percent: 100, file: videos[0] }));
+    expect(result.current.values.videos?.percent).toBe(100);
   });
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { CheckCircle2, CircleDashed, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -23,33 +23,117 @@ interface UploadProgressPanelProps {
   slots: UploadSlot[];
   visible: boolean;
   /**
-   * Progress by slot key. A slot fed by several requests uses sub-keys
-   * ("photos:cover", "photos:gallery"); the panel shows their average.
+   * Progress by slot key (the hook already combines a slot's requests). Raw
+   * sub-keys ("photos:cover") are averaged when no slot value is given.
    */
   progress?: Record<string, UploadProgressValue>;
 }
 
-/** Progress state for the panel. Callbacks skip unchanged values to limit re-renders. */
+interface ProgressPart {
+  percent: number;
+  phase?: "preparing" | "uploading";
+}
+
+interface ProgressState {
+  parts: Record<string, ProgressPart>;
+  shown: Record<string, UploadProgressValue>;
+}
+
+const EMPTY_STATE: ProgressState = { parts: {}, shown: {} };
+
+/**
+ * One value per slot. With known byte sizes it is bytes sent over the bytes of
+ * every file queued for the slot (so a small cover cannot show 100% while the
+ * gallery waits); without sizes it is the plain average. It never goes back
+ * within a phase, so a retry that restarts a request does not move the bar.
+ */
+function computeShown(
+  state: ProgressState,
+  weights: Record<string, number>
+): Record<string, UploadProgressValue> {
+  const slots = new Set<string>();
+  for (const name of [...Object.keys(state.parts), ...Object.keys(weights)]) {
+    slots.add(name.split(":")[0]);
+  }
+  const shown: Record<string, UploadProgressValue> = {};
+  for (const slot of slots) {
+    const inSlot = (name: string) => name === slot || name.startsWith(`${slot}:`);
+    const reported = Object.entries(state.parts).filter(([name]) => inSlot(name));
+    if (reported.length === 0) continue;
+    const queued = Object.entries(weights).filter(([name]) => inSlot(name));
+    const totalBytes = queued.reduce((sum, [, bytes]) => sum + bytes, 0);
+    let percent: number;
+    if (totalBytes > 0) {
+      const sent = queued.reduce(
+        (sum, [name, bytes]) => sum + (bytes * (state.parts[name]?.percent ?? 0)) / 100,
+        0
+      );
+      percent = (sent / totalBytes) * 100;
+    } else {
+      percent = reported.reduce((sum, [, part]) => sum + part.percent, 0) / reported.length;
+    }
+    percent = Math.min(100, Math.round(percent));
+    const phase = reported.some(([, part]) => part.phase === "preparing")
+      ? "preparing"
+      : reported[0][1].phase;
+    const previous = state.shown[slot];
+    if (previous && previous.phase === phase && previous.percent > percent) {
+      percent = previous.percent;
+    }
+    shown[slot] = { percent, phase };
+  }
+  return shown;
+}
+
+/**
+ * Progress state for the panel. Callbacks skip unchanged values to limit re-renders.
+ * Pass the files of a request to track()/trackVideo() so the slot's bar is
+ * weighted by bytes; call them before the uploads start.
+ */
 export function useUploadProgress() {
-  const [values, setValues] = useState<Record<string, UploadProgressValue>>({});
-  const setValue = useCallback((key: string, value: UploadProgressValue) => {
-    setValues((current) => {
-      const previous = current[key];
-      if (previous && previous.percent === value.percent && previous.phase === value.phase) {
+  const [state, setState] = useState<ProgressState>(EMPTY_STATE);
+  const weights = useRef<Record<string, number>>({});
+
+  const setPart = useCallback((key: string, part: ProgressPart) => {
+    setState((current) => {
+      const previous = current.parts[key];
+      if (previous && previous.percent === part.percent && previous.phase === part.phase) {
         return current;
       }
-      return { ...current, [key]: value };
+      const next = { ...current, parts: { ...current.parts, [key]: part } };
+      next.shown = computeShown(next, weights.current);
+      return next;
     });
   }, []);
 
   return useMemo(
     () => ({
-      values,
-      reset: () => setValues({}),
-      track: (key: string) => (percent: number) => setValue(key, { percent }),
-      trackVideo: (key: string) => (value: Required<UploadProgressValue>) => setValue(key, value),
+      values: state.shown,
+      reset: () => {
+        weights.current = {};
+        setState(EMPTY_STATE);
+      },
+      track: (key: string, files?: File[]) => {
+        if (files) weights.current[key] = files.reduce((sum, file) => sum + file.size, 0);
+        return (percent: number) => setPart(key, { percent });
+      },
+      /** Several videos share one slot; each reports with its own file. */
+      trackVideo: (key: string, files?: File[]) => {
+        files?.forEach((file, index) => {
+          weights.current[`${key}:${index}`] = file.size;
+        });
+        return (
+          value: Required<Pick<UploadProgressValue, "percent" | "phase">> & { file?: File }
+        ) => {
+          const index = files && value.file ? files.indexOf(value.file) : -1;
+          setPart(index >= 0 ? `${key}:${index}` : key, {
+            percent: value.percent,
+            phase: value.phase,
+          });
+        };
+      },
     }),
-    [values, setValue]
+    [state.shown, setPart]
   );
 }
 
@@ -58,8 +142,9 @@ function slotProgress(
   progress: Record<string, UploadProgressValue> | undefined
 ): UploadProgressValue | null {
   if (!progress) return null;
+  if (progress[key]) return progress[key];
   const parts = Object.entries(progress)
-    .filter(([name]) => name === key || name.startsWith(`${key}:`))
+    .filter(([name]) => name.startsWith(`${key}:`))
     .map(([, value]) => value);
   if (parts.length === 0) return null;
   const percent = Math.round(parts.reduce((sum, part) => sum + part.percent, 0) / parts.length);

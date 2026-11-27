@@ -414,7 +414,7 @@ export default function EditPromotionPage() {
               const uploadData = new FormData();
               uploadData.append("area", "promotion");
               for (const f of newPhotoFiles) uploadData.append("files", f);
-              const trackPhotos = uploadProgress.track("photos");
+              const trackPhotos = uploadProgress.track("photos", newPhotoFiles);
               const uploadRes = await fetchWithRetry(
                 "/api/media/upload",
                 {
@@ -443,7 +443,7 @@ export default function EditPromotionPage() {
                 files: newVideoFiles,
                 area: "promotion",
                 maxSeconds: MAX_EVENT_VIDEO_SECONDS,
-                onProgress: uploadProgress.trackVideo("videos"),
+                onProgress: uploadProgress.trackVideo("videos", newVideoFiles),
               });
               setUploadStatuses((c) => ({ ...c, videos: "done" }));
               return result;
