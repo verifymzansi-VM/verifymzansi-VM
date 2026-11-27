@@ -16,14 +16,21 @@ export function ListingPriceFields({
   category,
   disabled = false,
   error,
+  amountId,
+  amountLabel,
 }: {
   value: ListingPriceForm;
   onChange: (next: ListingPriceForm) => void;
   category: ListingCategory;
   disabled?: boolean;
   error?: string;
+  /** Lets a form focus the amount on an error (defaults to a generated id). */
+  amountId?: string;
+  /** For example "Monthly rent (R)"; defaults to "Price (R)" or "Salary (R)". */
+  amountLabel?: string;
 }) {
   const id = useId();
+  const inputId = amountId ?? `${id}-amount`;
   const isJob = category === "jobs_services";
   useEffect(() => {
     const normalized = changeListingPriceCategory(value, category);
@@ -41,10 +48,10 @@ export function ListingPriceFields({
       className="space-y-3"
       aria-describedby={error ? `${id}-error` : undefined}
     >
-      <legend className="text-sm font-medium">{isJob ? "Salary" : "Price"}</legend>
+      <legend className="sr-only">{isJob ? "Salary" : "Price"}</legend>
       <div className="flex flex-wrap gap-4">
         {choices.map(({ mode, label }) => (
-          <label key={mode} className="flex items-center gap-2 text-sm">
+          <label key={mode} className="flex min-h-11 items-center gap-2 text-sm">
             <input
               type="radio"
               name={`${id}-mode`}
@@ -58,9 +65,9 @@ export function ListingPriceFields({
       </div>
       {value.mode === "amount" && (
         <div className="space-y-2">
-          <Label htmlFor={`${id}-amount`}>{isJob ? "Salary (R)" : "Price (R)"}</Label>
+          <Label htmlFor={inputId}>{amountLabel ?? (isJob ? "Salary (R)" : "Price (R)")}</Label>
           <Input
-            id={`${id}-amount`}
+            id={inputId}
             inputMode="decimal"
             type="text"
             maxLength={16}
@@ -73,7 +80,7 @@ export function ListingPriceFields({
         </div>
       )}
       {!isJob && (value.mode === "amount" || value.mode === "on_request") && (
-        <label className="flex items-center gap-2 text-sm">
+        <label className="flex min-h-11 items-center gap-2 text-sm">
           <input
             type="checkbox"
             checked={value.negotiable}
