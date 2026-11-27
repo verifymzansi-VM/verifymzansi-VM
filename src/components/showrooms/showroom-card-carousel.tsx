@@ -969,7 +969,6 @@ export function ShowroomCardCarousel({
                 location="South Africa"
                 mediaUrl={emptyMediaUrl}
                 cardVariant="hero"
-                mediaControlVariant="hero"
               />
             </div>
           </div>
@@ -1054,7 +1053,6 @@ export function ShowroomCardCarousel({
             eyebrow=""
             mediaUrl="/images/fallbacks/hero-shop.svg"
             cardVariant="hero"
-            mediaControlVariant="hero"
           />
         </div>
 
@@ -1127,7 +1125,6 @@ export function ShowroomCardCarousel({
                 feedPlaybackActive={offset === 0}
                 makeEntireCardClickable
                 cardVariant="hero"
-                mediaControlVariant={offset === 0 ? "hero" : "default"}
                 fitStrategy="contain"
               />
             </div>

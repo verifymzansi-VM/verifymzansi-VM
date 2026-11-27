@@ -50,18 +50,35 @@ for (const viewport of PHONES) {
     test.use({ viewport, isMobile: true, hasTouch: true });
 
     for (const type of TYPES) {
-      test(`${type}: price, title and place on the photo, heard once`, async ({ page }) => {
+      const what =
+        type === "listing-video"
+          ? "price and title under the video"
+          : "price, title and place on the photo";
+      test(`${type}: ${what}, heard once`, async ({ page }) => {
         const expected = FIRST_SCREEN_EXPECTED[type];
         const response = await page.goto(`/dev/post-first-screen?type=${type}`);
         expect(response?.status()).toBe(200);
         const caption = page.locator("main [data-post-caption]");
         if (type === "listing-video") {
           // Nothing is drawn over a video: its heading and price follow under it, heard once.
-          await expect(page.locator("main video")).toBeVisible();
+          const video = page.locator("main video");
+          await expect(video).toBeVisible();
           await expect(caption).toHaveCount(0);
-          await expect(
-            page.getByRole("heading", { name: expected.title, exact: true })
-          ).toHaveCount(1);
+          const heading = page.getByRole("heading", { name: expected.title, exact: true });
+          await expect(heading).toHaveCount(1);
+          // The heading follows under the video, and the price is shown with it.
+          const videoBox = await video.boundingBox();
+          const headingBox = await heading.boundingBox();
+          expect(videoBox, "the video has no box").not.toBeNull();
+          expect(headingBox, "the heading has no box").not.toBeNull();
+          expect(headingBox!.y, "the heading sits under the video").toBeGreaterThanOrEqual(
+            videoBox!.y + videoBox!.height - 1
+          );
+          if (expected.price) {
+            await expect(
+              page.locator("main").getByText(expected.price, { exact: false }).first()
+            ).toBeVisible();
+          }
           return;
         }
         await expect(caption).toBeVisible();

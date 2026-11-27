@@ -32,7 +32,6 @@ const SMART_FIT_CROP_THRESHOLD = 0.2;
 
 export type MediaFitStrategy = "cover" | "smart" | "contain";
 export type MuteControlVisibility = "auto" | "always" | "hidden";
-export type MediaControlVariant = "default" | "hero";
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -293,8 +292,6 @@ export interface VideoCardPlayerProps {
   muteControlVisibility?: MuteControlVisibility;
   /** Shows a persistent play/pause toggle for ambient video previews. */
   showPlaybackControl?: boolean;
-  /** Optional visual treatment for the mute/audio control. */
-  controlVariant?: MediaControlVariant;
   /** Keeps ambient videos poster-only until the user explicitly starts playback. */
   deferVideoLoadUntilPlay?: boolean;
   /** Notifies callers when the ambient playback control changes state. */
@@ -364,7 +361,6 @@ export function VideoCardPlayer({
   mediaHeight,
   muteControlVisibility = "auto",
   showPlaybackControl = false,
-  controlVariant = "default",
   deferVideoLoadUntilPlay = false,
   onPlaybackStateChange,
   stickyAutoplay = false,
@@ -498,7 +494,6 @@ export function VideoCardPlayer({
       mediaHeight={mediaHeight}
       muteControlVisibility={muteControlVisibility}
       showPlaybackControl={showPlaybackControl}
-      controlVariant={controlVariant}
       deferVideoLoadUntilPlay={deferVideoLoadUntilPlay}
       onPlaybackStateChange={onPlaybackStateChange}
       stickyAutoplay={stickyAutoplay}
@@ -641,7 +636,6 @@ interface VideoCardPlayerInnerProps {
   mediaHeight?: number | null;
   muteControlVisibility: MuteControlVisibility;
   showPlaybackControl: boolean;
-  controlVariant: MediaControlVariant;
   deferVideoLoadUntilPlay: boolean;
   onPlaybackStateChange?: (isPlaying: boolean) => void;
   stickyAutoplay: boolean;
