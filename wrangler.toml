@@ -52,6 +52,8 @@ NEXT_PUBLIC_MEDIA_URL = "https://media.verifymzansi.com"
 R2_PUBLIC_URL = "https://media.verifymzansi.com"
 R2_PUBLIC_BUCKET = "verifymzansi-public"
 R2_PRIVATE_BUCKET = "verifymzansi-private"
+# The zone of the media hosts, for the edge cache purge (not a secret).
+MEDIA_CACHE_ZONE_ID = "05204c43f4378589a4cabecbe66917cc"
 # The stored-video keep rule (src/lib/media/video-rule.ts): "log" stores a
 # video that breaks it and records which rule; anything else refuses it.
 VIDEO_UPLOAD_RULE = "log"
@@ -193,6 +195,10 @@ service = "verifymzansi-offload"
 #   pnpm wrangler secret put RATE_LIMITER_API_KEY
 # Optional (the app keeps working and logs instead when unset):
 #   pnpm wrangler secret put PAYMENT_ALERT_EMAILS   # staff payment alert addresses
+#   # Edge cache purge of removed media (src/lib/foundation/retention-jobs.ts):
+#   # an API token with only Zone > Cache Purge > Purge on verifymzansi.com.
+#   # Unset, media cleanup deletes as before and logs edgePurge "off":
+#   pnpm wrangler secret put MEDIA_CACHE_PURGE_TOKEN
 #   # Automatic ID checks (src/lib/foundation/didit-client.ts); never in code.
 #   # Unset, automatic checks pause and members take photos on the page:
 #   pnpm wrangler secret put DIDIT_API_KEY         # create/read/delete sessions only
@@ -280,6 +286,8 @@ NEXT_PUBLIC_MEDIA_URL = "https://media.verifymzansi.com"
 R2_PUBLIC_URL = "https://media.verifymzansi.com"
 R2_PUBLIC_BUCKET = "verifymzansi-public"
 R2_PRIVATE_BUCKET = "verifymzansi-private"
+# The zone of the media hosts, for the edge cache purge (not a secret).
+MEDIA_CACHE_ZONE_ID = "05204c43f4378589a4cabecbe66917cc"
 # The stored-video keep rule (src/lib/media/video-rule.ts): "log" stores a
 # video that breaks it and records which rule; anything else refuses it.
 VIDEO_UPLOAD_RULE = "log"
@@ -368,6 +376,8 @@ NEXT_PUBLIC_MEDIA_URL = "https://media-staging.verifymzansi.com"
 R2_PUBLIC_URL = "https://media-staging.verifymzansi.com"
 R2_PUBLIC_BUCKET = "verifymzansi-public-staging"
 R2_PRIVATE_BUCKET = "verifymzansi-private-staging"
+# The zone of the media hosts, for the edge cache purge (not a secret).
+MEDIA_CACHE_ZONE_ID = "05204c43f4378589a4cabecbe66917cc"
 VIDEO_UPLOAD_RULE = "log"
 NEXT_PUBLIC_SUPABASE_URL = "https://vgplszqfcmdskwseoyam.supabase.co"
 NEXT_PUBLIC_SUPABASE_ANON_KEY = "sb_publishable_mKDEhmQ-Ik-DIxdKVxVang_IA5aVLD1"
