@@ -32,7 +32,7 @@ vi.mock("@/lib/utils/logger", () => ({
   }),
 }));
 
-const { prewarmVideoForFastUpload, uploadVideoWithFastPath } =
+const { pendingVideoPreparationCount, prewarmVideoForFastUpload, uploadVideoWithFastPath } =
   await import("@/app/post/_lib/video-fast-upload");
 
 describe("uploadVideoWithFastPath", () => {
@@ -190,9 +190,10 @@ describe("uploadVideoWithFastPath", () => {
     ).resolves.toBe("https://media.example.com/samsung.mp4");
     expect(mockCompressVideoForUpload).toHaveBeenCalledWith(original, {
       requireCompatibleOutput: true,
+      onProgress: expect.any(Function),
       forceConversion: true,
     });
-    expect(uploadViaServer).toHaveBeenCalledWith(converted);
+    expect(uploadViaServer).toHaveBeenCalledWith(converted, expect.any(Function));
   });
 
   it("converts a WebM with no duration (MediaRecorder) and measures the converted MP4", async () => {
@@ -204,7 +205,7 @@ describe("uploadVideoWithFastPath", () => {
     await expect(
       uploadVideoWithFastPath({ file: original, area: "listing", uploadViaServer })
     ).resolves.toBe("https://media.example.com/recorded.mp4");
-    expect(uploadViaServer).toHaveBeenCalledWith(converted);
+    expect(uploadViaServer).toHaveBeenCalledWith(converted, expect.any(Function));
   });
 
   it("refuses a converted WebM over an event's limit", async () => {
@@ -292,7 +293,7 @@ describe("uploadVideoWithFastPath", () => {
     mockCompressVideoForUpload.mockResolvedValueOnce(converted);
     const uploadViaServer = vi.fn().mockResolvedValue("https://media.example.com/large.mp4");
     await uploadVideoWithFastPath({ file: large, area: "listing", uploadViaServer });
-    expect(uploadViaServer).toHaveBeenCalledWith(converted);
+    expect(uploadViaServer).toHaveBeenCalledWith(converted, expect.any(Function));
 
     const huge = new File(["huge"], "huge.mp4", { type: "video/mp4" });
     Object.defineProperty(huge, "size", { value: 300 * 1024 * 1024 + 1 });
@@ -310,8 +311,9 @@ describe("uploadVideoWithFastPath", () => {
     expect(url).toBe("https://media.example.com/server.mp4");
     expect(mockCompressVideoForUpload).toHaveBeenCalledWith(file, {
       requireCompatibleOutput: true,
+      onProgress: expect.any(Function),
     });
-    expect(uploadViaServer).toHaveBeenCalledWith(file);
+    expect(uploadViaServer).toHaveBeenCalledWith(file, expect.any(Function));
     expect(networkFetch).not.toHaveBeenCalled();
   });
 
@@ -328,7 +330,7 @@ describe("uploadVideoWithFastPath", () => {
     });
 
     expect(url).toBe("https://media.example.com/converted.mp4");
-    expect(uploadViaServer).toHaveBeenCalledWith(converted);
+    expect(uploadViaServer).toHaveBeenCalledWith(converted, expect.any(Function));
   });
 
   it("reuses a background-prepared video during submit", async () => {
@@ -346,7 +348,7 @@ describe("uploadVideoWithFastPath", () => {
 
     expect(url).toBe("https://media.example.com/prepared.mp4");
     expect(mockCompressVideoForUpload).toHaveBeenCalledTimes(1);
-    expect(uploadViaServer).toHaveBeenCalledWith(prepared);
+    expect(uploadViaServer).toHaveBeenCalledWith(prepared, expect.any(Function));
   });
 
   it("refuses an empty URL from the server upload so the form can retry", async () => {
@@ -361,5 +363,77 @@ describe("uploadVideoWithFastPath", () => {
     expect(await uploadVideoWithFastPath({ file, area: "listing", uploadViaServer })).toBe(
       "https://media.example.com/retry.mp4"
     );
+  });
+});
+
+describe("video upload progress", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockReadLength.mockResolvedValue(30);
+  });
+
+  it("reports the conversion started at pick to a later submit, then the upload percent", async () => {
+    let reportConversion: ((percent: number) => void) | undefined;
+    let finishConversion: (() => void) | undefined;
+    mockCompressVideoForUpload.mockImplementationOnce(
+      (file: File, options: { onProgress?: (percent: number) => void }) =>
+        new Promise<File>((resolve) => {
+          reportConversion = options.onProgress;
+          finishConversion = () => resolve(file);
+        })
+    );
+    const file = new File(["video"], "pick.mp4", { type: "video/mp4" });
+    void prewarmVideoForFastUpload(file);
+    await vi.waitFor(() => expect(reportConversion).toBeDefined());
+    reportConversion?.(40);
+    expect(pendingVideoPreparationCount()).toBe(1);
+
+    const progress: Array<{ phase: string; percent: number }> = [];
+    const uploadViaServer = vi.fn(async (_file: File, onUploadProgress?: (p: number) => void) => {
+      onUploadProgress?.(50);
+      onUploadProgress?.(100);
+      return "https://media.example.com/pick.mp4";
+    });
+    const upload = uploadVideoWithFastPath({
+      file,
+      area: "listing",
+      uploadViaServer,
+      onProgress: ({ phase, percent }) => progress.push({ phase, percent }),
+    });
+    await vi.waitFor(() => expect(progress).toContainEqual({ phase: "preparing", percent: 40 }));
+    reportConversion?.(75);
+    finishConversion?.();
+
+    expect(await upload).toBe("https://media.example.com/pick.mp4");
+    expect(progress).toEqual([
+      { phase: "preparing", percent: 40 },
+      { phase: "preparing", percent: 75 },
+      { phase: "uploading", percent: 0 },
+      { phase: "uploading", percent: 50 },
+      { phase: "uploading", percent: 100 },
+    ]);
+  });
+
+  it("clears the progress state once a preparation finishes or fails", async () => {
+    mockCompressVideoForUpload.mockImplementationOnce(async (file: File) => file);
+    mockCompressVideoForUpload.mockRejectedValueOnce(new MockVideoTranscodeError("bad video"));
+    const uploadViaServer = vi.fn().mockResolvedValue("https://media.example.com/ok.mp4");
+
+    await uploadVideoWithFastPath({
+      file: new File(["a"], "a.mp4", { type: "video/mp4" }),
+      area: "listing",
+      uploadViaServer,
+      onProgress: () => {},
+    });
+    await expect(
+      uploadVideoWithFastPath({
+        file: new File(["b"], "b.mp4", { type: "video/mp4" }),
+        area: "listing",
+        uploadViaServer,
+        onProgress: () => {},
+      })
+    ).rejects.toThrow("bad video");
+
+    expect(pendingVideoPreparationCount()).toBe(0);
   });
 });

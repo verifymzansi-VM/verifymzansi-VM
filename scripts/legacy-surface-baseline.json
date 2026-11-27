@@ -3,9 +3,9 @@
   "counts": {
     "backendSwitches": 0,
     "legacyClientImports": 3,
-    "retiredCommandNames": 9,
-    "retiredCommandCalls": 9,
-    "retiredTableReads": 2
+    "retiredCommandNames": 8,
+    "retiredCommandCalls": 8,
+    "retiredTableReads": 1
   },
   "legacyClientImporters": [
     "src/app/api/organisations/[id]/report/route.ts",
@@ -13,7 +13,6 @@
     "src/lib/utils/admin-queries.ts"
   ],
   "retiredCommandNames": [
-    "get_showroom_exposure_report",
     "get_site_visit_stats",
     "intro_trial_offer",
     "is_organisation_admin",
@@ -23,5 +22,5 @@
     "release_intro_trial",
     "reserve_intro_trial"
   ],
-  "retiredTableNames": ["content_edit_requests", "organisations"]
+  "retiredTableNames": ["organisations"]
 }

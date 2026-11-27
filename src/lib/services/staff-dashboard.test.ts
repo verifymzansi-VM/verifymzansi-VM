@@ -3,7 +3,9 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { getStaffDashboard, getStaffNavCounts } from "./staff-dashboard";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { readStaffHomeSummary } from "@/lib/foundation/staff-home-summary";
 vi.mock("@/lib/foundation/server-session", () => ({ readFoundationServerSession: vi.fn() }));
+vi.mock("@/lib/foundation/staff-home-summary", () => ({ readStaffHomeSummary: vi.fn() }));
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: vi.fn(() => {
     throw new Error("Retired backend accessed");
@@ -34,6 +36,18 @@ beforeEach(() => {
     api: { rpc },
   } as unknown as Awaited<ReturnType<typeof readFoundationServerSession>>);
   rpc.mockResolvedValue({ data: overview, error: null });
+  vi.mocked(readStaffHomeSummary).mockRejectedValue(new Error("summary unavailable"));
+});
+it("adds the summary cards the staff home reads separately", async () => {
+  vi.mocked(readStaffHomeSummary).mockResolvedValue({
+    shift: null,
+    restrictions: { suspensions: 1, bans: 2, emergency: 0 },
+  });
+  expect(await getStaffDashboard(id)).toMatchObject({
+    queues: overview.restored_queues,
+    shift: null,
+    restrictions: { suspensions: 1, bans: 2, emergency: 0 },
+  });
 });
 it("loads restored staff cards and badges from the verified caller's API", async () => {
   expect(await getStaffDashboard(id)).toMatchObject({

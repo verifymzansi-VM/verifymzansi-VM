@@ -31,7 +31,11 @@ import {
   readBusinessProfileExtras,
   type BusinessProfileExtras,
 } from "@/components/post/business-profile-extras-fields";
-import { UploadProgressPanel, type UploadSlotStatus } from "@/components/ui/upload-progress-panel";
+import {
+  UploadProgressPanel,
+  useUploadProgress,
+  type UploadSlotStatus,
+} from "@/components/ui/upload-progress-panel";
 import { FocalPointPicker, type FocalPoint } from "@/components/ui/focal-point-picker";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { useToast } from "@/hooks/use-toast";
@@ -122,6 +126,7 @@ export default function EditBusinessPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submissionInFlightRef = useRef(false);
   const [submitProgress, setSubmitProgress] = useState<string | null>(null);
+  const uploadProgress = useUploadProgress();
   const [uploadStatuses, setUploadStatuses] = useState<Record<string, UploadSlotStatus>>({
     logo: "idle",
     photos: "idle",
@@ -422,6 +427,7 @@ export default function EditBusinessPage() {
     submissionInFlightRef.current = true;
     setIsSubmitting(true);
     setSubmitProgress("Uploading media...");
+    uploadProgress.reset();
     setUploadStatuses({
       logo: newLogoFile.length > 0 ? "uploading" : "skipped",
       photos:
@@ -510,6 +516,7 @@ export default function EditBusinessPage() {
             files: newLogoFile,
             area: "business_logo",
             field: "logo_url",
+            onProgress: uploadProgress.track("logo", newLogoFile),
           }).then((urls) => {
             if (newLogoFile.length > 0) setUploadStatuses((c) => ({ ...c, logo: "done" }));
             return urls;
@@ -519,16 +526,19 @@ export default function EditBusinessPage() {
               files: newCoverFile,
               area: "business_cover",
               field: "cover_photo",
+              onProgress: uploadProgress.track("photos:cover", newCoverFile),
             }),
             uploadRequiredBusinessMedia({
               files: newGalleryFiles,
               area: "business_gallery",
               field: "gallery_photos",
+              onProgress: uploadProgress.track("photos:gallery", newGalleryFiles),
             }),
             uploadRequiredBusinessMedia({
               files: newMallPhotoFiles,
               area: "business_gallery",
               field: "gallery_photos",
+              onProgress: uploadProgress.track("photos:mall", newMallPhotoFiles),
             }),
           ]).then((urls) => {
             if (newCoverFile.length || newGalleryFiles.length || newMallPhotoFiles.length) {
@@ -540,6 +550,7 @@ export default function EditBusinessPage() {
             ? uploadRequiredBusinessVideo({
                 file: newPromoVideoFile[0],
                 area: "business_cover",
+                onProgress: uploadProgress.trackVideo("video", newPromoVideoFile),
               }).then((url) => {
                 setUploadStatuses((c) => ({ ...c, video: "done" }));
                 return url;
@@ -1593,6 +1604,7 @@ export default function EditBusinessPage() {
               {/* Actions */}
               <UploadProgressPanel
                 visible={isSubmitting}
+                progress={uploadProgress.values}
                 slots={[
                   {
                     key: "logo",
