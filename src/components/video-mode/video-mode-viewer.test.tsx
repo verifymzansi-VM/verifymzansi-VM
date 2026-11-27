@@ -102,14 +102,29 @@ describe("Video mode auto-hide", () => {
     });
     expect(root.getAttribute("data-chrome")).toBe("hidden");
 
+    // A finger tap (click count 1).
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Pause video" }));
+      fireEvent.click(screen.getByRole("button", { name: "Pause video" }), { detail: 1 });
     });
     expect(root.getAttribute("data-chrome")).toBe("shown");
     expect(video.__playing).toBe(true);
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Pause video" }));
+      fireEvent.click(screen.getByRole("button", { name: "Pause video" }), { detail: 1 });
+    });
+    expect(video.__playing).toBe(false);
+    expect(root.getAttribute("data-chrome")).toBe("shown");
+  });
+
+  it("a keyboard or screen reader press of Pause pauses at once, even while hidden", async () => {
+    const video = await renderPlaying();
+    const root = document.querySelector("[data-chrome]")!;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(AUTO_HIDE_MS);
+    });
+    expect(root.getAttribute("data-chrome")).toBe("hidden");
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Pause video" }), { detail: 0 });
     });
     expect(video.__playing).toBe(false);
     expect(root.getAttribute("data-chrome")).toBe("shown");
