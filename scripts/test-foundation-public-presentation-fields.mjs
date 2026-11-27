@@ -43,12 +43,10 @@ const [PREFLIGHT, ROLLBACK] = [
   readFileSync(`database/foundation/${folder}/${UPDATE.replace(/\.sql$/, suffix)}`, "utf8")
 );
 const PRESENTATION = "internal.frontend_post_presentation(uuid)";
-const summary = (state) =>
-  new RegExp(
-    `^public presentation fields: ${state}; presentations with an email: \\d+; listings with a street address: \\d+; businesses with an unpublished address: \\d+; approval snapshots of posts with an email: \\d+$`
-  );
-const NOT_APPLIED = summary("update not applied");
-const APPLIED = summary("already applied");
+const NOT_APPLIED =
+  /^public presentation fields: update not applied; presentations with an email: \d+; listings with a street address: \d+; businesses with an unpublished address: \d+; approval snapshots of posts with an email: \d+$/;
+const APPLIED =
+  /^public presentation fields: already applied; presentations with an email: \d+; listings with a street address: \d+; businesses with an unpublished address: \d+; approval snapshots of posts with an email: \d+$/;
 
 const {
   started,
