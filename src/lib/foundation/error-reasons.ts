@@ -296,6 +296,7 @@ export const FOUNDATION_ERROR_REASONS = {
   transfer_resolver_same: ["42501"],
   verification_required: ["42501", "PT409"],
   verified_phone_required: ["PT409"],
+  video_facts_invalid: ["22023"],
   video_length_invalid: ["22023"],
   video_too_long: ["22023"],
   views_invalid: ["22023"],

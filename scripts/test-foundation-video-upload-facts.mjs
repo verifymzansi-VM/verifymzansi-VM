@@ -20,10 +20,10 @@
 // Needs a local Docker daemon; it takes no connection settings at all.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { assertReadOnlyPreflight, executeGrants } from "./lib/foundation-sql-checks.mjs";
+import { executeGrants } from "./lib/foundation-sql-checks.mjs";
 import {
   applyAndProveRollback,
-  assertDriftRefused,
+  checkPreflightBeforeApply,
   functionBodyMd5,
   runTwoAdminUpdateCheck,
 } from "./lib/foundation-staff-payment-world.mjs";
@@ -99,17 +99,12 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
     assert.deepEqual(json(completeNamed(before)), { object_id: before.id, state: "ready" });
     assert.deepEqual(stored(before.id), { state: "ready", duration_ms: 30_000, video_facts: null });
   });
-  await check(
-    "preflight: one read-only summary row before the update; early rollback and drift refused",
-    () => {
-      const [summary, ...problems] = preflight();
-      assert.deepEqual(problems, []);
-      assert.equal(summary[0], "summary");
-      assert.match(summary[1], NOT_APPLIED);
-      assertReadOnlyPreflight(database, kit.preflightSql);
-      assertDriftRefused(kit, { label: LABEL, signatures: Object.keys(REVIEWED), rows: 2 });
-    }
-  );
+  await checkPreflightBeforeApply(kit, database, check, {
+    label: LABEL,
+    signatures: Object.keys(REVIEWED),
+    notApplied: NOT_APPLIED,
+    rows: 2,
+  });
 
   // ------------------------------------------------------------- apply
   await applyAndProveRollback(kit, database, check, {

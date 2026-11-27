@@ -161,6 +161,8 @@ describe("the keep rule on described files", () => {
     const atLimit = (MAX_KEPT_VIDEO_BITS_PER_SECOND * facts.seconds) / 8;
     expect(videoRuleProblem(facts, atLimit)).toBeNull();
     expect(videoRuleProblem(facts, atLimit + 1)).toBe("bitrate");
+    // LIM-APP-video-keep-size (docs/testing/limits-register.json)
+    expect(videoRuleProblem({ ...facts, seconds: 120 }, 52_428_800)).toBeNull();
     expect(videoRuleProblem({ ...facts, seconds: 120 }, 52_428_801)).toBe("file_size");
     expect(await problemOf(clip({ padding: 1_100_000 }))).toBe("bitrate");
   });
