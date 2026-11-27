@@ -4911,16 +4911,17 @@ Decision: approved by owner 2026-11-26 (answer: 'Yes to both'), retention line k
 
 ### 952. Admin page fixes (item 85, part 1)
 
-Launch checklist item 85. Staff home cards that said Unavailable now fill from the same foundation reads as the pages behind them (shift, escalations, appeals, role changes, restrictions, data requests, platform health, team, retention). A failed read leaves only its own card Unavailable. The banner no longer says 'All clear' when a card could not be read. Area pages (Market, Business, Tourism and Events) list pending posts from the Moderation queue. The activity feed shows readable action and target names and 'A staff member' instead of the start of an account id. The Website traffic and Showroom fairness panels have no data source yet and are left as they are.
+Launch checklist item 85. Staff home cards that said Unavailable now fill from the same foundation reads as the pages behind them (shift, escalations, appeals, role changes, restrictions, data requests, platform health, team, retention). A failed read leaves only its own card Unavailable. The banner no longer says 'All clear' when a card could not be read. Area pages (Market, Business, Tourism and Events) list pending posts from the Moderation queue. The activity feed shows readable action and target names and 'A staff member' instead of the start of an account id. The Showroom fairness panel is removed from the staff home (owner decision, 27 November; its component and read are deleted). The Website traffic panel has no data source yet and is left as it is.
 
 Decision: awaiting owner.
 
 | File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `src/app/admin/page.tsx` | wording-behaviour | Group 952: the banner knows when a figure could not be read. | Staff home: when any card is Unavailable, the banner never says 'All clear'. | keep | awaiting owner | 2026-11-27 | 098fee634361 |
+| `src/app/admin/page.tsx` | wording-behaviour | Group 952: the banner knows when a figure could not be read. | Staff home: when any card is Unavailable, the banner never says 'All clear'. The Showroom fairness panel at the bottom of the admin home is gone. | keep | awaiting owner | 2026-11-27 | cfd66e29dda5 |
 | `src/app/admin/page.test.tsx` | test | Group 952: checks the banner never says all clear with an unread card. | Nothing (not part of a page) | keep | awaiting owner | 2026-11-27 | dba6f198ede5 |
 | `src/components/admin/home/home-banner.tsx` | wording-behaviour | Group 952: new message when a figure could not be loaded. | Staff home banner reads 'Some figures could not be loaded. Check the cards below.' instead of 'All clear' when nothing needs a person but a card is Unavailable. | keep | awaiting owner | 2026-11-27 | 0d073f6a08d1 |
 | `src/components/admin/home/attention.ts` | rewiring | Group 952: second-approval count may be absent. | Nothing (same look and steps) | keep | awaiting owner | 2026-11-27 | d1ac305af786 |
+| `src/components/admin/home/showroom-fairness-panel.tsx` | visual | Group 952: file deleted; the Showroom fairness panel is removed from the staff home (owner decision, 27 November). | Admin home: the 'Showroom fairness' panel at the bottom is gone. | keep | awaiting owner | 2026-11-27 | deleted |
 | `src/components/admin/home/my-shift-panel.tsx` | rewiring | Group 952: renewals left shown only when the read carries it. | Staff home My shift: the 'renewals left' text is left out of each claim (the read does not carry it). | keep | awaiting owner | 2026-11-27 | a94b2fcead11 |
 
 <!-- frontend-ledger:end -->

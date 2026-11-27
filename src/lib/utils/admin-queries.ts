@@ -93,9 +93,9 @@ export async function getAreaReports(area: MarketplaceArea) {
   return (await readNativeProgramReports(area)).open;
 }
 
-// getSiteVisitStats and getShowroomExposureReport have no foundation read yet:
-// they still use the retired service client, which reaches no tables in
-// production, so their panels show their unavailable state.
+// getSiteVisitStats has no foundation read yet: it still uses the retired
+// service client, which reaches no tables in production, so its panel shows its
+// unavailable state.
 
 /**
  * Content pending moderation for an area, oldest first: the same foundation
@@ -186,47 +186,5 @@ export async function getSiteVisitStats(): Promise<SiteVisitStats> {
     };
   } catch {
     return EMPTY_SITE_VISIT_STATS;
-  }
-}
-
-// ── Showroom fairness (admin home) ────────────────────────────
-
-export interface ShowroomSurfaceExposure {
-  surface: "home" | "business" | "market" | "tourism";
-  posts: number;
-  appearances7d: number;
-  fairShare7d: number | null;
-  lowest7d: number;
-  highest7d: number;
-}
-
-export interface ZeroExposurePost {
-  surface: ShowroomSurfaceExposure["surface"];
-  table: "businesses" | "listings" | "promotions";
-  id: string;
-  title: string;
-  province: string | null;
-  liveSince: string;
-}
-
-export interface ShowroomExposureReport {
-  available: boolean;
-  surfaces: ShowroomSurfaceExposure[];
-  zeroExposure: ZeroExposurePost[];
-}
-
-/** Fair-rotation health: appearances per showroom and posts nobody saw in 24h. */
-export async function getShowroomExposureReport(): Promise<ShowroomExposureReport> {
-  try {
-    const { data, error } = await createAdminClient().rpc("get_showroom_exposure_report");
-    if (error || !data) return { available: false, surfaces: [], zeroExposure: [] };
-    const report = data as Partial<ShowroomExposureReport>;
-    return {
-      available: true,
-      surfaces: report.surfaces ?? [],
-      zeroExposure: report.zeroExposure ?? [],
-    };
-  } catch {
-    return { available: false, surfaces: [], zeroExposure: [] };
   }
 }
