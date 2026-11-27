@@ -1865,36 +1865,30 @@ html[data-playwright="1"] [data-emblem][data-water-ready="late"] > .emblem-shiel
   text-shadow: 0 1px 2px rgb(0 0 0 / 0.85);
 }
 
-/* Clean view: every control leaves through its nearest edge, the right rail
-   (beside the edge tab) first, and comes back in the reverse order. */
-.vm-chrome {
-  transition:
-    transform 380ms cubic-bezier(0.22, 0.8, 0.24, 1),
-    opacity 280ms ease;
-  transition-delay: calc((3 - var(--vm-order, 0)) * 45ms);
-}
+/* Clean view: after 4 s of playback the controls fade in place (no sliding). */
+.vm-chrome,
 .vm-chrome-fade {
-  transition: opacity 280ms ease;
+  transition: opacity 300ms ease;
 }
-[data-chrome="hidden"] .vm-chrome {
-  opacity: 0;
-  transition-timing-function: cubic-bezier(0.55, 0, 0.75, 0.2), ease;
-  transition-delay: calc(var(--vm-order, 0) * 45ms);
-}
+[data-chrome="hidden"] .vm-chrome,
 [data-chrome="hidden"] .vm-chrome-fade {
   opacity: 0;
 }
-[data-chrome="hidden"] .vm-chrome-left {
-  transform: translateX(calc(-100% - 24px)) scale(0.8);
+/* Roll-over: the new area's name shows for 1.5 s. */
+.vm-cue {
+  animation: vm-cue 1.5s ease forwards;
 }
-[data-chrome="hidden"] .vm-chrome-right {
-  transform: translateX(calc(100% + 24px)) scale(0.8);
-}
-[data-chrome="hidden"] .vm-chrome-up {
-  transform: translateY(calc(-100% - 24px));
-}
-[data-chrome="hidden"] .vm-chrome-down {
-  transform: translateY(calc(100% + 32px));
+@keyframes vm-cue {
+  0% {
+    opacity: 0;
+  }
+  15%,
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
 }
 /* First visit: a gentle nudge upwards, then it fades on its own. */
 .vm-swipe-hint {
@@ -1943,11 +1937,7 @@ html[data-playwright="1"] [data-emblem][data-water-ready="late"] > .emblem-shiel
     top: calc(env(safe-area-inset-top) + 64px);
   }
   .vm-info {
-    left: calc(max(4px, env(safe-area-inset-left)) + 60px);
-  }
-  /* Little height: the tab rests just under the top bar, clear of the actions. */
-  .vm-edge-tab.vm-edge-tab {
-    top: calc(env(safe-area-inset-top) + 56px);
+    left: calc(max(4px, env(safe-area-inset-left)) + 52px);
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1955,15 +1945,14 @@ html[data-playwright="1"] [data-emblem][data-water-ready="late"] > .emblem-shiel
   .vm-track > * {
     transition: none !important;
   }
-  /* Controls fade in place instead of travelling. */
+  /* Controls and the roll-over cue appear and disappear at once. */
   .vm-chrome,
-  [data-chrome="hidden"] .vm-chrome {
-    transform: none !important;
-    transition: opacity 150ms ease;
-    transition-delay: 0ms;
+  .vm-chrome-fade {
+    transition: none;
   }
   .vm-swipe-hint,
-  .vm-swipe-hint-arrow {
+  .vm-swipe-hint-arrow,
+  .vm-cue {
     animation: none;
   }
 }
