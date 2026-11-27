@@ -128,6 +128,42 @@ describe("seller contact actions", () => {
     expect(screen.getByRole("button", { name: "Send an enquiry" })).toBeInTheDocument();
     expect(screen.queryByText("No contact details added.")).toBeNull();
   });
+  it("labels a revealed landline as one and offers no WhatsApp for it; a mobile keeps its look", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ phone: "+27311234567", whatsapp: "+27311234567" }))
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ phone: "+27821234567", whatsapp: null }))
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ phone: "+27860123456", whatsapp: "+27860123456" }))
+      );
+    const reveal = async (name: string) => {
+      fireEvent.click(screen.getByRole("button", { name: "Show contact number" }));
+      fireEvent.click(screen.getByRole("button", { name: "Complete CAPTCHA" }));
+      await waitFor(() => expect(screen.getByRole("link", { name })).toBeInTheDocument());
+      return screen.getByRole("link", { name });
+    };
+    const { unmount } = render(
+      <ListingContactActions listingId="abc" revealable={{ phone: true, whatsapp: true }} />
+    );
+    expect(await reveal("Call (landline) 031 123 4567")).toHaveAttribute(
+      "href",
+      "tel:+27311234567"
+    );
+    expect(screen.queryByRole("link", { name: /WhatsApp/ })).toBeNull();
+    unmount();
+    const mobile = render(
+      <ListingContactActions listingId="abc" revealable={{ phone: true, whatsapp: false }} />
+    );
+    expect(await reveal("Call +27821234567")).toHaveAttribute("href", "tel:+27821234567");
+    mobile.unmount();
+    // A call-only number (087, 0800, 0860, 0861) reads like a mobile, with no WhatsApp.
+    render(<ListingContactActions listingId="abc" revealable={{ phone: true, whatsapp: true }} />);
+    expect(await reveal("Call +27860123456")).toHaveAttribute("href", "tel:+27860123456");
+    expect(screen.queryByRole("link", { name: /WhatsApp/ })).toBeNull();
+  });
   const businessCard = (hasOtherContact: boolean) => (
     <ContentContactActions
       showPhoneButton
