@@ -27,7 +27,11 @@ import { CategoryPicker } from "@/components/listings/category-picker";
 import { MediaUpload } from "@/components/ui/media-upload";
 import { VideoFrameSelector } from "@/components/ui/video-frame-selector";
 import { MediaCropPreview, type CropPosition } from "@/components/ui/media-crop-preview";
-import { UploadProgressPanel, type UploadSlotStatus } from "@/components/ui/upload-progress-panel";
+import {
+  UploadProgressPanel,
+  useUploadProgress,
+  type UploadSlotStatus,
+} from "@/components/ui/upload-progress-panel";
 import {
   PlanGate,
   usePlanMaxPhotos,
@@ -281,6 +285,7 @@ function CreateListingForm() {
   const submissionInFlightRef = useRef(false);
   const [submitProgress, setSubmitProgress] = useState<string | null>(null);
   const [uploadStatuses, setUploadStatuses] = useState<UploadStatuses>(INITIAL_UPLOAD_STATUSES);
+  const uploadProgress = useUploadProgress();
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
@@ -879,6 +884,7 @@ function CreateListingForm() {
     setIsSubmitting(true);
     submissionInFlightRef.current = true;
     setSubmitProgress("Checking upload service...");
+    uploadProgress.reset();
     setUploadStatuses({
       logo: logoFile.length > 0 ? "uploading" : "skipped",
       photos: photoFiles.length > 0 ? "uploading" : "skipped",
@@ -910,19 +916,29 @@ function CreateListingForm() {
         : {};
 
       const [logoUrls, photoUrls, videoUrls, videoThumbnailUrl] = await settleMediaUploads([
-        uploadListingImages({ files: logoFile, area: "listing_logo", field: "logo_url" }).then(
-          (urls) => {
-            if (logoFile.length) setUploadStatuses((current) => ({ ...current, logo: "done" }));
-            return urls;
-          }
-        ),
-        uploadListingImages({ files: photoFiles, area: "listing", field: "images" }).then(
-          (urls) => {
-            if (photoFiles.length) setUploadStatuses((current) => ({ ...current, photos: "done" }));
-            return urls;
-          }
-        ),
-        uploadListingVideoFiles({ files: videoFile, area: "listing_video" }).then((urls) => {
+        uploadListingImages({
+          files: logoFile,
+          area: "listing_logo",
+          field: "logo_url",
+          onProgress: uploadProgress.track("logo", logoFile),
+        }).then((urls) => {
+          if (logoFile.length) setUploadStatuses((current) => ({ ...current, logo: "done" }));
+          return urls;
+        }),
+        uploadListingImages({
+          files: photoFiles,
+          area: "listing",
+          field: "images",
+          onProgress: uploadProgress.track("photos", photoFiles),
+        }).then((urls) => {
+          if (photoFiles.length) setUploadStatuses((current) => ({ ...current, photos: "done" }));
+          return urls;
+        }),
+        uploadListingVideoFiles({
+          files: videoFile,
+          area: "listing_video",
+          onProgress: uploadProgress.trackVideo("video", videoFile),
+        }).then((urls) => {
           if (videoFile.length) setUploadStatuses((current) => ({ ...current, video: "done" }));
           return urls;
         }),
@@ -1299,6 +1315,7 @@ function CreateListingForm() {
                     {isSubmitting && (
                       <UploadProgressPanel
                         visible={isSubmitting}
+                        progress={uploadProgress.values}
                         slots={[
                           {
                             key: "logo",

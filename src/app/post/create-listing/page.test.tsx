@@ -11,6 +11,11 @@ import {
 } from "@/test/foundation-post-transport";
 
 const switches = vi.hoisted(() => ({ SHOW_POST_TEMPLATES: false, SHOW_POST_COPY: false }));
+// Uploads with a progress bar use XHR; these tests stub fetch, so send them there.
+vi.mock("@/lib/utils/xhr-upload", () => ({
+  xhrFetch: (input: RequestInfo | URL, init?: RequestInit) => fetch(input, init),
+}));
+
 vi.mock("@/lib/hidden-features", async (importOriginal) => ({
   ...(await importOriginal<typeof HiddenFeatures>()),
   get SHOW_POST_TEMPLATES() {

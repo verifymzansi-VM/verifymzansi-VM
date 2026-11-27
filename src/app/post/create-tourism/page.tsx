@@ -19,7 +19,11 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { MediaUpload } from "@/components/ui/media-upload";
 import { OnlinePresenceFields } from "@/components/post/online-presence-fields";
-import { UploadProgressPanel, type UploadSlotStatus } from "@/components/ui/upload-progress-panel";
+import {
+  UploadProgressPanel,
+  useUploadProgress,
+  type UploadSlotStatus,
+} from "@/components/ui/upload-progress-panel";
 import { VideoFrameSelector } from "@/components/ui/video-frame-selector";
 import { MediaCropPreview, type CropPosition } from "@/components/ui/media-crop-preview";
 import {
@@ -311,6 +315,7 @@ function CreateTourismContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submissionInFlightRef = useRef(false);
   const [submitProgress, setSubmitProgress] = useState<string | null>(null);
+  const uploadProgress = useUploadProgress();
   const [uploadStatuses, setUploadStatuses] = useState<Record<string, UploadSlotStatus>>({
     logo: "idle",
     photos: "idle",
@@ -1045,6 +1050,7 @@ function CreateTourismContent() {
     submissionInFlightRef.current = true;
     setIsSubmitting(true);
     setSubmitProgress("Checking upload service...");
+    uploadProgress.reset();
     setUploadStatuses({
       logo: logoFiles.length > 0 ? "uploading" : "skipped",
       photos: photoFiles.length > 0 ? "uploading" : "skipped",
@@ -1076,6 +1082,7 @@ function CreateTourismContent() {
             files: photoFiles,
             area: uploadArea,
             field: "images",
+            onProgress: uploadProgress.track("photos", photoFiles),
           }).then((urls) => {
             if (photoFiles.length > 0) {
               setUploadStatuses((current) => ({ ...current, photos: "done" }));
@@ -1086,6 +1093,7 @@ function CreateTourismContent() {
             files: videoFiles,
             area: uploadArea,
             maxSeconds: videoLimitSeconds(listingType === "event" ? "event" : "other"),
+            onProgress: uploadProgress.trackVideo("videos", videoFiles),
           }).then((urls) => {
             if (videoFiles.length > 0) {
               setUploadStatuses((current) => ({ ...current, videos: "done" }));
@@ -1101,6 +1109,7 @@ function CreateTourismContent() {
             files: logoFiles,
             area: listingType === "tourism_business" ? "business_logo" : "promotion",
             field: "logo_url",
+            onProgress: uploadProgress.track("logo", logoFiles),
           }).then((urls) => {
             if (logoFiles.length > 0) {
               setUploadStatuses((current) => ({ ...current, logo: "done" }));
@@ -1808,6 +1817,7 @@ function CreateTourismContent() {
                     )}
                     <UploadProgressPanel
                       visible={isSubmitting}
+                      progress={uploadProgress.values}
                       slots={[
                         {
                           key: "logo",

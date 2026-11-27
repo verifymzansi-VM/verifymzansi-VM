@@ -1,7 +1,10 @@
 import { settleMediaUploads } from "./settle-media-uploads";
 import { createLogger } from "@/lib/utils/logger";
 import { VideoTranscodeError } from "@/lib/media/compress-before-upload";
-import { uploadVideoWithFastPath } from "@/app/post/_lib/video-fast-upload";
+import {
+  uploadVideoWithFastPath,
+  type VideoUploadProgress,
+} from "@/app/post/_lib/video-fast-upload";
 import { normalizeCreatePostRuntimeError } from "@/app/post/_lib/create-post-errors";
 import { uploadMediaViaServer } from "@/app/post/_lib/server-media-upload";
 import type { UploadArea } from "@/types/enums";
@@ -41,15 +44,18 @@ function toPromotionMediaUploadError(
 async function uploadPromotionVideosViaServer({
   files,
   area,
+  onProgress,
 }: {
   files: File[];
   area: UploadArea;
+  onProgress?: (percent: number) => void;
 }): Promise<string[]> {
   return uploadMediaViaServer({
     files,
     area,
     fallbackMessage: FIELD_MESSAGES.videos,
     preferPayloadError: true,
+    onProgress,
   });
 }
 
@@ -93,10 +99,12 @@ export async function uploadRequiredPromotionMedia({
   files,
   area,
   field,
+  onProgress,
 }: {
   files: File[];
   area: UploadArea;
   field: PromotionMediaField;
+  onProgress?: (percent: number) => void;
 }): Promise<string[]> {
   if (files.length === 0) return [];
 
@@ -105,6 +113,7 @@ export async function uploadRequiredPromotionMedia({
       files,
       area,
       fallbackMessage: FIELD_MESSAGES[field],
+      onProgress,
     });
   } catch (error) {
     log.warn("Blocking promotion-style save because media upload failed", {
@@ -121,11 +130,13 @@ export async function uploadPromotionVideoFiles({
   files,
   area,
   maxSeconds,
+  onProgress,
 }: {
   files: File[];
   area: UploadArea;
   /** Event posts 60 s; tourism businesses 120 s (the default). */
   maxSeconds?: number;
+  onProgress?: (progress: VideoUploadProgress) => void;
 }): Promise<string[]> {
   if (files.length === 0) return [];
 
@@ -136,10 +147,13 @@ export async function uploadPromotionVideoFiles({
           file,
           area,
           maxSeconds,
-          uploadViaServer: (uploadFile) =>
-            uploadPromotionVideosViaServer({ files: [uploadFile], area }).then(
-              (urls) => urls[0] ?? ""
-            ),
+          onProgress,
+          uploadViaServer: (uploadFile, onUploadProgress) =>
+            uploadPromotionVideosViaServer({
+              files: [uploadFile],
+              area,
+              onProgress: onUploadProgress,
+            }).then((urls) => urls[0] ?? ""),
         })
       )
     );
