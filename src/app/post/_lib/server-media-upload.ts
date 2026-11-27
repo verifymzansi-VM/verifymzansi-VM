@@ -1,5 +1,6 @@
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { fetchWithRetry } from "@/lib/utils/fetch-retry";
+import { xhrFetch, type UploadProgressHandler } from "@/lib/utils/xhr-upload";
 import { mediaUploadTimeoutMs } from "@/lib/media/upload-policy";
 import {
   appendTraceId,
@@ -18,6 +19,7 @@ export async function uploadMediaViaServer({
   fallbackMessage,
   preferPayloadError = false,
   timeoutMs,
+  onProgress,
 }: {
   files: File[];
   area: UploadArea;
@@ -25,6 +27,8 @@ export async function uploadMediaViaServer({
   fallbackMessage: string;
   preferPayloadError?: boolean;
   timeoutMs?: number;
+  /** Percent of the request body sent (0-100); switches the request to XHR. */
+  onProgress?: UploadProgressHandler;
 }): Promise<string[]> {
   const uploadData = new FormData();
   uploadData.append("area", area);
@@ -38,7 +42,8 @@ export async function uploadMediaViaServer({
       body: uploadData,
     },
     undefined,
-    timeoutMs ?? mediaUploadTimeoutMs(files.reduce((total, file) => total + file.size, 0))
+    timeoutMs ?? mediaUploadTimeoutMs(files.reduce((total, file) => total + file.size, 0)),
+    onProgress ? (input, init) => xhrFetch(input, init, onProgress) : undefined
   );
 
   const payload = await parseUploadJson(response);
@@ -64,12 +69,14 @@ export async function uploadMediaFileViaServer({
   fallbackMessage,
   preferPayloadError,
   timeoutMs,
+  onProgress,
 }: {
   file: File;
   area: UploadArea;
   fallbackMessage: string;
   preferPayloadError?: boolean;
   timeoutMs?: number;
+  onProgress?: UploadProgressHandler;
 }): Promise<string> {
   const urls = await uploadMediaViaServer({
     files: [file],
@@ -78,6 +85,7 @@ export async function uploadMediaFileViaServer({
     fallbackMessage,
     preferPayloadError,
     timeoutMs,
+    onProgress,
   });
 
   return urls[0] ?? "";

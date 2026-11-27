@@ -24,6 +24,11 @@ const { listingDetailPreviewSpy } = vi.hoisted(() => ({
   listingDetailPreviewSpy: vi.fn(),
 }));
 
+// Uploads with a progress bar use XHR; these tests stub fetch, so send them there.
+vi.mock("@/lib/utils/xhr-upload", () => ({
+  xhrFetch: (input: RequestInfo | URL, init?: RequestInit) => fetch(input, init),
+}));
+
 vi.mock("next/navigation", () => ({
   useRouter: vi.fn(),
   useParams: vi.fn(),

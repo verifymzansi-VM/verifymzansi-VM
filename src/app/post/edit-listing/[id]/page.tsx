@@ -23,7 +23,11 @@ import { getRestoredFoundationBrowserClient as createClient } from "@/lib/founda
 import { loadOwnListing } from "./load-own-listing";
 import { CategoryPicker } from "@/components/listings/category-picker";
 import { MediaUpload } from "@/components/ui/media-upload";
-import { UploadProgressPanel, type UploadSlotStatus } from "@/components/ui/upload-progress-panel";
+import {
+  UploadProgressPanel,
+  useUploadProgress,
+  type UploadSlotStatus,
+} from "@/components/ui/upload-progress-panel";
 import { FocalPointPicker, type FocalPoint } from "@/components/ui/focal-point-picker";
 import {
   usePlanMaxPhotos,
@@ -85,6 +89,7 @@ export default function EditListingPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submissionInFlightRef = useRef(false);
   const [submitProgress, setSubmitProgress] = useState<string | null>(null);
+  const uploadProgress = useUploadProgress();
   const [uploadStatuses, setUploadStatuses] = useState<Record<string, UploadSlotStatus>>({
     logo: "idle",
     photos: "idle",
@@ -430,6 +435,7 @@ export default function EditListingPage() {
     submissionInFlightRef.current = true;
     setIsSubmitting(true);
     setSubmitProgress("Uploading media...");
+    uploadProgress.reset();
     setUploadStatuses({
       logo: newLogoFile.length > 0 ? "uploading" : "skipped",
       photos: newPhotoFiles.length > 0 ? "uploading" : "skipped",
@@ -453,24 +459,31 @@ export default function EditListingPage() {
 
       // Upload photos, video, and video cover in parallel
       const [newLogoUrls, newPhotoUrls, newVideoUrl, newCoverUrls] = await settleMediaUploads([
-        uploadListingImages({ files: newLogoFile, area: "listing_logo", field: "logo_url" }).then(
-          (urls) => {
-            if (newLogoFile.length > 0) setUploadStatuses((c) => ({ ...c, logo: "done" }));
-            return urls;
-          }
-        ),
-        uploadListingImages({ files: newPhotoFiles, area: "listing", field: "images" }).then(
-          (urls) => {
-            if (newPhotoFiles.length > 0) setUploadStatuses((c) => ({ ...c, photos: "done" }));
-            return urls;
-          }
-        ),
+        uploadListingImages({
+          files: newLogoFile,
+          area: "listing_logo",
+          field: "logo_url",
+          onProgress: uploadProgress.track("logo"),
+        }).then((urls) => {
+          if (newLogoFile.length > 0) setUploadStatuses((c) => ({ ...c, logo: "done" }));
+          return urls;
+        }),
+        uploadListingImages({
+          files: newPhotoFiles,
+          area: "listing",
+          field: "images",
+          onProgress: uploadProgress.track("photos"),
+        }).then((urls) => {
+          if (newPhotoFiles.length > 0) setUploadStatuses((c) => ({ ...c, photos: "done" }));
+          return urls;
+        }),
         newVideoFile.length > 0
           ? (async () => {
               setSubmitProgress("Uploading media...");
               const urls = await uploadListingVideoFiles({
                 files: newVideoFile,
                 area: "listing_video",
+                onProgress: uploadProgress.trackVideo("video"),
               });
               const publicUrl = urls[0] ?? null;
               if (!publicUrl) {
@@ -1035,6 +1048,7 @@ export default function EditListingPage() {
 
               <UploadProgressPanel
                 visible={isSubmitting}
+                progress={uploadProgress.values}
                 slots={[
                   {
                     key: "logo",

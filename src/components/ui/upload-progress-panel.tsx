@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, useMemo, useState } from "react";
 import { CheckCircle2, CircleDashed, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -12,17 +13,66 @@ export interface UploadSlot {
   status: UploadSlotStatus;
 }
 
+/** How far one upload has got; a video is converted on the phone before it is sent. */
+export interface UploadProgressValue {
+  percent: number;
+  phase?: "preparing" | "uploading";
+}
+
 interface UploadProgressPanelProps {
   slots: UploadSlot[];
   visible: boolean;
+  /**
+   * Progress by slot key. A slot fed by several requests uses sub-keys
+   * ("photos:cover", "photos:gallery"); the panel shows their average.
+   */
+  progress?: Record<string, UploadProgressValue>;
 }
 
-export function UploadProgressPanel({ slots, visible }: UploadProgressPanelProps) {
+/** Progress state for the panel. Callbacks skip unchanged values to limit re-renders. */
+export function useUploadProgress() {
+  const [values, setValues] = useState<Record<string, UploadProgressValue>>({});
+  const setValue = useCallback((key: string, value: UploadProgressValue) => {
+    setValues((current) => {
+      const previous = current[key];
+      if (previous && previous.percent === value.percent && previous.phase === value.phase) {
+        return current;
+      }
+      return { ...current, [key]: value };
+    });
+  }, []);
+
+  return useMemo(
+    () => ({
+      values,
+      reset: () => setValues({}),
+      track: (key: string) => (percent: number) => setValue(key, { percent }),
+      trackVideo: (key: string) => (value: Required<UploadProgressValue>) => setValue(key, value),
+    }),
+    [values, setValue]
+  );
+}
+
+function slotProgress(
+  key: string,
+  progress: Record<string, UploadProgressValue> | undefined
+): UploadProgressValue | null {
+  if (!progress) return null;
+  const parts = Object.entries(progress)
+    .filter(([name]) => name === key || name.startsWith(`${key}:`))
+    .map(([, value]) => value);
+  if (parts.length === 0) return null;
+  const percent = Math.round(parts.reduce((sum, part) => sum + part.percent, 0) / parts.length);
+  return { percent, phase: parts[0].phase };
+}
+
+export function UploadProgressPanel({ slots, visible, progress }: UploadProgressPanelProps) {
   if (!visible) return null;
 
   const activeSlots = slots.filter((s) => s.status !== "skipped");
   if (activeSlots.length === 0) return null;
   const completedCount = activeSlots.filter((slot) => slot.status === "done").length;
+  const uploading = activeSlots.some((slot) => slot.key !== "saving" && slot.status !== "done");
 
   return (
     <div
@@ -35,6 +85,7 @@ export function UploadProgressPanel({ slots, visible }: UploadProgressPanelProps
         const isDone = slot.status === "done";
         const isWaiting = slot.status === "idle";
         const label = isDone ? slot.doneLabel : slot.label;
+        const current = isActive ? slotProgress(slot.key, progress) : null;
 
         return (
           <div
@@ -69,10 +120,33 @@ export function UploadProgressPanel({ slots, visible }: UploadProgressPanelProps
                   Step {index + 1} of {activeSlots.length}
                 </p>
               )}
+              {current && (
+                // Hidden from screen readers: a changing number would be read out
+                // many times a second inside this live region.
+                <div className="mt-1.5 flex items-center gap-2" aria-hidden="true">
+                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-brand-green-700 transition-[width] duration-300 motion-reduce:transition-none dark:bg-brand-gold-300"
+                      style={{ width: `${current.percent}%` }}
+                      data-testid={`upload-progress-${slot.key}`}
+                    />
+                  </div>
+                  <span className="w-24 shrink-0 text-right text-xs tabular-nums text-foreground">
+                    {current.phase === "preparing"
+                      ? `Converting ${current.percent}%`
+                      : current.phase === "uploading"
+                        ? `Uploading ${current.percent}%`
+                        : `${current.percent}%`}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         );
       })}
+      {uploading && (
+        <p className="text-xs text-muted-foreground">Keep this page open until it finishes.</p>
+      )}
     </div>
   );
 }
