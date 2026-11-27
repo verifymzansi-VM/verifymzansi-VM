@@ -11,9 +11,9 @@ deployment instructions below.
 - Production runs the **foundation** backend: the London Supabase project, with
   its SQL in `database/foundation/` (baseline `candidate.sql` plus `updates/`).
   Browsers reach data only through `api.*` database functions.
-- The **source** backend (`supabase/migrations/`, tables in schema `public`) is
-  retired and empty in production. Sections below marked "Historical" describe
-  it.
+- The **source** backend (tables in schema `public`) is retired and empty in
+  production; its `supabase/migrations/` history has been removed. Sections
+  below marked "Historical" describe it.
 - **Merging into `main` releases to production.** Changes reach `main` only
   through pull requests whose required checks pass and whose review has no open
   blocker, merged by the owner or by the coordinator under the owner's standing
@@ -187,18 +187,8 @@ The repo includes an env-aware Supabase CLI wrapper so linked remote commands do
 not depend on manually exporting `SUPABASE_ACCESS_TOKEN` and
 `SUPABASE_DB_PASSWORD` into your terminal first.
 
-Use either the generic wrapper:
-
 ```bash
-pnpm supabase:cli -- migration list
-pnpm supabase:cli -- db push
-```
-
-Or the convenience aliases:
-
-```bash
-pnpm supabase:migration:list
-pnpm supabase:db:push
+pnpm supabase:cli -- projects list
 ```
 
 ### Backups
@@ -229,7 +219,7 @@ fails for new actionable findings.
 To use a different env file, pass it through the generic wrapper:
 
 ```bash
-pnpm supabase:cli -- --env-file=.env.local migration list
+pnpm supabase:cli -- --env-file=.env.local projects list
 ```
 
 ### Browser tests
@@ -341,42 +331,40 @@ a person").
 
 ## Key Commands
 
-| Command                        | Purpose                                              |
-| ------------------------------ | ---------------------------------------------------- |
-| `pnpm dev`                     | Start the local Next.js dev server                   |
-| `pnpm build`                   | Production Next.js build                             |
-| `pnpm brand:assets`            | Regenerate logo lockups, favicon, and app icons      |
-| `pnpm knip`                    | Dead-code scan for unused files and exports          |
-| `pnpm jscpd`                   | Advisory code-duplication scan with HTML/JSON report |
-| `pnpm jscpd:check`             | Regression-only duplication budget gate              |
-| `pnpm depcruise`               | Import-graph check for cycles and test-only leaks    |
-| `pnpm lint`                    | ESLint                                               |
-| `pnpm typecheck`               | TypeScript typecheck                                 |
-| `pnpm test`                    | Blocking Vitest lane used for launch gating          |
-| `pnpm test:blocking`           | Explicit blocking Vitest lane                        |
-| `pnpm run stability:check`     | One-command full stabilization gate                  |
-| `pnpm test:coverage`           | Alias for the core coverage lane                     |
-| `pnpm test:coverage:core`      | Coverage lane focused on core server and domain code |
-| `pnpm test:dev-startup`        | Local dev startup smoke (boot + / + /api/health)     |
-| `pnpm test:launch:flows`       | Billing + OTP + DSAR launch-confidence bundle        |
-| `pnpm test:deep`               | Core coverage plus Playwright                        |
-| `pnpm test:all`                | Full validation shortcut                             |
-| `pnpm payments:audit`          | Paid-flow security and live posture audit            |
-| `pnpm safety:review`           | One-command code review and security gate            |
-| `pnpm safety:ci-review`        | CI-safe review gate (preflight is non-blocking)      |
-| `pnpm safety:release`          | One-command release-readiness gate                   |
-| `pnpm test:e2e`                | Full Playwright suite (foundation test copy)         |
-| `pnpm supabase:migration:list` | List linked Supabase local vs remote migrations      |
-| `pnpm supabase:db:push`        | Apply pending local migrations to linked Supabase    |
-| `pnpm preflight`               | Local launch checks with development-mode validation |
-| `pnpm preflight:prod`          | Production launch checks                             |
-| `pnpm validate:launch-env`     | Fail-fast production env validation                  |
-| `pnpm ozow:webhook:secret`     | Fetch Ozow webhook secret(s) via One API             |
-| `pnpm security:audit`          | Dependency vulnerability gate                        |
-| `pnpm secret-scan`             | Secret leak scan                                     |
-| `pnpm licenses:check`          | License policy gate                                  |
-| `pnpm build:cloudflare`        | OpenNext Cloudflare build                            |
-| `pnpm email:domain:check`      | Public DNS check for Gmail-backed domain email       |
+| Command                    | Purpose                                              |
+| -------------------------- | ---------------------------------------------------- |
+| `pnpm dev`                 | Start the local Next.js dev server                   |
+| `pnpm build`               | Production Next.js build                             |
+| `pnpm brand:assets`        | Regenerate logo lockups, favicon, and app icons      |
+| `pnpm knip`                | Dead-code scan for unused files and exports          |
+| `pnpm jscpd`               | Advisory code-duplication scan with HTML/JSON report |
+| `pnpm jscpd:check`         | Regression-only duplication budget gate              |
+| `pnpm depcruise`           | Import-graph check for cycles and test-only leaks    |
+| `pnpm lint`                | ESLint                                               |
+| `pnpm typecheck`           | TypeScript typecheck                                 |
+| `pnpm test`                | Blocking Vitest lane used for launch gating          |
+| `pnpm test:blocking`       | Explicit blocking Vitest lane                        |
+| `pnpm run stability:check` | One-command full stabilization gate                  |
+| `pnpm test:coverage`       | Alias for the core coverage lane                     |
+| `pnpm test:coverage:core`  | Coverage lane focused on core server and domain code |
+| `pnpm test:dev-startup`    | Local dev startup smoke (boot + / + /api/health)     |
+| `pnpm test:launch:flows`   | Billing + OTP + DSAR launch-confidence bundle        |
+| `pnpm test:deep`           | Core coverage plus Playwright                        |
+| `pnpm test:all`            | Full validation shortcut                             |
+| `pnpm payments:audit`      | Paid-flow security and live posture audit            |
+| `pnpm safety:review`       | One-command code review and security gate            |
+| `pnpm safety:ci-review`    | CI-safe review gate (preflight is non-blocking)      |
+| `pnpm safety:release`      | One-command release-readiness gate                   |
+| `pnpm test:e2e`            | Full Playwright suite (foundation test copy)         |
+| `pnpm preflight`           | Local launch checks with development-mode validation |
+| `pnpm preflight:prod`      | Production launch checks                             |
+| `pnpm validate:launch-env` | Fail-fast production env validation                  |
+| `pnpm ozow:webhook:secret` | Fetch Ozow webhook secret(s) via One API             |
+| `pnpm security:audit`      | Dependency vulnerability gate                        |
+| `pnpm secret-scan`         | Secret leak scan                                     |
+| `pnpm licenses:check`      | License policy gate                                  |
+| `pnpm build:cloudflare`    | OpenNext Cloudflare build                            |
+| `pnpm email:domain:check`  | Public DNS check for Gmail-backed domain email       |
 
 ## Domain Email Via Gmail
 

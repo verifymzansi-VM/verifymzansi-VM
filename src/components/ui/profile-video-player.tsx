@@ -25,7 +25,7 @@ import Image from "next/image";
 import { VideoSeekBar } from "@/components/ui/video-seek-bar";
 import { cn } from "@/lib/utils";
 import { formatVideoProgress } from "@/lib/media/video-time";
-import { getVariantUrl } from "@/lib/utils/media-url";
+import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { useGlobalMute } from "@/hooks/use-global-mute";
 import { useVideoPlaybackManager } from "@/contexts/video-playback-context";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
@@ -102,7 +102,7 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
     const [fullscreenError, setFullscreenError] = useState(false);
     const videoError = showErrorState && errorSource === src;
     const mediaFitClassName = getMediaFitClassName(mediaFit);
-    const nativePoster = poster ? getVariantUrl(poster, "card") : undefined;
+    const nativePoster = poster ? normalizeMediaUrl(poster) : undefined;
 
     useEffect(() => {
       const video = localVideoRef.current;

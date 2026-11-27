@@ -444,6 +444,9 @@ export default function EditListingPage() {
         ? coerceListingAttributes(category, categoryAttributes)
         : {};
 
+      // The terms first: if accepting fails, nothing has been uploaded.
+      if (needsTerms) await acceptTerms();
+
       // Upload photos, video, and video cover in parallel
       const [newLogoUrls, newPhotoUrls, newVideoUrl, newCoverUrls] = await settleMediaUploads([
         uploadListingImages({ files: newLogoFile, area: "listing_logo", field: "logo_url" }).then(
@@ -496,7 +499,6 @@ export default function EditListingPage() {
       setSubmitProgress("Saving listing...");
       setUploadStatuses((c) => ({ ...c, saving: "uploading" }));
 
-      if (needsTerms) await acceptTerms();
       // Submit via server-side API route for full validation & ownership check
       const res = await fetch(`/api/listings/${id}`, {
         method: "PUT",

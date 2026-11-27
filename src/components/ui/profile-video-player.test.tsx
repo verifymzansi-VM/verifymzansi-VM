@@ -95,18 +95,18 @@ describe("ProfileVideoPlayer", () => {
     expect(video).toHaveClass("object-contain");
   });
 
-  it("uses a responsive R2 variant for the native video poster", () => {
+  it("serves the native video poster through the media proxy", () => {
     render(
       <ProfileVideoPlayer
         src="/video.mp4"
         title="Profile clip"
-        poster="/api/media/serve/media/business/photo.webp"
+        poster="media/0f6c2a8e-1b7d-4e0a-9a51-3c2d9e7b1a01"
       />
     );
 
     expect(screen.getByLabelText("Profile clip video")).toHaveAttribute(
       "poster",
-      "/api/media/serve/media/business/photo.w800.webp"
+      "/api/media/serve/media/0f6c2a8e-1b7d-4e0a-9a51-3c2d9e7b1a01"
     );
   });
 

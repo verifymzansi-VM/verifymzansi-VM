@@ -153,6 +153,7 @@ describe("EditListingPage", () => {
   let fetchMock: Mock;
   let termsLoaded: () => Promise<void>;
   let serveAcceptedAt: (value: string | null) => void;
+  let terms: Mock;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -191,6 +192,7 @@ describe("EditListingPage", () => {
 
     ({
       api: fetchMock,
+      terms,
       termsLoaded,
       serveAcceptedAt,
     } = installFoundationPostFetch(
@@ -208,6 +210,7 @@ describe("EditListingPage", () => {
     render(<EditListingPage />);
     await termsLoaded();
     await waitFor(() => expect(screen.getByDisplayValue("Used iPhone 15")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "Save as template" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText(POSTING_TERMS_TICK)).toBeNull();
   });
 
@@ -241,6 +244,30 @@ describe("EditListingPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/dashboard/listings"));
     expectTermsAcceptedBeforeSave("/api/listings/listing-1");
+  });
+
+  it("when accepting the terms is refused, says so and uploads and saves nothing", async () => {
+    serveAcceptedAt(null);
+    render(<EditListingPage />);
+    await termsLoaded();
+    await waitFor(() => expect(screen.getByDisplayValue("Used iPhone 15")).toBeInTheDocument());
+    // A new logo waits to be uploaded.
+    fireEvent.click(screen.getByRole("button", { name: "Listing logo (optional)" }));
+    fireEvent.click(screen.getByLabelText(POSTING_TERMS_TICK));
+    terms.mockResolvedValueOnce({ ok: false, status: 503, json: async () => ({}) });
+    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+    expect(
+      await screen.findByText(
+        "The posting terms could not be accepted. Refresh this form and try again."
+      )
+    ).toBeInTheDocument();
+    expect(terms).toHaveBeenCalledWith(
+      "/api/foundation/posting-terms",
+      expect.objectContaining({ method: "POST" })
+    );
+    // No upload and no save request.
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
   });
 
   it("does not claim a saved update was submitted without server confirmation", async () => {
