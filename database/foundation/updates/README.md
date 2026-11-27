@@ -82,8 +82,8 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Package running in the posting allowance, 26 November 2026
 
-`20261126202833_allowance_says_package_running.sql` is pending (see the applied
-register). Launch checklist item 80.
+`20261126202833_allowance_says_package_running.sql` was applied on 27 November
+2026 at 04:53 UTC (see the applied register). Launch checklist item 80.
 
 - **One key added.** `api.get_my_frontend_posting_allowance_v2`, which every
   post form already reads, also answers `package_running` (boolean): true while
@@ -8932,6 +8932,9 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
 - `20261126062428_catalogue_filters_in_database.sql`: applied 2026-11-26 23:48
   UTC; apply-first; production fingerprint after it (fingerprint.sql, read-only,
   23:5x UTC) matched the full replay (except the known schema grant difference)
-- `20261126202833_allowance_says_package_running.sql`: pending; website-first
+- `20261126202833_allowance_says_package_running.sql`: applied 2026-11-27 04:53
+  UTC; website-first; production fingerprint after it (fingerprint.sql,
+  read-only, 04:53 UTC) matched the full replay (except the known schema grant
+  difference)
 
 <!-- applied-register:end -->
