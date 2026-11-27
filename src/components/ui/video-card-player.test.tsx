@@ -53,7 +53,7 @@ vi.mock("@/hooks/use-global-mute", () => ({
   useGlobalMute: useGlobalMuteMock,
 }));
 
-const { VideoCardPlayer } = await import("./video-card-player");
+const { RetryOnceImage, VideoCardPlayer } = await import("./video-card-player");
 
 /** Makes exactly the given media queries match (all others do not). */
 function setMatchingMediaQueries(queries: string[]) {
@@ -576,19 +576,97 @@ describe("VideoCardPlayer", () => {
     expect(screen.queryByTestId("media-fallback")).toBeNull();
   });
 
-  it("renders the provided fallback when an image fails to load", () => {
-    render(
-      <VideoCardPlayer
-        src="https://example.com/photo.jpg"
-        alt="Photo"
-        mode="ambient"
-        fallback={<div>Fallback media</div>}
-      />
-    );
+  describe("a picture that fails is asked for once more before the stand-in", () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
 
-    fireEvent.error(screen.getByAltText("Photo"));
+    it("recovers when the second request works", () => {
+      render(
+        <VideoCardPlayer
+          src="https://example.com/photo.jpg"
+          alt="Photo"
+          mode="ambient"
+          fallback={<div>Fallback media</div>}
+        />
+      );
 
-    expect(screen.getByTestId("media-fallback")).toHaveTextContent("Fallback media");
+      fireEvent.error(screen.getByAltText("Photo"));
+      expect(screen.queryByAltText("Photo")).toBeNull();
+      expect(screen.queryByTestId("media-fallback")).toBeNull();
+
+      act(() => vi.advanceTimersByTime(1000));
+
+      expect(screen.getByAltText("Photo")).toHaveAttribute("src", "https://example.com/photo.jpg");
+      expect(screen.queryByTestId("media-fallback")).toBeNull();
+    });
+
+    it("shows the stand-in after the retry fails, and does not try again", () => {
+      render(
+        <VideoCardPlayer
+          src="https://example.com/photo.jpg"
+          alt="Photo"
+          mode="ambient"
+          fallback={<div>Fallback media</div>}
+        />
+      );
+
+      fireEvent.error(screen.getByAltText("Photo"));
+      act(() => vi.advanceTimersByTime(1000));
+      fireEvent.error(screen.getByAltText("Photo"));
+
+      expect(screen.getByTestId("media-fallback")).toHaveTextContent("Fallback media");
+      act(() => vi.advanceTimersByTime(5000));
+      expect(screen.queryByAltText("Photo")).toBeNull();
+      expect(screen.getByTestId("media-fallback")).toBeInTheDocument();
+    });
+
+    it("gives a new picture its own retry when src changes", () => {
+      const onError = vi.fn();
+      const { rerender } = render(
+        <RetryOnceImage src="https://example.com/a.jpg" alt="Photo" onError={onError} />
+      );
+
+      fireEvent.error(screen.getByAltText("Photo"));
+      act(() => vi.advanceTimersByTime(1000));
+      rerender(<RetryOnceImage src="https://example.com/b.jpg" alt="Photo" onError={onError} />);
+
+      fireEvent.error(screen.getByAltText("Photo"));
+      expect(onError).not.toHaveBeenCalled();
+      expect(screen.queryByAltText("Photo")).toBeNull();
+
+      act(() => vi.advanceTimersByTime(1000));
+      expect(screen.getByAltText("Photo")).toHaveAttribute("src", "https://example.com/b.jpg");
+      fireEvent.error(screen.getByAltText("Photo"));
+      expect(onError).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps the showroom Play button usable over the stand-in when a poster fails", () => {
+      const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+      onTestFinished(() => play.mockRestore());
+      render(
+        <VideoCardPlayer
+          src="https://example.com/clip.mp4"
+          posterUrl="https://example.com/poster.jpg"
+          alt="Clip"
+          mode="ambient"
+          showPlaybackControl
+          deferVideoLoadUntilPlay
+          fallback={<div>Fallback media</div>}
+        />
+      );
+
+      fireEvent.error(screen.getByAltText("Clip"));
+      act(() => vi.advanceTimersByTime(1000));
+      fireEvent.error(screen.getByAltText("Clip"));
+
+      expect(screen.getByTestId("media-fallback")).toHaveTextContent("Fallback media");
+      fireEvent.click(screen.getByRole("button", { name: "Play video" }));
+      expect(play).toHaveBeenCalledTimes(1);
+      expect(document.querySelector("video")).toHaveAttribute(
+        "src",
+        "https://example.com/clip.mp4"
+      );
+    });
   });
 
   it("renders the provided fallback when a video cannot be loaded", () => {

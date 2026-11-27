@@ -54,6 +54,7 @@ export const BUSINESS_FIELD_STEPS: FieldSteps = {
 /** Keys after the listing form's aliases (contact_methods → contactMethods, …). */
 export const LISTING_FIELD_STEPS: FieldSteps = {
   ...onStep(1, [
+    "price_mode",
     "price_zar",
     "negotiable",
     "province",

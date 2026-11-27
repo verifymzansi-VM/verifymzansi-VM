@@ -17,6 +17,7 @@ describe("post field steps", () => {
     expect(stepForField("gallery_photos.2", BUSINESS_FIELD_STEPS)).toBe(3);
     expect(stepForField("attributes.property_type", LISTING_FIELD_STEPS)).toBe(0);
     expect(stepForField("images.0", LISTING_FIELD_STEPS)).toBe(2);
+    expect(stepForField("price_mode", LISTING_FIELD_STEPS)).toBe(1);
     expect(stepForField("event_details.ticket_tiers.0.name", TOURISM_FIELD_STEPS)).toBe(1);
     expect(stepForField("category_details.meeting_point", TOURISM_FIELD_STEPS)).toBe(2);
     expect(stepForField("video_thumbnail", TOURISM_FIELD_STEPS)).toBe(3);

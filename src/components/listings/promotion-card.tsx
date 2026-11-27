@@ -1,7 +1,6 @@
 "use client";
 
 import { memo } from "react";
-import { Tag } from "lucide-react";
 import { formatSaShortDate, formatZARShort, saCalendarDaysBetween } from "@/lib/utils/format";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { PosterCardShell } from "@/components/listings/poster-card-shell";
@@ -176,11 +175,6 @@ export const PromotionCard = memo(function PromotionCard({
       disableNativeDrag={disableNativeDrag}
       immersive={immersive}
       feedPlaybackActive={isActive && !isRailDragging}
-      fallback={
-        <div className="flex h-full w-full items-center justify-center text-white/35">
-          <Tag className="h-16 w-16" />
-        </div>
-      }
     />
   );
 });
