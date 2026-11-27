@@ -102,6 +102,7 @@ import {
   type PromotionAdvertiserRecord,
 } from "@/components/listings/promotion-detail-content";
 import { normalizeUserEnteredUrl } from "@/lib/utils/external-url";
+import { businessNumber } from "@/lib/utils/phone";
 import {
   TOURISM_FIELD_STEPS,
   stepForField,
@@ -3300,9 +3301,11 @@ function CreateTourismContent() {
                               placeholder="071 234 5678"
                               aria-invalid={!!fieldErrors.phone}
                             />
-                            {fieldErrors.phone && (
+                            {fieldErrors.phone ? (
                               <p className="inline-form-error">{fieldErrors.phone}</p>
-                            )}
+                            ) : businessNumber(phone)?.kind === "landline" ? (
+                              <p className="text-sm text-muted-foreground">Landline: calls only</p>
+                            ) : null}
                           </div>
                           <div className="space-y-2">
                             <Label

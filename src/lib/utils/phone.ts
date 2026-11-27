@@ -73,3 +73,29 @@ export function buildAccountPhoneFields(phone: string | null | undefined): {
 
 // Compatibility alias for older call sites during the terminology rollout.
 export const buildSellerPhoneFields = buildAccountPhoneFields;
+
+// One rule for a business's own numbers, the same as the database's
+// internal.business_contact_number: a landline has a 01x-05x area code, a
+// mobile starts 06x, 071-074, 076-079 or 081-084, and a call-only number is
+// 087 (VoIP), 0800 (toll-free) or 0860/0861 (share-call), never another 080 or
+// 086 range. Calls take any of these; WhatsApp takes a mobile only. Spaces,
+// brackets and dashes are ignored, and the number may start 0, 27 or +27.
+const BUSINESS_LANDLINE = /^\+27[1-5][0-9]{8}$/;
+const BUSINESS_MOBILE = /^\+27(?:6[0-9]|7[1-46-9]|8[1-4])[0-9]{7}$/;
+const BUSINESS_NON_GEOGRAPHIC = /^\+278(?:7[0-9]|00|6[01])[0-9]{6}$/;
+
+/** Shown when a number that is not a mobile is given for WhatsApp. */
+export const WHATSAPP_NEEDS_MOBILE = "WhatsApp needs a mobile number.";
+
+/** A business number in +27 form with its kind, or null. Calls take any kind;
+ * WhatsApp takes a mobile only. */
+export function businessNumber(
+  value: string | null | undefined
+): { number: string; kind: "landline" | "mobile" | "non-geographic" } | null {
+  const match = /^(?:0|27|[+]27)([1-9][0-9]{8})$/.exec((value ?? "").replace(/[ ()-]/g, ""));
+  const number = match ? `+27${match[1]}` : "";
+  if (BUSINESS_MOBILE.test(number)) return { number, kind: "mobile" };
+  if (BUSINESS_LANDLINE.test(number)) return { number, kind: "landline" };
+  if (BUSINESS_NON_GEOGRAPHIC.test(number)) return { number, kind: "non-geographic" };
+  return null;
+}
