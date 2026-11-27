@@ -6,7 +6,7 @@ import type { ClaimView } from "../services/queue-claims";
 import { claimTypeOf } from "../admin/moderation-items";
 import { getContentEditChanges } from "../content-edit-diff";
 import { FoundationStaffReadError } from "./staff-read";
-import { areaLabel, restoredArea, restoredContentType } from "./areas";
+import { areaLabel, restoredArea, restoredContentType, type FoundationArea } from "./areas";
 import { readStaffCopyFacts } from "./staff-copy-facts";
 import { videoLimitSeconds } from "../media/video-length";
 import { createLogger } from "../utils/logger";
@@ -175,10 +175,14 @@ async function readStaffVideoLengths(api: FoundationAuthenticatedApi, postIds: s
   }
   return lengths;
 }
-export async function readStaffModerationQueue(api: FoundationAuthenticatedApi, accountId: string) {
+export async function readStaffModerationQueue(
+  api: FoundationAuthenticatedApi,
+  accountId: string,
+  area?: FoundationArea
+) {
   const result = await api.rpc(
     "get_frontend_staff_moderation_queue",
-    { p_limit: 50 },
+    { ...(area ? { p_area: area } : {}), p_limit: 50 },
     { get: false }
   );
   if (result.error)

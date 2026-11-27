@@ -1,4 +1,6 @@
 import { Suspense } from "react";
+import { redirect } from "next/navigation";
+import { staffVerifyHref } from "@/lib/auth/staff-mfa-links";
 import { requireStaff } from "@/lib/auth/require-staff";
 import { roleHasCapability } from "@/lib/auth/admin-access";
 import { HOME_TITLES } from "@/lib/admin/nav";
@@ -18,7 +20,6 @@ import {
   TeamPanel,
 } from "@/components/admin/home/decision-panels";
 import { TrafficPanel, TrafficPanelSkeleton } from "@/components/admin/home/traffic-panel";
-import { ShowroomFairnessPanel } from "@/components/admin/home/showroom-fairness-panel";
 import { attentionItems } from "@/components/admin/home/attention";
 import { HomeBanner } from "@/components/admin/home/home-banner";
 
@@ -34,9 +35,26 @@ const DESCRIPTIONS = {
   admin: "Platform health, the team, and everything waiting for a decision.",
 } as const;
 
+/** True when a summary section the viewer should see could not be read. */
+function hasUnreadSection(dashboard: NonNullable<Awaited<ReturnType<typeof getStaffDashboard>>>) {
+  const sections = (
+    ["shift", "decisions", "restrictions", "dsar", "platform", "retention"] as const
+  ).some((key) => key in dashboard && dashboard[key] === null);
+  // The decisions card is filled in parts: a failed appeals or staff-roles read
+  // leaves its own figure out (shown as "Unavailable"), so count it as missing.
+  const { decisions } = dashboard;
+  const parts = Boolean(
+    decisions &&
+    (decisions.appeals_open === undefined || decisions.role_changes_pending === undefined)
+  );
+  return sections || parts;
+}
+
 export default async function AdminHomePage() {
   const { user, role } = await requireStaff();
   const dashboard = await getStaffDashboard(user.id);
+  // A reader whose authenticator code is too old is sent to confirm it, like the area pages.
+  if (dashboard?.needs_reverify) redirect(staffVerifyHref("/staff/two-step?confirm=1", "/admin"));
   const hasSideColumn = role === "admin" || (dashboard !== null && "oversight" in dashboard);
   const name = user.user_metadata?.display_name ?? user.user_metadata?.full_name;
   const firstName = typeof name === "string" && name.trim() ? name.trim().split(/\s+/)[0] : null;
@@ -48,6 +66,7 @@ export default async function AdminHomePage() {
         description={DESCRIPTIONS[role]}
         firstName={firstName}
         items={dashboard ? attentionItems(dashboard, role) : null}
+        incomplete={dashboard ? hasUnreadSection(dashboard) : false}
       />
 
       {!dashboard ? (
@@ -157,9 +176,6 @@ export default async function AdminHomePage() {
             <>
               <Suspense fallback={<TrafficPanelSkeleton />}>
                 <TrafficPanel />
-              </Suspense>
-              <Suspense fallback={null}>
-                <ShowroomFairnessPanel />
               </Suspense>
             </>
           )}
