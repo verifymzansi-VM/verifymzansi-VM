@@ -1411,6 +1411,19 @@ describe("CreateListingPage", () => {
       useAuthMock.mockReturnValue({ user: null, profile: null, isLoading: false });
     });
 
+    it("starts a fresh form when the address no longer names the copy, keeping nothing from it", async () => {
+      serveCopy(draft("electronics", { device_type: "Smartphone", brand: "Apple" }));
+      const { rerender } = render(<CreateListingPage />);
+      expect(await screen.findByText(/Copy of .Used iPhone 15/)).toBeInTheDocument();
+      // The same page instance, now opened without a copy (client navigation).
+      vi.mocked(useSearchParams).mockReturnValue(
+        new URLSearchParams("") as unknown as ReturnType<typeof useSearchParams>
+      );
+      rerender(<CreateListingPage />);
+      await waitFor(() => expect(screen.queryByText(/Copy of .Used iPhone 15/)).toBeNull());
+      expect(screen.queryByText(/Same title as the post you copied/)).toBeNull();
+    });
+
     it("opens the copy on the last step with the note, and submits it for review", async () => {
       serveCopy(draft("electronics", { device_type: "Smartphone", brand: "Apple" }));
       render(<CreateListingPage />);

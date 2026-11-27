@@ -31,7 +31,7 @@ const request = z
     max_price_cents: z.number().int().min(0).max(999999999999).optional(),
     attributes: z.record(key, z.union([z.boolean(), z.string().max(200), range])).optional(),
     cursor: cursor.optional(),
-    limit: z.number().int().min(1).max(48).optional(),
+    limit: z.number().int().min(1).max(200).optional(),
     offset: z.number().int().min(0).max(SEARCH_MAX_OFFSET).optional(),
     post_id: z.uuid().optional(),
     business_type: foundationBusinessTypeSchema.optional(),
@@ -41,7 +41,21 @@ const request = z
     // vehicle make (20261121131915_business_storefront.sql).
     storefront: z.uuid().optional(),
     make: z.string().min(1).max(80).optional(),
+    // One organisation's supported posts, one of its programmes or its
+    // sponsored posts; posts of one kind; ids only, up to 200
+    // (20261126062428_catalogue_filters_in_database.sql).
+    organisation: z
+      .string()
+      .max(60)
+      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+      .optional(),
+    programme: z.uuid().optional(),
+    sponsored: z.literal(true).optional(),
+    kind: z.enum(["listing", "business", "event"]).optional(),
+    ids_only: z.literal(true).optional(),
   })
+  .refine((value) => (value.limit ?? 0) <= 48 || value.ids_only)
+  .refine((value) => (!value.programme && !value.sponsored) || Boolean(value.organisation))
   .refine((value) => !value.make || Boolean(value.storefront))
   .refine((value) => value.offset === undefined || !value.cursor)
   .refine(
@@ -123,4 +137,26 @@ export async function searchFoundationPosts(
   const { data, error } = await api.rpc("search_posts", buildFoundationPostSearch(input));
   if (error) throw new Error("Foundation search unavailable");
   return parseFoundationPostSearch(data);
+}
+
+const idPage = z
+  .strictObject({
+    items: z.array(z.uuid()).max(200),
+    sort: page.shape.sort,
+    total: count,
+    facets: page.shape.facets,
+    next_cursor: cursor.nullable(),
+  })
+  .refine((value) => new Set(value.items).size === value.items.length);
+/** The ids of a search's results in its order (ids_only, up to 200 a call),
+ * and its total. */
+export async function searchFoundationPostIds(api: FoundationPublicApi, input: object) {
+  const { data, error } = await api.rpc(
+    "search_posts",
+    buildFoundationPostSearch({ ...input, ids_only: true })
+  );
+  if (error) throw new Error("Foundation search unavailable");
+  const result = idPage.safeParse(data);
+  if (!result.success) throw new Error("Invalid foundation search response");
+  return { ids: result.data.items, total: result.data.total };
 }

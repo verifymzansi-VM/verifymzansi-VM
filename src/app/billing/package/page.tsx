@@ -1,6 +1,10 @@
 import { PackageCheckout, type PackageCheckoutBlock } from "./package-checkout";
-import { readPackagesOnSale } from "@/lib/foundation/slot-package-offer";
+import {
+  readFoundationSlotPackageOffer,
+  type FoundationSlotPackageOffer,
+} from "@/lib/foundation/slot-package-offer";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
+import { createFoundationServiceApi } from "@/lib/foundation/service-api";
 import { readFoundationMySlotPackage } from "@/lib/foundation/billing-runtime";
 import { readOnlinePaymentMaxCents } from "@/lib/foundation/payment-limits";
 import { readMyUnpaidIndividualInvoices } from "@/lib/foundation/customer-invoices";
@@ -44,6 +48,18 @@ async function unpaidIndividualInvoices(): Promise<string[]> {
   }
 }
 
+/** The offer on sale; null while the owner's switch is off; "unavailable"
+ * when it cannot be read (the page then says so, and nothing is sold). */
+async function packageOffer(): Promise<FoundationSlotPackageOffer | null | "unavailable"> {
+  try {
+    const value = await readFoundationSlotPackageOffer(createFoundationServiceApi());
+    return value.on_sale && value.plans.length > 0 ? value : null;
+  } catch (error) {
+    logDegradedRead(log, "Package offer unavailable", error);
+    return "unavailable";
+  }
+}
+
 /**
  * The Multi-listing checkout (roadmap P4a). Always shown (launch checklist
  * item 71: no visible link leads to a 404). While the owner's sales switch in
@@ -56,7 +72,8 @@ export default async function PackageCheckoutPage({
 }: {
   searchParams: Promise<{ slots?: string; days?: string }>;
 }) {
-  const offer = await readPackagesOnSale();
+  const read = await packageOffer();
+  const offer = read === "unavailable" ? null : read;
   const { slots, days } = await searchParams;
   const typed = Number(slots);
   const initialSlots =
@@ -81,6 +98,7 @@ export default async function PackageCheckoutPage({
       block={block}
       onlineMaxCents={onlineMaxCents}
       unpaidInvoices={unpaidInvoices}
+      offerUnavailable={read === "unavailable"}
     />
   );
 }

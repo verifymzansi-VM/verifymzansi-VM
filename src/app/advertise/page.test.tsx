@@ -111,15 +111,16 @@ describe("AdvertisePage", () => {
 
     expect(screen.getByText("Can I cancel?")).toBeInTheDocument();
     for (const rule of [
-      "so the 7-day cooling-off does not apply and a change of mind is not a reason for a refund",
+      "Apart from your first purchase, a change of mind is not a reason for a refund: before you pay, you agree that your slot starts as soon as your payment is confirmed, so the 7-day cooling-off does not apply.",
+      "Your first purchase: if you email billing@verifymzansi.com from your account's email address within 5 business days after its payment is confirmed, we cancel it and refund it in full.",
       "A rejected post keeps its slot: correct it and submit it again.",
       "If we wrongly reject a post, a paid slot does not work, or the site is down for more than 24 hours in a row, we first add the days you lost; if you still ask, we refund a reasonable part of the price for those days.",
-      "If you are an individual (sole traders included), you can cancel a slot by emailing billing@verifymzansi.com from your account's email address.",
-      "The slot runs for 20 more business days, then we credit its unused whole days, less a R50 fee; if that is R0 or less, nothing is paid, so cancelling a 30-day slot usually returns nothing.",
-      "Closing your account cancels all your slots.",
+      "If you are an individual (sole traders included), you can cancel a slot or a Multi-listing package by emailing billing@verifymzansi.com from your account's email address.",
+      "It runs for 20 more business days, then we credit its unused whole days, less a R50 fee; if that is R0 or less, nothing is paid, so cancelling a 30-day slot usually returns nothing.",
+      "Closing your account counts as a request to cancel all your slots and your package.",
       "Companies and other organisations are not refunded for unused days.",
       "Billing errors and duplicate payments are refunded in full once we have checked them.",
-      "Refunds go to the account that paid, within 30 days after we approve them.",
+      "Refunds are paid to the original payment method, through our payment provider's refund service, or by EFT into a bank account in your own name, within 30 days after we approve them.",
       "Your rights under the Consumer Protection Act are not affected.",
     ])
       expect(text).toContain(rule);
