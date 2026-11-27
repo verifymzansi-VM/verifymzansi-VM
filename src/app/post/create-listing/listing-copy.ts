@@ -5,6 +5,7 @@
 import type { ListingCategory, ListingCondition } from "@/types/enums";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { DEFAULT_LISTING_CONTACT_METHODS, withListingEnquiry } from "@/lib/forms/listing-form";
+import { listingPriceModeFromRow } from "@/lib/domains/listings/price-form";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -27,6 +28,7 @@ export function listingCopyFields(row: Record<string, unknown>) {
       typeof row.price_cents === "number" && row.price_cents > 0
         ? String(row.price_cents / 100)
         : "",
+    priceMode: listingPriceModeFromRow(row),
     negotiable: row.price_negotiable === true,
     category: text(row.category) as ListingCategory | "",
     condition: (text(row.condition) || text(attributes.condition)) as ListingCondition | "",

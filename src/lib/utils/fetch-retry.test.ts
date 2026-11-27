@@ -205,4 +205,27 @@ describe("fetchWithRetry", () => {
     expect(vi.getTimerCount()).toBe(0);
     expect(fetch).toHaveBeenCalledTimes(1);
   });
+
+  it("sends each attempt through a custom fetcher and keeps the retry on network errors", async () => {
+    const mockResponse = new Response("ok", { status: 200 });
+    const fetcher = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValueOnce(mockResponse);
+
+    const promise = fetchWithRetry(
+      "/api/upload",
+      { method: "POST" },
+      undefined,
+      undefined,
+      fetcher
+    );
+    await vi.runAllTimersAsync();
+
+    expect(await promise).toBe(mockResponse);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher.mock.calls[0][1]).toMatchObject({ method: "POST" });
+    expect(fetcher.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+    expect(fetch).not.toHaveBeenCalled();
+  });
 });

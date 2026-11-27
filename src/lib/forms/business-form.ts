@@ -6,14 +6,12 @@ import {
 import type { BusinessDetails } from "@/types/business-details";
 import type { BusinessType } from "@/types/enums";
 import { isValidUserEnteredUrl } from "@/lib/utils/external-url";
-
-const SA_PHONE_REGEX = /^(\+27|0)[6-8][0-9]{8}$/;
+import { businessNumber, WHATSAPP_NEEDS_MOBILE } from "@/lib/utils/phone";
 
 export interface BusinessFormValues {
   businessType: BusinessType | "";
   businessDetails: BusinessDetails | null;
   storeNumber: string;
-  serviceAreasInput: string;
   mapDirections: string;
   phone: string;
   whatsapp: string;
@@ -22,13 +20,6 @@ export interface BusinessFormValues {
   socialInstagram: string;
   socialTwitter: string;
   socialTiktok: string;
-}
-
-export function parseServiceAreas(serviceAreasInput: string): string[] {
-  return serviceAreasInput
-    .split(",")
-    .map((area) => area.trim())
-    .filter(Boolean);
 }
 
 function validateDetailsField(
@@ -82,13 +73,6 @@ export function validateBusinessForm(values: BusinessFormValues): Record<string,
   }
 
   if (
-    values.businessType === "mobile_service" &&
-    parseServiceAreas(values.serviceAreasInput).length === 0
-  ) {
-    errors.service_areas = "Add at least one service area.";
-  }
-
-  if (
     values.businessType &&
     ["mall_store", "standalone_shop", "home_business", "market_stall"].includes(
       values.businessType
@@ -110,13 +94,13 @@ export function validateBusinessForm(values: BusinessFormValues): Record<string,
     }
   }
 
-  if (values.phone && !SA_PHONE_REGEX.test(values.phone.trim())) {
+  if (values.phone && !businessNumber(values.phone.trim())) {
     errors.phone = "Enter a valid South African number.";
   }
 
-  if (values.whatsapp && !SA_PHONE_REGEX.test(values.whatsapp.trim())) {
-    errors.whatsapp = "Enter a valid South African WhatsApp number.";
-  }
+  const whatsapp = values.whatsapp ? businessNumber(values.whatsapp.trim()) : undefined;
+  if (whatsapp === null) errors.whatsapp = "Enter a valid South African WhatsApp number.";
+  else if (whatsapp && whatsapp.kind !== "mobile") errors.whatsapp = WHATSAPP_NEEDS_MOBILE;
 
   if (values.website && !isValidUserEnteredUrl(values.website)) {
     errors.website = "Enter a valid website URL.";

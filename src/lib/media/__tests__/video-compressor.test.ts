@@ -52,6 +52,14 @@ vi.mock("@ffmpeg/util", () => ({
   fetchFile: mockFetchFile,
 }));
 
+// Header reads used only when the <video> element gives no size.
+const { mockHeaderSeconds, mockCompatibleTracks } = vi.hoisted(() => ({
+  mockHeaderSeconds: vi.fn(async (): Promise<number | null> => null),
+  mockCompatibleTracks: vi.fn(async () => true),
+}));
+vi.mock("@/lib/media/video-length", () => ({ readVideoBlobSeconds: mockHeaderSeconds }));
+vi.mock("@/lib/media/mp4-compatibility", () => ({ hasCompatibleMp4Tracks: mockCompatibleTracks }));
+
 // ---------------------------------------------------------------------------
 // Mock the <video> element used by readVideoDimensions (private helper inside
 // video-compressor.ts).  jsdom has no real media decoding, so we simulate
@@ -88,6 +96,8 @@ beforeEach(() => {
   mockExec.mockResolvedValue(0);
   mockWriteFile.mockResolvedValue(undefined);
   mockMount.current = undefined;
+  mockHeaderSeconds.mockResolvedValue(null);
+  mockCompatibleTracks.mockResolvedValue(true);
 
   vi.stubGlobal(
     "fetch",
@@ -438,5 +448,54 @@ describe("compressVideo", () => {
     const result = await compressVideo(file, { forceTranscode: true });
     expect(result.skipped).toBe(true);
     expect(mockUnmount).toHaveBeenCalledWith("/upload");
+  });
+
+  describe("when the <video> element gives no size (a hidden tab)", () => {
+    beforeEach(() => {
+      mockVideoMeta = { width: 0, height: 0, duration: 0 };
+    });
+
+    it("skips a compatible low-bitrate MP4 whose header gives its length", async () => {
+      mockHeaderSeconds.mockResolvedValue(30); // 3 MB over 30 s is about 0.8 Mbps
+      const file = fakeFile(3 * 1024 * 1024);
+
+      const result = await compressVideo(file);
+
+      expect(result.skipped).toBe(true);
+      expect(result.file).toBe(file);
+      expect(mockLoad).not.toHaveBeenCalled();
+    });
+
+    it("still converts an MP4 over the 50 MB stored-file cap", async () => {
+      mockHeaderSeconds.mockResolvedValue(10_000); // low bitrate, but too large to store
+      mockMount.current = vi.fn(async () => true);
+      const file = fakeFile(10);
+      Object.defineProperty(file, "size", { value: 50 * 1024 * 1024 + 1 });
+
+      const result = await compressVideo(file);
+
+      expect(result.skipped).toBe(false);
+      expect(mockExec).toHaveBeenCalled();
+    });
+
+    it("still converts when the bitrate is high or the length is unknown", async () => {
+      mockHeaderSeconds.mockResolvedValueOnce(5); // 10 MB over 5 s is 16 Mbps
+      expect((await compressVideo(fakeFile(10 * 1024 * 1024))).skipped).toBe(false);
+
+      mockHeaderSeconds.mockResolvedValueOnce(null);
+      expect((await compressVideo(fakeFile(3 * 1024 * 1024))).skipped).toBe(false);
+      expect(mockExec).toHaveBeenCalledTimes(2);
+    });
+
+    it("still converts an MP4 whose tracks are not H.264/AAC, and never skips a forced conversion", async () => {
+      mockHeaderSeconds.mockResolvedValue(30);
+      mockCompatibleTracks.mockResolvedValueOnce(false);
+      expect((await compressVideo(fakeFile(3 * 1024 * 1024))).skipped).toBe(false);
+
+      expect(
+        (await compressVideo(fakeFile(3 * 1024 * 1024), { forceTranscode: true })).skipped
+      ).toBe(false);
+      expect(mockExec).toHaveBeenCalledTimes(2);
+    });
   });
 });

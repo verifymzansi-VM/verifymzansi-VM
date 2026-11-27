@@ -108,6 +108,19 @@ function activity(category: string, input: string | undefined, required = false)
   if (!row) throw new RestoredPostInputError("Choose a valid activity for this category");
   return row.key;
 }
+/** The seller's explicit price choice. Without one (older callers) an amount
+ * is kept and zero reads as Free, or as "Salary not provided" for a job. */
+function restoredListingPrice(
+  category: string,
+  priceZar: number,
+  mode: "amount" | "free" | "on_request" | undefined
+) {
+  if (mode === "free" || mode === "on_request") return { mode };
+  if (priceZar > 0)
+    return { mode: "amount" as const, amount_cents: parseAttributeMoney(String(priceZar)) };
+  if (mode === "amount") throw new RestoredPostInputError("Enter a valid price");
+  return { mode: category === "jobs_services" ? ("on_request" as const) : ("free" as const) };
+}
 /** This normalized command is accepted only through a server-attested stage.
  * The database still derives ownership, funding, publication and verification.
  * All fields are existing form assertions; none can confer a role or badge. */
@@ -134,10 +147,7 @@ export function buildRestoredPostInput(
         field.unit === "ZAR_cents" ? parseAttributeMoney(String(value)) : value;
     }
     const attributes = parseListingAttributes(data.category, canonical);
-    const price =
-      data.price_zar > 0
-        ? { mode: "amount" as const, amount_cents: parseAttributeMoney(String(data.price_zar)) }
-        : { mode: data.category === "jobs_services" ? ("on_request" as const) : ("free" as const) };
+    const price = restoredListingPrice(data.category, data.price_zar, data.price_mode);
     const terms = { price, negotiable: data.negotiable };
     storeListingPriceTerms(terms, data.category);
     return {

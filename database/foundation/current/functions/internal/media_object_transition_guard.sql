@@ -24,6 +24,10 @@ begin
   if old.duration_ms is not null and new.duration_ms is distinct from old.duration_ms then
     raise exception 'video length is immutable' using errcode = '23514';
   end if;
+  -- So are its upload facts.
+  if old.video_facts is not null and new.video_facts is distinct from old.video_facts then
+    raise exception 'video facts are immutable' using errcode = '23514';
+  end if;
   new.state_changed_at := case when new.state <> old.state then statement_timestamp() else old.state_changed_at end;
   return new;
 end;

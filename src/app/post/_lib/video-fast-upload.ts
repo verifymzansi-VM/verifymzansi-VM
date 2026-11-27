@@ -13,6 +13,36 @@ const uploadedVideos = new WeakMap<
   File,
   Map<string, { promise: Promise<string>; expires: number }>
 >();
+/**
+ * Conversion progress of each video still being prepared, so a submit that
+ * starts after the pick-time preparation can show it. An entry lives only
+ * while its preparation runs and is removed when it settles.
+ */
+const preparationProgress = new Map<
+  File,
+  { percent: number; listeners: Set<(p: number) => void> }
+>();
+
+/** The video's progress on the submit screen: converting first, then sending. */
+export type VideoUploadProgress = {
+  phase: "preparing" | "uploading";
+  percent: number;
+  /** The file this reading is for, so several videos can share one progress bar. */
+  file?: File;
+};
+
+/** How many preparations are still reporting progress (for tests). */
+export function pendingVideoPreparationCount(): number {
+  return preparationProgress.size;
+}
+
+function watchPreparation(file: File, listener: (percent: number) => void): () => void {
+  const entry = preparationProgress.get(file);
+  if (!entry) return () => {};
+  listener(entry.percent);
+  entry.listeners.add(listener);
+  return () => entry.listeners.delete(listener);
+}
 let activeUploads = 0;
 const waitingUploads: Array<() => void> = [];
 
@@ -44,12 +74,20 @@ async function prepareVideoForUpload(file: File): Promise<File> {
     return existing;
   }
 
+  const progress = { percent: 0, listeners: new Set<(p: number) => void>() };
+  preparationProgress.set(file, progress);
+  const onProgress = (percent: number) => {
+    progress.percent = percent;
+    for (const listener of progress.listeners) listener(percent);
+  };
+
   // A video whose length cannot be read is always converted, so that what is
   // uploaded can be measured (an empty track or a trailer can hide it).
   const prepared = readVideoLengthSeconds(file)
     .then((seconds) =>
       compressVideoForUpload(file, {
         requireCompatibleOutput: true,
+        onProgress,
         ...(seconds === null ? { forceConversion: true } : {}),
       })
     )
@@ -64,6 +102,10 @@ async function prepareVideoForUpload(file: File): Promise<File> {
     .catch((error) => {
       preparedVideoUploads.delete(file);
       throw error;
+    })
+    .finally(() => {
+      progress.listeners.clear();
+      if (preparationProgress.get(file) === progress) preparationProgress.delete(file);
     });
   preparedVideoUploads.set(file, prepared);
   return prepared;
@@ -89,12 +131,14 @@ export async function uploadVideoWithFastPath({
   area,
   uploadViaServer,
   maxSeconds = MAX_VIDEO_SECONDS,
+  onProgress,
 }: {
   file: File;
   area: UploadArea;
-  uploadViaServer: (file: File) => Promise<string>;
+  uploadViaServer: (file: File, onUploadProgress?: (percent: number) => void) => Promise<string>;
   /** The post kind's limit: events 60 s, every other video 120 s. */
   maxSeconds?: number;
+  onProgress?: (progress: VideoUploadProgress) => void;
 }): Promise<string> {
   // A readable original over the limit is refused before any conversion work.
   // An unreadable one (MediaRecorder WebM, some MOV) is measured once converted.
@@ -115,12 +159,26 @@ export async function uploadVideoWithFastPath({
   // File identity and upload area prevent unrelated selections sharing results.
   const entry = { promise: Promise.resolve(""), expires: Infinity };
   entry.promise = (async () => {
-    const uploadFile = await prepareVideoForUpload(file);
+    const preparing = prepareVideoForUpload(file);
+    const stopWatching = watchPreparation(file, (percent) =>
+      onProgress?.({ phase: "preparing", percent, file })
+    );
+    let uploadFile: File;
+    try {
+      uploadFile = await preparing;
+    } finally {
+      stopWatching();
+    }
     // What is uploaded must itself have a readable length within the limit.
     assertVideoLength(await readVideoLengthSeconds(uploadFile), maxSeconds);
     // Every video goes through the server-validated /api/media/upload route;
     // the direct-to-storage routes it once tried first are retired.
-    const url = await withUploadSlot(() => uploadViaServer(uploadFile));
+    const url = await withUploadSlot(() => {
+      onProgress?.({ phase: "uploading", percent: 0, file });
+      return uploadViaServer(uploadFile, (percent) =>
+        onProgress?.({ phase: "uploading", percent, file })
+      );
+    });
     if (!url) throw new Error("Video upload returned no URL. Please retry.");
     entry.expires = Date.now() + 30 * 60_000;
     return url;

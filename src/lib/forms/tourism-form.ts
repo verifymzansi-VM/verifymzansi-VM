@@ -5,11 +5,10 @@ import type {
 import { TOURISM_SUBCATEGORY_FIELD_GROUPS } from "@/lib/constants/categories";
 import { eventTimeToIso } from "./event-time";
 import { isValidUserEnteredUrl } from "@/lib/utils/external-url";
+import { businessNumber, WHATSAPP_NEEDS_MOBILE } from "@/lib/utils/phone";
 import { BUSINESS_TEXT_LIMITS } from "@/lib/validations/business-limits";
 
 /* ── Regex ───────────────────────────────────────────────── */
-
-const SA_PHONE_REGEX = /^(\+27|0)[6-8][0-9]{8}$/;
 
 function hasValidMoneyPrecision(value: number): boolean {
   return Math.abs(value * 100 - Math.round(value * 100)) < 0.001;
@@ -219,13 +218,13 @@ function validateStep2(v: TourismFormValues, errors: Record<string, string>) {
   if (v.contactMethods.includes("whatsapp") && !v.whatsapp.trim())
     errors.whatsapp = "Add a WhatsApp number.";
 
-  if (v.phone && !SA_PHONE_REGEX.test(v.phone.trim())) {
+  if (v.phone && !businessNumber(v.phone.trim())) {
     errors.phone = "Enter a valid South African number.";
   }
 
-  if (v.whatsapp && !SA_PHONE_REGEX.test(v.whatsapp.trim())) {
-    errors.whatsapp = "Enter a valid South African WhatsApp number.";
-  }
+  const whatsapp = v.whatsapp ? businessNumber(v.whatsapp.trim()) : undefined;
+  if (whatsapp === null) errors.whatsapp = "Enter a valid South African WhatsApp number.";
+  else if (whatsapp && whatsapp.kind !== "mobile") errors.whatsapp = WHATSAPP_NEEDS_MOBILE;
 }
 
 /** Website, map pin and social links are collected for businesses and events. */

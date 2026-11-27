@@ -2,13 +2,11 @@ import { z } from "zod";
 import { foundationMediaUrl } from "./public-media-url";
 // Only explicit owner assertions are presented. This projection contains no
 // private contact numbers, owner identity, verification or funding authority.
-export const frontendPostPresentationSchema = z.strictObject({
-  business_contacts: z
-    .strictObject({
-      phone: z.string().nullable().optional(),
-      whatsapp: z.string().nullable().optional(),
-    })
-    .optional(),
+const presentationFields = z.strictObject({
+  // Sent only by a database without update 20261127055550 (or one rolled back
+  // to before it) and dropped below: business numbers reach a page only through
+  // the click-to-view route.
+  business_contacts: z.unknown().optional(),
   data: z
     .record(z.string(), z.unknown())
     .refine(
@@ -39,6 +37,9 @@ export const frontendPostPresentationSchema = z.strictObject({
     )
     .max(12),
 });
+export const frontendPostPresentationSchema = presentationFields.transform(
+  ({ business_contacts: _dropped, ...presentation }) => presentation
+);
 export type FrontendPostPresentation = z.infer<typeof frontendPostPresentationSchema>;
 /** Bounded owner layout hints for video; never replace inspected image facts. */
 export function presentedVideoLayout(frontend: FrontendPostPresentation | undefined) {
@@ -55,10 +56,7 @@ export function presentedVideoLayout(frontend: FrontendPostPresentation | undefi
     ? { width, height }
     : null;
 }
-export function presentedFormFields(
-  frontend: FrontendPostPresentation | undefined,
-  business = false
-) {
+export function presentedFormFields(frontend: FrontendPostPresentation | undefined) {
   if (!frontend) return {};
   const data = frontend.data;
   // Explicit mapping prevents a presentation record replacing canonical id,
@@ -90,10 +88,6 @@ export function presentedFormFields(
     poster = frontend.media.find((m) => m.purpose === "poster");
   if (logo) fields.logo_url = foundationMediaUrl(logo.object_key);
   if (poster) fields.video_thumbnail = foundationMediaUrl(poster.object_key);
-  if (business && frontend.business_contacts) {
-    fields.phone = frontend.business_contacts.phone ?? null;
-    fields.whatsapp = frontend.business_contacts.whatsapp ?? null;
-  }
   if (
     data.source_attributes &&
     typeof data.source_attributes === "object" &&
@@ -101,4 +95,24 @@ export function presentedFormFields(
   )
     fields.attributes = data.source_attributes;
   return fields;
+}
+
+// Which channels the click-to-view route can serve for a business
+// (data.business_contact_options, internal.frontend_post_presentation): the
+// business's ticked contact methods with a number the route accepts. Never
+// the numbers.
+const businessContactOptionsSchema = z.strictObject({
+  call: z.boolean(),
+  whatsapp: z.boolean(),
+});
+
+/** Which business numbers a visitor can ask for with "Show number". Without
+ * the database's answer (a reply from before update 20261127055550) none. */
+export function businessContactAvailability(frontend: FrontendPostPresentation | undefined) {
+  const options = businessContactOptionsSchema.safeParse(frontend?.data.business_contact_options);
+  return {
+    phone: options.success && options.data.call,
+    whatsapp: options.success && options.data.whatsapp,
+    email: false,
+  };
 }

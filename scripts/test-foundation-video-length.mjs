@@ -33,10 +33,10 @@
 // Needs a local Docker daemon; it takes no connection settings at all.
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
-import { assertReadOnlyPreflight, executeGrants } from "./lib/foundation-sql-checks.mjs";
+import { executeGrants } from "./lib/foundation-sql-checks.mjs";
 import {
   applyAndProveRollback,
-  assertDriftRefused,
+  checkPreflightBeforeApply,
   buyPackage,
   functionBodyMd5,
   postReviewHelpers,
@@ -59,7 +59,7 @@ const MB = 1024 * 1024;
 const SETUP = { update: UPDATE, label: "vlen", title: "Video length" };
 await runTwoAdminUpdateCheck(SETUP, async (run) => {
   const { database, check, kit, world, admin, admin2 } = run;
-  const { q, json, fails, member, staff, service, preflight } = kit;
+  const { q, json, fails, member, staff, service } = kit;
   const bodyMd5 = (signature) => functionBodyMd5(kit, signature);
   const { row, approveSql } = postReviewHelpers(kit);
 
@@ -148,17 +148,12 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
       oldDraft = draft("listing", videoObject());
     }
   );
-  await check(
-    "preflight: one read-only summary row before the update; early rollback and drift refused",
-    () => {
-      const [summary, ...problems] = preflight();
-      assert.deepEqual(problems, []);
-      assert.equal(summary[0], "summary");
-      assert.match(summary[1], NOT_APPLIED);
-      assertReadOnlyPreflight(database, kit.preflightSql);
-      assertDriftRefused(kit, { label: LABEL, signatures: [GUARD], rows: 2 });
-    }
-  );
+  await checkPreflightBeforeApply(kit, database, check, {
+    label: LABEL,
+    signatures: [GUARD],
+    notApplied: NOT_APPLIED,
+    rows: 2,
+  });
 
   // ------------------------------------------------------------- apply
   await applyAndProveRollback(kit, database, check, {
