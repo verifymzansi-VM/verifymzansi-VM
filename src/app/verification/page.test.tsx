@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, configure, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import VerificationPage from "./page";
 import { useSearchParams } from "next/navigation";
 import type { VerificationStatus } from "@/types/enums";
@@ -147,12 +147,40 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
+/**
+ * Posts a message to the page the way the check's frame does. The page starts
+ * listening in an effect that React flushes just after the frame is on the
+ * screen, so findByTitle can return before the listener exists; a message
+ * posted then is lost. Flushing the pending effects first makes the listener
+ * certain, and the post runs inside act so its updates are applied too.
+ */
+async function postFromCheckFrame(origin: string, data: unknown) {
+  await act(async () => {});
+  await act(async () => {
+    window.dispatchEvent(new MessageEvent("message", { origin, data }));
+  });
+}
+
 /** Takes a photo with the (stand-in) camera on the current step. */
 async function takeCameraPhoto() {
   fireEvent.click(await screen.findByRole("button", { name: /Take test photo/i }));
 }
 
 describe("VerificationPage", () => {
+  // The page is large and the coverage-excluded lane runs five heavy jsdom
+  // files side by side. A wait that takes about 0.3 s alone can take over 1 s
+  // there, so the 1 s default raced the render. 5 s is still a hard bound: an
+  // element that never appears fails the test.
+  let previousAsyncUtilTimeout = 1000;
+  beforeAll(() => {
+    configure((current) => {
+      previousAsyncUtilTimeout = current.asyncUtilTimeout;
+      return { asyncUtilTimeout: 5_000 };
+    });
+  });
+  afterAll(() => {
+    configure({ asyncUtilTimeout: previousAsyncUtilTimeout });
+  });
   let statusResponse: ReturnType<typeof jsonResponse>;
   let otpSendResponse: ReturnType<typeof jsonResponse>;
   let otpVerifyResponse: ReturnType<typeof jsonResponse>;
@@ -1213,16 +1241,9 @@ describe("VerificationPage", () => {
       expect(frame).toHaveAttribute("src", "https://verify.didit.me/s");
       expect(frame).toHaveAttribute("allow", "camera");
       // A message from another origin changes nothing.
-      window.dispatchEvent(
-        new MessageEvent("message", { origin: "https://evil.example", data: "didit:completed" })
-      );
+      await postFromCheckFrame("https://evil.example", "didit:completed");
       expect(screen.queryByText(/Checking your ID/i)).not.toBeInTheDocument();
-      window.dispatchEvent(
-        new MessageEvent("message", {
-          origin: "https://verify.didit.me",
-          data: { type: "didit:completed" },
-        })
-      );
+      await postFromCheckFrame("https://verify.didit.me", { type: "didit:completed" });
       expect(await screen.findByText(/Your ID is verified/i)).toBeTruthy();
       expect(screen.getByRole("button", { name: /Continue to location/i })).toBeTruthy();
     });
@@ -1266,12 +1287,7 @@ describe("VerificationPage", () => {
         }),
         200
       );
-      window.dispatchEvent(
-        new MessageEvent("message", {
-          origin: "https://verify.didit.me",
-          data: { type: "didit:completed" },
-        })
-      );
+      await postFromCheckFrame("https://verify.didit.me", { type: "didit:completed" });
       expect(await screen.findByText(/A person will check your ID/i)).toBeTruthy();
       expect(screen.getByRole("button", { name: /Meanwhile, add your location/i })).toBeTruthy();
       await waitFor(() => expect(statusReads()).toBeGreaterThan(before));
@@ -1290,12 +1306,7 @@ describe("VerificationPage", () => {
       );
       render(<VerificationPage />);
       await screen.findByTitle(/Independent ID check/i);
-      window.dispatchEvent(
-        new MessageEvent("message", {
-          origin: "https://verify.didit.me",
-          data: { type: "didit:completed" },
-        })
-      );
+      await postFromCheckFrame("https://verify.didit.me", { type: "didit:completed" });
       expect(await screen.findByText(/Checking your ID/i)).toBeTruthy();
       await waitFor(() =>
         expect(
@@ -1381,7 +1392,7 @@ describe("VerificationPage", () => {
         await waitFor(() => expect(statusReads()).toBe(before + 3), { timeout: 6_000 });
         expect(screen.getByText(/A person will check your ID/i)).toBeTruthy();
         expect(startButton()).not.toBeInTheDocument();
-      });
+      }, 20_000);
 
       it("shows the right screen once the steps are read again after a failed try", async () => {
         statusResponse = stale();
@@ -1401,7 +1412,7 @@ describe("VerificationPage", () => {
           await screen.findByRole("button", { name: /Start ID check/i }, { timeout: 4_000 })
         ).toBeTruthy();
         expect(screen.queryByText(/A person will check your ID/i)).not.toBeInTheDocument();
-      });
+      }, 20_000);
 
       it("keeps 'a person will check' when the fresh steps say the ID waits for review", async () => {
         statusResponse = stale();

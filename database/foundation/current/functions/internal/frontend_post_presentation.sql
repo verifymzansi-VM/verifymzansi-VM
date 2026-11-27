@@ -7,7 +7,7 @@ CREATE OR REPLACE FUNCTION internal.frontend_post_presentation(p_post uuid)
  STABLE
  SET search_path TO 'pg_catalog'
 AS $function$
- select jsonb_build_object('data',coalesce((select case when p.kind='listing' then d.data-'location_address' else d.data end
+ select jsonb_build_object('data',coalesce((select internal.public_post_presentation_data(p.kind::text,d.data)
       from private.post_presentations d join private.posts p on p.id=d.post_id where d.post_id=p_post),'{}'::jsonb),
    'media',coalesce((select jsonb_agg(jsonb_build_object('purpose',r.purpose,'position',r.position,'object_key',m.object_key,
      'width',m.width,'height',m.height) order by r.purpose,r.position)

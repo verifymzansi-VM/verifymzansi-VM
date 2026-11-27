@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { S3Client, GetObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
+import { FetchHttpHandler } from "@smithy/fetch-http-handler";
 import { createLogger } from "@/lib/utils/logger";
 import { checkLocalRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { isPlaywrightFoundationCopy } from "@/lib/supabase/playwright-mode";
@@ -116,6 +117,10 @@ function getClient(): S3Client {
     // R2 rejects the SDK ≥3.729 default flexible checksums.
     requestChecksumCalculation: "WHEN_REQUIRED",
     responseChecksumValidation: "WHEN_REQUIRED",
+    // Use the Workers' own fetch. The default Node-style handler runs on the
+    // Workers node:http layer, where some reads failed with "Cannot set
+    // property socket of #<IncomingMessage>" and the picture got a 500.
+    requestHandler: new FetchHttpHandler(),
   });
   _configKey = ck;
   return _client;

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { RotateCcw, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,9 @@ interface ResubmitButtonProps {
   contentType?: "listing" | "business" | "promotion";
   /** Optional label override (default: "Resubmit for review") */
   label?: string;
+  /** The post's Edit page, where the member accepts the current posting
+   * terms when resubmitting is refused for them. */
+  editHref?: string;
 }
 
 export function ResubmitButton({
@@ -23,15 +27,18 @@ export function ResubmitButton({
   expectedRevision,
   contentType,
   label = "Resubmit for review",
+  editHref,
 }: ResubmitButtonProps) {
   const actionFields = usePostActionFields();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [termsRequired, setTermsRequired] = useState(false);
   const router = useRouter();
 
   async function handleResubmit() {
     setLoading(true);
     setError(null);
+    setTermsRequired(false);
 
     try {
       const res = await fetch("/api/content/resubmit", {
@@ -47,6 +54,7 @@ export function ResubmitButton({
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         setError(data.error || "Failed to resubmit");
+        setTermsRequired(data.reason === "posting_terms_required");
         return;
       }
 
@@ -77,7 +85,15 @@ export function ResubmitButton({
       </Button>
       {error && (
         <p role="alert" className="inline-form-error">
-          {error}
+          {termsRequired && editHref && !/[.!?]$/.test(error) ? `${error}.` : error}
+          {termsRequired && editHref ? (
+            <>
+              {" "}
+              <Link href={editHref} className="font-semibold underline underline-offset-2">
+                Open Edit to accept them
+              </Link>
+            </>
+          ) : null}
         </p>
       )}
     </div>

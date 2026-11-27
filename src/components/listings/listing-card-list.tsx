@@ -41,6 +41,7 @@ interface ListingCardListProps {
   viewCount?: number;
   likeCount?: number;
   viewerHasLiked?: boolean;
+  /** @deprecated Ignored: paid add-ons were removed (item 37). Kept so existing callers compile. */
   boosted?: boolean;
   featured?: boolean;
   urgent?: boolean;
@@ -67,9 +68,6 @@ export const ListingCardList = memo(function ListingCardList({
   ownerTrustLevel = 0,
   viewCount: _viewCount,
   likeCount = 0,
-  boosted,
-  featured,
-  urgent,
   logoUrl,
   focalX,
   focalY,
@@ -81,7 +79,7 @@ export const ListingCardList = memo(function ListingCardList({
   const isVideo = isVideoMedia ?? isVideoUrl(imageUrl);
   const normalizedImageUrl = imageUrl ? normalizeMediaUrl(imageUrl) : undefined;
   const normalizedLogoUrl = logoUrl ? normalizeMediaUrl(logoUrl) : undefined;
-  const status = getListingCardStatus({ featured, boosted, urgent, createdAt });
+  const status = getListingCardStatus({ createdAt });
   // Same words and format as the post page; quiet when there is no amount and it is not free.
   const describedPrice = describeListingPrice({
     category,
