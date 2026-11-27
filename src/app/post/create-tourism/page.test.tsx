@@ -851,6 +851,55 @@ describe("CreateTourismPage type switch behavior", () => {
     );
   });
 
+  it.each([
+    { shown: false, expected: null, street: "" },
+    { shown: true, expected: "24 Vilakazi Street", street: "24 Vilakazi Street" },
+  ])(
+    "preview shows the street address only when the public-address switch is on (on: $shown)",
+    async ({ shown, expected, street }) => {
+      render(<CreateTourismPage />);
+      await termsLoaded();
+
+      fireEvent.change(screen.getByLabelText("Business Name (Required)"), {
+        target: { value: "Kruger Sunset Lodge" },
+      });
+      fireEvent.change(screen.getByLabelText("Description (Required)"), {
+        target: {
+          value: "A detailed tourism business description with enough content to pass validation.",
+        },
+      });
+      fireEvent.change(screen.getByLabelText("Tourism category (Required)"), {
+        target: { value: "hotel_resort" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Next" }));
+      fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+      fireEvent.click(screen.getByLabelText("Phone Call"));
+      fireEvent.click(screen.getByLabelText("Contact Form"));
+      fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
+      fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
+      fireEvent.change(screen.getByLabelText("Street address"), {
+        target: { value: "24 Vilakazi Street" },
+      });
+      fireEvent.change(screen.getByLabelText("Town"), { target: { value: "Orlando West" } });
+      if (shown) fireEvent.click(screen.getByLabelText("Show my exact visitor address publicly"));
+      fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+      fireEvent.click(screen.getByRole("button", { name: /Add media for Upload photos/i }));
+
+      await waitFor(() => {
+        expect(businessPreviewProps.current).not.toBeNull();
+      });
+      const business = (businessPreviewProps.current as { business: Record<string, unknown> })
+        .business as {
+        location_address: string | null;
+        business_details: { street_address: string };
+      };
+      expect(business.location_address).toBe(expected);
+      expect(business.business_details.street_address).toBe(street);
+    }
+  );
+
   it("marks the event preview card as video media for blob-based uploads", async () => {
     mediaFilesByLabel.set("Upload video", [new File(["video"], "clip.mp4", { type: "video/mp4" })]);
 

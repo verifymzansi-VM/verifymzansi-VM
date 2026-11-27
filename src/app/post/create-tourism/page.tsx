@@ -1633,7 +1633,7 @@ function CreateTourismContent() {
         location_city: city || null,
         location_province: province || null,
         location_town: locationTown || null,
-        location_address: locationAddress || null,
+        location_address: publishAddress ? locationAddress || null : null,
         phone: phone || null,
         whatsapp: whatsapp || null,
         website: website || null,
@@ -1642,7 +1642,7 @@ function CreateTourismContent() {
           locationAddress.trim() && publishAddress ? mapDirections.trim() || null : null,
         business_details: {
           type: "standalone_shop" as const,
-          street_address: locationAddress || "",
+          street_address: publishAddress ? locationAddress || "" : "",
           suburb: locationTown || "",
         },
         layout_template: null,
