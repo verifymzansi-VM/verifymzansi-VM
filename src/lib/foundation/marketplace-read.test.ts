@@ -355,6 +355,36 @@ describe("restored marketplace reads", () => {
     expect(JSON.stringify(result)).not.toContain("+27");
   });
 
+  it("never puts a business number on a public business row, only which ones Show number can serve", () => {
+    const core = card(1, {
+      kind: "business",
+      area: "business",
+      category: "restaurants",
+      price_mode: null,
+      price_cents: null,
+      condition: null,
+    });
+    const presentation = {
+      business_type: "physical",
+      event_window: null,
+      frontend: {
+        data: { website: "https://example.invalid" },
+        media: [],
+        business_contacts: { phone: "031 123 4567", whatsapp: "0821234567" },
+      },
+    };
+    const result = restoredPublicRow(core as never, undefined, presentation as never);
+    expect(result.phone).toBeNull();
+    expect(result.whatsapp).toBeNull();
+    expect(result.contact_available).toEqual({ phone: true, whatsapp: true, email: false });
+    expect(result.website).toBe("https://example.invalid");
+    const text = JSON.stringify(result);
+    expect(text).not.toContain("1234567");
+    expect(text).not.toContain("+27");
+    // A Market listing has no business numbers to ask for.
+    expect(restoredPublicRow(card() as never).contact_available).toBeUndefined();
+  });
+
   it("filters event dates before pagination and never mixes tourism businesses into events", async () => {
     const clock = vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-10-29T12:00:00Z"));
     try {

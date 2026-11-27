@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { Phone, Share2, Flag, Loader2, CheckCircle, Check, type LucideIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { contactPhone, whatsappLink } from "@/lib/utils/contact-links";
+import { contactCallPhone, contactPhone, whatsappLink } from "@/lib/utils/contact-links";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
@@ -111,7 +111,7 @@ function ContactActionsForTarget({
     }
   }
 
-  const phoneNumber = contactPhone(phone);
+  const phoneNumber = contactCallPhone(phone);
   const whatsappUrl = whatsappLink(whatsapp, config.shareTitle, config.sharePath);
   // One number is shown once: on the call button when both buttons use it.
   const whatsappNumberShown = !(

@@ -9,6 +9,11 @@ export const frontendPostPresentationSchema = z.strictObject({
       whatsapp: z.string().nullable().optional(),
     })
     .optional(),
+  // Whether the click-to-view route has a business number per channel; the
+  // numbers themselves never enter the public read.
+  business_contact_options: z
+    .strictObject({ phone: z.boolean(), whatsapp: z.boolean() })
+    .optional(),
   data: z
     .record(z.string(), z.unknown())
     .refine(
@@ -55,10 +60,7 @@ export function presentedVideoLayout(frontend: FrontendPostPresentation | undefi
     ? { width, height }
     : null;
 }
-export function presentedFormFields(
-  frontend: FrontendPostPresentation | undefined,
-  business = false
-) {
+export function presentedFormFields(frontend: FrontendPostPresentation | undefined) {
   if (!frontend) return {};
   const data = frontend.data;
   // Explicit mapping prevents a presentation record replacing canonical id,
@@ -91,10 +93,6 @@ export function presentedFormFields(
     poster = frontend.media.find((m) => m.purpose === "poster");
   if (logo) fields.logo_url = foundationMediaUrl(logo.object_key);
   if (poster) fields.video_thumbnail = foundationMediaUrl(poster.object_key);
-  if (business && frontend.business_contacts) {
-    fields.phone = frontend.business_contacts.phone ?? null;
-    fields.whatsapp = frontend.business_contacts.whatsapp ?? null;
-  }
   if (
     data.source_attributes &&
     typeof data.source_attributes === "object" &&
@@ -102,4 +100,31 @@ export function presentedFormFields(
   )
     fields.attributes = data.source_attributes;
   return fields;
+}
+
+/** A South African number in +27 form, as the click-to-view route serves it
+ * (internal.reveal_post_phone): any landline or mobile for a call, a mobile
+ * only for WhatsApp; null for anything else. */
+export function revealableBusinessNumber(
+  value: string | null | undefined,
+  channel: "call" | "whatsapp"
+) {
+  const number = (value ?? "").replace(/[ ()-]/g, "");
+  const match = /^(?:0|27|[+]27)([1-8][0-9]{8})$/.exec(number);
+  if (!match || (channel === "whatsapp" && !/^[6-8]/.test(match[1]!))) return null;
+  return `+27${match[1]}`;
+}
+
+/** Which business numbers a visitor can ask for with "Show number". Never the
+ * numbers: a public page receives them only from the click-to-view route. */
+export function businessContactAvailability(frontend: FrontendPostPresentation | undefined) {
+  const options = frontend?.business_contact_options;
+  const contacts = frontend?.business_contacts;
+  const phone = options
+    ? options.phone
+    : revealableBusinessNumber(contacts?.phone, "call") !== null;
+  const whatsapp = options
+    ? options.whatsapp
+    : revealableBusinessNumber(contacts?.whatsapp, "whatsapp") !== null;
+  return { phone, whatsapp, email: false };
 }

@@ -90,6 +90,8 @@ const PUBLIC_REQUIRED = [
 const PUBLIC_OPTIONAL = [
   ...FORM_FIELDS,
   ...BUSINESS_STICKERS,
+  // Which business numbers "Show number" can ask for (never the numbers).
+  "contact_available",
   // Totals while SHOW_ENGAGEMENT_TOTALS is on; null while it is off.
   "view_count",
   "like_count",

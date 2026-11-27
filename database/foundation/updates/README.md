@@ -80,6 +80,35 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Business numbers through the click-to-view route, 27 November 2026
+
+`20261127055550_reveal_business_contacts.sql` is pending (see the applied
+register).
+
+- **Business numbers on request.** `internal.reveal_post_phone` (behind the
+  service-only `api.reveal_post_phone`, which the website's "Show number" route
+  `/api/contact/reveal` calls after its Turnstile and per-visitor checks) now
+  answers for a publicly live business (Business and Tourism) with the number
+  the business chose on its form (`post_presentations.contacts`): `phone` for
+  call, `whatsapp` for whatsapp, normalised to `+27` and nine digits. Call
+  accepts any South African number, landline or mobile; WhatsApp only a mobile
+  (06, 07, 08). Spaces, brackets and dashes are ignored; any other value gives
+  null.
+- **Listings and events unchanged**: the owner's verified number, only for a
+  channel the owner chose.
+- **Guard.** The update refuses with 55000 unless `internal.reveal_post_phone`
+  has its reviewed body (md5 `98baceb9be415a5ba2150793263e58e1`) or this
+  update's (`3c71cc40436dfcc792ecea4ed0d0db3f`).
+
+Expand only: one replaced body; no command, argument, grant or table changes.
+ORDER: **apply-first** (apply, then merge): the current website never asks for a
+business number, so nothing changes until the website that shows business
+numbers behind "Show number" is deployed. Read-only preflight (counts only):
+`../preflight/20261127055550_reveal_business_contacts.check.sql`; rollback:
+`../rollback/20261127055550_reveal_business_contacts.down.sql` (puts the earlier
+body back). Behaviour checks:
+`scripts/test-foundation-reveal-business-contacts.mjs`.
+
 ## Public post presentation limited to display fields, 27 November 2026
 
 `20261127044054_public_presentation_display_fields.sql` is pending (see the
@@ -8983,5 +9012,6 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   23:5x UTC) matched the full replay (except the known schema grant difference)
 - `20261126202833_allowance_says_package_running.sql`: pending; website-first
 - `20261127044054_public_presentation_display_fields.sql`: pending; apply-first
+- `20261127055550_reveal_business_contacts.sql`: pending; apply-first
 
 <!-- applied-register:end -->
