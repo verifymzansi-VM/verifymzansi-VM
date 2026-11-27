@@ -4,7 +4,7 @@ import type {
 } from "@/types/tourism-details";
 import { TOURISM_SUBCATEGORY_FIELD_GROUPS } from "@/lib/constants/categories";
 import { eventTimeToIso } from "./event-time";
-import { PHOTO_OR_VIDEO_RULE } from "./video-cover-photo";
+import { PHOTO_OR_VIDEO_RULE, VIDEO_COVER_NEEDED } from "./video-cover-photo";
 import { isValidUserEnteredUrl } from "@/lib/utils/external-url";
 import { BUSINESS_TEXT_LIMITS } from "@/lib/validations/business-limits";
 
@@ -279,10 +279,21 @@ function validateOnlinePresence(v: TourismFormValues, errors: Record<string, str
 
 /* ── Step 3: Media & Review ──────────────────────────────── */
 
-function validateStep3(errors: Record<string, string>, imageCount: number, videoCount: number) {
+function validateStep3(
+  v: TourismFormValues,
+  errors: Record<string, string>,
+  imageCount: number,
+  videoCount: number,
+  videoCoverCount: number
+) {
   // A video alone is enough: its chosen cover frame becomes the first photo.
   if (imageCount < 1 && videoCount < 1) {
     errors.images = PHOTO_OR_VIDEO_RULE;
+    return;
+  }
+  // A tourism business needs a real photo, so a video without a cover frame is not enough.
+  if (v.listingType === "tourism_business" && imageCount < 1 && videoCoverCount < 1) {
+    errors.video_thumbnail = VIDEO_COVER_NEEDED;
   }
 }
 
@@ -297,7 +308,9 @@ export function validateTourismStep(
   values: TourismFormValues,
   /** Number of uploaded images (checked on step 3) */
   imageCount = 0,
-  videoCount = 0
+  videoCount = 0,
+  /** Number of captured video cover frames */
+  videoCoverCount = 0
 ): Record<string, string> {
   const errors: Record<string, string> = {};
 
@@ -316,7 +329,7 @@ export function validateTourismStep(
       validateStep2(values, errors);
       break;
     case 3:
-      validateStep3(errors, imageCount, videoCount);
+      validateStep3(values, errors, imageCount, videoCount, videoCoverCount);
       break;
   }
 

@@ -36,7 +36,11 @@ import { usePostDraftAutosave } from "@/hooks/use-post-draft-autosave";
 import { CategoryPicker } from "@/components/listings/category-picker";
 import { MediaUpload } from "@/components/ui/media-upload";
 import { VideoFrameSelector } from "@/components/ui/video-frame-selector";
-import { PHOTO_OR_VIDEO_RULE, photosWithVideoCover } from "@/lib/forms/video-cover-photo";
+import {
+  PHOTO_OR_VIDEO_RULE,
+  VIDEO_COVER_NEEDED,
+  photosWithVideoCover,
+} from "@/lib/forms/video-cover-photo";
 import { MediaCropPreview, type CropPosition } from "@/components/ui/media-crop-preview";
 import { UploadProgressPanel, type UploadSlotStatus } from "@/components/ui/upload-progress-panel";
 import {
@@ -789,7 +793,7 @@ function CreateListingForm() {
       const photoCount = existingPhotos.length + photoFiles.length;
       const hasVideoCover = videoFile.length > 0 && videoCoverFile.length > 0;
       if (category !== "jobs_services" && photoCount === 0 && !hasVideoCover)
-        errors.images = PHOTO_OR_VIDEO_RULE;
+        errors.images = videoFile.length > 0 ? VIDEO_COVER_NEEDED : PHOTO_OR_VIDEO_RULE;
       if (photoCount > maxPhotos) {
         errors.images = `You can upload up to ${maxPhotos} photos on this plan.`;
       }

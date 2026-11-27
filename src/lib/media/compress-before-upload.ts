@@ -88,7 +88,7 @@ export function compressVideoForUpload(
  * compatible (H.264/AAC) MP4 within the 50 MB stored-file cap. WebM is
  * converted like MOV: browser-made WebM often has no readable length.
  */
-async function videoNeedsConversion(file: Blob): Promise<boolean> {
+export async function videoNeedsConversion(file: Blob): Promise<boolean> {
   return (
     file.type !== "video/mp4" ||
     file.size > MAX_VIDEO_UPLOAD_BYTES ||

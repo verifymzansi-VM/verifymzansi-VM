@@ -972,7 +972,8 @@ function CreateTourismContent() {
         pickupAreas,
       },
       photoFiles.length,
-      videoFiles.length
+      videoFiles.length,
+      videoThumbnailFile.length
     );
 
     // Plan-based media limits

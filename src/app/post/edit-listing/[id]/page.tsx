@@ -358,9 +358,20 @@ export default function EditListingPage() {
     : {};
   const displayExistingPhotos = useMemo(() => normalizeMediaUrls(existingPhotos), [existingPhotos]);
   const displayExistingVideos = useMemo(() => normalizeMediaUrls(existingVideos), [existingVideos]);
-  const previewPhotos = previewPhotoUrls.length > 0 ? previewPhotoUrls : existingPhotos;
   const previewVideos = previewVideoUrls.length > 0 ? previewVideoUrls : existingVideos;
-  const previewVideoThumbnail = previewVideoCoverUrl ?? existingVideoThumbnail;
+  // A one-video slot swaps the saved video for the new pick. The saved video's cover
+  // frame (and the photo made from it) goes with it, so it is never used for the new video.
+  const videoReplaced =
+    newVideoFile.length > 0 &&
+    existingVideos.length > 0 &&
+    Math.max(maxVideos, existingVideos.length) === 1;
+  const keptVideoThumbnail = videoReplaced ? null : existingVideoThumbnail;
+  const keptPhotos =
+    videoReplaced && existingVideoThumbnail
+      ? existingPhotos.filter((url) => url !== existingVideoThumbnail)
+      : existingPhotos;
+  const previewPhotos = previewPhotoUrls.length > 0 ? previewPhotoUrls : keptPhotos;
+  const previewVideoThumbnail = previewVideoCoverUrl ?? keptVideoThumbnail;
   const previewLogo = previewLogoUrl ?? existingLogo;
 
   function validateForm() {
@@ -394,9 +405,9 @@ export default function EditListingPage() {
       errors.contactMethods = "Choose at least one contact method.";
     }
 
-    const totalPhotos = existingPhotos.length + newPhotoFiles.length;
+    const totalPhotos = keptPhotos.length + newPhotoFiles.length;
     const hasVideo = existingVideos.length > 0 || newVideoFile.length > 0;
-    const hasVideoCover = newVideoCoverFile.length > 0 || !!existingVideoThumbnail;
+    const hasVideoCover = newVideoCoverFile.length > 0 || !!keptVideoThumbnail;
     if (category !== "jobs_services" && totalPhotos === 0 && !(hasVideo && hasVideoCover))
       errors.images = hasVideo ? VIDEO_COVER_NEEDED : PHOTO_OR_VIDEO_RULE;
     if (totalPhotos > maxPhotos) {
@@ -487,13 +498,13 @@ export default function EditListingPage() {
       ]);
 
       // Resolve video thumbnail: new upload > existing > null
-      let videoThumbnail: string | null = existingVideoThumbnail;
+      let videoThumbnail: string | null = keptVideoThumbnail;
       if (newCoverUrls.length > 0) {
         videoThumbnail = newCoverUrls[0];
       }
       const finalLogoUrl = newLogoUrls[0] || existingLogo || null;
 
-      const allPhotos = [...existingPhotos, ...newPhotoUrls];
+      const allPhotos = [...keptPhotos, ...newPhotoUrls];
       // A one-video slot swaps the saved video for the new pick instead of adding to it.
       const allVideos = newVideoUrl
         ? Math.max(maxVideos, existingVideos.length) === 1

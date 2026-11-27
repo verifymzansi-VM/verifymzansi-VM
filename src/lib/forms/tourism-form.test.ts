@@ -167,11 +167,18 @@ describe("validateTourismStep tours and experiences", () => {
 
   it("needs at least one photo or video, and a video alone is enough", () => {
     expect(validateTourismStep(3, tour({}), 0, 0).images).toBe("Add at least one photo or video.");
-    expect(validateTourismStep(3, tour({}), 0, 1).images).toBeUndefined();
+    expect(validateTourismStep(3, tour({}), 0, 1, 1).images).toBeUndefined();
     expect(validateTourismStep(3, tour({}), 1, 0).images).toBeUndefined();
     const event = tour({ listingType: "event" });
     expect(validateTourismStep(3, event, 0, 0).images).toBe("Add at least one photo or video.");
     expect(validateTourismStep(3, event, 0, 1).images).toBeUndefined();
+  });
+
+  it("asks a tourism business with a video but no cover frame to pick one", () => {
+    const errors = validateTourismStep(3, tour({}), 0, 1, 0);
+    expect(errors.video_thumbnail).toBe("Add a photo, or a cover image for the video.");
+    expect(validateTourismStep(3, tour({}), 0, 1, 1).video_thumbnail).toBeUndefined();
+    expect(validateTourismStep(3, tour({}), 1, 1, 0).video_thumbnail).toBeUndefined();
   });
 
   it("asks how visitors join without requiring an office address", () => {

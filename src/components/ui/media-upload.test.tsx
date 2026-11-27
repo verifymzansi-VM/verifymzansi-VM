@@ -4,6 +4,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { canBrowserShowVideo } from "@/lib/media/video-decode-client";
 import { MediaUpload } from "./media-upload";
 
+// Fake test bytes cannot be probed; a MOV is converted, an MP4 goes up as it is.
+vi.mock("@/lib/media/compress-before-upload", () => ({
+  videoNeedsConversion: vi.fn(async (file: Blob) => file.type !== "video/mp4"),
+}));
+
 vi.mock("@/hooks/use-toast", () => ({
   useToast: () => ({ toast: vi.fn() }),
 }));
@@ -74,9 +79,9 @@ describe("MediaUpload", () => {
   });
 
   describe("video length (M4.4)", () => {
-    const pick = (name = "clip.mp4") => {
+    const pick = (name = "clip.mp4", type = "video/mp4") => {
       fireEvent.change(screen.getByLabelText("Event video"), {
-        target: { files: [new File(["video"], name, { type: "video/mp4" })] },
+        target: { files: [new File(["video"], name, { type })] },
       });
     };
 
@@ -126,6 +131,22 @@ describe("MediaUpload", () => {
         await screen.findByText("This video format isn't supported. Try saving it as MP4.")
       ).toBeInTheDocument();
       expect(screen.queryByRole("button", { name: "Remove hevc.mp4" })).not.toBeInTheDocument();
+    });
+
+    it("does not refuse a MOV the converter will handle, even if the browser cannot show it", async () => {
+      vi.mocked(canBrowserShowVideo).mockResolvedValue(false);
+      try {
+        render(<EventVideoHarness />);
+        pick("iphone.mov", "video/quicktime");
+        expect(
+          await screen.findByRole("button", { name: "Remove iphone.mov" })
+        ).toBeInTheDocument();
+        expect(
+          screen.queryByText("This video format isn't supported. Try saving it as MP4.")
+        ).not.toBeInTheDocument();
+      } finally {
+        vi.mocked(canBrowserShowVideo).mockResolvedValue(true);
+      }
     });
 
     it("accepts a phone original over 50 MB so it can be converted before upload", async () => {

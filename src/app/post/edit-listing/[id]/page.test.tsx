@@ -379,6 +379,48 @@ describe("EditListingPage", () => {
     expect(mockPush).not.toHaveBeenCalled();
   });
 
+  it("does not reuse the old video's cover frame when the saved video is swapped", async () => {
+    const frame = "https://media.verifymzansi.com/listings/old-frame.jpg";
+    mockMaybeSingle.mockResolvedValue({
+      data: {
+        id: "listing-1",
+        seller_id: "user-1",
+        status: "live",
+        revision: 4,
+        title: "Used iPhone 15",
+        description: "Clean phone in excellent condition.",
+        price_cents: 150000,
+        category: "electronics",
+        condition: "used",
+        attributes: { device_type: "Smartphone", brand: "Apple", storage_gb: 256 },
+        location_province: "Gauteng",
+        location_city: "Johannesburg",
+        location_suburb: "Sandton",
+        price_negotiable: true,
+        contact_methods: ["call", "whatsapp"],
+        photos: [frame],
+        videos: ["https://media.verifymzansi.com/listings/old.mp4"],
+        video_thumbnail: frame,
+        logo_url: null,
+      },
+      error: null,
+    });
+    render(<EditListingPage />);
+    await termsLoaded();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Video \(max 1\)/ })).toBeInTheDocument();
+    });
+
+    // A new video replaces the saved one and no new cover is picked.
+    fireEvent.click(screen.getByRole("button", { name: /Video \(max 1\)/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+
+    expect(await screen.findByText("Please fix the highlighted fields.")).toBeInTheDocument();
+    expect(fetchMock.mock.calls.filter(([url]) => url === "/api/listings/listing-1")).toHaveLength(
+      0
+    );
+  });
+
   it("uploads and uses a replacement listing logo", async () => {
     fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
       if (input === "/api/media/upload") {
