@@ -387,6 +387,75 @@ describe("CreateListingPage", () => {
     expect(mockPush).toHaveBeenCalledWith("/dashboard/listings");
   });
 
+  it("posts with Price on request and Negotiable, sending no amount", async () => {
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      if (input === "/api/media/upload")
+        return {
+          ok: true,
+          json: async () => ({
+            urls: ["https://media.verifymzansi.com/listings/photo.jpg"],
+            errors: [],
+          }),
+        };
+      if (input === "/api/listings") return { ok: true, json: async () => ({ id: "listing-1" }) };
+      throw new Error(`Unexpected fetch call: ${String(input)}`);
+    });
+
+    render(<CreateListingPage />);
+    await termsLoaded();
+
+    fireEvent.click(screen.getByText("Select Electronics"));
+    fireEvent.change(screen.getByLabelText("Title (Required)"), {
+      target: { value: "Used iPhone 15" },
+    });
+    fireEvent.change(screen.getByLabelText("Description (Required)"), {
+      target: { value: "A clean listing description with enough detail to continue." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    // "Amount" is preselected, so the usual flow is just typing a price.
+    expect(screen.getByRole("radio", { name: "Enter a price" })).toBeChecked();
+    fireEvent.click(screen.getByRole("radio", { name: "Price on request" }));
+    expect(screen.queryByLabelText(/^Asking price \(ZAR\)/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Price negotiable" }));
+    fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Photos (max 5)" }));
+    acceptListingTerms();
+    expect(listingCardSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ price: 0, priceMode: "on_request" })
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some((call) => call[0] === "/api/listings")).toBe(true);
+    });
+    const request = fetchMock.mock.calls.find((call) => call[0] === "/api/listings")!;
+    const payload = JSON.parse(request[1].body as string);
+    expect(payload).toMatchObject({ price_mode: "on_request", price_zar: 0, negotiable: true });
+  });
+
+  it("asks for a price when Amount is chosen and left empty", () => {
+    render(<CreateListingPage />);
+    fireEvent.click(screen.getByText("Select Electronics"));
+    fireEvent.change(screen.getByLabelText("Title (Required)"), {
+      target: { value: "Used iPhone 15" },
+    });
+    fireEvent.change(screen.getByLabelText("Description (Required)"), {
+      target: { value: "A clean listing description with enough detail to continue." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(
+      within(screen.getByRole("group", { name: "Price" })).getByText("Enter a valid price.")
+    ).toBeInTheDocument();
+  });
+
   it("blocks saving when the server rejects a selected photo", async () => {
     fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
       if (input === "/api/media/upload") {
@@ -908,7 +977,7 @@ describe("CreateListingPage", () => {
       };
       localStorage.setItem(
         `vm-draft:listing:${DRAFT_USER_ID}`,
-        JSON.stringify({ v: 1, savedAt: Date.now(), step: 0, data })
+        JSON.stringify({ v: 1, savedAt: Date.now(), step: overrides.step ?? 0, data })
       );
     }
 
@@ -931,6 +1000,15 @@ describe("CreateListingPage", () => {
         "A draft description from last session."
       );
       expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: "Draft restored" }));
+    });
+
+    it("restores an old draft with price 0 and no price choice as Free", async () => {
+      seedDraft({ price: "0", negotiable: false, step: 1 });
+      render(<CreateListingPage />);
+
+      await waitFor(() => {
+        expect(screen.getByRole("radio", { name: "Free" })).toBeChecked();
+      });
     });
 
     it("clears restored fields when discard draft is clicked", async () => {

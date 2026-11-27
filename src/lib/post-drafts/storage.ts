@@ -33,6 +33,8 @@ export interface ListingDraftData {
   title: string;
   description: string;
   price: string;
+  /** Absent on drafts saved before the price choice existed. */
+  priceMode?: "" | "amount" | "free" | "on_request";
   negotiable: boolean;
   province: string;
   city: string;

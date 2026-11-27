@@ -8,17 +8,7 @@ import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { usePostTransport } from "@/hooks/use-post-transport";
 import Link from "next/link";
-import {
-  Camera,
-  Check,
-  Eye,
-  FileText,
-  Inbox,
-  Loader2,
-  MessageCircle,
-  Phone,
-  Tag,
-} from "lucide-react";
+import { Camera, Eye, FileText, Inbox, Loader2, MessageCircle, Phone, Tag } from "lucide-react";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { usePostActionFields } from "@/hooks/use-post-action-fields";
 import { loadOwnListing } from "@/app/post/edit-listing/[id]/load-own-listing";
@@ -103,6 +93,12 @@ import {
   stepForField,
   stepForFieldErrors,
 } from "@/app/post/_lib/post-field-steps";
+import { ListingPriceFields } from "@/components/posting/listing-price-fields";
+import {
+  listingPricePreview,
+  listingPriceSubmission,
+  type ListingPriceForm,
+} from "@/lib/domains/listings/price-form";
 
 const STEPS: PostFormStep[] = [
   {
@@ -261,6 +257,9 @@ function CreateListingForm() {
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
   const [negotiable, setNegotiable] = useState(false);
+  // "Amount" is preselected; Free and Price on request are one tap away.
+  const [priceMode, setPriceMode] = useState<ListingPriceForm["mode"]>("amount");
+  const priceForm: ListingPriceForm = { mode: priceMode, amount: price, negotiable };
   const [category, setCategory] = useState<ListingCategory | "">("");
   const [condition, setCondition] = useState<ListingCondition | "">("");
   const [categoryAttributes, setCategoryAttributes] = useState<
@@ -342,7 +341,7 @@ function CreateListingForm() {
     const base = [
       !!title.trim(),
       !!description.trim(),
-      !!price,
+      !!price || priceMode === "free" || priceMode === "on_request",
       !!category,
       !!province,
       !!city,
@@ -377,6 +376,7 @@ function CreateListingForm() {
     title,
     description,
     price,
+    priceMode,
     category,
     province,
     city,
@@ -457,6 +457,7 @@ function CreateListingForm() {
         setTitle(copy.title);
         setDescription(copy.description);
         setPrice(copy.price);
+        setPriceMode(copy.priceMode);
         setNegotiable(copy.negotiable);
         setCategory(copy.category);
         setCondition(copy.condition);
@@ -515,7 +516,10 @@ function CreateListingForm() {
     setStep(Math.min(Math.max(restored.step ?? 0, 0), STEPS.length - 1));
     setTitle(restoredData.title ?? "");
     setDescription(restoredData.description ?? "");
-    setPrice(restoredData.price ?? "");
+    // A draft saved before the price choice existed used "0" to mean Free.
+    const oldFreeDraft = !restoredData.priceMode && restoredData.price === "0";
+    setPrice(oldFreeDraft ? "" : (restoredData.price ?? ""));
+    setPriceMode(oldFreeDraft ? "free" : restoredData.priceMode || "amount");
     setNegotiable(Boolean(restoredData.negotiable));
     setCategory((restoredData.category as ListingCategory | "") ?? "");
     setCondition((restoredData.condition as ListingCondition | "") ?? "");
@@ -553,6 +557,7 @@ function CreateListingForm() {
       title,
       description,
       price,
+      priceMode,
       negotiable,
       province,
       city,
@@ -573,6 +578,7 @@ function CreateListingForm() {
       ...fields,
       title: "",
       price: "",
+      priceMode: "amount",
       negotiable: false,
       province: fields.province || profile?.location_province || "",
       city:
@@ -584,6 +590,7 @@ function CreateListingForm() {
     setStep(0);
     setTitle("");
     setPrice("");
+    setPriceMode("amount");
     setNegotiable(false);
     setPhotoFiles([]);
     setVideoFile([]);
@@ -643,6 +650,7 @@ function CreateListingForm() {
       title,
       description,
       price,
+      priceMode,
       negotiable,
       province,
       city,
@@ -674,6 +682,7 @@ function CreateListingForm() {
     title,
     description,
     price,
+    priceMode,
     negotiable,
     province,
     city,
@@ -738,12 +747,8 @@ function CreateListingForm() {
     }
 
     if (targetStep === 1) {
-      if (
-        (category !== "jobs_services" || price) &&
-        (!price || Number.isNaN(parseFloat(price)) || parseFloat(price) < 0)
-      ) {
-        errors.price_zar = "Enter a valid price.";
-      }
+      const priced = listingPriceSubmission(category, priceForm);
+      if ("error" in priced) errors.price_zar = priced.error;
       if (!province) errors.province = "Select a province.";
       if (!city) errors.city = "Select a city.";
       if (province.trim().length > 50) {
@@ -933,12 +938,13 @@ function CreateListingForm() {
       const primaryMediaFile = videoFile[0] ?? photoFiles[0] ?? null;
       const mediaDimensions = primaryMediaFile ? await readMediaDimensions(primaryMediaFile) : null;
 
+      const priced = listingPriceSubmission(category, priceForm);
+      if ("error" in priced) throw new Error(priced.error);
       const body = {
         ...postFields(copyId !== null),
         title: title.trim(),
         description: description.trim(),
-        price_zar: price ? parseFloat(price) : 0,
-        negotiable: category === "jobs_services" ? false : negotiable,
+        ...priced,
         category: mapListingCategory(category),
         condition:
           category === "jobs_services" || category === "auto_parts"
@@ -1081,12 +1087,19 @@ function CreateListingForm() {
     }
   }
 
+  // The previews show the seller's choice: an amount, "Free" or "Price on request".
+  const { priceMode: previewPriceMode, priceCents: previewPriceCents } = listingPricePreview(
+    category,
+    priceForm
+  );
+
   function handleDiscardDraft() {
     discardDraft();
     setStep(0);
     setTitle("");
     setDescription("");
     setPrice("");
+    setPriceMode("amount");
     setNegotiable(false);
     setCategory("");
     setCondition("");
@@ -1111,7 +1124,6 @@ function CreateListingForm() {
   }
 
   function renderCardPreview() {
-    const numericPrice = parseFloat(price);
     const normalizedAttributes = category
       ? coerceListingAttributes(category, categoryAttributes)
       : {};
@@ -1122,7 +1134,8 @@ function CreateListingForm() {
       <ListingCard
         id="preview-listing"
         title={title || "Your listing title"}
-        price={!Number.isNaN(numericPrice) && numericPrice > 0 ? Math.round(numericPrice * 100) : 0}
+        price={previewPriceCents}
+        priceMode={previewPriceMode}
         imageUrl={cardMediaUrl || undefined}
         posterUrl={cardPosterUrl}
         isVideo={videoFile.length > 0}
@@ -1156,7 +1169,6 @@ function CreateListingForm() {
   }
 
   function renderPreview() {
-    const numericPrice = parseFloat(price);
     const normalizedAttributes = category
       ? coerceListingAttributes(category, categoryAttributes)
       : {};
@@ -1183,8 +1195,8 @@ function CreateListingForm() {
             owner_id: "preview-owner",
             title: title || "Your listing title",
             description: description || "Your listing description will appear here.",
-            price_cents:
-              !Number.isNaN(numericPrice) && numericPrice > 0 ? Math.round(numericPrice * 100) : 0,
+            price_cents: previewPriceCents,
+            price_mode: previewPriceMode,
             price_negotiable: negotiable,
             category: category || null,
             condition: condition || null,
@@ -1464,16 +1476,26 @@ function CreateListingForm() {
                     <PostFormSection
                       title={category === "jobs_services" ? "Salary (Optional)" : "Price"}
                     >
-                      <div className="space-y-2">
-                        <Label htmlFor="price" required={category !== "jobs_services"}>
-                          {isPropertyRentListing
-                            ? "Monthly Rent (ZAR) *"
-                            : category === "jobs_services"
-                              ? "Salary (ZAR) (Optional)"
-                              : "Asking price (ZAR) *"}
-                        </Label>
-                        <div className="flex flex-col xs:flex-row gap-3">
-                          <div className="relative flex-1">
+                      {category !== "jobs_services" ? (
+                        <ListingPriceFields
+                          category={category || "other_items"}
+                          value={priceForm}
+                          onChange={(next) => {
+                            setPriceMode(next.mode);
+                            setPrice(next.amount);
+                            setNegotiable(next.negotiable);
+                            clearErrors("price_zar");
+                          }}
+                          amountId="price"
+                          amountLabel={
+                            isPropertyRentListing ? "Monthly Rent (ZAR)" : "Asking price (ZAR)"
+                          }
+                          error={fieldErrors.price_zar}
+                        />
+                      ) : (
+                        <div className="space-y-2">
+                          <Label htmlFor="price">Salary (ZAR) (Optional)</Label>
+                          <div className="relative">
                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">
                               R
                             </span>
@@ -1493,31 +1515,11 @@ function CreateListingForm() {
                               aria-invalid={!!fieldErrors.price_zar}
                             />
                           </div>
-
-                          {category !== "jobs_services" && (
-                            <label
-                              className={cn(
-                                "flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2",
-                                negotiable
-                                  ? "border-brand-green-600 bg-brand-green-50 text-brand-green-800 dark:border-brand-green-400 dark:bg-brand-green-950/50 dark:text-brand-gold-200"
-                                  : "border-input bg-card text-foreground/80 hover:border-foreground/30"
-                              )}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={negotiable}
-                                onChange={(event) => setNegotiable(event.target.checked)}
-                                className="sr-only"
-                              />
-                              {negotiable ? <Check className="h-4 w-4" aria-hidden="true" /> : null}
-                              Negotiable
-                            </label>
+                          {fieldErrors.price_zar && (
+                            <p className="inline-form-error">{fieldErrors.price_zar}</p>
                           )}
                         </div>
-                        {fieldErrors.price_zar && (
-                          <p className="inline-form-error">{fieldErrors.price_zar}</p>
-                        )}
-                      </div>
+                      )}
                     </PostFormSection>
 
                     <PostFormSection
@@ -1751,7 +1753,7 @@ function CreateListingForm() {
                         title={title}
                         description={description}
                         priceCents={price === "" ? null : Math.round(Number(price) * 100)}
-                        priceExpected
+                        priceExpected={category === "jobs_services" || priceMode === "amount"}
                         category={category || null}
                         location={city || null}
                         pendingPhotoCount={photoFiles.length + existingPhotos.length}
