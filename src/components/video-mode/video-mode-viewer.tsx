@@ -628,6 +628,8 @@ export function VideoModeViewer({
       if (document.querySelector(OPEN_LAYER)) return;
       const target = event.target as Element | null;
       if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
+      // Any key shows the controls and starts the 4 s again.
+      showControls();
       if (event.key === "Escape") {
         event.preventDefault();
         close();
@@ -645,7 +647,7 @@ export function VideoModeViewer({
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [close, go, moveMedia]);
+  }, [close, go, moveMedia, showControls]);
 
   /* ── Touch: one gesture, one axis. Vertical changes post, horizontal changes media. ── */
   const stageRef = useRef<HTMLDivElement>(null);
@@ -788,7 +790,6 @@ export function VideoModeViewer({
       data-viewer-theme="dark"
       data-chrome={cleanView ? "hidden" : "shown"}
       onPointerDownCapture={noteActivity}
-      onKeyDownCapture={autoHide.show}
       onPointerMoveCapture={noteSeekMove}
       onTouchMoveCapture={noteSeekMove}
       className="fixed inset-0 z-50 overflow-hidden bg-black text-white"
@@ -1016,7 +1017,7 @@ export function VideoModeViewer({
         <div
           data-vm-chrome
           inert={cleanView}
-          className="vm-sections vm-chrome absolute left-[max(2px,env(safe-area-inset-left))] top-[calc(env(safe-area-inset-top)+68px)] z-20"
+          className="vm-sections vm-chrome absolute left-[max(4px,env(safe-area-inset-left))] top-[calc(env(safe-area-inset-top)+68px)] z-20"
         >
           <SectionRail
             vertical={browseValue.vertical}
@@ -1056,7 +1057,7 @@ export function VideoModeViewer({
             data-vm-caption={captionAt === null ? "over" : "under"}
             style={captionAt === null ? undefined : { top: captionAt }}
             className={cn(
-              "vm-info absolute left-[max(12px,env(safe-area-inset-left))] right-[calc(max(8px,env(safe-area-inset-right))+56px)] z-20 max-w-xl",
+              "vm-info absolute left-[max(12px,env(safe-area-inset-left))] right-[calc(max(8px,env(safe-area-inset-right))+64px)] z-20 max-w-xl",
               captionAt !== null
                 ? null
                 : cleanView
@@ -1069,7 +1070,7 @@ export function VideoModeViewer({
           <div
             data-vm-chrome
             inert={cleanView}
-            className="vm-info vm-chrome absolute bottom-[calc(env(safe-area-inset-bottom)+28px)] left-[max(12px,env(safe-area-inset-left))] right-[calc(max(8px,env(safe-area-inset-right))+56px)] z-20 max-w-xl"
+            className="vm-info vm-chrome absolute bottom-[calc(env(safe-area-inset-bottom)+28px)] left-[max(12px,env(safe-area-inset-left))] right-[calc(max(8px,env(safe-area-inset-right))+64px)] z-20 max-w-xl"
           >
             <DetailsRow
               slide={activeSlide}

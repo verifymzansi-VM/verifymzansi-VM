@@ -1937,7 +1937,7 @@ html[data-playwright="1"] [data-emblem][data-water-ready="late"] > .emblem-shiel
     top: calc(env(safe-area-inset-top) + 64px);
   }
   .vm-info {
-    left: calc(max(2px, env(safe-area-inset-left)) + 52px);
+    left: calc(max(4px, env(safe-area-inset-left)) + 52px);
   }
 }
 @media (prefers-reduced-motion: reduce) {
