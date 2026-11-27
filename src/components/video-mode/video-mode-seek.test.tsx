@@ -27,33 +27,46 @@ afterEach(() => {
 });
 
 describe("VideoModeSeek", () => {
-  it("shows the active video's time and length and seeks it", () => {
+  it("states the active video's time and length and seeks it", () => {
     const { video, position } = mountVideo(45, 12);
     render(<VideoModeSeek />);
-    expect(screen.getByText("0:12 / 0:45")).toBeInTheDocument();
-
     const bar = screen.getByRole("slider", { name: "Seek playback" });
+    expect(bar).toHaveAttribute("aria-valuetext", "0:12 of 0:45");
+    // A quiet line, no time label on the picture.
+    expect(screen.queryByText("0:12 / 0:45")).toBeNull();
     expect(Number.parseFloat(window.getComputedStyle(bar).height)).toBeGreaterThanOrEqual(24);
     fireEvent.change(bar, { target: { value: "30" } });
     expect(position()).toBe(30);
-    expect(screen.getByText("0:30 / 0:45")).toBeInTheDocument();
+    expect(screen.getByRole("slider", { name: "Seek playback" })).toHaveAttribute(
+      "aria-valuetext",
+      "0:30 of 0:45"
+    );
 
     // Playback moving on updates the label.
     video.currentTime = 31;
     act(() => {
       video.dispatchEvent(new Event("timeupdate"));
     });
-    expect(screen.getByText("0:31 / 0:45")).toBeInTheDocument();
+    expect(screen.getByRole("slider", { name: "Seek playback" })).toHaveAttribute(
+      "aria-valuetext",
+      "0:31 of 0:45"
+    );
   });
 
   it("follows a video element that appears after it (a retry)", () => {
     render(<VideoModeSeek />);
-    expect(screen.getByText("0:00 / 0:00")).toBeInTheDocument();
+    expect(screen.getByRole("slider", { name: "Seek playback" })).toHaveAttribute(
+      "aria-valuetext",
+      "0:00 of 0:00"
+    );
     const { video } = mountVideo(20, 0);
     act(() => {
       video.dispatchEvent(new Event("loadedmetadata"));
     });
-    expect(screen.getByText("0:00 / 0:20")).toBeInTheDocument();
+    expect(screen.getByRole("slider", { name: "Seek playback" })).toHaveAttribute(
+      "aria-valuetext",
+      "0:00 of 0:20"
+    );
   });
 
   it("ignores other videos on the page", () => {
@@ -64,6 +77,9 @@ describe("VideoModeSeek", () => {
     act(() => {
       other.dispatchEvent(new Event("loadedmetadata"));
     });
-    expect(screen.getByText("0:00 / 0:00")).toBeInTheDocument();
+    expect(screen.getByRole("slider", { name: "Seek playback" })).toHaveAttribute(
+      "aria-valuetext",
+      "0:00 of 0:00"
+    );
   });
 });

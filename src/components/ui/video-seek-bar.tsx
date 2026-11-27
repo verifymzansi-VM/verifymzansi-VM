@@ -173,3 +173,42 @@ export function VideoSeekBar({
     />
   );
 }
+
+/**
+ * The quiet progress line every player shows on the video's bottom edge: 2 px,
+ * white at 25 % with the played part at 75 %, no knob and no time. The real
+ * slider (`VideoSeekBar`) lies over it, invisible, so the 24 px strip can still
+ * be dragged, tapped and used with the arrow keys. While held or focused from
+ * the keyboard the line grows to 4 px and shows a small dot.
+ */
+export function VideoProgressLine({
+  currentTime,
+  duration,
+  onSeek,
+  className,
+}: {
+  currentTime: number;
+  duration: number;
+  onSeek: (time: number) => void;
+  className?: string;
+}) {
+  const played = duration > 0 ? Math.min(100, Math.max(0, (currentTime / duration) * 100)) : 0;
+  return (
+    <div className={cn("relative w-full", className)} style={TARGET_STYLE} data-video-progress>
+      <VideoSeekBar
+        currentTime={currentTime}
+        duration={duration}
+        onSeek={onSeek}
+        className="peer absolute inset-0 block opacity-0"
+      />
+      <div
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 bg-white/25 peer-focus-visible:h-1 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand-gold-300 peer-active:h-1 peer-focus-visible:[&_span]:block peer-active:[&_span]:block motion-safe:transition-[height]"
+        aria-hidden="true"
+      >
+        <div className="relative h-full bg-white/75" style={{ width: `${played}%` }}>
+          <span className="absolute -right-1.5 top-1/2 hidden h-3 w-3 -translate-y-1/2 rounded-full bg-white" />
+        </div>
+      </div>
+    </div>
+  );
+}
