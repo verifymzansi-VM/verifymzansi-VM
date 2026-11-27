@@ -217,6 +217,32 @@ describe("PackageCheckout (P4a)", () => {
     });
   });
 
+  it("says no VAT is charged under the total", () => {
+    render(<PackageCheckout terms={terms} initialSlots={25} initialDays={30} />);
+    expect(screen.getByTestId("checkout-no-vat")).toHaveTextContent("No VAT is charged.");
+  });
+
+  it("when the offer could not be read: says so, and nothing can be paid or asked for", () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    render(
+      <PackageCheckout
+        terms={terms.map((term) => ({ ...term, planId: null }))}
+        initialSlots={25}
+        initialDays={30}
+        offerUnavailable
+      />
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "We couldn't load package prices just now. Refresh the page or try again in a few minutes."
+    );
+    expect(screen.queryByText(/not on sale yet/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("checkbox", { name: /My slots start now/ }));
+    expect(payButton()).toBeDisabled();
+    fireEvent.click(payButton());
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("changing the number or the term asks for the tick again", () => {
     render(<PackageCheckout terms={terms} initialSlots={25} initialDays={30} />);
     const tick = () => screen.getByRole("checkbox", { name: /My slots start now/ });

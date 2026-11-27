@@ -26,3 +26,15 @@ export function CheckoutTermsLinks() {
     </>
   );
 }
+
+/**
+ * Under a checkout's total: VerifyMzansi is not registered for VAT (decision
+ * C3), so the price confirmed is the whole price and no VAT is added.
+ */
+export function NoVatCharged() {
+  return (
+    <p data-testid="checkout-no-vat" className="mt-1.5 text-xs text-muted-foreground">
+      No VAT is charged.
+    </p>
+  );
+}

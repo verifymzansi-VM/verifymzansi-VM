@@ -178,11 +178,14 @@ describe("PromotionCard", () => {
     expect(screen.getByTestId("card")).toHaveClass("hover:border-teal-600/60");
   });
 
-  it("keeps the type ribbon visible when the card is boosted", () => {
-    render(<PromotionCard {...defaultProps} promotionType="event" boosted immersive={false} />);
+  it("shows the plain type ribbon even if an old caller still passes a paid add-on (item 37)", () => {
+    render(
+      <PromotionCard {...defaultProps} promotionType="event" boosted featured immersive={false} />
+    );
 
-    expect(screen.getByText("Event ★")).toBeTruthy();
-    expect(screen.getByText("Event ★")).toHaveClass("bg-teal-800");
+    expect(screen.getByText("Event")).toHaveClass("bg-teal-800");
+    expect(screen.queryByText("Event ★")).toBeNull();
+    expect(screen.queryByText("Featured")).toBeNull();
   });
 
   it("renders the linked business logo when provided", () => {
