@@ -82,10 +82,10 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Close unused commands; short names in the staff role review, 26 November 2026
 
-`20261127222829_close_unused_commands.sql` is pending (see the applied
-register). Launch checklist item 47. Contract step: eight member and staff
-commands that the website replaced in earlier, applied updates are removed, and
-the staff role review shows staff by their short name.
+`20261127222829_close_unused_commands.sql` was applied on 28 November 2026 (see
+the applied register). Launch checklist item 47. Contract step: eight member and
+staff commands that the website replaced in earlier, applied updates are
+removed, and the staff role review shows staff by their short name.
 
 - **Removed commands** (each with its `../contract-steps.json` entry naming the
   replacement and the applied expand update):
@@ -9139,7 +9139,10 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
 - `20261127114113_video_upload_facts.sql`: applied 2026-11-27 16:10 UTC;
   apply-first; production fingerprint after it (fingerprint.sql, read-only)
   matched the full replay (except the known schema grant difference)
-- `20261127222829_close_unused_commands.sql`: pending; website-first
+- `20261127222829_close_unused_commands.sql`: applied 2026-11-28 02:05 UTC;
+  website-first (after the #395 deploy); production fingerprint after it
+  (fingerprint.sql, read-only, 02:10 UTC) matched the full replay (except the
+  known schema grant difference)
 - `20261128012529_posting_form_display_fields.sql`: pending; apply-first
 
 <!-- applied-register:end -->

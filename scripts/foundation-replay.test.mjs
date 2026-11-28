@@ -18,15 +18,15 @@ test("the recorded fingerprint keeps the production-matched values", () => {
   // below. Reviewed updates after it are listed as pending until the owner has
   // applied them and production is captured again.
   const check = recorded.productionCheck;
-  assert.equal(check.matchedThroughUpdate, "20261127114113_video_upload_facts.sql");
+  assert.equal(check.matchedThroughUpdate, "20261127222829_close_unused_commands.sql");
   assert.deepEqual(check.matchedFingerprints, {
     column_grants: "5e5623672e80b927048d8553487d5442",
     columns: "a9c783fed542f6c4fb8a22b5e246587d",
     constraints: "a3a1ff925de179c05f462c2167ecf3b7",
     event_triggers: "821f7d069c595c075754fad9309136ac",
-    function_bodies: "2637dd55673089be4d8e48d4398c83d5",
-    function_grants: "5f7a86725d7ab53b15642ba1483bd97a",
-    function_metadata: "08fe7cac34844656c429840627d65c05",
+    function_bodies: "4052fe2751d92bbe83b29e51e9015773",
+    function_grants: "fcef91c4817b006d6ab932ff1fae92dc",
+    function_metadata: "4f07f09fb268b52548646e1e645ea87e",
     indexes: "2f19c47ab5c875caf360ea831259afd1",
     policies: "085a305fbc41d38d34eb40c3748c0793",
     row_level_security: "833c95cfe0709cc6ab0ed86504463fef",
