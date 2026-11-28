@@ -55,4 +55,3 @@ begin
 end$function$;
 alter function internal.release_frontend_content_hold(uuid,integer,text) owner to postgres;
 revoke all on function internal.release_frontend_content_hold(uuid,integer,text) from public;
-grant execute on function internal.release_frontend_content_hold(uuid,integer,text) to authenticated;

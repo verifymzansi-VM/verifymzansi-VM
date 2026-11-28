@@ -36,7 +36,7 @@ const call = (who, role, sql) =>
         ? h.asService(sql)
         : role === "visitor"
           ? h.asVisitor(sql)
-          : h.asOwner(sql);
+          : h.asOwner(sql, who);
 
 // ---------------------------------------------------------------- fixture SQL
 
@@ -138,12 +138,14 @@ const READ_CAPS = [
     count: (r) => r.rows.length,
   },
   {
+    // The staff business review queue reads this internal function; called
+    // directly with the staff member's claims (no API command of its own).
     id: "LIM-F-get_frontend_seen_queue",
-    as: "staff",
+    as: "staff-owner",
     cap: 200,
     setup: async () => ({ owner: await h.member("seen-queue-owner") }),
     seed: ({ owner }, n) => businessChecks(owner.id, n),
-    sql: () => `select api.get_frontend_seen_queue('visits') as r`,
+    sql: () => `select internal.get_frontend_seen_queue('visits') as r`,
     count: (r) => r.rows.length,
   },
   ...[
@@ -251,31 +253,37 @@ const READ_CAPS = [
     sql: () => `select api.get_frontend_staff_role_review(1,null) as r`,
     count,
   })),
+  // internal.get_my_frontend_business_checks has no API command of its own; it
+  // is called directly with the member's claims.
   ...[
-    ["LIM-F-get_my_frontend_business_checks", "get_my_frontend_business_checks", 100],
-    ["LIM-F-get_my_frontend_business_review_state", "get_my_frontend_business_review_state", 100],
+    ["LIM-F-get_my_frontend_business_checks", "internal.get_my_frontend_business_checks", 100],
+    [
+      "LIM-F-get_my_frontend_business_review_state",
+      "api.get_my_frontend_business_review_state",
+      100,
+    ],
   ].map(([id, fn, cap]) => ({
     id,
-    as: "member",
+    as: fn.startsWith("internal.") ? "member-owner" : "member",
     cap,
     setup: async ({ user }) => {
       const business = await businessPost(h, user);
       return { business, c: await businessCase(h, user, business) };
     },
     seed: ({ c }, n) => messages(c.id, n),
-    sql: ({ business }) => `select api.${fn}(${lit(business)}) as r`,
+    sql: ({ business }) => `select ${fn}(${lit(business)}) as r`,
     count: (r) => r.cases[0].messages.length,
   })),
   ...[
-    ["LIM-F-get_my_frontend_business_checks-2", "get_my_frontend_business_checks"],
-    ["LIM-F-get_my_frontend_business_review_state-2", "get_my_frontend_business_review_state"],
+    ["LIM-F-get_my_frontend_business_checks-2", "internal.get_my_frontend_business_checks"],
+    ["LIM-F-get_my_frontend_business_review_state-2", "api.get_my_frontend_business_review_state"],
   ].map(([id, fn]) => ({
     id,
-    as: "member",
+    as: fn.startsWith("internal.") ? "member-owner" : "member",
     cap: 20,
     setup: async ({ user }) => ({ business: await businessPost(h, user) }),
     seed: ({ user, business }, n) => businessChecks(user.id, n, { status: "rejected", business }),
-    sql: ({ business }) => `select api.${fn}(${lit(business)}) as r`,
+    sql: ({ business }) => `select ${fn}(${lit(business)}) as r`,
     count: (r) => r.cases.length,
   })),
   {
@@ -541,7 +549,7 @@ describe("database read caps", () => {
       const staff = await h.staff(`cap-staff-${row.id}`);
       const ctx = { user, staff, ...(row.setup ? await row.setup({ user, staff }) : {}) };
       await h.seed(row.seed(ctx, row.cap + 1));
-      const rows = await call(row.as === "member" ? user : staff, row.as, row.sql(ctx));
+      const rows = await call(row.as.startsWith("member") ? user : staff, row.as, row.sql(ctx));
       assert.equal(row.count(rows[0].r), row.cap);
     });
   }

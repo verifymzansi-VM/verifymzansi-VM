@@ -137,13 +137,6 @@
       "count": 2
     },
     {
-      "function": "internal.list_my_frontend_notifications(integer,boolean,timestamp with time zone)",
-      "level": "warning",
-      "sqlstate": "00000",
-      "message": "routine is marked as STABLE, but expression is VOLATILE",
-      "count": 2
-    },
-    {
       "function": "internal.list_my_notifications(timestamp with time zone,uuid,integer)",
       "level": "warning",
       "sqlstate": "00000",

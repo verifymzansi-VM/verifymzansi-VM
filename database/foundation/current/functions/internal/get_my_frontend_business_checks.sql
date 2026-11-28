@@ -30,4 +30,3 @@ begin
 end$function$;
 alter function internal.get_my_frontend_business_checks(uuid) owner to postgres;
 revoke all on function internal.get_my_frontend_business_checks(uuid) from public;
-grant execute on function internal.get_my_frontend_business_checks(uuid) to authenticated;

@@ -64,7 +64,6 @@ export function readRestoredStaffRoles(
           .array(
             z.strictObject({
               user_id: z.uuid(),
-              email: z.string().max(254).nullable(),
               display_name: z.string().max(120).nullable(),
             })
           )

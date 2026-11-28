@@ -174,7 +174,13 @@ try {
         "42501",
         /recent second-factor verification required/
       );
-      assert.equal(json(staff(who, roleReview, nowSeconds() - 15 * 60 + 30)).actor_id, who.id);
+      const review = json(staff(who, roleReview, nowSeconds() - 15 * 60 + 30));
+      assert.equal(review.actor_id, who.id);
+      // Each person carries only the short name: no full name, no email address.
+      assert.ok(review.people.length > 0);
+      for (const person of review.people)
+        assert.deepEqual(Object.keys(person).sort(), ["display_name", "user_id"]);
+      assert.equal(JSON.stringify(review).includes("@"), false);
     }
     // The same 16-minute-old code still opens a capability without the rule.
     assert.equal(json(staff(admin, queueView, nowSeconds() - 16 * 60)).own_count, 0);
@@ -831,11 +837,13 @@ try {
         true
       );
       assert.equal(count(`private.frontend_content_holds where post_id='${event}'`), 1);
-      // The reviewer who hid it cannot restore it.
+      // The reviewer who hid it cannot restore it. Staff release a hold through
+      // an appeal; the release itself is checked here directly, as the database
+      // owner with the reviewer's claims.
       fails(
         staff(
           governor,
-          `select api.release_frontend_content_hold('${hold}',1,'Self restoration');`
+          `reset role; select internal.release_frontend_content_hold('${hold}',1,'Self restoration');`
         ),
         "42501",
         /independent restoration reviewer required/
