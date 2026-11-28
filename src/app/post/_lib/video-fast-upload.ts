@@ -1,5 +1,10 @@
-import { compressVideoForUpload, VideoTranscodeError } from "@/lib/media/compress-before-upload";
-import { MAX_VIDEO_ORIGINAL_BYTES, MAX_VIDEO_UPLOAD_BYTES } from "@/lib/media/upload-policy";
+import {
+  prepareVideoUpload,
+  VideoTranscodeError,
+  type PreparedVideo,
+} from "@/lib/media/compress-before-upload";
+import { MAX_VIDEO_ORIGINAL_BYTES } from "@/lib/media/upload-policy";
+import type { VideoSource } from "@/lib/media/video-rule";
 import { MAX_VIDEO_SECONDS, videoLengthProblem } from "@/lib/media/video-length";
 import { readVideoLengthSeconds } from "@/lib/media/video-length-client";
 import { normalizeSelectedFile } from "@/lib/utils/media-upload";
@@ -8,7 +13,7 @@ import type { UploadArea } from "@/types/enums";
 
 const log = createLogger("VideoFastUpload");
 
-const preparedVideoUploads = new WeakMap<File, Promise<File>>();
+const preparedVideoUploads = new WeakMap<File, Promise<PreparedVideo>>();
 const uploadedVideos = new WeakMap<
   File,
   Map<string, { promise: Promise<string>; expires: number }>
@@ -64,7 +69,7 @@ function assertVideoLength(seconds: number | null, maxSeconds: number): void {
   if (problem) throw new VideoTranscodeError(`${problem}.`);
 }
 
-async function prepareVideoForUpload(file: File): Promise<File> {
+async function prepareVideoForUpload(file: File): Promise<PreparedVideo> {
   // A larger original is accepted only to be converted; 50 MB caps the stored file.
   if (!file.size || file.size > MAX_VIDEO_ORIGINAL_BYTES) {
     throw new VideoTranscodeError("Select a non-empty video up to 300 MB.");
@@ -81,24 +86,14 @@ async function prepareVideoForUpload(file: File): Promise<File> {
     for (const listener of progress.listeners) listener(percent);
   };
 
-  // A video whose length cannot be read is always converted, so that what is
-  // uploaded can be measured (an empty track or a trailer can hide it).
-  const prepared = readVideoLengthSeconds(file)
-    .then((seconds) =>
-      compressVideoForUpload(file, {
-        requireCompatibleOutput: true,
-        onProgress,
-        ...(seconds === null ? { forceConversion: true } : {}),
-      })
-    )
-    .then((preparedFile) => {
-      if (!preparedFile.size || preparedFile.size > MAX_VIDEO_UPLOAD_BYTES) {
-        throw new VideoTranscodeError(
-          "The converted video is larger than 50 MB. Film it in 720p or export it as MP4, then try again."
-        );
-      }
-      return normalizeSelectedFile(preparedFile);
-    })
+  // Kept as it is when it meets the keep rule, else remuxed or converted; a
+  // video whose headers cannot be read is converted, so what is uploaded can
+  // be measured (an empty track or a trailer can hide its length).
+  const prepared = prepareVideoUpload(file, { onProgress })
+    .then(({ file: preparedFile, source }) => ({
+      file: normalizeSelectedFile(preparedFile),
+      source,
+    }))
     .catch((error) => {
       preparedVideoUploads.delete(file);
       throw error;
@@ -111,7 +106,26 @@ async function prepareVideoForUpload(file: File): Promise<File> {
   return prepared;
 }
 
-export function prewarmVideoForFastUpload(file: File): Promise<File> {
+/**
+ * The video the cover frame is taken from: the prepared (kept, remuxed or
+ * converted) file, so the frame matches what plays. When preparation fails
+ * the original is used; the submit shows why the video cannot go up.
+ */
+export function prepareVideoForCover(
+  file: File,
+  onProgress: (percent: number) => void
+): Promise<File> {
+  const preparing = prepareVideoForUpload(file);
+  const stopWatching = watchPreparation(file, onProgress);
+  return preparing
+    .then(
+      (prepared) => prepared.file,
+      () => file
+    )
+    .finally(stopWatching);
+}
+
+export function prewarmVideoForFastUpload(file: File): Promise<PreparedVideo> {
   return prepareVideoForUpload(file);
 }
 
@@ -135,7 +149,11 @@ export async function uploadVideoWithFastPath({
 }: {
   file: File;
   area: UploadArea;
-  uploadViaServer: (file: File, onUploadProgress?: (percent: number) => void) => Promise<string>;
+  uploadViaServer: (
+    file: File,
+    onUploadProgress: (percent: number) => void,
+    source: VideoSource
+  ) => Promise<string>;
   /** The post kind's limit: events 60 s, every other video 120 s. */
   maxSeconds?: number;
   onProgress?: (progress: VideoUploadProgress) => void;
@@ -163,20 +181,23 @@ export async function uploadVideoWithFastPath({
     const stopWatching = watchPreparation(file, (percent) =>
       onProgress?.({ phase: "preparing", percent, file })
     );
-    let uploadFile: File;
+    let prepared: PreparedVideo;
     try {
-      uploadFile = await preparing;
+      prepared = await preparing;
     } finally {
       stopWatching();
     }
+    const uploadFile = prepared.file;
     // What is uploaded must itself have a readable length within the limit.
     assertVideoLength(await readVideoLengthSeconds(uploadFile), maxSeconds);
     // Every video goes through the server-validated /api/media/upload route;
     // the direct-to-storage routes it once tried first are retired.
     const url = await withUploadSlot(() => {
       onProgress?.({ phase: "uploading", percent: 0, file });
-      return uploadViaServer(uploadFile, (percent) =>
-        onProgress?.({ phase: "uploading", percent, file })
+      return uploadViaServer(
+        uploadFile,
+        (percent) => onProgress?.({ phase: "uploading", percent, file }),
+        prepared.source
       );
     });
     if (!url) throw new Error("Video upload returned no URL. Please retry.");

@@ -1,67 +1,36 @@
 /**
- * Client-side video compression using FFmpeg WASM.
+ * Client-side video remux and conversion using FFmpeg WASM (video plan,
+ * phase 1b). Only files the keep rule (video-rule.ts) does not keep get here.
  *
- * Lazy-loads the ~32 MB WASM binary only when compression is needed. The core
- * is self-hosted under /vendor (see scripts/vendor-wasm-assets.mjs) so the CSP
+ * Lazy-loads the ~32 MB WASM binary only when it is needed. The core is
+ * self-hosted under /vendor (see scripts/vendor-wasm-assets.mjs) so the CSP
  * never has to trust a public CDN.
  * Uses single-threaded mode to avoid requiring COOP/COEP headers
  * that would break Cloudflare Turnstile and analytics scripts.
  *
- * Target output: MP4 H.264 baseline, ≤720p, 1.5 Mbps video, 128 Kbps AAC audio,
- * with -movflags +faststart for instant progressive playback.
+ * Remux: the first video and sound streams copied into a faststart MP4.
+ * Convert: H.264 High (level 4.0), up to 720p, CRF 23 capped at 3 Mbps,
+ * 2-second keyframes; AAC sound copied, other sound encoded as AAC 128 kbps;
+ * faststart. The caller checks the output against the keep rule.
  */
-import { hasCompatibleMp4Tracks } from "@/lib/media/mp4-compatibility";
-import { MAX_VIDEO_UPLOAD_BYTES } from "@/lib/media/upload-policy";
-import { readVideoBlobSeconds } from "@/lib/media/video-length";
+import type { VideoFileFacts } from "@/lib/media/video-length";
 
-export interface CompressionOptions {
-  /** Require a new H.264/AAC output even for small or low-bitrate MP4 inputs. */
-  forceTranscode?: boolean;
-  /** Maximum width in pixels (default: 1280) */
-  maxWidth?: number;
-  /** Maximum height in pixels (default: 720) */
-  maxHeight?: number;
-  /** Video bitrate string for FFmpeg, e.g. "1.5M" (default: "1.5M") */
-  videoBitrate?: string;
-  /** Audio bitrate string for FFmpeg, e.g. "128k" (default: "128k") */
-  audioBitrate?: string;
-  /** FFmpeg encoding preset (default: "ultrafast") */
-  preset?: string;
-  /** Keyframe interval in frames (default: 60 = 2s at 30fps) */
-  keyframeInterval?: number;
-  /** Skip compression if file is smaller than this in bytes (default: 2 MB) */
-  skipBelowBytes?: number;
+export interface TranscodeOptions {
+  /** `remuxed`: copy the streams into a faststart MP4; `converted`: re-encode. */
+  mode: "remuxed" | "converted";
+  /** The picked file's facts, when its headers could be read. */
+  facts: VideoFileFacts | null;
   /** Progress callback (0-100) */
   onProgress?: (percent: number) => void;
-  /** AbortSignal to cancel compression */
+  /** AbortSignal to cancel the work */
   signal?: AbortSignal;
 }
 
-export interface CompressionResult {
-  file: File;
-  originalSize: number;
-  compressedSize: number;
-  compressionRatio: number;
-  skipped: boolean;
-  /** Reason compression was skipped, if applicable */
-  skipReason?: string;
-}
-
-const DEFAULT_OPTIONS: Required<Omit<CompressionOptions, "onProgress" | "signal">> = {
-  forceTranscode: false,
-  maxWidth: 1280,
-  maxHeight: 720,
-  videoBitrate: "1.5M",
-  audioBitrate: "128k",
-  // Submission runs on the user's phone; prioritize encoding speed.
-  preset: "ultrafast",
-  keyframeInterval: 60,
-  skipBelowBytes: 2 * 1024 * 1024, // 2 MB
-};
-
-const WEB_UPLOAD_VIDEO_TYPES = new Set(["video/mp4", "video/webm"]);
-/** Below this a compatible file is already small enough; compression won't help much. */
-const LOW_BITRATE_BPS = 2_000_000;
+/** Converted size: long edge 1280, short edge 720, never upscaled. */
+const MAX_LONG_EDGE = 1280;
+const MAX_SHORT_EDGE = 720;
+/** Clips up to this long use the sharper (slower) preset. */
+const SHARP_PRESET_MAX_SECONDS = 30;
 const FFMPEG_CORE_BASE_PATH = "/vendor/ffmpeg-core";
 /** Where the picked file is mounted (read in slices, never copied whole). */
 const INPUT_MOUNT = "/upload";
@@ -84,145 +53,55 @@ async function loadFfmpegWasmURL(signal?: AbortSignal): Promise<string> {
   return URL.createObjectURL(new Blob([wasm], { type: "application/wasm" }));
 }
 
-/**
- * Read video dimensions using a temporary <video> element.
- */
-function readVideoDimensions(
-  file: File
-): Promise<{ width: number; height: number; duration: number } | null> {
-  return new Promise((resolve) => {
-    const url = URL.createObjectURL(file);
-    const video = document.createElement("video");
-    video.preload = "metadata";
-
-    const cleanup = () => {
-      URL.revokeObjectURL(url);
-      video.remove();
-    };
-
-    const timer = setTimeout(() => {
-      cleanup();
-      resolve(null);
-    }, 10_000);
-
-    video.addEventListener(
-      "loadedmetadata",
-      () => {
-        clearTimeout(timer);
-        const result = {
-          width: video.videoWidth,
-          height: video.videoHeight,
-          duration: Number.isFinite(video.duration) ? video.duration : 0,
-        };
-        cleanup();
-        resolve(result.width > 0 ? result : null);
-      },
-      { once: true }
-    );
-
-    video.addEventListener(
-      "error",
-      () => {
-        clearTimeout(timer);
-        cleanup();
-        resolve(null);
-      },
-      { once: true }
-    );
-
-    video.src = url;
-  });
+/** The ffmpeg arguments after the input for a remux or a conversion. */
+export function transcodeArguments(mode: TranscodeOptions["mode"], facts: VideoFileFacts | null) {
+  const streams = ["-map", "0:v:0", "-map", "0:a:0?", "-map_metadata", "-1"];
+  if (mode === "remuxed") return [...streams, "-c", "copy", "-movflags", "+faststart"];
+  // Cap both edges for portrait, landscape and square video; min() never
+  // upscales, and the pad keeps both sizes even (an H.264 requirement).
+  const scale = `scale='min(iw,if(gte(iw,ih),${MAX_LONG_EDGE},${MAX_SHORT_EDGE}))':'min(ih,if(gte(iw,ih),${MAX_SHORT_EDGE},${MAX_LONG_EDGE}))':force_original_aspect_ratio=decrease,pad=ceil(iw/2)*2:ceil(ih/2)*2`;
+  // 30 fps only when the source is faster (or its rate is unknown).
+  const fps = facts && facts.video.fps > 0 && facts.video.fps <= 30.5 ? "" : "fps=30,";
+  const sharp = facts !== null && facts.seconds <= SHARP_PRESET_MAX_SECONDS;
+  // The buffer lets a clip briefly exceed 3 Mbps. Over a short clip that
+  // burst would lift the average above the keep rule's 4 Mbps, so it is at
+  // most 0.5 Mbit per second of clip (6 Mbit from 12 s).
+  const buffer = facts ? Math.min(6000, Math.max(500, Math.round(facts.seconds * 500))) : 6000;
+  return [
+    ...streams,
+    "-vf",
+    `${fps}${scale}`,
+    "-c:v",
+    "libx264",
+    "-profile:v",
+    "high",
+    "-level",
+    "4.0",
+    "-pix_fmt",
+    "yuv420p",
+    // superfast is visibly sharper; ultrafast keeps long clips within the
+    // time limit (it ignores "high", which the keep rule allows).
+    "-preset",
+    sharp ? "superfast" : "ultrafast",
+    "-crf",
+    "23",
+    "-maxrate",
+    "3000k",
+    "-bufsize",
+    `${buffer}k`,
+    "-g",
+    "60",
+    ...(facts?.audio === "aac" ? ["-c:a", "copy"] : ["-c:a", "aac", "-b:a", "128k"]),
+    "-movflags",
+    "+faststart",
+  ];
 }
 
 /**
- * Estimate video bitrate from file size and duration.
- * Returns bitrate in bits per second.
+ * Remux or convert a video with FFmpeg WASM into a new MP4 File. Throws when
+ * the encoder fails or is aborted; the caller decides what the member sees.
  */
-function estimateBitrate(fileSizeBytes: number, durationSec: number): number {
-  if (durationSec <= 0) return Infinity;
-  return (fileSizeBytes * 8) / durationSec;
-}
-
-/** Determine if compression would produce a meaningful size reduction. */
-function shouldSkipCompression(
-  file: File,
-  dims: { width: number; height: number; duration: number } | null,
-  opts: Required<Omit<CompressionOptions, "onProgress" | "signal">>
-): string | null {
-  if (opts.forceTranscode || !WEB_UPLOAD_VIDEO_TYPES.has(file.type)) {
-    return null;
-  }
-
-  if (file.size < opts.skipBelowBytes) {
-    return `File is ${(file.size / (1024 * 1024)).toFixed(1)} MB (below ${(opts.skipBelowBytes / (1024 * 1024)).toFixed(0)} MB threshold)`;
-  }
-
-  if (!dims) return null; // Can't determine — proceed with compression
-
-  // Orientation-agnostic: cap the long edge at max(maxWidth, maxHeight)
-  const maxDim = Math.max(opts.maxWidth, opts.maxHeight);
-  const isWithinResolution =
-    Math.max(dims.width, dims.height) <= maxDim &&
-    Math.min(dims.width, dims.height) <= Math.min(opts.maxWidth, opts.maxHeight);
-  const bitrate = estimateBitrate(file.size, dims.duration);
-  // 2 Mbps target threshold — if already below, compression won't help much
-  const isLowBitrate = bitrate < LOW_BITRATE_BPS;
-
-  if (isWithinResolution && isLowBitrate) {
-    return `Already ${dims.width}×${dims.height} at ${(bitrate / 1_000_000).toFixed(1)} Mbps`;
-  }
-
-  return null;
-}
-
-/**
- * When the <video> element gives no size (a hidden tab defers media loading
- * until it is shown), decide from the file's own headers instead. Skip only a
- * compatible H.264/AAC MP4 within the stored-file cap whose header length
- * gives a low bitrate; anything that cannot be confirmed is compressed.
- */
-async function skipReasonWithoutDimensions(file: File): Promise<string | null> {
-  if (file.type !== "video/mp4" || file.size > MAX_VIDEO_UPLOAD_BYTES) return null;
-  const seconds = await readVideoBlobSeconds(file);
-  if (!seconds || seconds <= 0) return null;
-  const bitrate = estimateBitrate(file.size, seconds);
-  if (bitrate >= LOW_BITRATE_BPS) return null;
-  if (!(await hasCompatibleMp4Tracks(file))) return null;
-  return `Compatible MP4 at ${(bitrate / 1_000_000).toFixed(1)} Mbps (size not readable)`;
-}
-
-/**
- * Compress a video file using FFmpeg WASM.
- *
- * - Caps resolution at 720p (1280×720), preserving aspect ratio.
- * - Re-encodes to H.264 baseline + AAC.
- * - Adds -movflags +faststart for instant playback.
- * - Returns the original file unchanged if compression is skipped or fails.
- */
-export async function compressVideo(
-  file: File,
-  options: CompressionOptions = {}
-): Promise<CompressionResult> {
-  const opts = { ...DEFAULT_OPTIONS, ...options };
-  const originalSize = file.size;
-
-  // ── Check if we should skip ──────────────────────────────
-  const dims = await readVideoDimensions(file);
-  const skipReason =
-    shouldSkipCompression(file, dims, opts) ??
-    (!dims && !opts.forceTranscode ? await skipReasonWithoutDimensions(file) : null);
-  if (skipReason) {
-    return {
-      file,
-      originalSize,
-      compressedSize: originalSize,
-      compressionRatio: 1,
-      skipped: true,
-      skipReason,
-    };
-  }
-
-  // ── Check for abort before heavy work ────────────────────
+export async function transcodeVideo(file: File, options: TranscodeOptions): Promise<File> {
   if (options.signal?.aborted) {
     throw new DOMException("Compression aborted", "AbortError");
   }
@@ -302,49 +181,10 @@ export async function compressVideo(
       await ffmpeg.writeFile(inputName, await fetchFile(file));
     }
 
-    // ── Build FFmpeg command ─────────────────────────────
-    // Cap both long and short edges, including portrait and square videos.
-    // force_original_aspect_ratio
-    // shrinks the output to fit within the bounding box. min() prevents upscaling.
-    const maxDim = Math.max(opts.maxWidth, opts.maxHeight);
-    const minDim = Math.min(opts.maxWidth, opts.maxHeight);
-    const scaleFilter = `scale='min(iw,if(gte(iw,ih),${maxDim},${minDim}))':'min(ih,if(gte(iw,ih),${minDim},${maxDim}))':force_original_aspect_ratio=decrease`,
-      // Ensure dimensions are divisible by 2 (H.264 requirement)
-      padFilter = `pad=ceil(iw/2)*2:ceil(ih/2)*2`;
-
     const args = [
       "-i",
       inputPath,
-      "-map",
-      "0:v:0",
-      "-map",
-      "0:a:0?",
-      "-map_metadata",
-      "-1",
-      "-vf",
-      `fps=30,${scaleFilter},${padFilter}`,
-      "-c:v",
-      "libx264",
-      "-profile:v",
-      "baseline",
-      "-pix_fmt",
-      "yuv420p",
-      "-r",
-      "30",
-      "-level",
-      "3.1",
-      "-preset",
-      opts.preset,
-      "-b:v",
-      opts.videoBitrate,
-      "-c:a",
-      "aac",
-      "-b:a",
-      opts.audioBitrate,
-      "-movflags",
-      "+faststart",
-      "-g",
-      String(opts.keyframeInterval),
+      ...transcodeArguments(options.mode, options.facts),
       "-y",
       outputName,
     ];
@@ -368,56 +208,15 @@ export async function compressVideo(
     }
 
     const blobPart: BlobPart = typeof data === "string" ? data : new Uint8Array(data);
-    const compressedBlob = new Blob([blobPart], { type: "video/mp4" });
-    const compressedSize = compressedBlob.size;
-    if (!compressedSize) throw new Error("Video encoder produced an empty file");
-
-    // If compression made an already web-compatible file larger, keep original.
-    // Incompatible inputs such as MOV still need the MP4 output for R2 validation.
-    if (
-      !opts.forceTranscode &&
-      compressedSize >= originalSize &&
-      WEB_UPLOAD_VIDEO_TYPES.has(file.type)
-    ) {
-      return {
-        file,
-        originalSize,
-        compressedSize: originalSize,
-        compressionRatio: 1,
-        skipped: true,
-        skipReason: "Compressed output was larger than original",
-      };
-    }
-
-    const compressedFile = new File([compressedBlob], withMp4Extension(file.name), {
+    const output = new File([blobPart], withMp4Extension(file.name), {
       type: "video/mp4",
       lastModified: Date.now(),
     });
-
-    return {
-      file: compressedFile,
-      originalSize,
-      compressedSize,
-      compressionRatio: originalSize / compressedSize,
-      skipped: false,
-    };
+    if (!output.size) throw new Error("Video encoder produced an empty file");
+    return output;
   } catch (err) {
     if (options.signal?.aborted) throw new DOMException("Compression aborted", "AbortError");
-    // Re-throw abort errors
-    if (err instanceof DOMException && err.name === "AbortError") {
-      throw err;
-    }
-
-    // Compression failed — return original file with warning
-    console.warn("[video-compressor] FFmpeg compression failed, uploading original:", err);
-    return {
-      file,
-      originalSize,
-      compressedSize: originalSize,
-      compressionRatio: 1,
-      skipped: true,
-      skipReason: `Compression failed: ${err instanceof Error ? err.message : "Unknown error"}`,
-    };
+    throw err;
   } finally {
     // Unmount on every path, errors included, so an encoder is never left
     // holding the picked file through a stale mount.

@@ -29,7 +29,12 @@ import {
   UNREADABLE_VIDEO_LENGTH_MESSAGE,
   videoLengthProblem,
 } from "../media/video-length";
-import { VIDEO_RULE_MESSAGE, videoRuleProblem, videoUploadFacts } from "../media/video-rule";
+import {
+  VIDEO_RULE_MESSAGE,
+  videoRuleProblem,
+  videoUploadFacts,
+  type VideoSource,
+} from "../media/video-rule";
 
 const log = createLogger("FoundationMediaUpload");
 const IMMUTABLE_CACHE = "public, max-age=31536000, immutable";
@@ -189,11 +194,13 @@ export async function uploadFoundationMedia(
   service: FoundationServiceApi,
   file: File,
   write: typeof uploadToR2 | undefined = undefined,
-  environment = process.env
+  environment = process.env,
+  /** How the posting form prepared the video, as it says (stored with the facts). */
+  videoSource?: VideoSource
 ): Promise<FoundationUploadedMedia> {
   const usage: { allowance?: ImagesAllowance } = {};
   try {
-    return await uploadCheckedMedia(api, service, file, write, environment, usage);
+    return await uploadCheckedMedia(api, service, file, write, environment, usage, videoSource);
   } finally {
     await usage.allowance?.save();
   }
@@ -205,7 +212,8 @@ async function uploadCheckedMedia(
   file: File,
   write: typeof uploadToR2 | undefined,
   environment: NodeJS.ProcessEnv,
-  usage: { allowance?: ImagesAllowance }
+  usage: { allowance?: ImagesAllowance },
+  videoSource: VideoSource | undefined
 ): Promise<FoundationUploadedMedia> {
   // Stored videos are MP4 only (M4.4): the site converts WebM and MOV on the
   // phone first, and browser-made WebM often has no readable length.
@@ -247,7 +255,7 @@ async function uploadCheckedMedia(
     // The keep rule (src/lib/media/video-rule.ts). VIDEO_UPLOAD_RULE=log
     // stores a video that breaks it and records which rule it broke.
     const broken = videoRuleProblem(facts!, bytes.length);
-    videoFacts = videoUploadFacts(facts!, broken);
+    videoFacts = videoUploadFacts(facts!, broken, videoSource);
     const enforce = environment.VIDEO_UPLOAD_RULE !== "log";
     log.info("Video upload rule", {
       result: broken ?? "pass",

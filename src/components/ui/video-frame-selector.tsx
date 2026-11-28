@@ -9,6 +9,13 @@ interface VideoFrameSelectorProps {
   file: File;
   /** Called when the user selects a frame (JPEG File). */
   onFrameSelect: (frame: File | null) => void;
+  /**
+   * Prepares the video before frames are taken (resolves to the file that
+   * will be uploaded), so the cover matches what plays.
+   */
+  prepareVideo?: (file: File, onProgress: (percent: number) => void) => Promise<File>;
+  /** Pick a frame by itself once the video loads (off when a cover is already set). */
+  autoSelect?: boolean;
   /** Additional className for the outer wrapper. */
   className?: string;
 }
@@ -20,11 +27,76 @@ interface VideoFrameSelectorProps {
  * a poster frame. The selected frame is captured as a JPEG File
  * via canvas, and a 9:16 card preview is rendered alongside.
  */
-export function VideoFrameSelector({ file, onFrameSelect, className }: VideoFrameSelectorProps) {
+export function VideoFrameSelector({
+  file: picked,
+  onFrameSelect,
+  prepareVideo,
+  autoSelect = true,
+  className,
+}: VideoFrameSelectorProps) {
+  // The file frames come from: the picked one, or its prepared copy.
+  const [prepared, setPrepared] = useState<{ picked: File; file: File } | null>(null);
+  const [preparing, setPreparing] = useState<{ picked: File; percent: number } | null>(null);
+  useEffect(() => {
+    if (!prepareVideo) return;
+    let current = true;
+    void prepareVideo(picked, (percent) => {
+      if (current) setPreparing({ picked, percent });
+    }).then(
+      (file) => {
+        if (current) setPrepared({ picked, file });
+      },
+      () => {
+        // Frames from the picked file; the submit says why it cannot go up.
+        if (current) setPrepared({ picked, file: picked });
+      }
+    );
+    return () => {
+      current = false;
+    };
+  }, [picked, prepareVideo]);
+  const file = prepareVideo ? (prepared?.picked === picked ? prepared.file : null) : picked;
+  if (!file) {
+    const percent = preparing?.picked === picked ? preparing.percent : 0;
+    return (
+      <p
+        className={cn("flex items-center gap-2 text-sm text-muted-foreground", className)}
+        role="status"
+      >
+        <Camera className="h-4 w-4" aria-hidden="true" />
+        {`Preparing the video for its cover frame${percent > 0 ? ` (${percent}%)` : ""}…`}
+      </p>
+    );
+  }
+  return (
+    <FrameScrubber
+      key={`${file.name}:${file.size}:${file.lastModified}`}
+      file={file}
+      onFrameSelect={onFrameSelect}
+      autoSelect={autoSelect}
+      className={className}
+    />
+  );
+}
+
+function FrameScrubber({
+  file,
+  onFrameSelect,
+  autoSelect: autoSelectAtStart,
+  className,
+}: {
+  file: File;
+  onFrameSelect: (frame: File | null) => void;
+  autoSelect: boolean;
+  className?: string;
+}) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const previewBlobUrlRef = useRef<string | null>(null);
   const fileKey = `${file.name}:${file.size}:${file.lastModified}`;
+  // Decided when this video's frames first show, so a frame picked by itself
+  // never replaces a cover the poster chose while the video was prepared.
+  const [autoSelect] = useState(autoSelectAtStart);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -57,11 +129,11 @@ export function VideoFrameSelector({ file, onFrameSelect, className }: VideoFram
     const video = videoRef.current;
     if (!video) return;
     setDuration(video.duration);
-    if (autoSelectedForKey !== fileKey) {
+    if (autoSelect && autoSelectedForKey !== fileKey) {
       const seekTarget = Math.min(1, video.duration * 0.1);
       video.currentTime = Math.max(0, seekTarget);
     }
-  }, [autoSelectedForKey, fileKey]);
+  }, [autoSelect, autoSelectedForKey, fileKey]);
 
   // Capture the frame when the user seeks or on initial auto-select
   const captureFrame = useCallback(() => {

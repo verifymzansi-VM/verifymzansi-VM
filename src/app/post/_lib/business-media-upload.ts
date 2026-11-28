@@ -9,6 +9,7 @@ import {
   uploadMediaFileViaServer,
   uploadMediaViaServer,
 } from "@/app/post/_lib/server-media-upload";
+import type { VideoSource } from "@/lib/media/video-rule";
 import type { UploadArea } from "@/types/enums";
 
 const log = createLogger("BusinessMediaUpload");
@@ -49,16 +50,21 @@ async function uploadBusinessVideoViaServer({
   file,
   area,
   onProgress,
+  videoSource,
 }: {
   file: File;
   area: UploadArea;
   onProgress?: (percent: number) => void;
+  videoSource: VideoSource;
 }): Promise<string> {
   return uploadMediaFileViaServer({
     file,
     area,
     fallbackMessage: FIELD_MESSAGES.cover_video,
+    // The server's reason (such as a video it cannot store) reaches the field.
+    preferPayloadError: true,
     onProgress,
+    videoSource,
   });
 }
 
@@ -143,8 +149,13 @@ export async function uploadRequiredBusinessVideo({
       file,
       area,
       onProgress,
-      uploadViaServer: (uploadFile, onUploadProgress) =>
-        uploadBusinessVideoViaServer({ file: uploadFile, area, onProgress: onUploadProgress }),
+      uploadViaServer: (uploadFile, onUploadProgress, videoSource) =>
+        uploadBusinessVideoViaServer({
+          file: uploadFile,
+          area,
+          onProgress: onUploadProgress,
+          videoSource,
+        }),
     });
   } catch (error) {
     if (error instanceof VideoTranscodeError) {

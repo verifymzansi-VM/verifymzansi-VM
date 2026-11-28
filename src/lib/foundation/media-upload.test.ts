@@ -501,6 +501,74 @@ describe("video length and stored size at upload (M4.4)", () => {
     );
   });
 
+  it("stores how the posting form prepared the video with its facts", async () => {
+    const attest = attested();
+    await expect(
+      uploadFoundationMedia(
+        { rpc: videoIntent() } as unknown as FoundationAuthenticatedApi,
+        { rpc: attest } as unknown as FoundationServiceApi,
+        new File(
+          [syntheticMp4(30, { faststart: true, audioSeconds: 30 }).slice().buffer],
+          "clip.mp4",
+          { type: "video/mp4" }
+        ),
+        vi.fn(async (input: { key: string }) => ({
+          key: input.key,
+          url: `https://media.verifymzansi.com/${input.key}`,
+        })),
+        {} as NodeJS.ProcessEnv,
+        "remuxed"
+      )
+    ).resolves.toMatchObject({ kind: "video" });
+    expect(attest).toHaveBeenCalledWith(
+      "complete_frontend_video_upload",
+      expect.objectContaining({
+        p_facts: expect.objectContaining({ source: "remuxed", problem: null }),
+      })
+    );
+  });
+
+  it("LOAD: two 50 MB, 2-minute videos upload at once through the production storage path", async () => {
+    // The largest file the keep rule stores: exactly 50 MiB over 2 minutes
+    // (about 3.5 Mbps), faststart, H.264 and AAC.
+    const header = syntheticMp4(120, { faststart: true, audioSeconds: 120, padding: 0 });
+    const bytes = syntheticMp4(120, {
+      faststart: true,
+      audioSeconds: 120,
+      padding: 52_428_800 - header.length,
+    });
+    expect(bytes.length).toBe(52_428_800);
+    const stored: number[] = [];
+    vi.mocked(putImmutableR2Bytes).mockImplementation(async (_bucket, _key, body) => {
+      stored.push(body.length);
+      return body;
+    });
+    const upload = () => {
+      const attest = attested();
+      return uploadFoundationMedia(
+        { rpc: videoIntent() } as unknown as FoundationAuthenticatedApi,
+        { rpc: attest } as unknown as FoundationServiceApi,
+        new File([bytes.slice().buffer], "clip.mp4", { type: "video/mp4" }),
+        undefined,
+        { VIDEO_UPLOAD_RULE: "enforce" } as unknown as NodeJS.ProcessEnv,
+        "kept"
+      ).then((result) => ({ result, attest }));
+    };
+    const done = await Promise.all([upload(), upload()]);
+    expect(stored).toEqual([52_428_800, 52_428_800]);
+    for (const { result, attest } of done) {
+      expect(result).toMatchObject({ kind: "video" });
+      expect(attest).toHaveBeenCalledWith(
+        "complete_frontend_video_upload",
+        expect.objectContaining({
+          p_size: 52_428_800,
+          p_duration_ms: 120_000,
+          p_facts: expect.objectContaining({ problem: null, source: "kept" }),
+        })
+      );
+    }
+  }, 60_000);
+
   it("refuses a converted file over 50 MB before reserving storage", async () => {
     const rpc = videoIntent();
     const oversized = syntheticMp4(60, { padding: 50 * 1024 * 1024 });

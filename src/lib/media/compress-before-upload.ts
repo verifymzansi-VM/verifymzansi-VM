@@ -1,21 +1,28 @@
 /**
- * Thin adapter that compresses a video file before upload.
+ * Prepares a picked video for upload (video plan, phase 1b), with the keep
+ * rule the upload server enforces (video-rule.ts):
+ * - an MP4 that already meets the rule is kept untouched;
+ * - a file whose streams meet it but whose container does not (MOV, moov at
+ *   the end, extra tracks) is remuxed: streams copied, nothing re-encoded;
+ * - anything else is converted.
+ * A remux or conversion whose output still breaks the rule (or that fails or
+ * times out) blocks the upload: the original is never published.
  *
- * Lazy-loads the FFmpeg WASM compressor so non-upload pages pay zero cost.
- * Returns the (possibly compressed) File ready for upload.
- * Every stored video is MP4 (roadmap M4.4). Only a compatible MP4 (H.264/AAC
- * sample descriptions) within the 50 MB stored-file cap may be uploaded
- * unchanged when the optional compression is slow or fails. Everything else
- * (MOV, WebM, other MP4 codecs, an MP4 over 50 MB) must convert, and a failed
- * conversion blocks the upload: the original is never published. Track
- * inspection is not a full decode/integrity check.
+ * The FFmpeg WASM encoder is lazy-loaded only for a remux or conversion, so a
+ * kept file and pages without uploads pay nothing.
  */
-import { hasCompatibleMp4Tracks } from "@/lib/media/mp4-compatibility";
 import { MAX_VIDEO_UPLOAD_BYTES } from "@/lib/media/upload-policy";
+import { readVideoBlobFacts, type VideoFileFacts } from "@/lib/media/video-length";
+import { videoPreparation, videoRuleProblem, type VideoSource } from "@/lib/media/video-rule";
+import { detectMimeFromMagicBytes } from "@/lib/utils/file-validation";
 
 /** Shown when a required conversion fails. */
 const VIDEO_CONVERSION_FAILED_MESSAGE =
   "We couldn't convert this video. Film it in 720p or export it as MP4, then try again.";
+const VIDEO_TOO_LARGE_MESSAGE =
+  "The converted video is larger than 50 MB. Film it in 720p or export it as MP4, then try again.";
+const VIDEO_TOO_SLOW_MESSAGE =
+  "This video took too long to convert. Film it in 720p or export it as MP4, then try again.";
 
 export class VideoTranscodeError extends Error {
   constructor(message = VIDEO_CONVERSION_FAILED_MESSAGE) {
@@ -24,11 +31,11 @@ export class VideoTranscodeError extends Error {
   }
 }
 
-/** Optional compression of a compatible MP4; a 2-minute clip needs about this long. */
-const DEFAULT_COMPRESSION_TIMEOUT_MS = 2 * 60_000;
-// MOV conversion is mandatory, unlike optional MP4/WebM compression. Phone
-// encodes can take several minutes, especially on a cold WASM download.
-const REQUIRED_CONVERSION_TIMEOUT_MS = 10 * 60_000;
+/** The file to upload and how it was made (stored with its facts). */
+export type PreparedVideo = { file: File; source: VideoSource };
+
+// Phone encodes can take several minutes, especially on a cold WASM download.
+const PREPARATION_TIMEOUT_MS = 10 * 60_000;
 let preparationQueue: Promise<void> = Promise.resolve();
 
 function createTimeoutSignal(ms: number): {
@@ -58,21 +65,15 @@ function createTimeoutSignal(ms: number): {
 }
 
 type VideoPreparationOptions = {
-  requireCompatibleOutput?: boolean;
   timeoutMs?: number;
-  /**
-   * Convert even a compatible MP4: its length cannot be read (an empty track,
-   * a phone's trailer after the last box), and the converted MP4 can be.
-   */
-  forceConversion?: boolean;
-  /** Conversion progress (0-100), from the encoder. */
+  /** Remux or conversion progress (0-100), from the encoder. */
   onProgress?: (percent: number) => void;
 };
 
-export function compressVideoForUpload(
+export function prepareVideoUpload(
   file: File,
   options?: VideoPreparationOptions
-): Promise<File> {
+): Promise<PreparedVideo> {
   // A WASM instance holds both the input and output in memory. Multiple phone
   // videos must not compete for CPU/memory, or consume their timeout in a queue.
   const prepared = preparationQueue.then(() => prepareVideo(file, options));
@@ -85,54 +86,77 @@ export function compressVideoForUpload(
   return prepared;
 }
 
-/**
- * Whether this video must be converted before upload: anything but a
- * compatible (H.264/AAC) MP4 within the 50 MB stored-file cap. WebM is
- * converted like MOV: browser-made WebM often has no readable length.
- */
-export async function videoNeedsConversion(file: Blob): Promise<boolean> {
-  return (
-    file.type !== "video/mp4" ||
-    file.size > MAX_VIDEO_UPLOAD_BYTES ||
-    !(await hasCompatibleMp4Tracks(file))
-  );
+/** Whether the file is an MP4 by its type and by its first bytes, as the server checks. */
+async function isMp4(file: Blob): Promise<boolean> {
+  if (file.type !== "video/mp4") return false;
+  const head = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+  return detectMimeFromMagicBytes(head) === "video/mp4";
 }
 
-async function prepareVideo(file: File, options?: VideoPreparationOptions): Promise<File> {
-  const { compressVideo } = await import("@/lib/media/video-compressor");
-  const needsConversion = options?.forceConversion || (await videoNeedsConversion(file));
-  const timeout = createTimeoutSignal(
-    options?.timeoutMs ??
-      (needsConversion ? REQUIRED_CONVERSION_TIMEOUT_MS : DEFAULT_COMPRESSION_TIMEOUT_MS)
-  );
-  let result: Awaited<ReturnType<typeof compressVideo>>;
+/** How a picked video will be prepared, from its headers only. */
+async function planPreparation(file: Blob): Promise<{
+  source: VideoSource;
+  facts: VideoFileFacts | null;
+}> {
+  const facts = await readVideoBlobFacts(file);
+  return { source: videoPreparation(facts, file.size, await isMp4(file)), facts };
+}
 
+/**
+ * Whether this video is remuxed or converted before upload (it is not an MP4
+ * that meets the keep rule as it is).
+ */
+export async function videoNeedsConversion(file: Blob): Promise<boolean> {
+  return (await planPreparation(file)).source !== "kept";
+}
+
+async function transcode(
+  file: File,
+  mode: "remuxed" | "converted",
+  facts: VideoFileFacts | null,
+  options?: VideoPreparationOptions
+): Promise<File> {
+  const { transcodeVideo } = await import("@/lib/media/video-compressor");
+  const timeout = createTimeoutSignal(options?.timeoutMs ?? PREPARATION_TIMEOUT_MS);
   try {
-    result = await Promise.race([
-      compressVideo(file, {
+    return await Promise.race([
+      transcodeVideo(file, {
+        mode,
+        facts,
         signal: timeout.signal,
-        forceTranscode: needsConversion,
         ...(options?.onProgress ? { onProgress: options.onProgress } : {}),
       }),
       timeout.promise,
     ]);
   } catch (error) {
-    if (timeout.timedOut()) {
-      if (!needsConversion) {
-        return file;
-      }
-      throw new VideoTranscodeError(
-        "This video took too long to convert. Film it in 720p or export it as MP4, then try again."
-      );
-    }
-    throw error;
+    if (timeout.timedOut()) throw new VideoTranscodeError(VIDEO_TOO_SLOW_MESSAGE);
+    console.warn(`[video] ${mode === "remuxed" ? "remux" : "conversion"} failed`, error);
+    throw new VideoTranscodeError();
   } finally {
     timeout.cancel();
   }
+}
 
-  if (needsConversion && (result.skipped || result.file === file)) throw new VideoTranscodeError();
-  if (options?.requireCompatibleOutput && result.file.type !== "video/mp4") {
-    throw new VideoTranscodeError();
+/** The output's keep-rule problem (null when it can be stored as it is). */
+async function outputProblem(output: File) {
+  const facts = await readVideoBlobFacts(output);
+  return facts ? videoRuleProblem(facts, output.size) : "unreadable";
+}
+
+async function prepareVideo(file: File, options?: VideoPreparationOptions): Promise<PreparedVideo> {
+  const { source, facts } = await planPreparation(file);
+  if (source === "kept") return { file, source };
+  if (source === "remuxed") {
+    // A remux takes seconds; one whose output still breaks the rule (a
+    // container the copy cannot fix) falls back to a conversion.
+    const remuxed = await transcode(file, "remuxed", facts, options).catch(() => null);
+    if (remuxed && (await outputProblem(remuxed)) === null)
+      return { file: remuxed, source: "remuxed" };
   }
-  return result.file;
+  const converted = await transcode(file, "converted", facts, options);
+  const problem = await outputProblem(converted);
+  if (problem === "file_size" || converted.size > MAX_VIDEO_UPLOAD_BYTES)
+    throw new VideoTranscodeError(VIDEO_TOO_LARGE_MESSAGE);
+  if (problem) throw new VideoTranscodeError();
+  return { file: converted, source: "converted" };
 }

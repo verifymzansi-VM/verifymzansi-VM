@@ -95,7 +95,10 @@ import {
   uploadRequiredBusinessMedia,
   uploadRequiredBusinessVideo,
 } from "@/app/post/_lib/business-media-upload";
-import { prewarmVideosForFastUpload } from "@/app/post/_lib/video-fast-upload";
+import {
+  prepareVideoForCover,
+  prewarmVideosForFastUpload,
+} from "@/app/post/_lib/video-fast-upload";
 import { validateBusinessForm } from "@/lib/forms/business-form";
 import {
   coerceBusinessDetails,
@@ -2030,7 +2033,8 @@ function CreateBusinessContent() {
                           onChange={(files) => {
                             setPromoVideoFile(files);
                             prewarmVideosForFastUpload(files);
-                            if (files.length === 0) setVideoThumbnailFile([]);
+                            // The thumbnail belongs to this video.
+                            if (files[0] !== promoVideoFile[0]) setVideoThumbnailFile([]);
                             clearErrors("cover_video", "video_thumbnail");
                           }}
                           accept="video/*"
@@ -2058,6 +2062,8 @@ function CreateBusinessContent() {
                         >
                           <VideoFrameSelector
                             file={promoVideoFile[0]}
+                            prepareVideo={prepareVideoForCover}
+                            autoSelect={videoThumbnailFile.length === 0}
                             onFrameSelect={(frame) => {
                               setVideoThumbnailFile(frame ? [frame] : []);
                               clearErrors("video_thumbnail");

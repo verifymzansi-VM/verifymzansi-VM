@@ -9,6 +9,7 @@ import {
   IMAGES_ALLOWANCE_EXHAUSTED_MESSAGE,
   type FoundationUploadedMedia,
 } from "@/lib/foundation/media-upload";
+import { VIDEO_SOURCES } from "@/lib/media/video-rule";
 import { enforceMutationRequest } from "@/lib/utils/mutation-guard";
 import { createLogger } from "@/lib/utils/logger";
 import { checkRateLimit, getClientRateLimitIdentity } from "@/lib/utils/rate-limit";
@@ -52,12 +53,25 @@ export async function uploadFoundationMediaRequest(request: NextRequest) {
       return context.respond(
         NextResponse.json({ error: "Choose one to ten media files" }, { status: 400 })
       );
+    // How the posting form prepared a single video (a measurement, stored with its facts).
+    const sent = form.get("video_source");
+    const videoSource =
+      files.length === 1 ? VIDEO_SOURCES.find((source) => source === sent) : undefined;
     const objects: FoundationUploadedMedia[] = [];
     const errors: string[] = [];
     let status = 400;
     for (const file of files) {
       try {
-        objects.push(await uploadFoundationMedia(caller.api, createFoundationServiceApi(), file));
+        objects.push(
+          await uploadFoundationMedia(
+            caller.api,
+            createFoundationServiceApi(),
+            file,
+            undefined,
+            process.env,
+            videoSource
+          )
+        );
       } catch (error) {
         status = error instanceof FoundationMediaError ? error.status : 503;
         errors.push(

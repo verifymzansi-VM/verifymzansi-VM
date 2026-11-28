@@ -7,6 +7,7 @@ import {
 } from "@/app/post/_lib/video-fast-upload";
 import { normalizeCreatePostRuntimeError } from "@/app/post/_lib/create-post-errors";
 import { uploadMediaViaServer } from "@/app/post/_lib/server-media-upload";
+import type { VideoSource } from "@/lib/media/video-rule";
 import type { UploadArea } from "@/types/enums";
 
 const log = createLogger("PromotionMediaUpload");
@@ -45,10 +46,12 @@ async function uploadPromotionVideosViaServer({
   files,
   area,
   onProgress,
+  videoSource,
 }: {
   files: File[];
   area: UploadArea;
   onProgress?: (percent: number) => void;
+  videoSource?: VideoSource;
 }): Promise<string[]> {
   return uploadMediaViaServer({
     files,
@@ -56,6 +59,7 @@ async function uploadPromotionVideosViaServer({
     fallbackMessage: FIELD_MESSAGES.videos,
     preferPayloadError: true,
     onProgress,
+    videoSource,
   });
 }
 
@@ -148,11 +152,12 @@ export async function uploadPromotionVideoFiles({
           area,
           maxSeconds,
           onProgress,
-          uploadViaServer: (uploadFile, onUploadProgress) =>
+          uploadViaServer: (uploadFile, onUploadProgress, videoSource) =>
             uploadPromotionVideosViaServer({
               files: [uploadFile],
               area,
               onProgress: onUploadProgress,
+              videoSource,
             }).then((urls) => urls[0] ?? ""),
         })
       )

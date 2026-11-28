@@ -1271,7 +1271,7 @@
       "tests": [
         {
           "kind": "behaviour",
-          "file": "src/app/post/_lib/video-fast-upload.test.ts"
+          "file": "src/lib/media/compress-before-upload.test.ts"
         }
       ]
     },

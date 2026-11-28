@@ -6,7 +6,7 @@ import {
 } from "@/test/foundation-post-transport";
 import CreateTourismPage from "./page";
 import { fetchWithRetry } from "@/lib/utils/fetch-retry";
-import { compressVideoForUpload, VideoTranscodeError } from "@/lib/media/compress-before-upload";
+import { prepareVideoUpload, VideoTranscodeError } from "@/lib/media/compress-before-upload";
 import { checkUploadServiceReachable } from "@/lib/utils/upload-preflight";
 import { readVideoLengthSeconds } from "@/lib/media/video-length-client";
 
@@ -251,7 +251,7 @@ vi.mock("@/components/ui/media-upload", () => ({
 }));
 
 vi.mock("@/lib/media/compress-before-upload", () => ({
-  compressVideoForUpload: vi.fn(async (file: File) => file),
+  prepareVideoUpload: vi.fn(async (file: File) => ({ file, source: "kept" })),
   VideoTranscodeError: class VideoTranscodeError extends Error {
     constructor(message: string) {
       super(message);
@@ -1080,7 +1080,7 @@ describe("CreateTourismPage type switch behavior", () => {
     const transcodeFailure = new VideoTranscodeError(
       "This MOV video could not be converted to MP4. Export it as MP4 and try again."
     );
-    (compressVideoForUpload as unknown as ReturnType<typeof vi.fn>)
+    (prepareVideoUpload as unknown as ReturnType<typeof vi.fn>)
       .mockRejectedValueOnce(transcodeFailure)
       .mockRejectedValueOnce(transcodeFailure);
 

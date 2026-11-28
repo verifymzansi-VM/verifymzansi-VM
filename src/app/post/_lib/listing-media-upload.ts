@@ -10,6 +10,7 @@ import {
   uploadMediaFileViaServer,
   uploadMediaViaServer,
 } from "@/app/post/_lib/server-media-upload";
+import type { VideoSource } from "@/lib/media/video-rule";
 import type { UploadArea } from "@/types/enums";
 
 const log = createLogger("ListingMediaUpload");
@@ -69,10 +70,12 @@ async function uploadListingVideoViaServer({
   file,
   area,
   onProgress,
+  videoSource,
 }: {
   file: File;
   area: UploadArea;
   onProgress?: (percent: number) => void;
+  videoSource: VideoSource;
 }): Promise<string> {
   return uploadMediaFileViaServer({
     file,
@@ -80,6 +83,7 @@ async function uploadListingVideoViaServer({
     fallbackMessage: VIDEO_FIELD_MESSAGE,
     preferPayloadError: true,
     onProgress,
+    videoSource,
   });
 }
 
@@ -117,8 +121,13 @@ export async function uploadListingVideoFiles({
           file,
           area,
           onProgress,
-          uploadViaServer: (uploadFile, onUploadProgress) =>
-            uploadListingVideoViaServer({ file: uploadFile, area, onProgress: onUploadProgress }),
+          uploadViaServer: (uploadFile, onUploadProgress, videoSource) =>
+            uploadListingVideoViaServer({
+              file: uploadFile,
+              area,
+              onProgress: onUploadProgress,
+              videoSource,
+            }),
         })
       )
     );

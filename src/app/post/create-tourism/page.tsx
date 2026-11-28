@@ -77,7 +77,10 @@ import {
   uploadPromotionVideoFiles,
   uploadRequiredPromotionMedia,
 } from "@/app/post/_lib/promotion-media-upload";
-import { prewarmVideosForFastUpload } from "@/app/post/_lib/video-fast-upload";
+import {
+  prepareVideoForCover,
+  prewarmVideosForFastUpload,
+} from "@/app/post/_lib/video-fast-upload";
 import { VIDEO_GUIDANCE, videoLimitSeconds, VIDEO_SOUND_OFF_TIP } from "@/lib/media/video-length";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
@@ -3532,6 +3535,8 @@ function CreateTourismContent() {
                           <p className="text-sm font-medium">Video thumbnail</p>
                           <VideoFrameSelector
                             file={videoFiles[0]}
+                            prepareVideo={prepareVideoForCover}
+                            autoSelect={videoThumbnailFile.length === 0}
                             onFrameSelect={(f) => {
                               setVideoThumbnailFile(f ? [f] : []);
                               clearErrors("video_thumbnail");

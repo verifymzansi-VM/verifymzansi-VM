@@ -71,7 +71,10 @@ import {
   uploadListingImages,
   uploadListingVideoFiles,
 } from "@/app/post/_lib/listing-media-upload";
-import { prewarmVideosForFastUpload } from "@/app/post/_lib/video-fast-upload";
+import {
+  prepareVideoForCover,
+  prewarmVideosForFastUpload,
+} from "@/app/post/_lib/video-fast-upload";
 import {
   DEFAULT_LISTING_CONTACT_METHODS,
   coerceListingAttributes,
@@ -1687,7 +1690,8 @@ function CreateListingForm() {
                           onChange={(files) => {
                             setVideoFile(files);
                             prewarmVideosForFastUpload(files);
-                            if (files.length === 0) setVideoCoverFile([]);
+                            // The cover belongs to the first video.
+                            if (files[0] !== videoFile[0]) setVideoCoverFile([]);
                             clearErrors("videos");
                           }}
                           accept="video/*"
@@ -1718,6 +1722,8 @@ function CreateListingForm() {
                         <div className="space-y-3">
                           <VideoFrameSelector
                             file={videoFile[0]}
+                            prepareVideo={prepareVideoForCover}
+                            autoSelect={videoCoverFile.length === 0}
                             onFrameSelect={(frame) => {
                               setVideoCoverFile(frame ? [frame] : []);
                               clearErrors("videoThumbnail");

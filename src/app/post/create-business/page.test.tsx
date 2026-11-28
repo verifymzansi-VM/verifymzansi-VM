@@ -58,7 +58,7 @@ vi.mock("@/lib/utils/upload-preflight", () => ({
 }));
 
 vi.mock("@/lib/media/compress-before-upload", () => ({
-  compressVideoForUpload: vi.fn(async (file: File) => file),
+  prepareVideoUpload: vi.fn(async (file: File) => ({ file, source: "kept" })),
 }));
 
 vi.mock("next/link", () => ({
