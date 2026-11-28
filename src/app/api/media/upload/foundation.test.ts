@@ -5,6 +5,7 @@ import { uploadFoundationMediaRequest } from "./foundation";
 import { createFoundationRouteContext } from "@/lib/foundation/request-route";
 import { FoundationSessionError } from "@/lib/foundation/request-api";
 import { FoundationMediaError, uploadFoundationMedia } from "@/lib/foundation/media-upload";
+import { VIDEO_RULE_MESSAGE } from "@/lib/media/video-rule";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
 import { readBoundedRequestFormData, RequestBodyTooLargeError } from "@/lib/utils/request-body";
 import type * as RequestBody from "@/lib/utils/request-body";
@@ -44,9 +45,10 @@ const object = (n: number) => ({
 });
 const file = (name: string, size = 10) =>
   new File([new Uint8Array(size)], name, { type: "image/png" });
-function request(files: File[], { csrfValid = true } = {}) {
+function request(files: File[], { csrfValid = true, videoSource = "" } = {}) {
   const form = new FormData();
   for (const item of files) form.append("files", item);
+  if (videoSource) form.append("video_source", videoSource);
   return new NextRequest("https://verifymzansi.com/api/media/upload", {
     method: "POST",
     body: form,
@@ -222,6 +224,31 @@ describe("uploadFoundationMediaRequest", () => {
       status: 400,
       body: { success: false, errors: ["Your video is 2 min 40 s; the limit is 2 minutes"] },
     });
+  });
+
+  it("tells the member when the server cannot store a video as it is (keep rule)", async () => {
+    vi.mocked(uploadFoundationMedia).mockRejectedValue(
+      new FoundationMediaError(400, "video_format", VIDEO_RULE_MESSAGE)
+    );
+    const response = await uploadFoundationMediaRequest(request([file("a.mp4")]));
+    expect(await json(response)).toMatchObject({
+      status: 400,
+      body: { success: false, errors: [VIDEO_RULE_MESSAGE] },
+    });
+  });
+
+  it("passes how a single video was prepared to the upload, and ignores unknown values", async () => {
+    await uploadFoundationMediaRequest(request([file("a.mp4")], { videoSource: "converted" }));
+    await uploadFoundationMediaRequest(request([file("b.mp4")], { videoSource: "uploaded" }));
+    await uploadFoundationMediaRequest(
+      request([file("c.mp4"), file("d.mp4")], { videoSource: "kept" })
+    );
+    expect(vi.mocked(uploadFoundationMedia).mock.calls.map((call) => call[5])).toEqual([
+      "converted",
+      undefined,
+      undefined,
+      undefined,
+    ]);
   });
 
   it.each([

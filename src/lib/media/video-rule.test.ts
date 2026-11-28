@@ -5,9 +5,11 @@ import { readVideoBlobFacts, readVideoBytesFacts, type VideoFileFacts } from "./
 import {
   MAX_KEPT_VIDEO_BITS_PER_SECOND,
   VIDEO_RULE_MESSAGE,
+  videoPreparation,
   videoRuleProblem,
   videoUploadFacts,
   type VideoRuleProblem,
+  type VideoSource,
 } from "./video-rule";
 import { syntheticMp4, type SyntheticMp4Options } from "@/test/synthetic-video";
 
@@ -46,7 +48,7 @@ describe("real MP4 files (made with the site's own ffmpeg.wasm; see make-video-r
 
   it("has exactly the reviewed fixture set", () => {
     expect(readdirSync(FIXTURES).sort()).toEqual(
-      [...Object.keys(expected), "unreadable-fragmented.mp4"].sort()
+      [...Object.keys(expected), "remux-h264-aac.mov", "unreadable-fragmented.mp4"].sort()
     );
   });
 
@@ -217,7 +219,60 @@ describe("stored facts", () => {
 
   it("tells the member what to do", () => {
     expect(VIDEO_RULE_MESSAGE).toBe(
-      "This video can't be stored as it is. Pick it again in the posting form so it can be prepared, or export it as MP4 (H.264, up to 1080p)."
+      "This video can't be stored as it is. Refresh the page and choose it again, or export it as MP4 (H.264, up to 1080p)."
+    );
+  });
+});
+
+describe("videoPreparation (what the phone does before upload, phase 1b)", () => {
+  const expected: Record<string, VideoSource> = {
+    "pass-720x1280-high-30fps-aac.mp4": "kept",
+    "pass-1080x1920-high-30fps-aac.mp4": "kept",
+    "pass-1280x720-main-60fps-silent.mp4": "kept",
+    "pass-converter-baseline-720p.mp4": "kept",
+    "pass-1920x1080-29.97fps-aac.mp4": "kept",
+    "fail-moov-at-end.mp4": "remuxed",
+    "fail-subtitle-track.mp4": "remuxed",
+    "fail-two-audio-tracks.mp4": "remuxed",
+    "fail-1920x1080-60fps.mp4": "converted",
+    "fail-2560x1440.mp4": "converted",
+    "fail-high-bitrate.mp4": "converted",
+    "fail-mp3-audio.mp4": "converted",
+  };
+
+  it.each(Object.entries(expected))("%s → %s", async (name, source) => {
+    const bytes = new Uint8Array(readFileSync(`${FIXTURES}/${name}`));
+    expect(videoPreparation(await factsOf(bytes), bytes.length, true)).toBe(source);
+  });
+
+  it("reads AAC inside a QuickTime wave box, so a real H.264/AAC MOV is remuxed", async () => {
+    const bytes = new Uint8Array(readFileSync(`${FIXTURES}/remux-h264-aac.mov`));
+    const facts = await factsOf(bytes);
+    expect(facts).toMatchObject({ audio: "aac", audioTracks: 1, faststart: false });
+    expect(videoPreparation(facts, bytes.length, false)).toBe("remuxed");
+  });
+
+  it("remuxes a file that meets the rule but is not an MP4 (MOV) or a different container", async () => {
+    const bytes = new Uint8Array(readFileSync(`${FIXTURES}/pass-720x1280-high-30fps-aac.mp4`));
+    expect(videoPreparation(await factsOf(bytes), bytes.length, false)).toBe("remuxed");
+  });
+
+  it("converts unreadable headers and anything a copy cannot fix", async () => {
+    expect(videoPreparation(null, 1000, true)).toBe("converted");
+    const facts = await factsOf(clip());
+    // Over 50 MB: a remux keeps the size, so only a conversion can shrink it.
+    expect(videoPreparation(facts, 52_428_801, true)).toBe("converted");
+    expect(videoPreparation({ ...facts, faststart: false, audio: "other" }, 1000, true)).toBe(
+      "converted"
+    );
+  });
+
+  it("stores how the form prepared the video, and only the three known values", async () => {
+    const facts = await factsOf(clip());
+    expect(videoUploadFacts(facts, null, "remuxed")).toMatchObject({ source: "remuxed" });
+    expect(videoUploadFacts(facts, null)).not.toHaveProperty("source");
+    expect(videoUploadFacts(facts, null, "uploaded" as unknown as VideoSource)).not.toHaveProperty(
+      "source"
     );
   });
 });

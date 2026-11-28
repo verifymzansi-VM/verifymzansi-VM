@@ -1,8 +1,9 @@
 /**
  * The keep rule for stored videos (video plan, phase 1): an MP4 every phone
  * browser plays as it is. The upload server checks every video against it
- * (src/lib/foundation/media-upload.ts); the posting forms will use the same
- * rule to decide whether a picked file can be kept, remuxed or converted.
+ * (src/lib/foundation/media-upload.ts); the posting forms use the same rule
+ * to decide whether a picked file is kept, remuxed or converted
+ * (videoPreparation, used by compress-before-upload.ts).
  *
  * Only headers are read (video-length.ts), nothing is decoded. Profiles 66,
  * 77 and 100 (Baseline, Main, High) are 8-bit 4:2:0 by definition.
@@ -37,7 +38,7 @@ export type VideoRuleProblem =
 
 /** What a member is told when the server refuses a video under the rule. */
 export const VIDEO_RULE_MESSAGE =
-  "This video can't be stored as it is. Pick it again in the posting form so it can be prepared, or export it as MP4 (H.264, up to 1080p).";
+  "This video can't be stored as it is. Refresh the page and choose it again, or export it as MP4 (H.264, up to 1080p).";
 
 /** The first rule the file breaks, or null when it can be stored as it is. */
 export function videoRuleProblem(
@@ -62,6 +63,39 @@ export function videoRuleProblem(
   return null;
 }
 
+/** How the posting form prepares a picked video (phase 1b), sent with its facts. */
+export type VideoSource = "kept" | "remuxed" | "converted";
+export const VIDEO_SOURCES: readonly VideoSource[] = ["kept", "remuxed", "converted"];
+
+/**
+ * What the phone does with a picked video before upload:
+ * - `kept`: an MP4 that already meets the rule goes up untouched;
+ * - `remuxed`: only the container is wrong (MOV, moov at the end, extra
+ *   tracks or a second sound track), so the streams are copied into a new
+ *   faststart MP4 without re-encoding;
+ * - `converted`: anything else (or unreadable headers) is re-encoded.
+ * `mp4` says the file is an MP4 by its type and its first bytes, as the
+ * upload server checks.
+ */
+export function videoPreparation(
+  facts: VideoFileFacts | null,
+  sizeBytes: number,
+  mp4: boolean
+): VideoSource {
+  if (!facts) return "converted";
+  if (mp4 && videoRuleProblem(facts, sizeBytes) === null) return "kept";
+  // A remux writes faststart, keeps only the first video and sound tracks
+  // and drops every other track; the streams themselves are unchanged.
+  const remuxed: VideoFileFacts = {
+    ...facts,
+    faststart: true,
+    videoTracks: Math.min(facts.videoTracks, 1),
+    audioTracks: Math.min(facts.audioTracks, 1),
+    otherTracks: 0,
+  };
+  return videoRuleProblem(remuxed, sizeBytes) === null ? "remuxed" : "converted";
+}
+
 /**
  * Ranges the database accepts for stored facts (update 20261127114113): a
  * crafted file can claim more (16-bit sizes, any frame rate, any four bytes as
@@ -80,9 +114,15 @@ function printableCodec(codec: string): string {
  * what the file is, and which rule it broke (null when none). Length, size
  * and so bitrate are already stored on the row.
  */
-export function videoUploadFacts(facts: VideoFileFacts, problem: VideoRuleProblem | null) {
+export function videoUploadFacts(
+  facts: VideoFileFacts,
+  problem: VideoRuleProblem | null,
+  source?: VideoSource
+) {
   const { video } = facts;
   return {
+    // How the posting form prepared it, as the form says (a measurement only).
+    ...(source && VIDEO_SOURCES.includes(source) ? { source } : {}),
     codec: printableCodec(video.codec),
     ...(video.profile === null ? {} : { profile: video.profile }),
     ...(video.level === null ? {} : { level: video.level }),

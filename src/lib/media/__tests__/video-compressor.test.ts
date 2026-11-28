@@ -52,53 +52,13 @@ vi.mock("@ffmpeg/util", () => ({
   fetchFile: mockFetchFile,
 }));
 
-// Header reads used only when the <video> element gives no size.
-const { mockHeaderSeconds, mockCompatibleTracks } = vi.hoisted(() => ({
-  mockHeaderSeconds: vi.fn(async (): Promise<number | null> => null),
-  mockCompatibleTracks: vi.fn(async () => true),
-}));
-vi.mock("@/lib/media/video-length", () => ({ readVideoBlobSeconds: mockHeaderSeconds }));
-vi.mock("@/lib/media/mp4-compatibility", () => ({ hasCompatibleMp4Tracks: mockCompatibleTracks }));
-
-// ---------------------------------------------------------------------------
-// Mock the <video> element used by readVideoDimensions (private helper inside
-// video-compressor.ts).  jsdom has no real media decoding, so we simulate
-// loadedmetadata via a minimal stub.
-// ---------------------------------------------------------------------------
-
-function createMockVideo(width: number, height: number, duration: number) {
-  const listeners: Record<string, EventListener> = {};
-  return {
-    preload: "",
-    videoWidth: width,
-    videoHeight: height,
-    duration,
-    set src(_url: string) {
-      // Trigger loadedmetadata asynchronously (mirrors real browser behaviour)
-      setTimeout(() => listeners["loadedmetadata"]?.(new Event("loadedmetadata")), 0);
-    },
-    addEventListener(event: string, handler: EventListener) {
-      listeners[event] = handler;
-    },
-    remove: vi.fn(),
-  };
-}
-
-let mockVideoMeta = { width: 1920, height: 1080, duration: 30 };
-
 beforeEach(() => {
-  mockVideoMeta = { width: 1920, height: 1080, duration: 30 };
   vi.clearAllMocks();
-
-  // Restore default mock implementations after clearAllMocks
   mockReadFile.mockResolvedValue(new Uint8Array(500_000));
   mockLoad.mockResolvedValue(undefined);
   mockExec.mockResolvedValue(0);
   mockWriteFile.mockResolvedValue(undefined);
   mockMount.current = undefined;
-  mockHeaderSeconds.mockResolvedValue(null);
-  mockCompatibleTracks.mockResolvedValue(true);
-
   vi.stubGlobal(
     "fetch",
     vi.fn(async () => new Response(new Uint8Array([0x00, 0x61, 0x73, 0x6d]), { status: 200 }))
@@ -110,319 +70,178 @@ beforeEach(() => {
       revokeObjectURL: vi.fn(),
     })
   );
-
-  // Intercept document.createElement to return a mock <video> when requested
-  const origCreate = document.createElement.bind(document);
-  vi.spyOn(document, "createElement").mockImplementation(
-    (tag: string, opts?: ElementCreationOptions) => {
-      if (tag === "video") {
-        return createMockVideo(
-          mockVideoMeta.width,
-          mockVideoMeta.height,
-          mockVideoMeta.duration
-        ) as unknown as HTMLElement;
-      }
-      return origCreate(tag, opts);
-    }
-  );
 });
 
-// ---------------------------------------------------------------------------
-// Import after mocks
-// ---------------------------------------------------------------------------
+import { transcodeArguments, transcodeVideo } from "@/lib/media/video-compressor";
+import type { VideoFileFacts } from "@/lib/media/video-length";
 
-import { compressVideo } from "@/lib/media/video-compressor";
-
-// Helper: create a File with a given size.
 function fakeFile(sizeBytes: number, name = "test.mp4", type = "video/mp4"): File {
-  const buf = new ArrayBuffer(sizeBytes);
-  return new File([buf], name, { type });
+  return new File([new ArrayBuffer(sizeBytes)], name, { type });
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
+/** Facts of a 20 s 1080p 30 fps phone clip with AAC sound; options change one thing. */
+function facts(change: Partial<VideoFileFacts> & { fps?: number } = {}): VideoFileFacts {
+  const { fps = 30, ...rest } = change;
+  return {
+    seconds: 20,
+    faststart: true,
+    video: { codec: "avc1", profile: 100, level: 40, width: 1080, height: 1920, fps },
+    videoTracks: 1,
+    audio: "aac",
+    audioTracks: 1,
+    otherTracks: 0,
+    ...rest,
+  };
+}
 
-describe("compressVideo", () => {
-  it("transcodes small MP4 inputs when their codec requires conversion and retains larger output", async () => {
-    const file = fakeFile(10, "phone.mp4", "video/mp4");
-    const result = await compressVideo(file, { forceTranscode: true });
-    expect(mockExec).toHaveBeenCalled();
-    expect(result.skipped).toBe(false);
-    expect(result.file).not.toBe(file);
+function lastArgs(): string[] {
+  return mockExec.mock.calls[mockExec.mock.calls.length - 1][0] as string[];
+}
+
+function after(args: string[], flag: string): string | undefined {
+  const at = args.indexOf(flag);
+  return at < 0 ? undefined : args[at + 1];
+}
+
+describe("transcodeArguments", () => {
+  it("remuxes by copying the first video and sound streams into a faststart MP4", () => {
+    expect(transcodeArguments("remuxed", facts())).toEqual([
+      "-map",
+      "0:v:0",
+      "-map",
+      "0:a:0?",
+      "-map_metadata",
+      "-1",
+      "-c",
+      "copy",
+      "-movflags",
+      "+faststart",
+    ]);
   });
-  it("releases the encoder when encoding fails", async () => {
+
+  it("converts with sharper settings: H.264 High 4.0, CRF 23 capped at 3 Mbps, 2 s keyframes", () => {
+    const args = transcodeArguments("converted", facts());
+    expect(after(args, "-c:v")).toBe("libx264");
+    expect(after(args, "-profile:v")).toBe("high");
+    expect(after(args, "-level")).toBe("4.0");
+    expect(after(args, "-pix_fmt")).toBe("yuv420p");
+    expect(after(args, "-crf")).toBe("23");
+    expect(after(args, "-maxrate")).toBe("3000k");
+    expect(after(args, "-bufsize")).toBe("6000k");
+    expect(after(args, "-g")).toBe("60");
+    expect(after(args, "-movflags")).toBe("+faststart");
+    expect(args).not.toContain("-b:v");
+    expect(args).not.toContain("baseline");
+    const filter = after(args, "-vf")!;
+    expect(filter).toContain("1280");
+    expect(filter).toContain("720");
+    expect(filter).toContain("pad=");
+  });
+
+  it("shrinks the rate buffer for short clips so the average stays within 4 Mbps", () => {
+    expect(after(transcodeArguments("converted", facts({ seconds: 1 })), "-bufsize")).toBe("500k");
+    expect(after(transcodeArguments("converted", facts({ seconds: 4 })), "-bufsize")).toBe("2000k");
+    expect(after(transcodeArguments("converted", facts({ seconds: 90 })), "-bufsize")).toBe(
+      "6000k"
+    );
+    expect(after(transcodeArguments("converted", null), "-bufsize")).toBe("6000k");
+  });
+
+  it("uses superfast up to 30 s and ultrafast for longer or unreadable clips", () => {
+    expect(after(transcodeArguments("converted", facts({ seconds: 30 })), "-preset")).toBe(
+      "superfast"
+    );
+    expect(after(transcodeArguments("converted", facts({ seconds: 31 })), "-preset")).toBe(
+      "ultrafast"
+    );
+    expect(after(transcodeArguments("converted", null), "-preset")).toBe("ultrafast");
+  });
+
+  it("drops to 30 fps only when the source is faster or its rate is unknown", () => {
+    expect(after(transcodeArguments("converted", facts({ fps: 29.97 })), "-vf")).toMatch(/^scale=/);
+    expect(after(transcodeArguments("converted", facts({ fps: 60 })), "-vf")).toMatch(
+      /^fps=30,scale=/
+    );
+    expect(after(transcodeArguments("converted", null), "-vf")).toMatch(/^fps=30,scale=/);
+  });
+
+  it("copies AAC sound and encodes any other sound as AAC 128 kbps", () => {
+    const copied = transcodeArguments("converted", facts());
+    expect(after(copied, "-c:a")).toBe("copy");
+    expect(copied).not.toContain("-b:a");
+    for (const other of [facts({ audio: "other" }), facts({ audio: "none" }), null]) {
+      const args = transcodeArguments("converted", other);
+      expect(after(args, "-c:a")).toBe("aac");
+      expect(after(args, "-b:a")).toBe("128k");
+    }
+  });
+});
+
+describe("transcodeVideo", () => {
+  it("returns a new MP4 file from the encoder output", async () => {
+    const output = await transcodeVideo(fakeFile(3_000_000, "clip.mov", "video/quicktime"), {
+      mode: "converted",
+      facts: facts(),
+    });
+    expect(output.type).toBe("video/mp4");
+    expect(output.name).toBe("clip.mp4");
+    expect(output.size).toBe(500_000);
+    const args = lastArgs();
+    expect(args.slice(0, 2)).toEqual(["-i", "input.mov"]);
+    expect(args.slice(-2)).toEqual(["-y", "output.mp4"]);
+  });
+
+  it("passes the remux arguments to the encoder", async () => {
+    await transcodeVideo(fakeFile(10), { mode: "remuxed", facts: facts() });
+    expect(after(lastArgs(), "-c")).toBe("copy");
+  });
+
+  it("throws when the encoder fails, or produces nothing", async () => {
     mockExec.mockResolvedValueOnce(1);
-    const file = fakeFile(3_000_000, "clip.mov", "video/quicktime");
-    const result = await compressVideo(file);
-    expect(result.file).toBe(file);
-    expect(result.skipReason).toContain("exited with code 1");
-    expect(mockReadFile).not.toHaveBeenCalled();
-    expect(mockTerminate).toHaveBeenCalled();
-  });
-
-  it("rejects empty encoder output and releases the worker", async () => {
+    await expect(transcodeVideo(fakeFile(10), { mode: "converted", facts: null })).rejects.toThrow(
+      "exited with code 1"
+    );
     mockReadFile.mockResolvedValueOnce(new Uint8Array(0));
-    const result = await compressVideo(fakeFile(3_000_000, "clip.mov", "video/quicktime"));
-    expect(result.skipped).toBe(true);
-    expect(result.skipReason).toContain("empty file");
-    expect(mockTerminate).toHaveBeenCalled();
-  });
-
-  it("compresses square video exceeding the short-edge limit", async () => {
-    mockVideoMeta = { width: 1080, height: 1080, duration: 30 };
-    await compressVideo(fakeFile(3_000_000));
-    expect(mockExec).toHaveBeenCalled();
-    const args = mockExec.mock.calls[0][0] as string[];
-    expect(args[args.indexOf("-vf") + 1]).toContain("720");
-    expect(args[args.indexOf("-pix_fmt") + 1]).toBe("yuv420p");
-    expect(args[args.indexOf("-r") + 1]).toBe("30");
-  });
-
-  it("skips compression for files below the size threshold", async () => {
-    const small = fakeFile(1 * 1024 * 1024); // 1 MB — below default 2 MB threshold
-    const result = await compressVideo(small);
-
-    expect(result.skipped).toBe(true);
-    expect(result.skipReason).toContain("below");
-    expect(result.file).toBe(small); // returns original
-    expect(result.compressionRatio).toBe(1);
-    expect(mockLoad).not.toHaveBeenCalled(); // FFmpeg never loaded
-  });
-
-  it("does not skip small QuickTime files because R2 upload requires MP4/WebM", async () => {
-    const smallMov = fakeFile(1 * 1024 * 1024, "clip.mov", "video/quicktime");
-    const result = await compressVideo(smallMov);
-
-    expect(result.skipped).toBe(false);
-    expect(result.file.type).toBe("video/mp4");
-    expect(result.file.name).toBe("clip.mp4");
-    expect(mockLoad).toHaveBeenCalled();
-  });
-
-  it("skips compression for small custom threshold", async () => {
-    const file = fakeFile(500_000); // 500 KB
-    const result = await compressVideo(file, { skipBelowBytes: 1_000_000 });
-
-    expect(result.skipped).toBe(true);
-    expect(result.skipReason).toContain("below");
-  });
-
-  it("skips when video is already ≤720p and low bitrate", async () => {
-    // 720p, 30s, 3 MB → ~800 Kbps (below 2 Mbps threshold)
-    mockVideoMeta = { width: 1280, height: 720, duration: 30 };
-    const file = fakeFile(3 * 1024 * 1024);
-
-    const result = await compressVideo(file);
-
-    expect(result.skipped).toBe(true);
-    expect(result.skipReason).toContain("Already");
-    expect(result.file).toBe(file);
-    expect(mockLoad).not.toHaveBeenCalled();
-  });
-
-  it("skips when portrait video fits within max dimension and low bitrate", async () => {
-    // Portrait 720×1280, 30s, 3 MB → low bitrate
-    mockVideoMeta = { width: 720, height: 1280, duration: 30 };
-    const file = fakeFile(3 * 1024 * 1024);
-
-    const result = await compressVideo(file);
-
-    expect(result.skipped).toBe(true);
-    expect(result.skipReason).toContain("Already");
-  });
-
-  it("does NOT skip when resolution exceeds max dimension", async () => {
-    // 1920×1080, 30s, 10 MB → needs compression
-    mockVideoMeta = { width: 1920, height: 1080, duration: 30 };
-    const file = fakeFile(10 * 1024 * 1024);
-
-    const result = await compressVideo(file);
-
-    expect(result.skipped).toBe(false);
-    expect(mockLoad).toHaveBeenCalled();
-    expect(mockExec).toHaveBeenCalled();
-  });
-
-  it("loads the UMD core required by the production webpack classic worker", async () => {
-    mockVideoMeta = { width: 1920, height: 1080, duration: 30 };
-    const file = fakeFile(10 * 1024 * 1024);
-
-    await compressVideo(file);
-
-    expect(fetch).toHaveBeenCalledWith("/vendor/ffmpeg-core/ffmpeg-core.wasm.gz", {
-      signal: undefined,
-    });
-    expect(mockLoad).toHaveBeenCalledWith({
-      coreURL: `${window.location.origin}/vendor/ffmpeg-core/ffmpeg-core.js`,
-      wasmURL: "blob:mock",
-    });
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:mock");
-  });
-
-  it("falls back to the original file when the self-hosted core is unavailable", async () => {
-    mockVideoMeta = { width: 1920, height: 1080, duration: 30 };
-    vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 404 }));
-
-    const result = await compressVideo(fakeFile(10 * 1024 * 1024));
-
-    expect(result.skipped).toBe(true);
-    expect(result.skipReason).toContain("FFmpeg core download failed (404)");
-    expect(mockLoad).not.toHaveBeenCalled();
-  });
-
-  it("does NOT skip when bitrate is high even at 720p", async () => {
-    // 1280×720, 10s, 10 MB → ~8 Mbps (above 2 Mbps threshold)
-    mockVideoMeta = { width: 1280, height: 720, duration: 10 };
-    const file = fakeFile(10 * 1024 * 1024);
-
-    const result = await compressVideo(file);
-
-    expect(result.skipped).toBe(false);
-    expect(mockLoad).toHaveBeenCalled();
-  });
-
-  it("returns compressed file with correct metadata", async () => {
-    mockVideoMeta = { width: 1920, height: 1080, duration: 30 };
-    const original = fakeFile(10 * 1024 * 1024, "video.mov", "video/quicktime");
-
-    const result = await compressVideo(original);
-
-    expect(result.skipped).toBe(false);
-    expect(result.originalSize).toBe(10 * 1024 * 1024);
-    expect(result.compressedSize).toBeLessThan(result.originalSize);
-    expect(result.compressionRatio).toBeGreaterThan(1);
-    expect(result.file.type).toBe("video/mp4");
-    expect(result.file.name).toBe("video.mp4"); // extension changed
-  });
-
-  it("returns original file if compressed output is larger", async () => {
-    mockVideoMeta = { width: 1920, height: 1080, duration: 30 };
-    const original = fakeFile(3 * 1024 * 1024); // 3 MB
-
-    // Mock FFmpeg returning a larger file (4 MB)
-    mockReadFile.mockResolvedValueOnce(new Uint8Array(4 * 1024 * 1024));
-
-    const result = await compressVideo(original);
-
-    expect(result.skipped).toBe(true);
-    expect(result.skipReason).toContain("larger");
-    expect(result.file).toBe(original);
-  });
-
-  it("keeps larger MP4 output for QuickTime input so upload validation can pass", async () => {
-    mockVideoMeta = { width: 1920, height: 1080, duration: 30 };
-    const original = fakeFile(3 * 1024 * 1024, "clip.mov", "video/quicktime");
-
-    mockReadFile.mockResolvedValueOnce(new Uint8Array(4 * 1024 * 1024));
-
-    const result = await compressVideo(original);
-
-    expect(result.skipped).toBe(false);
-    expect(result.file).not.toBe(original);
-    expect(result.file.type).toBe("video/mp4");
-    expect(result.file.name).toBe("clip.mp4");
-  });
-
-  it("adds an MP4 extension when compressed phone video has no extension", async () => {
-    mockVideoMeta = { width: 1920, height: 1080, duration: 30 };
-    const original = fakeFile(3 * 1024 * 1024, "1000061870", "video/quicktime");
-
-    const result = await compressVideo(original);
-
-    expect(result.skipped).toBe(false);
-    expect(result.file.type).toBe("video/mp4");
-    expect(result.file.name).toBe("1000061870.mp4");
-  });
-
-  it("falls back to original on FFmpeg failure", async () => {
-    mockVideoMeta = { width: 1920, height: 1080, duration: 30 };
-    const original = fakeFile(10 * 1024 * 1024);
-
-    mockLoad.mockRejectedValueOnce(new Error("WASM failed to load"));
-
-    const result = await compressVideo(original);
-
-    expect(result.skipped).toBe(true);
-    expect(result.skipReason).toContain("failed");
-    expect(result.file).toBe(original);
-    expect(result.compressionRatio).toBe(1);
-  });
-
-  it("throws AbortError when signal is already aborted", async () => {
-    mockVideoMeta = { width: 1920, height: 1080, duration: 30 };
-    const file = fakeFile(10 * 1024 * 1024);
-    const controller = new AbortController();
-    controller.abort();
-
-    await expect(compressVideo(file, { signal: controller.signal })).rejects.toThrow(
-      "Compression aborted"
+    await expect(transcodeVideo(fakeFile(10), { mode: "converted", facts: null })).rejects.toThrow(
+      "empty file"
     );
   });
 
-  it("includes scale filter in FFmpeg arguments", async () => {
-    mockVideoMeta = { width: 1920, height: 1080, duration: 30 };
-    const file = fakeFile(10 * 1024 * 1024);
-
-    await compressVideo(file);
-
-    const args = mockExec.mock.calls[mockExec.mock.calls.length - 1][0] as string[];
-    const vfIndex = args.indexOf("-vf");
-    expect(vfIndex).toBeGreaterThan(-1);
-    const filterStr = args[vfIndex + 1];
-    expect(filterStr).toContain("scale=");
-    // Drop excess frames before scaling high-frame-rate phone footage.
-    expect(filterStr.startsWith("fps=30,scale=")).toBe(true);
-    expect(args[args.indexOf("-preset") + 1]).toBe("ultrafast");
-    expect(filterStr).toContain("1280"); // max dimension
-    expect(filterStr).toContain("pad=");
+  it("reports progress", async () => {
+    const onProgress = vi.fn();
+    mockOn.mockImplementationOnce((_event: string, handler: (p: { progress: number }) => void) =>
+      handler({ progress: 0.42 })
+    );
+    await transcodeVideo(fakeFile(10), { mode: "converted", facts: null, onProgress });
+    expect(onProgress).toHaveBeenCalledWith(42);
   });
 
-  it("passes -movflags +faststart for instant playback", async () => {
-    mockVideoMeta = { width: 1920, height: 1080, duration: 30 };
-    const file = fakeFile(10 * 1024 * 1024);
-
-    await compressVideo(file);
-
-    const args = mockExec.mock.calls[mockExec.mock.calls.length - 1][0] as string[];
-    const movflagsIdx = args.indexOf("-movflags");
-    expect(movflagsIdx).toBeGreaterThan(-1);
-    expect(args[movflagsIdx + 1]).toBe("+faststart");
-  });
-
-  it("uses H.264 baseline profile", async () => {
-    mockVideoMeta = { width: 1920, height: 1080, duration: 30 };
-    const file = fakeFile(10 * 1024 * 1024);
-
-    await compressVideo(file);
-
-    const args = mockExec.mock.calls[mockExec.mock.calls.length - 1][0] as string[];
-    expect(args).toContain("libx264");
-    expect(args).toContain("baseline");
+  it("throws AbortError when the signal is already aborted", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      transcodeVideo(fakeFile(10), { mode: "converted", facts: null, signal: controller.signal })
+    ).rejects.toThrow("Compression aborted");
   });
 
   it("mounts a large phone original for the encoder instead of copying it into memory", async () => {
     mockMount.current = vi.fn(async () => true);
     const file = fakeFile(10, "phone.mov", "video/quicktime");
     Object.defineProperty(file, "size", { value: 250 * 1024 * 1024 });
-    const result = await compressVideo(file, { forceTranscode: true });
-    expect(result.skipped).toBe(false);
+    await transcodeVideo(file, { mode: "converted", facts: null });
     expect(mockMount.current).toHaveBeenCalledWith(
       "WORKERFS",
       { blobs: [{ name: "input.mov", data: file }] },
       "/upload"
     );
     expect(mockWriteFile).not.toHaveBeenCalledWith("input.mov", expect.anything());
-    const args = mockExec.mock.calls[mockExec.mock.calls.length - 1][0] as string[];
-    expect(args[args.indexOf("-i") + 1]).toBe("/upload/input.mov");
+    expect(after(lastArgs(), "-i")).toBe("/upload/input.mov");
   });
 
   it("does not copy an original over 50 MB into memory when mounting is unavailable", async () => {
     const file = fakeFile(10, "phone.mov", "video/quicktime");
     Object.defineProperty(file, "size", { value: 60 * 1024 * 1024 });
-    const result = await compressVideo(file, { forceTranscode: true });
-    expect(result.skipped).toBe(true);
-    expect(result.file).toBe(file);
+    await expect(transcodeVideo(file, { mode: "converted", facts: null })).rejects.toThrow();
     expect(mockWriteFile).not.toHaveBeenCalled();
     expect(mockExec).not.toHaveBeenCalled();
   });
@@ -435,67 +254,22 @@ describe("compressVideo", () => {
       mockWriteFile.mockClear();
       const file = fakeFile(10, "phone.mov", "video/quicktime");
       Object.defineProperty(file, "size", { value: bytes });
-      await compressVideo(file, { forceTranscode: true });
+      await transcodeVideo(file, { mode: "converted", facts: null }).catch(() => undefined);
       if (copied) expect(mockWriteFile).toHaveBeenCalledWith("input.mov", expect.anything());
       else expect(mockWriteFile).not.toHaveBeenCalled();
     }
   });
 
-  it("unmounts the picked file when the encoder fails", async () => {
+  it("unmounts the picked file and stops the encoder when it fails", async () => {
     mockMount.current = vi.fn(async () => true);
     mockExec.mockResolvedValueOnce(1);
-    const file = fakeFile(10, "phone.mov", "video/quicktime");
-    const result = await compressVideo(file, { forceTranscode: true });
-    expect(result.skipped).toBe(true);
+    await expect(
+      transcodeVideo(fakeFile(10, "phone.mov", "video/quicktime"), {
+        mode: "converted",
+        facts: null,
+      })
+    ).rejects.toThrow();
     expect(mockUnmount).toHaveBeenCalledWith("/upload");
-  });
-
-  describe("when the <video> element gives no size (a hidden tab)", () => {
-    beforeEach(() => {
-      mockVideoMeta = { width: 0, height: 0, duration: 0 };
-    });
-
-    it("skips a compatible low-bitrate MP4 whose header gives its length", async () => {
-      mockHeaderSeconds.mockResolvedValue(30); // 3 MB over 30 s is about 0.8 Mbps
-      const file = fakeFile(3 * 1024 * 1024);
-
-      const result = await compressVideo(file);
-
-      expect(result.skipped).toBe(true);
-      expect(result.file).toBe(file);
-      expect(mockLoad).not.toHaveBeenCalled();
-    });
-
-    it("still converts an MP4 over the 50 MB stored-file cap", async () => {
-      mockHeaderSeconds.mockResolvedValue(10_000); // low bitrate, but too large to store
-      mockMount.current = vi.fn(async () => true);
-      const file = fakeFile(10);
-      Object.defineProperty(file, "size", { value: 50 * 1024 * 1024 + 1 });
-
-      const result = await compressVideo(file);
-
-      expect(result.skipped).toBe(false);
-      expect(mockExec).toHaveBeenCalled();
-    });
-
-    it("still converts when the bitrate is high or the length is unknown", async () => {
-      mockHeaderSeconds.mockResolvedValueOnce(5); // 10 MB over 5 s is 16 Mbps
-      expect((await compressVideo(fakeFile(10 * 1024 * 1024))).skipped).toBe(false);
-
-      mockHeaderSeconds.mockResolvedValueOnce(null);
-      expect((await compressVideo(fakeFile(3 * 1024 * 1024))).skipped).toBe(false);
-      expect(mockExec).toHaveBeenCalledTimes(2);
-    });
-
-    it("still converts an MP4 whose tracks are not H.264/AAC, and never skips a forced conversion", async () => {
-      mockHeaderSeconds.mockResolvedValue(30);
-      mockCompatibleTracks.mockResolvedValueOnce(false);
-      expect((await compressVideo(fakeFile(3 * 1024 * 1024))).skipped).toBe(false);
-
-      expect(
-        (await compressVideo(fakeFile(3 * 1024 * 1024), { forceTranscode: true })).skipped
-      ).toBe(false);
-      expect(mockExec).toHaveBeenCalledTimes(2);
-    });
+    expect(mockTerminate).toHaveBeenCalled();
   });
 });

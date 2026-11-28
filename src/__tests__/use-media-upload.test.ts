@@ -70,6 +70,11 @@ vi.spyOn(document, "createElement").mockImplementation(
   }
 );
 
+// The keep rule decides: this sample is kept as it is (compress-before-upload.test.ts covers it).
+vi.mock("@/lib/media/compress-before-upload", () => ({
+  prepareVideoUpload: vi.fn(async (file: File) => ({ file, source: "kept" })),
+}));
+
 // Dynamic import so mocks are set first
 const { useMediaUpload } = await import("@/hooks/use-media-upload");
 
@@ -166,6 +171,8 @@ describe("useMediaUpload", () => {
       );
     });
 
+    const sent = mockFetch.mock.calls[0][1].body as FormData;
+    expect(sent.get("video_source")).toBe("kept");
     expect(uploadResult).toBe("https://media.verifymzansi.com/media/listing/user1/video.mp4");
     expect(result.current.isUploading).toBe(false);
     expect(result.current.progress).toBe(100);

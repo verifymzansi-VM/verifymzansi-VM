@@ -5,6 +5,7 @@ import {
   installFoundationPostFetch,
 } from "@/test/foundation-post-transport";
 import CreateBusinessPage from "./page";
+import { prepareVideoUpload } from "@/lib/media/compress-before-upload";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { BUSINESS_CATEGORIES } from "@/lib/constants/categories";
@@ -58,7 +59,14 @@ vi.mock("@/lib/utils/upload-preflight", () => ({
 }));
 
 vi.mock("@/lib/media/compress-before-upload", () => ({
-  compressVideoForUpload: vi.fn(async (file: File) => file),
+  prepareVideoUpload: vi.fn(async (file: File) => ({ file, source: "kept" })),
+}));
+
+// A submit made before a cover was chosen takes a frame from the prepared video.
+vi.mock("@/lib/media/video-frame", () => ({
+  extractVideoFrame: vi.fn(
+    async (file: File) => new File(["frame"], `${file.name}_poster.jpg`, { type: "image/jpeg" })
+  ),
 }));
 
 vi.mock("next/link", () => ({
@@ -667,7 +675,8 @@ describe("CreateBusinessPage", () => {
     await waitFor(() =>
       expect(calls.mock.calls.filter(([input]) => input === "/api/businesses")).toHaveLength(1)
     );
-    expect(calls.mock.calls.filter(([input]) => input === "/api/media/upload")).toHaveLength(2);
+    // The photo, the video and its cover frame (taken at submit: none was chosen).
+    expect(calls.mock.calls.filter(([input]) => input === "/api/media/upload")).toHaveLength(3);
   });
 
   it("uploads promo video through the validated server upload path", async () => {
@@ -715,6 +724,49 @@ describe("CreateBusinessPage", () => {
     expect(mockPush).toHaveBeenCalledWith(
       "/dashboard/listings?area=MZANSI_BUSINESS&created=business"
     );
+  });
+
+  it("video only, submitted while the video is still being prepared: the frame becomes the cover photo", async () => {
+    const videoUrl = "https://media.verifymzansi.com/media/business_cover/user/clip.mp4";
+    const frameUrl = "https://media.verifymzansi.com/media/business_cover/user/frame.jpg";
+    let finish: () => void = () => {};
+    vi.mocked(prepareVideoUpload).mockImplementationOnce(
+      (file: File) =>
+        new Promise((resolve) => (finish = () => resolve({ file, source: "converted" })))
+    );
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (input === "/api/media/upload") {
+        const file = init?.body instanceof FormData ? (init.body.get("files") as File) : null;
+        return jsonResponse({ urls: [file?.type === "image/jpeg" ? frameUrl : videoUrl] });
+      }
+      if (input === "/api/businesses") {
+        return jsonResponse({ success: true, business: { id: "biz-1" } }, { status: 201 });
+      }
+      return jsonResponse({});
+    });
+
+    render(<CreateBusinessPage />);
+    await termsLoaded();
+    await completeStandaloneStepOne();
+    await completeLocationStep();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Video \(optional\)/i }));
+    });
+    acceptBusinessTerms();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+    });
+    expect(fetchMock.mock.calls.some((call) => call[0] === "/api/businesses")).toBe(false);
+    await act(async () => finish());
+
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some((call) => call[0] === "/api/businesses")).toBe(true)
+    );
+    const request = fetchMock.mock.calls.find((call) => call[0] === "/api/businesses")!;
+    const payload = JSON.parse(request[1].body as string);
+    expect(payload.cover_video).toBe(videoUrl);
+    expect(payload.video_thumbnail).toBe(frameUrl);
+    expect(payload.cover_photo).toBe(frameUrl);
   });
 
   it("reviews the structured customer access choices", async () => {

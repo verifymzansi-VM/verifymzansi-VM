@@ -302,7 +302,9 @@ function isAacEntry(bytes: Uint8Array, entry: Box): boolean {
   const version = (bytes[entry.data + 8] << 8) | bytes[entry.data + 9];
   const extra = version === 1 ? 16 : version === 2 ? 36 : version === 0 ? 0 : -1;
   if (extra < 0) return false;
-  const esds = child(bytes, { ...entry, data: entry.data + 28 + extra }, "esds");
+  const boxes = { ...entry, data: entry.data + 28 + extra };
+  // QuickTime keeps `esds` inside a `wave` box (sound description versions 1 and 2).
+  const esds = child(bytes, boxes, "esds") ?? child(bytes, child(bytes, boxes, "wave"), "esds");
   if (!esds) return false;
   let at = esds.data + 4;
   // ES_Descriptor (tag 3): ES_ID, flags, then optional fields the flags announce.

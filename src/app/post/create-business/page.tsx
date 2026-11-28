@@ -95,7 +95,11 @@ import {
   uploadRequiredBusinessMedia,
   uploadRequiredBusinessVideo,
 } from "@/app/post/_lib/business-media-upload";
-import { prewarmVideosForFastUpload } from "@/app/post/_lib/video-fast-upload";
+import {
+  prepareVideoForCover,
+  prewarmVideosForFastUpload,
+  videoCoverForSubmit,
+} from "@/app/post/_lib/video-fast-upload";
 import { validateBusinessForm } from "@/lib/forms/business-form";
 import {
   coerceBusinessDetails,
@@ -920,9 +924,13 @@ function CreateBusinessContent() {
       const finalCoverPhoto = coverUrls[0] || null;
       const finalCoverVideo = videoUrl;
       let finalVideoThumbnail: string | null = null;
-      if (finalCoverVideo && videoThumbnailFile.length > 0) {
+      // A frame from the prepared video when none was chosen yet (still preparing).
+      const thumbnailFiles = finalCoverVideo
+        ? await videoCoverForSubmit(promoVideoFile[0], videoThumbnailFile)
+        : [];
+      if (thumbnailFiles.length > 0) {
         const thumbUrls = await uploadRequiredBusinessMedia({
-          files: videoThumbnailFile,
+          files: thumbnailFiles,
           area: "business_cover",
           field: "video_thumbnail",
         });
@@ -2030,7 +2038,8 @@ function CreateBusinessContent() {
                           onChange={(files) => {
                             setPromoVideoFile(files);
                             prewarmVideosForFastUpload(files);
-                            if (files.length === 0) setVideoThumbnailFile([]);
+                            // The thumbnail belongs to this video.
+                            if (files[0] !== promoVideoFile[0]) setVideoThumbnailFile([]);
                             clearErrors("cover_video", "video_thumbnail");
                           }}
                           accept="video/*"
@@ -2058,6 +2067,8 @@ function CreateBusinessContent() {
                         >
                           <VideoFrameSelector
                             file={promoVideoFile[0]}
+                            prepareVideo={prepareVideoForCover}
+                            autoSelect={videoThumbnailFile.length === 0}
                             onFrameSelect={(frame) => {
                               setVideoThumbnailFile(frame ? [frame] : []);
                               clearErrors("video_thumbnail");

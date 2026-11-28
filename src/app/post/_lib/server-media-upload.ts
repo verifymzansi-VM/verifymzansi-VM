@@ -10,6 +10,7 @@ import {
   parseUploadResponse,
 } from "@/app/post/_lib/media-upload-response";
 import { normalizeCreatePostRuntimeError } from "@/app/post/_lib/create-post-errors";
+import type { VideoSource } from "@/lib/media/video-rule";
 import type { UploadArea } from "@/types/enums";
 
 export async function uploadMediaViaServer({
@@ -20,6 +21,7 @@ export async function uploadMediaViaServer({
   preferPayloadError = false,
   timeoutMs,
   onProgress,
+  videoSource,
 }: {
   files: File[];
   area: UploadArea;
@@ -29,10 +31,13 @@ export async function uploadMediaViaServer({
   timeoutMs?: number;
   /** Percent of the request body sent (0-100); switches the request to XHR. */
   onProgress?: UploadProgressHandler;
+  /** How a single prepared video was made (kept, remuxed or converted), stored with its facts. */
+  videoSource?: VideoSource;
 }): Promise<string[]> {
   const uploadData = new FormData();
   uploadData.append("area", area);
   files.forEach((file) => uploadData.append("files", file));
+  if (videoSource && files.length === 1) uploadData.append("video_source", videoSource);
 
   const response = await fetchWithRetry(
     "/api/media/upload",
@@ -70,6 +75,7 @@ export async function uploadMediaFileViaServer({
   preferPayloadError,
   timeoutMs,
   onProgress,
+  videoSource,
 }: {
   file: File;
   area: UploadArea;
@@ -77,6 +83,7 @@ export async function uploadMediaFileViaServer({
   preferPayloadError?: boolean;
   timeoutMs?: number;
   onProgress?: UploadProgressHandler;
+  videoSource?: VideoSource;
 }): Promise<string> {
   const urls = await uploadMediaViaServer({
     files: [file],
@@ -86,6 +93,7 @@ export async function uploadMediaFileViaServer({
     preferPayloadError,
     timeoutMs,
     onProgress,
+    videoSource,
   });
 
   return urls[0] ?? "";
