@@ -63,9 +63,11 @@ async function loadFromServer<T>(
 
 async function deleteFromServer(flow: DraftFlow, owner: string): Promise<void> {
   try {
+    // keepalive: the form navigates away straight after a successful submit.
     await fetch(`/api/drafts?flow=${encodeURIComponent(serverFlow(flow))}`, {
       method: "DELETE",
       headers: withCsrfHeaders({ "X-Draft-Account": owner }),
+      keepalive: true,
     });
   } catch {
     // Best-effort.
@@ -101,9 +103,16 @@ export function usePostDraftAutosave<T>(
     saveDraft<T>(flow, userId, step, data);
   }, 800);
 
+  // Server requests run one after another, so a save still on its way can
+  // never land after the delete that follows a successful submit.
+  const serverQueue = useRef<Promise<void>>(Promise.resolve());
+  const queueServer = useCallback((request: () => Promise<void>) => {
+    serverQueue.current = serverQueue.current.then(request, request);
+  }, []);
+
   const serverSync = useDebouncedCallback((step: number, data: T) => {
     if (!userId || !enabled || !restoreRef.current?.canSync) return;
-    void saveToServer<T>(flow, userId, step, data);
+    queueServer(() => saveToServer<T>(flow, userId, step, data));
   }, 5_000);
 
   const saveAll = useCallback(
@@ -150,8 +159,8 @@ export function usePostDraftAutosave<T>(
     serverSync.cancel();
     restoreRef.current = null;
     clearDraft(flow, userId);
-    void deleteFromServer(flow, userId);
-  }, [userId, flow, save, serverSync]);
+    queueServer(() => deleteFromServer(flow, userId));
+  }, [userId, flow, save, serverSync, queueServer]);
 
   /* Cancel pending saves on unmount */
   useEffect(

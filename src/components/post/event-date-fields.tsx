@@ -72,6 +72,7 @@ export function EventDateFields({
           <input
             id="end_time"
             type="time"
+            aria-describedby="event-midnight-hint"
             className={inputClass}
             disabled={!start}
             value={end.slice(11, 16)}
@@ -85,6 +86,9 @@ export function EventDateFields({
           />
         </label>
       </div>
+      <p id="event-midnight-hint" className="text-sm text-muted-foreground">
+        Ends at midnight? Choose the next day and 00:00.
+      </p>
     </fieldset>
   );
 }

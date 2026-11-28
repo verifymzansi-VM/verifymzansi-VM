@@ -9,8 +9,9 @@ import { BRAND_SHIELD_LARGE_SRC, BrandMark } from "@/components/brand";
 import { SaFlagStripe } from "@/components/brand/sa-flag-stripe";
 import { Button } from "@/components/ui/button";
 
-// Full-screen viewers cover the page and have their own controls.
-const BANNER_BLOCKED_PATH_PREFIXES = ["/video-mode"];
+// Full-screen viewers cover the page and have their own controls; task pages
+// (posting, the dashboard, staff screens) need their first tap to reach the page.
+const BANNER_BLOCKED_PATH_PREFIXES = ["/video-mode", "/post/", "/dashboard", "/admin"];
 
 // Tab storage: closing the tab (or the browser) forgets it, so the pop-up shows
 // again the next time the site is opened, but not on every page or reload.

@@ -321,4 +321,94 @@ describe("promotionSchema", () => {
     const result = promotionSchema.safeParse({ ...VALID_INPUT, location_address: "   " });
     expect(result.success).toBe(false);
   });
+  describe("event entry details (doors, refunds, tickets, YouTube)", () => {
+    const paidEvent = (eventDetails: Record<string, unknown>, priceZar = 150) =>
+      promotionSchema.safeParse({
+        ...VALID_INPUT,
+        form_version: 2,
+        price_zar: priceZar,
+        start_date: daysFromNow(10),
+        event_details: { event_type: "festival_concert", ...eventDetails },
+      });
+
+    it("keeps doors open, ticket sales, door payment, refunds and a YouTube link", () => {
+      const result = paidEvent({
+        doors_open: "17:30",
+        ticket_sales: "both",
+        gate_payment: ["cash", "card"],
+        refund_policy: "full_until_days",
+        refund_days: 7,
+        social_links: { youtube: "https://youtube.com/@jazz" },
+      });
+      expect(result.success).toBe(true);
+      expect(result.success && result.data.event_details).toMatchObject({
+        doors_open: "17:30",
+        ticket_sales: "both",
+        gate_payment: ["cash", "card"],
+        refund_policy: "full_until_days",
+        refund_days: 7,
+        social_links: { youtube: "https://youtube.com/@jazz" },
+      });
+    });
+
+    it("rejects a bad doors-open time, unknown choices and a bad YouTube link", () => {
+      expect(paidEvent({ doors_open: "25:00" }).success).toBe(false);
+      expect(paidEvent({ refund_policy: "sometimes" }).success).toBe(false);
+      expect(paidEvent({ ticket_sales: "radio" }).success).toBe(false);
+      expect(paidEvent({ ticket_sales: "door", gate_payment: ["crypto"] }).success).toBe(false);
+      expect(paidEvent({ social_links: { youtube: "javascript:alert(1)" } }).success).toBe(false);
+    });
+
+    it("needs the days for a full-refund-until policy", () => {
+      const result = paidEvent({ refund_policy: "full_until_days" });
+      expect(result.success).toBe(false);
+      expect(
+        result.success ? [] : result.error.issues.map((issue) => issue.path.join("."))
+      ).toContain("event_details.refund_days");
+    });
+
+    it("drops answers that do not belong to the choices made", () => {
+      const result = paidEvent({
+        ticket_sales: "online",
+        gate_payment: ["cash"],
+        refund_policy: "no_refunds",
+        refund_days: 3,
+      });
+      expect(result.success).toBe(true);
+      const details = result.success ? result.data.event_details : undefined;
+      expect(details).not.toHaveProperty("gate_payment");
+      expect(details).not.toHaveProperty("refund_days");
+      expect(details).toMatchObject({ ticket_sales: "online", refund_policy: "no_refunds" });
+    });
+
+    it("drops ticket and refund answers for a free event, but keeps doors open", () => {
+      const result = paidEvent(
+        {
+          doors_open: "09:00",
+          ticket_sales: "door",
+          gate_payment: ["cash"],
+          refund_policy: "full_until_days",
+          refund_days: 2,
+        },
+        0
+      );
+      expect(result.success).toBe(true);
+      const details = result.success ? result.data.event_details : undefined;
+      expect(details).toEqual({ event_type: "festival_concert", doors_open: "09:00" });
+    });
+
+    it("still accepts the older keys the form no longer asks, so old posts load", () => {
+      const result = paidEvent({
+        dress_code: "Smart casual",
+        recurring: "monthly",
+        group_discount_available: true,
+      });
+      expect(result.success).toBe(true);
+      expect(result.success && result.data.event_details).toMatchObject({
+        dress_code: "Smart casual",
+        recurring: "monthly",
+        group_discount_available: true,
+      });
+    });
+  });
 });

@@ -5,6 +5,7 @@ import { promotionSchema } from "../validations/promotion";
 import { parseListingAttributes, parseAttributeMoney } from "../domains/taxonomy/attributes";
 import { postContactSelectionSchema } from "../domains/posts/contact-channels";
 import { storeListingPriceTerms } from "../domains/listings/price-terms";
+import { finishListingAttributes } from "../domains/listings/market-extras";
 import { resolveRestoredLocality } from "./restored-locality";
 import reference from "../domains/taxonomy/reference.json";
 import { isTrustedPlatformMediaUrl } from "../utils/media-url";
@@ -138,7 +139,11 @@ export function buildRestoredPostInput(
     if (!editing && !data.termsAccepted)
       throw new RestoredPostInputError("Accept the posting terms before submitting");
     const pair = resolveRestoredLocality(data.province, data.city);
-    const sourceAttrs = data.attributes as Record<string, unknown>;
+    // Pets choice mirrored to pets_allowed, answers to hidden questions dropped.
+    const sourceAttrs: Record<string, unknown> = finishListingAttributes(
+      data.category,
+      data.attributes as Parameters<typeof finishListingAttributes>[1]
+    );
     const canonical: Record<string, unknown> = {};
     for (const field of reference.listingFields.filter((f) => f.category === data.category)) {
       const value = field.key === "condition" ? data.condition : sourceAttrs[field.sourceKey];
@@ -183,6 +188,15 @@ export function buildRestoredPostInput(
         location_town: data.town || null,
         location_address: data.address || null,
         source_attributes: sourceAttrs,
+        // The seller's links, shown as tappable buttons (public allow-list keys).
+        ...(data.website ? { website: data.website } : {}),
+        ...(data.social_links && Object.values(data.social_links).some(Boolean)
+          ? {
+              social_links: Object.fromEntries(
+                Object.entries(data.social_links).filter(([, url]) => Boolean(url))
+              ),
+            }
+          : {}),
         layout_width: data.videos.length ? (data.media_width ?? null) : null,
         layout_height: data.videos.length ? (data.media_height ?? null) : null,
       },

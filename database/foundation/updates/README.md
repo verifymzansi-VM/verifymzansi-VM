@@ -9093,5 +9093,6 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
 - `20261127114113_video_upload_facts.sql`: applied 2026-11-27 16:10 UTC;
   apply-first; production fingerprint after it (fingerprint.sql, read-only)
   matched the full replay (except the known schema grant difference)
+- `20261128012529_posting_form_display_fields.sql`: pending; apply-first
 
 <!-- applied-register:end -->

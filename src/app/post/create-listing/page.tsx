@@ -8,7 +8,7 @@ import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { usePostTransport } from "@/hooks/use-post-transport";
 import Link from "next/link";
-import { Camera, Eye, FileText, Inbox, Loader2, MessageCircle, Phone, Tag } from "lucide-react";
+import { Camera, Eye, FileText, Loader2, Tag } from "lucide-react";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { usePostActionFields } from "@/hooks/use-post-action-fields";
 import { loadOwnListing } from "@/app/post/edit-listing/[id]/load-own-listing";
@@ -81,11 +81,29 @@ import {
 import { CATEGORIES } from "@/lib/constants/categories";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 import { checkUploadServiceReachable } from "@/lib/utils/upload-preflight";
-import { loadDraft, type DraftEnvelope, type ListingDraftData } from "@/lib/post-drafts/storage";
+import { loadDraft, type DraftEnvelope } from "@/lib/post-drafts/storage";
+import { ContactSwitches, type ContactSwitchOption } from "@/components/post/contact-switches";
+import {
+  OnlinePresenceFields,
+  type OnlinePresenceValues,
+} from "@/components/post/online-presence-fields";
+import { MediaLimitsLine } from "@/components/post/media-limits-line";
+import { PostSubmittedScreen } from "@/components/post/post-submitted-screen";
+import {
+  finishListingAttributes,
+  JOB_SAFETY_LINE,
+  sentContactMethods,
+} from "@/lib/domains/listings/market-extras";
+import {
+  EMPTY_MARKET_LINKS,
+  MARKET_LINK_ERROR_ALIASES,
+  marketLinksErrors,
+  marketLinksPayload,
+} from "@/lib/domains/listings/market-links";
 import { LISTING_CONDITIONS } from "@/lib/constants/listing-condition";
 import { ListingDetailContent } from "@/components/listings/listing-detail-content";
 import { readMediaDimensions } from "@/lib/utils/media-metadata";
-import { VIDEO_GUIDANCE, VIDEO_SOUND_OFF_TIP } from "@/lib/media/video-length";
+import { VIDEO_SOUND_OFF_TIP } from "@/lib/media/video-length";
 import {
   announceTemplate,
   announceTemplateFailed,
@@ -95,6 +113,7 @@ import {
   TemplateLoading,
   templateLoading,
   type ListingStart,
+  type MarketDraftData,
 } from "./listing-template";
 import { formFieldsFromTemplate } from "@/lib/post-templates";
 import {
@@ -129,12 +148,12 @@ const FIELD_SELECT_CLASS =
 const TITLE_MAX = 100;
 const DESC_MAX = 5000;
 
-/** Private enquiry is always on (see withListingEnquiry); its tile is shown locked. */
-const CONTACT_OPTIONS = [
-  { id: "call", label: "Phone call", icon: Phone },
-  { id: "whatsapp", label: "WhatsApp", icon: MessageCircle },
-  { id: "in_app", label: "Private enquiry", icon: Inbox },
-] as const;
+/** Call and WhatsApp use the account's verified number; private enquiry is always on (withListingEnquiry). */
+const CONTACT_OPTIONS: readonly ContactSwitchOption[] = [
+  { id: "call", label: "Phone call", usesVerifiedNumber: true },
+  { id: "whatsapp", label: "WhatsApp", usesVerifiedNumber: true },
+  { id: "in_app", label: "Private enquiry", locked: true },
+];
 
 const FIELD_IDS: Record<string, string> = {
   category: "listing-category-field",
@@ -189,6 +208,7 @@ const LISTING_FIELD_KEY_ALIASES: Record<string, string> = {
   contact_methods: "contactMethods",
   location_province: "province",
   location_city: "city",
+  ...MARKET_LINK_ERROR_ALIASES,
 };
 
 /** Human-readable labels for each form field key, used in the error alert. */
@@ -200,6 +220,12 @@ const LISTING_FIELD_LABELS: Record<string, string> = {
   province: "Province",
   city: "City",
   contactMethods: "Contact methods",
+  website: "Website",
+  socialFacebook: "Facebook",
+  socialInstagram: "Instagram",
+  socialTiktok: "TikTok",
+  socialYoutube: "YouTube",
+  socialTwitter: "X (Twitter)",
   logo_url: "Listing logo",
   videoThumbnail: "Video cover image",
   images: "Photos",
@@ -210,7 +236,12 @@ const LISTING_FIELD_LABELS: Record<string, string> = {
 function getFieldId(key: string | undefined): string | undefined {
   if (!key) return undefined;
   const normalizedKey = LISTING_FIELD_KEY_ALIASES[key] ?? key;
-  return FIELD_IDS[normalizedKey];
+  if (FIELD_IDS[normalizedKey]) return FIELD_IDS[normalizedKey];
+  // Category questions and links use their own input ids.
+  if (normalizedKey.startsWith("attributes."))
+    return `listing-attribute-${normalizedKey.slice(11)}`;
+  if (normalizedKey === "website" || normalizedKey.startsWith("social")) return normalizedKey;
+  return undefined;
 }
 
 function normalizeListingFieldErrors(errors: Record<string, string>): Record<string, string> {
@@ -279,6 +310,7 @@ function CreateListingForm() {
   const [town, setTown] = useState("");
   const [address, setAddress] = useState("");
   const [contactMethods, setContactMethods] = useState<string[]>(DEFAULT_LISTING_CONTACT_METHODS);
+  const [links, setLinks] = useState<OnlinePresenceValues>(EMPTY_MARKET_LINKS);
   const [logoFile, setLogoFile] = useState<File[]>([]);
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [videoFile, setVideoFile] = useState<File[]>([]);
@@ -319,7 +351,7 @@ function CreateListingForm() {
     save: saveDraft,
     restore: restoreDraft,
     discard: discardDraft,
-  } = usePostDraftAutosave<ListingDraftData>("listing", user?.id, !isLoading);
+  } = usePostDraftAutosave<MarketDraftData>("listing", user?.id, !isLoading);
   const locationValue: LocationValue = { province, city, town, address };
   const maxPhotos = usePlanMaxPhotos("MZANSI_MARKET");
   const maxVideos = usePlanMaxVideos("MZANSI_MARKET");
@@ -360,6 +392,7 @@ function CreateListingForm() {
     ];
     const catDef = category ? CATEGORIES.find((c) => c.value === category) : undefined;
     const attrFields = (catDef?.attributeFields ?? []).filter((field) => {
+      if (field.formHidden) return false;
       if (!field.dependsOnValue || !field.dependsOn) {
         return true;
       }
@@ -477,6 +510,7 @@ function CreateListingForm() {
         setTown(copy.town);
         setAddress(copy.address);
         setContactMethods(copy.contactMethods);
+        setLinks(copy.links);
         setExistingPhotos(copy.photos);
         setExistingLogo(copy.logo);
         setFocalPoint(copy.focal);
@@ -521,7 +555,7 @@ function CreateListingForm() {
   // A kept page (opened again from Create Post) settles again only for a template.
   // A copy (?copy=<id>) never starts from a template.
   const templateParam = copyId ? null : (searchParams?.get("template") ?? null);
-  const applyDraft = (restored: DraftEnvelope<ListingDraftData>) => {
+  const applyDraft = (restored: DraftEnvelope<MarketDraftData>) => {
     const restoredData = restored.data;
     setStep(Math.min(Math.max(restored.step ?? 0, 0), STEPS.length - 1));
     setTitle(restoredData.title ?? "");
@@ -543,6 +577,7 @@ function CreateListingForm() {
         ? withListingEnquiry(restoredData.contactMethods)
         : DEFAULT_LISTING_CONTACT_METHODS
     );
+    setLinks({ ...EMPTY_MARKET_LINKS, ...restoredData.links });
     setLastSavedAt(restored.savedAt ?? null);
     toast({
       title: "Draft restored",
@@ -550,7 +585,7 @@ function CreateListingForm() {
       variant: "success",
     });
   };
-  const settleStart = useEffectEvent((start: ListingStart<ListingDraftData>, again: boolean) => {
+  const settleStart = useEffectEvent((start: ListingStart<MarketDraftData>, again: boolean) => {
     dropTemplateFromAddress();
     if (start.templateFailed) announceTemplateFailed(toast);
     const { template } = start;
@@ -560,7 +595,7 @@ function CreateListingForm() {
     }
     // What the template replaces: the saved draft on a first visit, or the work
     // in the form when a kept page is opened again with a template.
-    const formData: ListingDraftData = {
+    const formData: MarketDraftData = {
       category,
       condition,
       categoryAttributes,
@@ -574,6 +609,7 @@ function CreateListingForm() {
       town,
       address,
       contactMethods,
+      links,
     };
     const files = { photoFiles, videoFile, videoCoverFile };
     const draft = again
@@ -584,8 +620,9 @@ function CreateListingForm() {
     templateHold.current?.end();
     const fields = formFieldsFromTemplate(template.data);
     // The member's area when the template has none, as an empty form gets it.
-    const filled: ListingDraftData = {
+    const filled: MarketDraftData = {
       ...fields,
+      links: EMPTY_MARKET_LINKS,
       title: "",
       price: "",
       priceMode: "amount",
@@ -614,13 +651,14 @@ function CreateListingForm() {
     setTown(fields.town);
     setAddress(fields.address);
     setContactMethods(fields.contactMethods);
+    setLinks(EMPTY_MARKET_LINKS);
     const userId = user?.id;
     const undo = draft
       ? () => {
           // First visit: the stored draft as it is now (another tab may have
           // saved newer work), since the template's fields were never saved.
           applyDraft(
-            (!again && userId ? loadDraft<ListingDraftData>("listing", userId) : null) ?? draft
+            (!again && userId ? loadDraft<MarketDraftData>("listing", userId) : null) ?? draft
           );
           if (again) {
             setPhotoFiles(files.photoFiles);
@@ -641,7 +679,7 @@ function CreateListingForm() {
     const again = started.current;
     let cancelled = false;
     // A kept page reads no saved draft: the form holds the latest work.
-    void loadListingStart<ListingDraftData>(again ? () => null : restoreDraft).then((start) => {
+    void loadListingStart<MarketDraftData>(again ? () => null : restoreDraft).then((start) => {
       if (cancelled) return;
       started.current = true;
       queueMicrotask(() => settleStart(start, again));
@@ -653,7 +691,7 @@ function CreateListingForm() {
 
   useEffect(() => {
     if (copyId || !user?.id || isLoading || isSubmitting || submitSucceeded) return;
-    const data: ListingDraftData = {
+    const data: MarketDraftData = {
       category,
       condition,
       categoryAttributes,
@@ -667,6 +705,7 @@ function CreateListingForm() {
       town,
       address,
       contactMethods,
+      links,
     };
     const hold = templateHold.current;
     if (hold) {
@@ -699,6 +738,7 @@ function CreateListingForm() {
     town,
     address,
     contactMethods,
+    links,
   ]);
 
   function clearErrors(...keys: string[]) {
@@ -718,7 +758,18 @@ function CreateListingForm() {
   function focusFirstError(errors: Record<string, string>, targetStep = step) {
     const orderByStep = [
       ["category", "title", "description"],
-      ["price_zar", "province", "city", "contactMethods"],
+      [
+        "price_zar",
+        "province",
+        "city",
+        "contactMethods",
+        "website",
+        "socialFacebook",
+        "socialInstagram",
+        "socialTwitter",
+        "socialTiktok",
+        "socialYoutube",
+      ],
       ["images", "videos", "termsAccepted"],
     ][targetStep];
 
@@ -776,6 +827,7 @@ function CreateListingForm() {
       if (contactMethods.length === 0) {
         errors.contactMethods = "Choose at least one contact method.";
       }
+      Object.assign(errors, marketLinksErrors(links));
     }
 
     if (targetStep === 2) {
@@ -815,9 +867,8 @@ function CreateListingForm() {
     setCategoryAttributes((prev) => ({ ...prev, [name]: value }));
   }
 
-  function toggleContact(id: string) {
-    if (id === "in_app") return;
-    setContactMethods((prev) => (prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id]));
+  function changeContacts(next: string[]) {
+    setContactMethods(withListingEnquiry(next));
     clearErrors("contactMethods");
   }
 
@@ -918,7 +969,7 @@ function CreateListingForm() {
       setSubmitProgress("Uploading media...");
 
       const normalizedAttributes = category
-        ? coerceListingAttributes(category, categoryAttributes)
+        ? finishListingAttributes(category, coerceListingAttributes(category, categoryAttributes))
         : {};
 
       const [logoUrls, photoUrls, videoUrls, videoThumbnailUrl] = await settleMediaUploads([
@@ -985,7 +1036,8 @@ function CreateListingForm() {
         ),
         videos: videoUrls,
         videoThumbnail: videoThumbnailUrl,
-        contactMethods,
+        contactMethods: sentContactMethods(contactMethods, profile),
+        ...marketLinksPayload(links),
         media_width: mediaDimensions?.width,
         media_height: mediaDimensions?.height,
         focal_x: focalPoint.x,
@@ -1087,14 +1139,10 @@ function CreateListingForm() {
         return;
       }
 
-      toast({
-        title: copyId ? "Copy submitted for review." : "Listing submitted for review.",
-        variant: "success",
-      });
+      // The submitted screen replaces the form (no pop-up, no redirect).
       setSubmitSucceeded(true);
       if (!copyId) discardDraft();
       setUploadStatuses((current) => ({ ...current, saving: "done" }));
-      router.push("/dashboard/listings");
     } catch (error: unknown) {
       const uploadFailure = getListingMediaUploadErrorState(error);
       if (uploadFailure) {
@@ -1135,6 +1183,7 @@ function CreateListingForm() {
     setTown("");
     setAddress("");
     setContactMethods(DEFAULT_LISTING_CONTACT_METHODS);
+    setLinks(EMPTY_MARKET_LINKS);
     setLogoFile([]);
     setPhotoFiles([]);
     setVideoFile([]);
@@ -1196,8 +1245,9 @@ function CreateListingForm() {
 
   function renderPreview() {
     const normalizedAttributes = category
-      ? coerceListingAttributes(category, categoryAttributes)
+      ? finishListingAttributes(category, coerceListingAttributes(category, categoryAttributes))
       : {};
+    const previewLinks = marketLinksPayload(links);
 
     return (
       <section
@@ -1235,7 +1285,9 @@ function CreateListingForm() {
             location_city: city || null,
             location_suburb: town || null,
             location_address: address || null,
-            contact_methods: contactMethods,
+            contact_methods: sentContactMethods(contactMethods, profile),
+            website: previewLinks.website,
+            social_links: previewLinks.social_links,
             created_at: new Date().toISOString(),
           }}
           seller={{
@@ -1273,6 +1325,20 @@ function CreateListingForm() {
   // While a template (?template=<id>) loads, the form waits, so nothing typed is lost.
   if (templateLoading(templateParam)) return <TemplateLoading />;
 
+  if (submitSucceeded) {
+    return (
+      <div className="flex min-h-screen flex-col">
+        <Header isAuthenticated />
+        <main id="main-content" className="flex-1">
+          <div className="container-page py-10">
+            <PostSubmittedScreen postTitle={title.trim()} area="MZANSI_MARKET" />
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen flex-col">
       <Header isAuthenticated />
@@ -1283,7 +1349,7 @@ function CreateListingForm() {
             <form noValidate onSubmit={handleSubmit}>
               <PostFormScaffold
                 title="Post an item"
-                description="Clear photos and honest details get more replies."
+                description="Required fields are marked."
                 breadcrumbs={[
                   { label: "Dashboard", href: "/dashboard" },
                   { label: "Create Post", href: "/post/create" },
@@ -1291,7 +1357,6 @@ function CreateListingForm() {
                 ]}
                 badgeLabel="Mzansi Market"
                 area="market"
-                guideDescription="Pick a category first. We only ask for what matters."
                 steps={STEPS}
                 onStepChange={setStep}
                 onFieldError={(key) => focusFirstError({ [key]: fieldErrors[key] })}
@@ -1389,14 +1454,19 @@ function CreateListingForm() {
                       <p className="inline-form-error">{fieldErrors.category}</p>
                     )}
                     {category === "jobs_services" && (
-                      <p className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
-                        Jobs are for vacancies you want to fill. If you offer a service, such as
-                        plumbing or hairdressing, customers find you more easily through a{" "}
-                        <Link href="/post/create-business" className="font-medium underline">
-                          business profile
-                        </Link>
-                        .
-                      </p>
+                      <div className="space-y-2 rounded-md bg-muted p-3 text-sm text-muted-foreground">
+                        <p>
+                          Jobs are for vacancies you want to fill. If you offer a service, such as
+                          plumbing or hairdressing, customers find you more easily through a{" "}
+                          <Link href="/post/create-business" className="font-medium underline">
+                            business profile
+                          </Link>
+                          .
+                        </p>
+                        <p role="note" className="font-semibold text-foreground">
+                          {JOB_SAFETY_LINE}
+                        </p>
+                      </div>
                     )}
 
                     <PostFormSection title="Describe it">
@@ -1427,7 +1497,6 @@ function CreateListingForm() {
                               </option>
                             ))}
                           </PostSelect>
-                          <p className="text-xs text-muted-foreground">Optional, but helpful.</p>
                         </div>
                       )}
 
@@ -1572,54 +1641,27 @@ function CreateListingForm() {
                       />
                     </PostFormSection>
 
-                    <PostFormSection
-                      title="How buyers reach you *"
-                      description="Buyers can always send you a private enquiry. Add a call or WhatsApp too."
-                    >
-                      <div
-                        id="listing-contact-methods"
-                        tabIndex={-1}
-                        role="group"
-                        aria-label="Contact methods"
-                        className="rounded-xl focus:outline-none"
-                      >
-                        <div className="grid grid-cols-3 gap-2">
-                          {CONTACT_OPTIONS.map((option) => {
-                            const Icon = option.icon;
-                            const isSelected = contactMethods.includes(option.id);
-                            const locked = option.id === "in_app";
+                    <ContactSwitches
+                      id="listing-contact-methods"
+                      legend="How buyers reach you"
+                      options={CONTACT_OPTIONS}
+                      selected={contactMethods}
+                      onChange={changeContacts}
+                      verifiedPhone={profile?.phone}
+                      error={fieldErrors.contactMethods}
+                    />
 
-                            return (
-                              <label
-                                key={option.id}
-                                className={cn(
-                                  "relative flex min-h-[4.5rem] cursor-pointer flex-col items-center justify-center gap-1.5 rounded-2xl border p-3 text-center text-xs font-semibold transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2",
-                                  isSelected
-                                    ? "border-brand-green-600 bg-brand-green-50 text-brand-green-800 ring-1 ring-brand-green-600 dark:border-brand-green-400 dark:bg-brand-green-950/50 dark:text-brand-gold-200 dark:ring-brand-green-400"
-                                    : "border-border bg-card text-foreground/80 hover:border-foreground/25 hover:bg-muted/50",
-                                  fieldErrors.contactMethods &&
-                                    !isSelected &&
-                                    "border-destructive/50"
-                                )}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={isSelected}
-                                  disabled={locked}
-                                  onChange={() => toggleContact(option.id)}
-                                  className="sr-only"
-                                />
-                                <Icon className="h-5 w-5" />
-                                {option.label}
-                              </label>
-                            );
-                          })}
-                        </div>
-                        {fieldErrors.contactMethods && (
-                          <p className="inline-form-error mt-2">{fieldErrors.contactMethods}</p>
-                        )}
-                      </div>
-                    </PostFormSection>
+                    <OnlinePresenceFields
+                      values={links}
+                      onChange={(field, value) => {
+                        setLinks((current) => ({ ...current, [field]: value }));
+                        clearErrors(field);
+                      }}
+                      errors={fieldErrors}
+                      showMapPin={false}
+                      title="Website and social media"
+                      description="Optional. Buyers can tap them on your post."
+                    />
                   </div>
                 )}
 
@@ -1633,6 +1675,7 @@ function CreateListingForm() {
                           : `${PHOTO_OR_VIDEO_RULE} Your first photo is the cover.`
                       }
                     >
+                      <MediaLimitsLine />
                       <div id="listing-images" tabIndex={-1} className="space-y-2 rounded-lg">
                         <MediaUpload
                           id="listing-images-input"
@@ -1659,9 +1702,6 @@ function CreateListingForm() {
                           }}
                           accept="image/*"
                         />
-                        <p className="text-xs text-muted-foreground">
-                          Portrait photos around 1080 x 1920 fill the card best.
-                        </p>
                         <PhotoOrderList files={photoFiles} onReorder={setPhotoFiles} />
                       </div>
 
@@ -1680,7 +1720,7 @@ function CreateListingForm() {
                         <MediaUpload
                           id="listing-video-input"
                           label={`Video (max ${maxVideos})${!videoAllowed ? " — Upgrade to unlock" : ""}`}
-                          description={`${category === "jobs_services" ? "Optional. " : ""}Use clear portrait clips that show the item, property, or service honestly. ${VIDEO_GUIDANCE} ${VIDEO_SOUND_OFF_TIP}`}
+                          description={`${category === "jobs_services" ? "Optional. " : ""}Upright clips work best; put the best part first. ${VIDEO_SOUND_OFF_TIP}`}
                           error={fieldErrors.videos}
                           maxFiles={maxVideos}
                           files={videoFile}
@@ -1706,12 +1746,7 @@ function CreateListingForm() {
                               to add a video and stand out in search results.
                             </span>
                           </p>
-                        ) : (
-                          <p className="text-xs text-muted-foreground">
-                            Use one clear vertical clip for the poster-style hero. Portrait 9:16
-                            video is the best fit.
-                          </p>
-                        )}
+                        ) : null}
                       </div>
 
                       {videoFile.length > 0 && (

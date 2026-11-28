@@ -6,7 +6,6 @@ import { TOURISM_SUBCATEGORY_FIELD_GROUPS } from "@/lib/constants/categories";
 import { eventTimeToIso } from "./event-time";
 import { PHOTO_OR_VIDEO_RULE, VIDEO_COVER_NEEDED } from "./video-cover-photo";
 import { isValidUserEnteredUrl } from "@/lib/utils/external-url";
-import { businessNumber, WHATSAPP_NEEDS_MOBILE } from "@/lib/utils/phone";
 import { BUSINESS_TEXT_LIMITS } from "@/lib/validations/business-limits";
 
 /* ── Regex ───────────────────────────────────────────────── */
@@ -33,10 +32,26 @@ export interface TourismFormValues extends TourismCategorySpecificFormFields {
 
   /* tourism business */
   subcategory: string;
+  /** Older drafts only: the form keeps only TGCSA grading. */
   starRating: string;
   numberOfRooms: string;
   bookingUrl: string;
   languagesSpoken: string;
+  /** "From R___" price in rand, as typed. */
+  priceFrom?: string;
+  /** Stays: whole numbers, as typed. */
+  sleeps?: string;
+  bedrooms?: string;
+  beds?: string;
+  bathrooms?: string;
+  cancellationPolicy?: string;
+  cancellationFreeDays?: string;
+  /** Attractions: free-text opening hours. */
+  openingHours?: string;
+  /**
+   * The account's verified number, used for Call and WhatsApp (nothing is
+   * typed). Empty when the account has none.
+   */
   phone: string;
   whatsapp: string;
   website: string;
@@ -44,6 +59,7 @@ export interface TourismFormValues extends TourismCategorySpecificFormFields {
   socialInstagram: string;
   socialTwitter: string;
   socialTiktok: string;
+  socialYoutube?: string;
   /** Google Maps share link for the venue or premises */
   mapDirections?: string;
 
@@ -55,6 +71,18 @@ export interface TourismFormValues extends TourismCategorySpecificFormFields {
   venueName: string;
   venueCapacity: string;
   ticketsUrl: string;
+  /** "HH:MM" */
+  doorsOpen?: string;
+  refundPolicy?: string;
+  refundDays?: string;
+}
+
+/** Whole number of at least `min`, or an error message. */
+function wholeNumberError(value: string | undefined, label: string, min: number): string | null {
+  if (!value?.trim()) return null;
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < min) return `${label} must be a whole number of ${min} or more.`;
+  return null;
 }
 
 /* ── Step 0: Type & Basics ───────────────────────────────── */
@@ -107,6 +135,40 @@ function validateStep1Tourism(v: TourismFormValues, errors: Record<string, strin
         errors.numberOfRooms = "Number of rooms must be 0 or more.";
       }
     }
+  }
+
+  // Stays: guests and rooms
+  if (group === "A") {
+    for (const [key, label, min] of [
+      ["sleeps", "Sleeps", 1],
+      ["bedrooms", "Bedrooms", 0],
+      ["beds", "Beds", 0],
+      ["bathrooms", "Bathrooms", 0],
+    ] as const) {
+      const message = wholeNumberError(v[key], label, min);
+      if (message) errors[key] = message;
+    }
+  }
+
+  // "From R___" price (all groups)
+  if (v.priceFrom?.trim()) {
+    const price = Number(v.priceFrom);
+    if (!Number.isFinite(price) || price <= 0) {
+      errors.priceFrom = "Enter a price above R0, or leave it blank.";
+    } else if (!hasValidMoneyPrecision(price)) {
+      errors.priceFrom = "Price can have at most 2 decimal places.";
+    }
+  }
+
+  if (v.cancellationPolicy === "free_until_days") {
+    const days = Number(v.cancellationFreeDays);
+    if (!v.cancellationFreeDays?.trim() || !Number.isInteger(days) || days < 1 || days > 365) {
+      errors.cancellationFreeDays = "Enter the number of days (1 to 365).";
+    }
+  }
+
+  if (group === "E" && (v.openingHours?.length ?? 0) > 120) {
+    errors.openingHours = "Opening hours cannot exceed 120 characters.";
   }
 
   // Booking URL (all groups)
@@ -181,6 +243,17 @@ function validateStep1Event(v: TourismFormValues, errors: Record<string, string>
   if (v.ticketsUrl.trim() && !isValidUserEnteredUrl(v.ticketsUrl)) {
     errors.ticketsUrl = "Enter a valid ticketing URL.";
   }
+
+  if (v.doorsOpen && !/^([01]\d|2[0-3]):[0-5]\d$/.test(v.doorsOpen)) {
+    errors.doorsOpen = "Choose a doors-open time.";
+  }
+
+  if (Number(v.priceZar) > 0 && v.refundPolicy === "full_until_days") {
+    const days = Number(v.refundDays);
+    if (!v.refundDays?.trim() || !Number.isInteger(days) || days < 1 || days > 365) {
+      errors.refundDays = "Enter the number of days (1 to 365).";
+    }
+  }
 }
 
 /* ── Step 2: Location & Contact ──────────────────────────── */
@@ -204,28 +277,15 @@ function validateStep2(v: TourismFormValues, errors: Record<string, string>) {
     }
   }
 
+  // Call and WhatsApp use the account's verified number: nothing is typed.
+  const usesNumber = v.contactMethods.some((method) => method === "call" || method === "whatsapp");
   if (v.contactMethods.length === 0) {
     errors.contactMethods = "Choose at least one contact method.";
+  } else if (usesNumber && !v.phone.trim()) {
+    errors.contactMethods = "Verify a number on your account to use Call or WhatsApp.";
   }
 
   validateOnlinePresence(v, errors);
-
-  // Events reuse the poster's account phone and inbox, so per-event contact
-  // details are not collected or validated.
-  if (v.listingType === "event") return;
-
-  if (v.contactMethods.includes("call") && !v.phone.trim())
-    errors.phone = "Add a phone number for phone calls.";
-  if (v.contactMethods.includes("whatsapp") && !v.whatsapp.trim())
-    errors.whatsapp = "Add a WhatsApp number.";
-
-  if (v.phone && !businessNumber(v.phone.trim())) {
-    errors.phone = "Enter a valid South African number.";
-  }
-
-  const whatsapp = v.whatsapp ? businessNumber(v.whatsapp.trim()) : undefined;
-  if (whatsapp === null) errors.whatsapp = "Enter a valid South African WhatsApp number.";
-  else if (whatsapp && whatsapp.kind !== "mobile") errors.whatsapp = WHATSAPP_NEEDS_MOBILE;
 }
 
 /** Website, map pin and social links are collected for businesses and events. */
@@ -243,6 +303,7 @@ function validateOnlinePresence(v: TourismFormValues, errors: Record<string, str
     ["socialInstagram", "Enter a valid Instagram URL."],
     ["socialTwitter", "Enter a valid X / Twitter URL."],
     ["socialTiktok", "Enter a valid TikTok URL."],
+    ["socialYoutube", "Enter a valid YouTube URL."],
   ];
 
   for (const [field, message] of socialFields) {

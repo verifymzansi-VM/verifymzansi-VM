@@ -39,10 +39,17 @@ export interface CategoryDefinition {
 export interface AttributeField {
   name: string;
   label: string;
-  type: "text" | "number" | "select" | "boolean" | "checklist";
+  type: "text" | "number" | "select" | "boolean" | "checklist" | "date";
   required: boolean;
+  /** Kept for search filters and older posts, but not asked in the form
+   * (property's pets_allowed: the form asks pets_policy and mirrors it). */
+  formHidden?: boolean;
+  /** Saved with the post only, not a search field: never offered as a filter. */
+  filterable?: false;
   options?: Array<string | { value: string; label: string }>;
   placeholder?: string;
+  /** Longest text a text field accepts. */
+  maxLength?: number;
   unit?: string;
   /** For cascading selects: name of the parent field this depends on (e.g. model depends on make) */
   dependsOn?: string;
@@ -147,6 +154,19 @@ export const CATEGORIES: CategoryDefinition[] = [
         label: "Pets Allowed",
         type: "boolean",
         required: false,
+        formHidden: true,
+      },
+      {
+        name: "pets_policy",
+        label: "Pets",
+        type: "select",
+        required: false,
+        filterable: false,
+        options: [
+          { value: "allowed", label: "Allowed" },
+          { value: "not_allowed", label: "Not allowed" },
+          { value: "ask", label: "Ask" },
+        ],
       },
       {
         name: "levy_zar",
@@ -269,10 +289,56 @@ export const CATEGORIES: CategoryDefinition[] = [
       },
       {
         name: "available_from",
-        label: "Available From",
-        type: "text",
+        label: "Available from",
+        type: "date",
         required: false,
-        placeholder: "e.g. Immediately, 1 July 2026",
+      },
+      {
+        name: "deposit_zar",
+        label: "Deposit",
+        type: "number",
+        required: false,
+        filterable: false,
+        placeholder: "Amount in rand",
+        dependsOn: "listing_intent",
+        dependsOnValue: "rent",
+      },
+      {
+        name: "lease_term",
+        label: "Lease term",
+        type: "select",
+        required: false,
+        filterable: false,
+        dependsOn: "listing_intent",
+        dependsOnValue: "rent",
+        options: [
+          { value: "month_to_month", label: "Month to month" },
+          { value: "6_months", label: "6 months" },
+          { value: "12_months", label: "12 months" },
+          { value: "24_months", label: "24 months" },
+        ],
+      },
+      {
+        name: "utilities_included",
+        label: "Included in the rent",
+        type: "checklist",
+        required: false,
+        filterable: false,
+        dependsOn: "listing_intent",
+        dependsOnValue: "rent",
+        options: [
+          { value: "prepaid_electricity", label: "Prepaid electricity" },
+          { value: "water", label: "Water" },
+        ],
+      },
+      {
+        name: "occupation_date",
+        label: "Occupation date",
+        type: "date",
+        required: false,
+        filterable: false,
+        dependsOn: "listing_intent",
+        dependsOnValue: "sale",
       },
     ],
   },
@@ -1058,13 +1124,53 @@ const formerHomeOptions = homeSubcategory?.options ?? [];
 const clothingFields = homeCategory.attributeFields.filter((f) =>
   ["material", "brand", "dimensions", "delivery_available"].includes(f.name)
 );
+// Clothing and sports ask size and who it is for (never Furniture's power rating).
+const sizeAndGenderFields: AttributeField[] = [
+  {
+    name: "size",
+    label: "Size",
+    type: "text",
+    required: false,
+    filterable: false,
+    maxLength: 20,
+    placeholder: "e.g. M, 32, UK 8",
+  },
+  {
+    name: "gender",
+    label: "For",
+    type: "select",
+    required: false,
+    filterable: false,
+    options: [
+      { value: "women", label: "Women" },
+      { value: "men", label: "Men" },
+      { value: "unisex", label: "Unisex" },
+      { value: "girls", label: "Girls" },
+      { value: "boys", label: "Boys" },
+    ],
+  },
+];
+/** "How the buyer gets it", asked for items (not property or jobs). */
+export const DELIVERY_METHODS_FIELD: AttributeField = {
+  name: "delivery_methods",
+  label: "How the buyer gets it",
+  type: "checklist",
+  required: false,
+  filterable: false,
+  options: [
+    { value: "collect", label: "Collect" },
+    { value: "meet_public", label: "Meet in a public place" },
+    { value: "courier", label: "Courier" },
+    { value: "seller_delivers", label: "I deliver" },
+  ],
+};
 CATEGORIES.push(
   {
     value: "clothing_accessories",
     label: "Clothing & Accessories",
     icon: Shirt,
     description: "Clothing, shoes, bags and accessories",
-    attributeFields: clothingFields,
+    attributeFields: [...sizeAndGenderFields, ...clothingFields],
   },
   {
     value: "sports_hobbies",
@@ -1083,6 +1189,7 @@ CATEGORIES.push(
             ["sports_outdoor", "musical_instruments", "books_stationery"].includes(o.value)
         ),
       },
+      ...sizeAndGenderFields,
       ...clothingFields,
     ],
   },
@@ -1122,6 +1229,8 @@ for (const c of CATEGORIES) {
   // Rent is entered once, in the main price field (labelled Monthly rent).
   if (c.value === "property")
     c.attributeFields = c.attributeFields.filter((field) => field.name !== "monthly_rent_zar");
+  if (c.value !== "property" && c.value !== "jobs_services")
+    c.attributeFields = [...c.attributeFields, DELIVERY_METHODS_FIELD];
   if (c.value === "jobs_services") {
     c.label = "Jobs";
     c.description = "Advertise a vacancy. To offer services, create a business profile.";

@@ -238,3 +238,61 @@ describe("presentEventSlide", () => {
     }
   });
 });
+
+describe("presenters: tourism From price and event entry details", () => {
+  it("leads a stay with its From price instead of the price band", () => {
+    const slide = presentBusinessSlide(
+      {
+        ...business,
+        business_type: "physical_store",
+        category: "tourism_hospitality",
+        category_details: { price_from_cents: 45000, price_unit: "night", sleeps: 4 },
+      } as unknown as BusinessDetailRecord,
+      owner,
+      [],
+      engagement
+    );
+    expect(slide.headline.figure?.value).toBe("From R450 per night");
+    const glance = slide.left.find((section) => section.id === "glance");
+    const labels = glance?.type === "facts" ? glance.facts.map((fact) => fact.label) : [];
+    expect(labels).toContain("Sleeps");
+    expect(labels).not.toContain("Price");
+  });
+
+  it("shows doors, tickets, door payment, refunds and the ID line; drops removed fields", () => {
+    const slide = presentEventSlide(
+      {
+        ...event,
+        event_details: {
+          ...event.event_details,
+          age_restriction: "18_plus",
+          doors_open: "17:30",
+          ticket_sales: "both",
+          gate_payment: ["cash"],
+          refund_policy: "only_if_cancelled",
+          dress_code: "Smart casual",
+          recurring: "monthly",
+          group_discount_available: true,
+        },
+      } as PromotionDetailRecord,
+      owner,
+      null,
+      engagement
+    );
+    const know = slide.right.find((section) => section.id === "know");
+    const rows = know?.type === "rows" ? know.rows : [];
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        { label: "ID", value: "ID will be checked at the door" },
+        { label: "Doors open", value: "17:30" },
+        { label: "Tickets sold", value: "Online and at the door" },
+        { label: "Pay at the door", value: "Cash" },
+        { label: "Refunds", value: "Refund only if the event is cancelled" },
+      ])
+    );
+    const labels = rows.map((row) => row.label);
+    expect(labels).not.toContain("Dress code");
+    expect(labels).not.toContain("Recurring");
+    expect(labels).not.toContain("Group discounts");
+  });
+});

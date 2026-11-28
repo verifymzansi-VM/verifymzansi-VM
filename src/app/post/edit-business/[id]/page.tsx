@@ -5,6 +5,10 @@ import {
   selectedContacts,
 } from "@/components/post/business-contact-fields";
 import { PostSelect } from "@/components/post/post-select";
+import { BusinessHoursFields } from "@/components/post/business-hours-fields";
+import { BusinessVisitFields } from "@/components/post/business-visit-fields";
+import { MediaLimitsLine } from "@/components/post/media-limits-line";
+import { useAuth } from "@/hooks/use-auth";
 
 import { photosWithVideoCover } from "@/lib/forms/video-cover-photo";
 import { settleMediaUploads } from "@/app/post/_lib/settle-media-uploads";
@@ -70,7 +74,18 @@ import {
   cleanCustomerAccess,
   serviceAreasFromAccess,
 } from "@/lib/forms/customer-access";
-import { validateBusinessForm } from "@/lib/forms/business-form";
+import {
+  EMPTY_BUSINESS_HOURS,
+  PAYMENT_METHOD_OPTIONS,
+  businessHoursPayload,
+  readBusinessHours,
+  readVisitDetails,
+  validateBusinessForm,
+  withVisitDetails,
+  type BusinessHours,
+  type VisitDetails,
+} from "@/lib/forms/business-form";
+import { bookingUrlSchema } from "@/lib/validations/business-unified";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import {
   coerceBusinessDetails,
@@ -89,25 +104,11 @@ import {
   type BusinessCategory,
   type MarketplaceArea,
 } from "@/types/enums";
-import {
-  OperatingHoursInput,
-  formatHoursValue,
-  parseHoursValue,
-} from "@/components/ui/operating-hours-input";
 import { readMediaDimensions } from "@/lib/utils/media-metadata";
-import { VIDEO_GUIDANCE, VIDEO_SOUND_OFF_TIP } from "@/lib/media/video-length";
+import { VIDEO_SOUND_OFF_TIP } from "@/lib/media/video-length";
 
 const selectClass =
   "flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-shadow sm:h-10 sm:text-sm";
-
-const PAYMENT_METHOD_OPTIONS = [
-  { value: "cash", label: "Cash" },
-  { value: "card", label: "Card" },
-  { value: "eft", label: "EFT / Bank Transfer" },
-  { value: "snapscan", label: "SnapScan" },
-  { value: "capitec_pay", label: "Capitec Pay" },
-  { value: "other", label: "Other" },
-];
 
 export default function EditBusinessPage() {
   const router = useRouter();
@@ -122,6 +123,7 @@ export default function EditBusinessPage() {
   const params = useParams<{ id: string }>();
   const businessId = params.id;
   const { toast } = useToast();
+  const { profile } = useAuth();
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -168,10 +170,10 @@ export default function EditBusinessPage() {
   const [mapDirections, setMapDirections] = useState("");
 
   // Contact & Social
-  const [phone, setPhone] = useState("");
-  const [whatsapp, setWhatsapp] = useState("");
   const [website, setWebsite] = useState("");
-  const contactValues = { phone, whatsapp, website };
+  // Call and WhatsApp publish the account's verified number, also over an older typed one.
+  const verifiedPhone = profile?.phone?.trim() || "";
+  const contactValues = { phone: verifiedPhone, whatsapp: verifiedPhone, website };
   const contactMethods = readContactMethods(categoryDetails.contact_methods, contactValues);
   const publicContacts = selectedContacts(contactMethods, contactValues);
   // Profiles without customer access predate the address toggle and always show the pin.
@@ -182,11 +184,13 @@ export default function EditBusinessPage() {
   const [socialInstagram, setSocialInstagram] = useState("");
   const [socialTwitter, setSocialTwitter] = useState("");
   const [socialTiktok, setSocialTiktok] = useState("");
+  const [socialYoutube, setSocialYoutube] = useState("");
 
-  // Operating Hours
-  const [hoursMonFri, setHoursMonFri] = useState({ open: "", close: "", closed: false });
-  const [hoursSat, setHoursSat] = useState({ open: "", close: "", closed: false });
-  const [hoursSun, setHoursSun] = useState({ open: "", close: "", closed: true });
+  // Opening hours, booking and visitors
+  const [hours, setHours] = useState<BusinessHours>(EMPTY_BUSINESS_HOURS);
+  const [visit, setVisit] = useState<VisitDetails>({ walkInPolicy: "", visitorFeatures: [] });
+  const bookingUrl =
+    typeof categoryDetails.booking_url === "string" ? categoryDetails.booking_url : "";
 
   // Services & Additional
   const [servicesInput, setServicesInput] = useState("");
@@ -264,6 +268,10 @@ export default function EditBusinessPage() {
         setSubcategory(b.subcategory || "");
         setCategoryDetails({
           ...(b.category_details ?? {}),
+          // Older posts without a stored choice used whichever numbers they had.
+          contact_methods:
+            b.category_details?.contact_methods ??
+            [b.phone && "call", b.whatsapp && "whatsapp"].filter(Boolean),
           customer_access:
             b.category_details?.customer_access ??
             legacyAccessFromRecord({
@@ -291,9 +299,8 @@ export default function EditBusinessPage() {
         setStoreNumber(b.store_number || "");
         setProfileExtras(readBusinessProfileExtras(b.category_details));
         setMapDirections(b.map_directions || "");
-        setPhone(b.phone || "");
-        setWhatsapp(b.whatsapp || "");
         setWebsite(b.website || "");
+        setVisit(readVisitDetails(b.business_details));
         setBusinessDetails(
           coerceBusinessDetails(b.business_type || "standalone_shop", b.business_details)
         );
@@ -316,11 +323,7 @@ export default function EditBusinessPage() {
           )
         );
 
-        // Operating hours
-        const hours = b.operating_hours || {};
-        setHoursMonFri(parseHoursValue(hours.Mon_Fri || ""));
-        setHoursSat(parseHoursValue(hours.Sat || ""));
-        setHoursSun(parseHoursValue(hours.Sun || ""));
+        setHours(readBusinessHours(b.operating_hours));
 
         // Social links
         const social = b.social_links || {};
@@ -328,6 +331,7 @@ export default function EditBusinessPage() {
         setSocialInstagram(social.instagram || "");
         setSocialTwitter(social.twitter || "");
         setSocialTiktok(social.tiktok || "");
+        setSocialYoutube(social.youtube || "");
 
         // Layout template
         setLayoutTemplate(b.layout_template || null);
@@ -452,7 +456,10 @@ export default function EditBusinessPage() {
         socialInstagram: socialInstagram.trim(),
         socialTwitter: socialTwitter.trim(),
         socialTiktok: socialTiktok.trim(),
+        socialYoutube: socialYoutube.trim(),
       });
+      if (!bookingUrlSchema.safeParse(bookingUrl).success)
+        validationErrors["category_details.booking_url"] = "Enter a valid booking link.";
 
       if (categoryDetails.customer_access) {
         for (const key of Object.keys(validationErrors))
@@ -592,9 +599,10 @@ export default function EditBusinessPage() {
       if (socialInstagram) socialLinks.instagram = socialInstagram;
       if (socialTwitter) socialLinks.twitter = socialTwitter;
       if (socialTiktok) socialLinks.tiktok = socialTiktok;
+      if (socialYoutube) socialLinks.youtube = socialYoutube;
 
       // Build operating hours
-      const operatingHours: Record<string, string> = {};
+      let operatingHours: Record<string, string | boolean> = {};
       if (businessType === "market_stall" && !categoryDetails.customer_access) {
         const td = (businessDetails as unknown as Record<string, unknown>).trading_days as
           string[] | undefined;
@@ -611,12 +619,7 @@ export default function EditBusinessPage() {
           operatingHours.Sun = hasSun ? th : "Closed";
         }
       } else {
-        const monFriVal = formatHoursValue(hoursMonFri.open, hoursMonFri.close, hoursMonFri.closed);
-        const satVal = formatHoursValue(hoursSat.open, hoursSat.close, hoursSat.closed);
-        const sunVal = formatHoursValue(hoursSun.open, hoursSun.close, hoursSun.closed);
-        if (monFriVal) operatingHours.Mon_Fri = monFriVal;
-        if (satVal) operatingHours.Sat = satVal;
-        if (sunVal) operatingHours.Sun = sunVal;
+        operatingHours = businessHoursPayload(hours);
       }
 
       // Build service areas
@@ -664,7 +667,13 @@ export default function EditBusinessPage() {
         gallery_photos: finalGalleryPhotos.length > 0 ? finalGalleryPhotos : [],
         services_offered: services,
         service_areas: serviceAreas,
-        business_details: hadStoredAccess.current ? undefined : finalBusinessDetails,
+        business_details: withVisitDetails(
+          hadStoredAccess.current
+            ? null
+            : (finalBusinessDetails as unknown as Record<string, unknown>),
+          businessType,
+          visit
+        ),
         ...businessProfileExtrasPayload(profileExtras),
         category_details: categoryDetails.customer_access
           ? {
@@ -760,6 +769,7 @@ export default function EditBusinessPage() {
       instagram: socialInstagram,
       twitter: socialTwitter,
       tiktok: socialTiktok,
+      youtube: socialYoutube,
     }).filter(([, value]) => value.trim().length > 0)
   );
   const previewGalleryPhotos = [...existingGalleryPhotos, ...previewGalleryUrls];
@@ -774,6 +784,14 @@ export default function EditBusinessPage() {
     previewBusinessDetails.type === "mall_store"
       ? { ...previewBusinessDetails, mall_photos: previewMallPhotos }
       : previewBusinessDetails;
+  const previewDetails =
+    withVisitDetails(
+      categoryDetails.customer_access
+        ? null
+        : (previewMallDetails as unknown as Record<string, unknown>),
+      businessType,
+      visit
+    ) ?? null;
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -865,17 +883,20 @@ export default function EditBusinessPage() {
                     const unselected = suggestions.filter((s) => !services.includes(s));
                     if (unselected.length === 0) return null;
                     return (
-                      <div className="flex flex-wrap gap-1.5">
-                        {unselected.map((sug) => (
-                          <button
-                            key={sug}
-                            type="button"
-                            onClick={() => setServices((prev) => [...prev, sug])}
-                            className="inline-flex min-h-9 items-center rounded-full border border-dashed border-brand-blue-400/60 px-3 text-xs font-medium text-brand-blue-700 transition-colors hover:bg-brand-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-brand-blue-300 dark:hover:bg-brand-blue-950/40"
-                          >
-                            + {sug}
-                          </button>
-                        ))}
+                      <div className="space-y-1.5">
+                        <p className="text-xs font-medium text-muted-foreground">Tap to add</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {unselected.map((sug) => (
+                            <button
+                              key={sug}
+                              type="button"
+                              onClick={() => setServices((prev) => [...prev, sug])}
+                              className="inline-flex min-h-9 items-center rounded-full border border-dashed border-brand-blue-400/60 px-3 text-xs font-medium text-brand-blue-700 transition-colors hover:bg-brand-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-brand-blue-300 dark:hover:bg-brand-blue-950/40"
+                            >
+                              + {sug}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     );
                   })()}
@@ -1193,18 +1214,12 @@ export default function EditBusinessPage() {
 
               <BusinessContactFields
                 methods={contactMethods}
-                values={contactValues}
+                verifiedPhone={verifiedPhone}
                 errors={fieldErrors}
-                onMethods={(methods) =>
-                  setCategoryDetails((current) => ({ ...current, contact_methods: methods }))
-                }
-                onValue={(field, value) =>
-                  ({
-                    phone: setPhone,
-                    whatsapp: setWhatsapp,
-                    website: setWebsite,
-                  })[field](value)
-                }
+                onMethods={(methods) => {
+                  setCategoryDetails((current) => ({ ...current, contact_methods: methods }));
+                  clearErrors("contact_methods", "phone", "whatsapp");
+                }}
               />
 
               <OnlinePresenceFields
@@ -1215,6 +1230,7 @@ export default function EditBusinessPage() {
                   socialInstagram,
                   socialTwitter,
                   socialTiktok,
+                  socialYoutube,
                 }}
                 onChange={(field, value) => {
                   ({
@@ -1224,6 +1240,7 @@ export default function EditBusinessPage() {
                     socialInstagram: setSocialInstagram,
                     socialTwitter: setSocialTwitter,
                     socialTiktok: setSocialTiktok,
+                    socialYoutube: setSocialYoutube,
                   })[field](value);
                   clearErrors(field === "mapDirections" ? "map_directions" : field);
                 }}
@@ -1245,41 +1262,24 @@ export default function EditBusinessPage() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  <Label>Opening hours</Label>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <OperatingHoursInput
-                      id="hoursMonFri"
-                      label="Mon - Fri"
-                      open={hoursMonFri.open}
-                      close={hoursMonFri.close}
-                      closed={hoursMonFri.closed}
-                      onOpenChange={(v) => setHoursMonFri((p) => ({ ...p, open: v }))}
-                      onCloseChange={(v) => setHoursMonFri((p) => ({ ...p, close: v }))}
-                      onClosedChange={(v) => setHoursMonFri((p) => ({ ...p, closed: v }))}
-                    />
-                    <OperatingHoursInput
-                      id="hoursSat"
-                      label="Saturday"
-                      open={hoursSat.open}
-                      close={hoursSat.close}
-                      closed={hoursSat.closed}
-                      onOpenChange={(v) => setHoursSat((p) => ({ ...p, open: v }))}
-                      onCloseChange={(v) => setHoursSat((p) => ({ ...p, close: v }))}
-                      onClosedChange={(v) => setHoursSat((p) => ({ ...p, closed: v }))}
-                    />
-                    <OperatingHoursInput
-                      id="hoursSun"
-                      label="Sunday / Public Holidays"
-                      open={hoursSun.open}
-                      close={hoursSun.close}
-                      closed={hoursSun.closed}
-                      onOpenChange={(v) => setHoursSun((p) => ({ ...p, open: v }))}
-                      onCloseChange={(v) => setHoursSun((p) => ({ ...p, close: v }))}
-                      onClosedChange={(v) => setHoursSun((p) => ({ ...p, closed: v }))}
-                    />
-                  </div>
+                  <p className="text-sm font-medium">Opening hours</p>
+                  <BusinessHoursFields value={hours} onChange={setHours} />
                 </div>
               )}
+
+              <div className="space-y-3">
+                <p className="text-sm font-medium">Booking and visitors</p>
+                <BusinessVisitFields
+                  bookingUrl={bookingUrl}
+                  onBookingUrlChange={(value) => {
+                    setCategoryDetails((current) => ({ ...current, booking_url: value }));
+                    clearErrors("category_details.booking_url");
+                  }}
+                  bookingUrlError={fieldErrors["category_details.booking_url"]}
+                  visit={visit}
+                  onVisitChange={setVisit}
+                />
+              </div>
 
               {/* Profiles with customer access answer delivery in "How do you serve customers?". */}
               {businessType !== "online_only" && !categoryDetails.customer_access && (
@@ -1307,6 +1307,7 @@ export default function EditBusinessPage() {
               )}
 
               <div className="space-y-5">
+                <MediaLimitsLine />
                 <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                   <MediaUpload
                     id="edit-business-logo-input"
@@ -1416,7 +1417,7 @@ export default function EditBusinessPage() {
                 <MediaUpload
                   id="edit-business-video-input"
                   label={`Video${!videoAllowed ? " — Upgrade to unlock" : ""}`}
-                  description={`Auto-plays muted on your profile. ${VIDEO_GUIDANCE} ${VIDEO_SOUND_OFF_TIP}`}
+                  description={`Auto-plays muted on your profile. ${VIDEO_SOUND_OFF_TIP}`}
                   maxFiles={1}
                   files={newPromoVideoFile}
                   existing={
@@ -1503,31 +1504,7 @@ export default function EditBusinessPage() {
                       video_thumbnail: previewVideoThumbnail,
                       gallery_photos: previewGalleryPhotos,
                       social_links: Object.keys(socialLinks).length > 0 ? socialLinks : null,
-                      operating_hours: {
-                        ...(formatHoursValue(
-                          hoursMonFri.open,
-                          hoursMonFri.close,
-                          hoursMonFri.closed
-                        )
-                          ? {
-                              Mon_Fri: formatHoursValue(
-                                hoursMonFri.open,
-                                hoursMonFri.close,
-                                hoursMonFri.closed
-                              ),
-                            }
-                          : {}),
-                        ...(formatHoursValue(hoursSat.open, hoursSat.close, hoursSat.closed)
-                          ? {
-                              Sat: formatHoursValue(hoursSat.open, hoursSat.close, hoursSat.closed),
-                            }
-                          : {}),
-                        ...(formatHoursValue(hoursSun.open, hoursSun.close, hoursSun.closed)
-                          ? {
-                              Sun: formatHoursValue(hoursSun.open, hoursSun.close, hoursSun.closed),
-                            }
-                          : {}),
-                      },
+                      operating_hours: businessHoursPayload(hours),
                       services_offered: services,
                       payment_methods_accepted: paymentMethods,
                       delivery_options: deliveryOptions,
@@ -1552,7 +1529,7 @@ export default function EditBusinessPage() {
                         readCustomerAccess(categoryDetails.customer_access).publishAddress
                           ? mapDirections || null
                           : null,
-                      business_details: categoryDetails.customer_access ? null : previewMallDetails,
+                      business_details: previewDetails,
                       layout_template: layoutTemplate,
                     } as BusinessDetailRecord
                   }

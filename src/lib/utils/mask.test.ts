@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { maskPhone, maskName, maskIdNumber, maskEmail } from "./mask";
+import { maskPhone, maskName, maskIdNumber, maskEmail, maskLocalPhone } from "./mask";
 
 describe("maskPhone", () => {
   it("masks +27 numbers", () => {
@@ -48,5 +48,15 @@ describe("maskEmail", () => {
 
   it("handles single-char local", () => {
     expect(maskEmail("a@b.com")).toBe("***@b.com");
+  });
+});
+
+describe("maskLocalPhone", () => {
+  it("shows the first two and last four digits of a local number", () => {
+    expect(maskLocalPhone("+27821234567")).toBe("08• ••• 4567");
+    expect(maskLocalPhone("0712345678")).toBe("07• ••• 5678");
+  });
+  it("hides a number too short to mask", () => {
+    expect(maskLocalPhone("123")).toBe("••• ••• ••••");
   });
 });

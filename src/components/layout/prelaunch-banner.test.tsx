@@ -56,4 +56,14 @@ describe("PrelaunchBanner", () => {
     await new Promise((resolve) => setTimeout(resolve, 500));
     expect(screen.queryByRole("dialog")).toBeNull();
   });
+
+  it.each(["/post/create", "/post/create-listing", "/dashboard/slots", "/admin/moderation"])(
+    "stays off the task page %s",
+    async (path) => {
+      mockUsePathname.mockReturnValue(path);
+      render(<PrelaunchBanner />);
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      expect(screen.queryByRole("dialog")).toBeNull();
+    }
+  );
 });

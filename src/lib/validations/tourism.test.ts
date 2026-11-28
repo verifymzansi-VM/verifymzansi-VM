@@ -243,4 +243,72 @@ describe("tourism validation schemas", () => {
       expect(result.success).toBe(false);
     });
   });
+  describe("posting fixes batch keys", () => {
+    it("accepts the From price, stay sizes, backup, cancellation days and opening hours", () => {
+      const details = {
+        price_from_cents: 45000,
+        price_unit: "night",
+        sleeps: 4,
+        bedrooms: 2,
+        beds: 3,
+        bathrooms: 1,
+        backup_utilities: ["inverter_solar", "borehole"],
+        cancellation_policy: "free_until_days",
+        cancellation_free_days: 7,
+        opening_hours: "Daily 08:00 to 17:00",
+      };
+      const result = tourismBusinessSchema.safeParse(
+        validTourismBusiness({ category_details: details })
+      );
+      expect(result.success).toBe(true);
+      expect(result.success && result.data.category_details).toMatchObject(details);
+    });
+
+    it("rejects unknown units, backup items, fractional sizes and long opening hours", () => {
+      for (const details of [
+        { price_unit: "week" },
+        { backup_utilities: ["solar_panels"] },
+        { sleeps: 2.5 },
+        { price_from_cents: 450.5 },
+        { opening_hours: "x".repeat(121) },
+      ]) {
+        expect(
+          tourismBusinessSchema.safeParse(validTourismBusiness({ category_details: details }))
+            .success,
+          JSON.stringify(details)
+        ).toBe(false);
+      }
+    });
+
+    it("still accepts the older price band, cancellation values and star rating", () => {
+      const result = tourismBusinessSchema.safeParse(
+        validTourismBusiness({
+          category_details: {
+            price_range: "midrange",
+            cancellation_policy: "strict",
+            star_rating: 3,
+          },
+        })
+      );
+      expect(result.success).toBe(true);
+    });
+
+    it("accepts the event doors, refund, ticket and YouTube keys", () => {
+      const result = eventSchema.safeParse(
+        validEvent({
+          event_details: {
+            doors_open: "17:30",
+            refund_policy: "no_refunds",
+            ticket_sales: "online",
+            gate_payment: ["card"],
+            social_links: { youtube: "https://youtube.com/@jazz" },
+          },
+        })
+      );
+      expect(result.success).toBe(true);
+      expect(
+        eventSchema.safeParse(validEvent({ event_details: { doors_open: "7pm" } })).success
+      ).toBe(false);
+    });
+  });
 });

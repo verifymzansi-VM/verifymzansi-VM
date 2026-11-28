@@ -23,9 +23,6 @@ export function BusinessCategoryPicker({
   return (
     <fieldset id="business-category-group" tabIndex={-1} className="space-y-2">
       <legend className="text-sm font-medium">What does your business mainly do? (Required)</legend>
-      <p id={`${id}-hint`} className="text-sm text-muted-foreground">
-        Choose one main activity. You will describe your location later.
-      </p>
       <FieldHelp label="business category">
         Choose what customers come to you for. A hair salon belongs under Beauty &amp; Personal Care
         even if you work from home. Use Products and services for other things you offer.
@@ -39,7 +36,6 @@ export function BusinessCategoryPicker({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="For example: braids, plumber or spaza"
-        aria-describedby={`${id}-hint`}
         className="h-11 w-full rounded-xl border border-input bg-background px-3"
       />
       {selected && (
@@ -56,12 +52,9 @@ export function BusinessCategoryPicker({
             type="button"
             aria-pressed={value === c.value}
             onClick={() => onChange(c.value)}
-            className={`rounded-xl border p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${value === c.value ? "border-primary bg-primary/10" : "border-input"}`}
+            className={`min-h-11 rounded-xl border px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${value === c.value ? "border-primary bg-primary/10" : "border-input"}`}
           >
             <span className="block text-sm font-semibold">{c.label}</span>
-            <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-              {c.description || "A business that does not fit the categories above"}
-            </span>
           </button>
         ))}
       </div>

@@ -197,23 +197,103 @@ describe("validateTourismStep tours and experiences", () => {
     expect(errors.city).toBeDefined();
   });
 
-  it("takes a landline for calls but needs a mobile for WhatsApp", () => {
-    const contacts = (phone: string, whatsapp: string) =>
-      validateTourismStep(2, tour({ contactMethods: ["call", "whatsapp"], phone, whatsapp }), 0);
-    expect(contacts("021 123 4567", "0821234567")).not.toHaveProperty("phone");
-    expect(contacts("021 123 4567", "0821234567")).not.toHaveProperty("whatsapp");
-    expect(contacts("0821234567", "0211234567").whatsapp).toBe("WhatsApp needs a mobile number.");
-    // 087, 0800, 0860 and 0861 take calls only.
-    for (const number of ["0871234567", "0800123456", "0860123456", "0861123456"]) {
-      expect(contacts(number, "0821234567"), number).not.toHaveProperty("phone");
-      expect(contacts("0821234567", number).whatsapp, number).toBe(
-        "WhatsApp needs a mobile number."
+  it("uses the verified account number for Call and WhatsApp, with nothing typed", () => {
+    const contacts = (contactMethods: string[], phone: string) =>
+      validateTourismStep(
+        2,
+        tour({ subcategory: "guest_house_bnb", contactMethods, phone, whatsapp: phone }),
+        0
+      );
+    // Without a verified number, Call and WhatsApp are refused.
+    for (const methods of [["call"], ["whatsapp"], ["call", "form"]]) {
+      expect(contacts(methods, "").contactMethods, methods.join()).toBe(
+        "Verify a number on your account to use Call or WhatsApp."
       );
     }
-    expect(contacts("0862123456", "0801234567")).toMatchObject({
-      phone: "Enter a valid South African number.",
-      whatsapp: "Enter a valid South African WhatsApp number.",
-    });
+    // With one they pass; the contact form alone never needs a number.
+    expect(contacts(["call", "whatsapp"], "0821234567")).toEqual({});
+    expect(contacts(["form"], "")).toEqual({});
+    expect(contacts([], "0821234567").contactMethods).toBe("Choose at least one contact method.");
+    // No typed-number errors any more.
+    expect(contacts(["call", "whatsapp"], "0821234567")).not.toHaveProperty("phone");
+    expect(contacts(["call", "whatsapp"], "0821234567")).not.toHaveProperty("whatsapp");
+  });
+
+  it.each([
+    "hotel_resort",
+    "guest_house_bnb",
+    "spa_wellness_retreat",
+    "tourist_attraction",
+    "cultural_heritage",
+  ])("does not ask how visitors join a fixed venue (%s)", (subcategory) => {
+    expect(validateTourismStep(2, tour({ subcategory }), 0)).not.toHaveProperty("joinMethods");
+  });
+
+  it.each(["tour_operator", "safari_wildlife", "adventure_activities"])(
+    "asks how visitors join a tour or experience (%s)",
+    (subcategory) => {
+      expect(validateTourismStep(2, tour({ subcategory }), 0)).toHaveProperty("joinMethods");
+    }
+  );
+
+  it("checks the From price, stay sizes, cancellation days and opening hours", () => {
+    const step1 = (overrides: Record<string, unknown>) =>
+      validateTourismStep(1, tour({ subcategory: "guest_house_bnb", ...overrides }), 0);
+    expect(
+      step1({ priceFrom: "450", sleeps: "4", bedrooms: "0", beds: "3", bathrooms: "1" })
+    ).toEqual({});
+    expect(step1({ priceFrom: "0" }).priceFrom).toBe("Enter a price above R0, or leave it blank.");
+    expect(step1({ priceFrom: "450.555" }).priceFrom).toBe(
+      "Price can have at most 2 decimal places."
+    );
+    expect(step1({ sleeps: "0" }).sleeps).toBe("Sleeps must be a whole number of 1 or more.");
+    expect(step1({ beds: "2.5" }).beds).toBe("Beds must be a whole number of 0 or more.");
+    expect(step1({ cancellationPolicy: "free_until_days" }).cancellationFreeDays).toBe(
+      "Enter the number of days (1 to 365)."
+    );
+    expect(step1({ cancellationPolicy: "free_until_days", cancellationFreeDays: "7" })).toEqual({});
+    expect(step1({ cancellationPolicy: "no_refunds" })).toEqual({});
+    // Stay sizes are only checked for stays; opening hours only for attractions.
+    expect(validateTourismStep(1, tour({ sleeps: "0" }), 0)).toEqual({});
+    expect(
+      validateTourismStep(
+        1,
+        tour({ subcategory: "tourist_attraction", openingHours: "x".repeat(121) }),
+        0
+      ).openingHours
+    ).toBe("Opening hours cannot exceed 120 characters.");
+  });
+
+  it("checks the event doors-open time and refund days for paid events", () => {
+    const event = (overrides: Record<string, unknown>) =>
+      validateTourismStep(
+        1,
+        tour({
+          listingType: "event",
+          eventType: "festival_concert",
+          startDate: "2099-12-01T18:00",
+          priceZar: "150",
+          ...overrides,
+        }),
+        0
+      );
+    expect(event({ doorsOpen: "17:30" })).toEqual({});
+    expect(event({ doorsOpen: "25:00" }).doorsOpen).toBe("Choose a doors-open time.");
+    expect(event({ refundPolicy: "full_until_days" }).refundDays).toBe(
+      "Enter the number of days (1 to 365)."
+    );
+    expect(event({ refundPolicy: "full_until_days", refundDays: "3" })).toEqual({});
+    // A free event has no refund to describe.
+    expect(event({ priceZar: "0", refundPolicy: "full_until_days" })).toEqual({});
+  });
+
+  it("checks the YouTube link like the other links", () => {
+    expect(validateTourismStep(2, tour({ socialYoutube: "not a link" }), 0).socialYoutube).toBe(
+      "Enter a valid YouTube URL."
+    );
+    expect(
+      validateTourismStep(2, tour({ socialYoutube: "youtube.com/@soweto" }), 0)
+    ).not.toHaveProperty("socialYoutube");
   });
 
   it("asks how visitors join without requiring an office address", () => {

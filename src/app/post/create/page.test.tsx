@@ -221,19 +221,21 @@ describe("CreatePostPage", () => {
     expect(screen.getByRole("heading", { name: "Tourism" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Events" })).toBeInTheDocument();
     expect(screen.getAllByText("Tourism & Events")).toHaveLength(2);
-    expect(screen.getByText("Advertising a job vacancy")).toBeInTheDocument();
-    expect(screen.getByText("You run a shop, practice or service")).toBeInTheDocument();
-    expect(screen.getByText("a venue for hire. Use Mzansi Business.")).toBeInTheDocument();
+    // Each card: title, one line and Covers; no repeated "Post here if" / "Not for" lists.
+    expect(
+      screen.getByText("The classifieds. People browse it to buy, rent or find work.")
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("Covers:")).toHaveLength(4);
+    expect(screen.queryByText("Post here if")).toBeNull();
+    expect(screen.queryByText("Advertising a job vacancy")).toBeNull();
+    expect(screen.queryByText(/Not for/)).toBeNull();
     expect(screen.getByText("Free to post")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^Create a market listing:/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^Create a business profile:/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^Create an event:/ })).toBeInTheDocument();
-    expect(screen.getByText("Not sure?")).toBeInTheDocument();
+    // The "Not sure?" row repeated the cards, so it is gone.
+    expect(screen.queryByText("Not sure?")).toBeNull();
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /See advertising options/i })).toHaveAttribute(
-      "href",
-      "/advertise"
-    );
   });
 
   it("opens each form with the chosen category or type preselected", async () => {
@@ -243,16 +245,6 @@ describe("CreatePostPage", () => {
 
     await waitFor(() => {
       expect(mockPush).toHaveBeenCalledWith("/post/create-business");
-    });
-  });
-
-  it("routes common examples to the right area", async () => {
-    render(await CreatePostPage());
-
-    fireEvent.click(screen.getByRole("button", { name: /Holiday accommodation/ }));
-
-    await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith("/post/create-tourism?type=tourism_business");
     });
   });
 

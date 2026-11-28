@@ -5,7 +5,7 @@ import { useState, useEffect, type ReactNode } from "react";
 import Link from "next/link";
 import { MultiListingNudge } from "@/components/billing/multi-listing-nudge";
 import { usePathname } from "next/navigation";
-import { AlertTriangle, Loader2, Sparkles, Check, X, Camera, Video } from "lucide-react";
+import { AlertTriangle, Loader2, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -87,12 +87,6 @@ interface PlanInfo {
   maxVideos: number;
   videoAllowed: boolean;
 }
-
-const AREA_LABELS: Record<MarketplaceArea, string> = {
-  MZANSI_MARKET: "Mzansi Market",
-  MZANSI_BUSINESS: "Mzansi Business",
-  PROMOTIONS_EVENTS: "Tourism & Events",
-};
 
 const AREA_COLORS: Record<MarketplaceArea, string> = {
   MZANSI_MARKET: "border-0 bg-brand-green-600 text-white hover:bg-brand-green-600",
@@ -299,8 +293,14 @@ export function PlanGate({
     }
     document.addEventListener("visibilitychange", handleVisibilityChange);
     let authAccount: string | null | undefined;
-    const authChanges = createClient().auth.onAuthStateChange((_event, session) => {
+    const authChanges = createClient().auth.onAuthStateChange((event, session) => {
       const next = session?.user.id ?? null;
+      // The first event only reports the account already signed in: the read
+      // above is for it, so starting a second read would only delay the form.
+      if (event === "INITIAL_SESSION") {
+        authAccount = next;
+        return;
+      }
       if (authAccount === next) return;
       authAccount = next;
       ++readGeneration;
@@ -544,42 +544,8 @@ export function PlanGate({
     );
   }
 
-  // ── Has paid plan — show plan status bar + form directly ──
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border/70 bg-muted/50 px-4 py-3">
-        <Badge className={AREA_COLORS[area]}>{AREA_LABELS[area]}</Badge>
-
-        <Badge variant="outline">
-          {PLAN_TIER_LABELS[planInfo.tier as PlanTier] ?? "Active"} plan
-        </Badge>
-
-        <div className="flex items-center gap-3 text-sm text-muted-foreground ml-auto">
-          <span className="flex items-center gap-1">
-            <Camera className="h-3.5 w-3.5" />
-            {planInfo.maxPhotos} photos
-          </span>
-          {planInfo.videoAllowed && (
-            <span className="flex items-center gap-1 text-brand-green-700 dark:text-brand-gold-300">
-              <Video className="h-3.5 w-3.5" aria-hidden="true" />
-              Video
-            </span>
-          )}
-          <span>
-            {isUnlimited ? (
-              "Unlimited posts"
-            ) : (
-              <>
-                {planInfo.currentCount}/{planInfo.maxAllowed} {AREA_ITEM_LABELS[area]} used
-              </>
-            )}
-          </span>
-        </div>
-      </div>
-
-      {children}
-    </div>
-  );
+  // ── Has paid plan: the form directly. Plan and slot counts live on My slots. ──
+  return <>{children}</>;
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -588,7 +554,7 @@ export function PlanGate({
 function PlanPickerWithTrial({
   onTrialSelected,
   onChooseFreeEvent,
-  area,
+  area: _area,
   planInfo,
   areaPlans,
   onSubscribe,
@@ -609,46 +575,8 @@ function PlanPickerWithTrial({
     onTrialSelected?.(7);
     setShowForm(true);
   };
-  const usageText =
-    planInfo.maxAllowed === -1
-      ? "Unlimited posts"
-      : `${planInfo.currentCount}/${planInfo.maxAllowed} ${AREA_ITEM_LABELS[area]} used`;
-
-  if (showForm) {
-    return (
-      <div className="space-y-4">
-        {/* Free post status bar */}
-        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border/70 bg-muted/50 px-4 py-3">
-          <Badge className={AREA_COLORS[area]}>{AREA_LABELS[area]}</Badge>
-
-          <div className="flex items-center gap-1.5 text-sm">
-            <Sparkles
-              aria-hidden="true"
-              className="h-3.5 w-3.5 text-brand-gold-700 dark:text-brand-gold-300"
-            />
-            <span className="font-medium text-brand-gold-800 dark:text-brand-gold-200">
-              {planInfo.postingLimitBypassEnabled
-                ? `Staff / testing access — Unlimited posts • ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video`
-                : `Introductory trial — ${trialLength(planInfo.offer)} days • ${FREE_POST_CONFIG.maxPhotos} photos • ${FREE_POST_CONFIG.maxVideos} video`}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-3 text-sm text-muted-foreground ml-auto">
-            <span className="flex items-center gap-1">
-              <Camera className="h-3.5 w-3.5" />
-              {planInfo.maxPhotos} photos
-            </span>
-            <span className="flex items-center gap-1 text-brand-green-700 dark:text-brand-gold-300">
-              <Video className="h-3.5 w-3.5" aria-hidden="true" />1 video
-            </span>
-            <span>{usageText}</span>
-          </div>
-        </div>
-
-        {children}
-      </div>
-    );
-  }
+  // The form directly: the trial terms were shown on the card that opened it.
+  if (showForm) return <>{children}</>;
 
   return (
     <div className="space-y-3">

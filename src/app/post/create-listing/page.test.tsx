@@ -153,6 +153,30 @@ vi.mock("@/components/listings/category-picker", () => ({
       >
         Select Electronics
       </button>
+      <button
+        type="button"
+        onClick={() => {
+          onChange("jobs_services");
+          onAttributeChange("job_type", "full_time");
+          onAttributeChange("location_type", "on_site");
+        }}
+      >
+        Select Jobs
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          onChange("property");
+          onAttributeChange("property_type", "house");
+          onAttributeChange("listing_intent", "rent");
+          onAttributeChange("pets_policy", "allowed");
+          onAttributeChange("deposit_zar", "9000");
+          onAttributeChange("lease_term", "12_months");
+          onAttributeChange("occupation_date", "2027-01-01");
+        }}
+      >
+        Select Property
+      </button>
     </div>
   ),
 }));
@@ -244,12 +268,14 @@ describe("CreateListingPage", () => {
     fireEvent.click(screen.getByLabelText(/I accept the VerifyMzansi posting terms/i));
   }
 
-  it("renders the shared guide and step labels", () => {
+  it("renders one line under the title and the step labels, with no guide box", () => {
     render(<CreateListingPage />);
 
     const stepNav = screen.getByRole("navigation", { name: "Mzansi Market creation steps" });
 
-    expect(screen.getByText("Quick guide")).toBeInTheDocument();
+    expect(screen.queryByText("Quick guide")).not.toBeInTheDocument();
+    expect(screen.getByText("Required fields are marked.")).toBeInTheDocument();
+    expect(screen.queryByText("Clear photos and honest details get more replies.")).toBeNull();
     expect(within(stepNav).getAllByText("What are you listing?").length).toBeGreaterThan(0);
     expect(within(stepNav).getAllByText("Price, location & contact").length).toBeGreaterThan(0);
     expect(within(stepNav).getAllByText("Photos & review").length).toBeGreaterThan(0);
@@ -397,7 +423,19 @@ describe("CreateListingPage", () => {
     expect(payload.termsAccepted).toBe(true);
     expectFoundationPostFields(payload);
     expect(postingTermsFetch).toHaveBeenCalledTimes(1);
-    expect(mockPush).toHaveBeenCalledWith("/dashboard/listings");
+    // A clear submitted screen replaces the form: no pop-up, no redirect.
+    expect(await screen.findByRole("heading", { name: "Submitted" })).toBeInTheDocument();
+    expect(
+      screen.getByText("Our team reviews every post before it goes live.")
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Used iPhone 15\s*In review/ })).toHaveAttribute(
+      "href",
+      "/dashboard/listings?area=MZANSI_MARKET"
+    );
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(mockToast).not.toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Listing submitted for review." })
+    );
   });
 
   it("posts with Price on request and Negotiable, sending no amount", async () => {
@@ -1638,7 +1676,8 @@ describe("CreateListingPage", () => {
 
       fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
 
-      await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/dashboard/listings"));
+      expect(await screen.findByRole("heading", { name: "Submitted" })).toBeInTheDocument();
+      expect(mockPush).not.toHaveBeenCalled();
       const [payload] = saves();
       expect(payload.images).toEqual([photo]);
       expect(payload.videos).toEqual([]);
@@ -1671,7 +1710,7 @@ describe("CreateListingPage", () => {
       fireEvent.click(screen.getByLabelText(/I accept the VerifyMzansi posting terms/i));
       fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
 
-      await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/dashboard/listings"));
+      expect(await screen.findByRole("heading", { name: "Submitted" })).toBeInTheDocument();
       const acceptance = postingTermsFetch.mock.calls.find((call) => call[1]?.method === "POST");
       expect(JSON.parse(acceptance![1].body as string)).toEqual({
         version: SERVED_POSTING_TERMS.version,
@@ -1715,7 +1754,7 @@ describe("CreateListingPage", () => {
       // The member adds a photo (not uploaded in this test) and sends it again.
       fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
 
-      await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/dashboard/listings"));
+      expect(await screen.findByRole("heading", { name: "Submitted" })).toBeInTheDocument();
       const [first, second] = saves();
       expect(first.expectedRevision).toBe(1);
       expect(second.expectedRevision).toBe(2);
@@ -1737,6 +1776,191 @@ describe("CreateListingPage", () => {
       serveCopy({ ...draft("electronics", {}), status: "pending_moderation" });
       render(<CreateListingPage />);
       await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/dashboard/listings"));
+    });
+  });
+
+  describe("contacts, links, media limits and Market answers", () => {
+    const VERIFIED = "+27821234567";
+
+    function serveSubmit() {
+      fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+        if (input === "/api/media/upload")
+          return {
+            ok: true,
+            json: async () => ({
+              urls: ["https://media.verifymzansi.com/listings/photo.jpg"],
+              errors: [],
+            }),
+          };
+        if (input === "/api/listings") return { ok: true, json: async () => ({ id: "listing-1" }) };
+        throw new Error(`Unexpected fetch call: ${String(input)}`);
+      });
+    }
+
+    function stepOne(pick = "Select Electronics") {
+      fireEvent.click(screen.getByText(pick));
+      fireEvent.change(screen.getByLabelText("Title (Required)"), {
+        target: { value: "Used iPhone 15" },
+      });
+      fireEvent.change(screen.getByLabelText("Description (Required)"), {
+        target: { value: "A clean listing description with enough detail to continue." },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    }
+
+    function stepTwo() {
+      const amount = screen.queryByLabelText(/^(Asking price|Monthly Rent) \(ZAR\)/i);
+      if (amount) fireEvent.change(amount, { target: { value: "1500" } });
+      fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
+      fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
+    }
+
+    async function submitAndReadPayload() {
+      fireEvent.click(screen.getByRole("button", { name: "Next" }));
+      fireEvent.click(screen.getByRole("button", { name: "Photos (max 5)" }));
+      acceptListingTerms();
+      fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
+      await waitFor(() =>
+        expect(fetchMock.mock.calls.some((call) => call[0] === "/api/listings")).toBe(true)
+      );
+      const request = fetchMock.mock.calls.find((call) => call[0] === "/api/listings")!;
+      return JSON.parse(request[1].body as string);
+    }
+
+    afterEach(() => {
+      useAuthMock.mockReturnValue({ user: null, profile: null, isLoading: false });
+    });
+
+    it("shows on/off switches with the masked verified number and sends the chosen methods", async () => {
+      useAuthMock.mockReturnValue({ user: null, profile: { phone: VERIFIED }, isLoading: false });
+      serveSubmit();
+      render(<CreateListingPage />);
+      await termsLoaded();
+      stepOne();
+
+      const call = screen.getByRole("switch", { name: "Phone call" });
+      const whatsapp = screen.getByRole("switch", { name: "WhatsApp" });
+      const enquiry = screen.getByRole("switch", { name: "Private enquiry" });
+      expect(call).toBeChecked();
+      expect(whatsapp).not.toBeChecked();
+      expect(enquiry).toBeChecked();
+      expect(enquiry).toBeDisabled();
+      expect(screen.getAllByText(/Your verified number 08• ••• 4567/)).toHaveLength(2);
+      // Nothing to type: no phone inputs.
+      expect(screen.queryByRole("textbox", { name: /phone|whatsapp/i })).toBeNull();
+
+      fireEvent.click(whatsapp);
+      fireEvent.click(call);
+      expect(whatsapp).toBeChecked();
+      expect(call).not.toBeChecked();
+      stepTwo();
+      const payload = await submitAndReadPayload();
+      expect(payload.contactMethods).toEqual(["in_app", "whatsapp"]);
+    });
+
+    it("sends only the private enquiry when the account has no verified number", async () => {
+      useAuthMock.mockReturnValue({ user: null, profile: { phone: null }, isLoading: false });
+      serveSubmit();
+      render(<CreateListingPage />);
+      await termsLoaded();
+      stepOne();
+
+      expect(screen.getByRole("switch", { name: "Phone call" })).toBeDisabled();
+      expect(screen.getByRole("switch", { name: "Phone call" })).not.toBeChecked();
+      expect(screen.getAllByRole("link", { name: "Verify a number" }).length).toBeGreaterThan(0);
+      stepTwo();
+      const payload = await submitAndReadPayload();
+      expect(payload.contactMethods).toEqual(["in_app"]);
+    });
+
+    it("sends website and social links, keeping only the filled ones", async () => {
+      serveSubmit();
+      render(<CreateListingPage />);
+      await termsLoaded();
+      stepOne();
+      stepTwo();
+      expect(screen.queryByLabelText(/Location pin/)).toBeNull();
+      fireEvent.change(screen.getByLabelText(/^Website \(Optional\)/), {
+        target: { value: "https://shop.example.co.za" },
+      });
+      fireEvent.change(screen.getByLabelText(/^YouTube/), {
+        target: { value: "https://youtube.com/@shop" },
+      });
+      fireEvent.change(screen.getByLabelText(/^TikTok/), {
+        target: { value: "https://tiktok.com/@shop" },
+      });
+      const payload = await submitAndReadPayload();
+      expect(payload.website).toBe("https://shop.example.co.za");
+      expect(payload.social_links).toEqual({
+        tiktok: "https://tiktok.com/@shop",
+        youtube: "https://youtube.com/@shop",
+      });
+    });
+
+    it("stops on step 2 for a link that is not a web address", () => {
+      render(<CreateListingPage />);
+      stepOne();
+      stepTwo();
+      fireEvent.change(screen.getByLabelText(/^Facebook/), { target: { value: "not a link" } });
+      fireEvent.click(screen.getByRole("button", { name: "Next" }));
+      expect(screen.getAllByText("Enter a valid link.").length).toBeGreaterThan(0);
+      expect(screen.queryByRole("button", { name: "Submit for review" })).toBeNull();
+    });
+
+    it("keeps links in the saved draft", async () => {
+      useAuthMock.mockReturnValue({ user: { id: "links-user" }, profile: null, isLoading: false });
+      render(<CreateListingPage />);
+      await termsLoaded();
+      // Autosave starts once the (empty) saved draft has been read.
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+      stepOne();
+      fireEvent.change(screen.getByLabelText(/^Instagram/), {
+        target: { value: "https://instagram.com/shop" },
+      });
+      await waitFor(
+        () => {
+          const saved = JSON.parse(localStorage.getItem("vm-draft:listing:links-user") ?? "{}");
+          expect(saved.data?.links?.socialInstagram).toBe("https://instagram.com/shop");
+        },
+        { timeout: 4000 }
+      );
+    });
+
+    it("shows the media limits next to the upload buttons", () => {
+      render(<CreateListingPage />);
+      stepOne();
+      stepTwo();
+      fireEvent.click(screen.getByRole("button", { name: "Next" }));
+      expect(
+        screen.getByText("Photos up to 5 MB · Video up to 2 min, up to 300 MB")
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/Portrait photos around 1080 x 1920/)).toBeNull();
+    });
+
+    it("tells job posters never to pay to apply", () => {
+      render(<CreateListingPage />);
+      fireEvent.click(screen.getByText("Select Jobs"));
+      expect(screen.getByText("Never pay to apply for a job.")).toBeInTheDocument();
+    });
+
+    it("mirrors the pets choice to pets_allowed and drops sale-only answers on a rental", async () => {
+      serveSubmit();
+      render(<CreateListingPage />);
+      await termsLoaded();
+      stepOne("Select Property");
+      stepTwo();
+      const payload = await submitAndReadPayload();
+      expect(payload.attributes).toMatchObject({
+        property_type: "house",
+        listing_intent: "rent",
+        pets_policy: "allowed",
+        pets_allowed: true,
+        deposit_zar: 9000,
+        lease_term: "12_months",
+      });
+      expect(payload.attributes).not.toHaveProperty("occupation_date");
     });
   });
 });

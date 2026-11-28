@@ -476,4 +476,91 @@ describe("ModerationPreviewPanel video length", () => {
     render(<ModerationPreviewPanel item={baseItem} />);
     expect(screen.queryByTestId("video-length-note")).toBeNull();
   });
+
+  it("shows an event in the event view with everything entered and real links", () => {
+    render(
+      <ModerationPreviewPanel
+        item={{
+          ...baseItem,
+          id: "event-1",
+          title: "Jazz on the lawn",
+          business_name: "Jazz on the lawn",
+          contentType: "promotion",
+          area: "PROMOTIONS_EVENTS",
+          areaLabel: "Tourism & Events",
+          itemType: "Event",
+          category: "events",
+          price_cents: 15000,
+          start_date: "2026-12-12T16:00:00.000Z",
+          end_date: "2026-12-12T20:00:00.000Z",
+          contact_methods: ["call", "form"],
+          event_details: {
+            event_type: "festival_concert",
+            venue_name: "Botanical Gardens",
+            doors_open: "17:30",
+            age_restriction: "18_plus",
+            refund_policy: "no_refunds",
+            social_links: { youtube: "https://youtube.com/@jazz" },
+          },
+        }}
+      />
+    );
+    expect(screen.queryByText("Business media")).toBeNull();
+    expect(screen.getByText("Festival / Concert")).toBeInTheDocument();
+    expect(screen.getByText("Paid from R 15000")).toBeInTheDocument();
+    expect(screen.getByText("17:30")).toBeInTheDocument();
+    expect(screen.getByText("Botanical Gardens")).toBeInTheDocument();
+    expect(screen.getByText("18+ (ID will be checked at the door)")).toBeInTheDocument();
+    expect(screen.getByText("No refunds")).toBeInTheDocument();
+    expect(screen.getByText("Call (verified number), VerifyMzansi inbox")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "YouTube" })).toHaveAttribute(
+      "href",
+      "https://youtube.com/@jazz"
+    );
+  });
+
+  it("names the Market category plainly and lists the seller's answers", () => {
+    render(
+      <ModerationPreviewPanel
+        item={{
+          ...baseItem,
+          business_name: "Red jacket",
+          contentType: "listing",
+          category: "clothing_accessories",
+          attributes: { size: "M", gender: "women" },
+          website: "https://shop.example.co.za",
+        }}
+      />
+    );
+    expect(screen.getByText("Clothing & Accessories")).toBeInTheDocument();
+    expect(screen.queryByText("clothing accessories")).toBeNull();
+    expect(screen.getByText("M")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Website" })).toHaveAttribute(
+      "href",
+      "https://shop.example.co.za"
+    );
+  });
+
+  it("shows a business's social links as real links with plain category and payment names", () => {
+    render(
+      <ModerationPreviewPanel
+        item={{
+          ...baseBusinessItem,
+          contentType: "business",
+          category: "food_dining",
+          payment_methods_accepted: ["zapper", "card_machine"],
+          social_links: { facebook: "https://facebook.com/nomsa" },
+          operating_hours: { Mon_Fri: "08:00 - 17:00" },
+          business_details: null,
+        }}
+      />
+    );
+    expect(screen.getByText("Restaurants & Catering")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Facebook" })).toHaveAttribute(
+      "href",
+      "https://facebook.com/nomsa"
+    );
+    expect(screen.getByText("Zapper")).toBeInTheDocument();
+    expect(screen.getByText("Card machine")).toBeInTheDocument();
+  });
 });

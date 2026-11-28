@@ -2,7 +2,7 @@
 
 import { VideoViewTracker } from "@/components/ui/video-view-tracker";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { contactPhone, whatsappLink } from "@/lib/utils/contact-links";
 import Image from "next/image";
@@ -37,7 +37,12 @@ import { formatRandAmount, formatSaLongDate, formatZARShort } from "@/lib/utils/
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { cn } from "@/lib/utils";
 import { safeExternalHref } from "@/lib/utils/sanitize-html";
-import { FacebookIcon, InstagramIcon, TikTokIcon, XIcon } from "@/components/icons/social-icons";
+import { PostLinks, postLinkItems } from "@/components/listings/post-links";
+import {
+  EVENT_ID_CHECK_LINE,
+  eventChecksId,
+  eventEntryFacts,
+} from "@/lib/forms/event-entry-details";
 import { useVideoPlaybackManager } from "@/contexts/video-playback-context";
 import { type BusinessCategory, type AccountVerificationStatus } from "@/types/enums";
 import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
@@ -58,7 +63,6 @@ import {
 import {
   buildEventCalendarUrl,
   EVENT_RAIN_POLICY_LABELS,
-  EVENT_RECURRING_LABELS,
   formatLooseDate,
   getEventState,
   type EventState,
@@ -894,21 +898,22 @@ export function PromotionDetailContent({
                 ? (EVENT_AGE_RESTRICTIONS.find((a) => a.value === ed.age_restriction)?.label ??
                   humanizeKey(ed.age_restriction))
                 : null;
+              // Dress code, recurring and group discounts are no longer shown.
+              const entryFacts = eventEntryFacts(ed);
+              const checksId = eventChecksId(ed.age_restriction);
               const hasContent =
                 ed.venue_capacity ||
                 (ed.ticket_tiers && ed.ticket_tiers.length > 0) ||
                 ed.tickets_url ||
                 ed.age_restriction ||
-                ed.dress_code ||
                 ed.lineup ||
                 ed.parking_available != null ||
                 ed.accessibility?.length ||
                 ed.food_drinks_available != null ||
                 ed.bring_your_own ||
-                ed.recurring ||
                 ed.rain_policy ||
                 ed.early_bird_deadline ||
-                ed.group_discount_available != null;
+                entryFacts.length > 0;
               if (!hasContent) return null;
               return (
                 <Card>
@@ -935,12 +940,12 @@ export function PromotionDetailContent({
                         </>
                       )}
 
-                      {ed.dress_code && (
-                        <>
-                          <dt className="text-muted-foreground">Dress code</dt>
-                          <dd className="font-medium">{ed.dress_code}</dd>
-                        </>
-                      )}
+                      {entryFacts.map((fact) => (
+                        <Fragment key={fact.label}>
+                          <dt className="text-muted-foreground">{fact.label}</dt>
+                          <dd className="font-medium">{fact.value}</dd>
+                        </Fragment>
+                      ))}
 
                       {ed.parking_available != null && (
                         <>
@@ -962,15 +967,6 @@ export function PromotionDetailContent({
                         </>
                       )}
 
-                      {ed.recurring && (
-                        <>
-                          <dt className="text-muted-foreground">Recurring</dt>
-                          <dd className="font-medium">
-                            {EVENT_RECURRING_LABELS[ed.recurring] ?? ed.recurring}
-                          </dd>
-                        </>
-                      )}
-
                       {ed.rain_policy && (
                         <>
                           <dt className="text-muted-foreground">Rain policy</dt>
@@ -986,16 +982,9 @@ export function PromotionDetailContent({
                           <dd className="font-medium">{formatLooseDate(ed.early_bird_deadline)}</dd>
                         </>
                       )}
-
-                      {ed.group_discount_available != null && (
-                        <>
-                          <dt className="text-muted-foreground">Group discounts</dt>
-                          <dd className="font-medium">
-                            {ed.group_discount_available ? "Available" : "Not available"}
-                          </dd>
-                        </>
-                      )}
                     </dl>
+
+                    {checksId && <p className="font-medium">{EVENT_ID_CHECK_LINE}</p>}
 
                     {ed.lineup && (
                       <div className="space-y-1">
@@ -1064,74 +1053,28 @@ export function PromotionDetailContent({
               );
             })()}
 
-          {/* ═══ EVENT LINKS — website, map pin, social media ═══ */}
+          {/* ═══ EVENT LINKS — map pin, website and social media ═══ */}
           {(() => {
             const ed = promotion.event_details;
             if (!ed) return null;
-            const socials = [
-              {
-                key: "facebook",
-                label: "Facebook",
-                href: ed.social_links?.facebook,
-                Icon: FacebookIcon,
-              },
-              {
-                key: "instagram",
-                label: "Instagram",
-                href: ed.social_links?.instagram,
-                Icon: InstagramIcon,
-              },
-              { key: "twitter", label: "X (Twitter)", href: ed.social_links?.twitter, Icon: XIcon },
-              { key: "tiktok", label: "TikTok", href: ed.social_links?.tiktok, Icon: TikTokIcon },
-            ].filter((item) => item.href);
-            if (!ed.website && !ed.map_directions && socials.length === 0) return null;
+            const hasLinks = postLinkItems(ed.website, ed.social_links).length > 0;
+            if (!ed.map_directions && !hasLinks) return null;
             return (
               <Card>
                 <CardContent className="space-y-3 p-4 text-sm">
-                  <h2 className="font-semibold">Links and directions</h2>
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    {ed.map_directions && (
-                      <Button asChild variant="outline" className="flex-1 gap-2">
-                        <a
-                          href={safeExternalHref(ed.map_directions)}
-                          target="_blank"
-                          rel="noopener noreferrer nofollow ugc"
-                        >
-                          <MapPin className="h-4 w-4 text-brand-red-600" aria-hidden="true" />
-                          Open location pin
-                        </a>
-                      </Button>
-                    )}
-                    {ed.website && (
-                      <Button asChild variant="outline" className="flex-1 gap-2">
-                        <a
-                          href={safeExternalHref(ed.website)}
-                          target="_blank"
-                          rel="noopener noreferrer nofollow ugc"
-                        >
-                          <Globe className="h-4 w-4" aria-hidden="true" />
-                          Visit website
-                        </a>
-                      </Button>
-                    )}
-                  </div>
-                  {socials.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {socials.map(({ key, label, href, Icon }) => (
-                        <a
-                          key={key}
-                          href={safeExternalHref(href!)}
-                          target="_blank"
-                          rel="noopener noreferrer nofollow ugc"
-                          aria-label={label}
-                          title={label}
-                          className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-muted text-foreground transition-colors hover:bg-muted/70"
-                        >
-                          <Icon className="h-5 w-5" />
-                        </a>
-                      ))}
-                    </div>
+                  {ed.map_directions && (
+                    <Button asChild variant="outline" className="w-full gap-2 sm:w-auto">
+                      <a
+                        href={safeExternalHref(ed.map_directions)}
+                        target="_blank"
+                        rel="noopener noreferrer nofollow ugc"
+                      >
+                        <MapPin className="h-4 w-4 text-brand-red-600" aria-hidden="true" />
+                        Open location pin
+                      </a>
+                    </Button>
                   )}
+                  <PostLinks website={ed.website} social={ed.social_links} />
                 </CardContent>
               </Card>
             );

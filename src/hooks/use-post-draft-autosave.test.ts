@@ -95,17 +95,42 @@ describe("usePostDraftAutosave", () => {
     await first;
   });
 
-  it("discard clears localStorage and calls server delete", () => {
+  it("discard clears localStorage and calls server delete", async () => {
     const { result } = renderHook(() => usePostDraftAutosave("listing", "user-1", true));
 
-    act(() => {
+    await act(async () => {
       result.current.discard();
     });
 
     expect(mockClearDraft).toHaveBeenCalledWith("listing", "user-1");
     expect(mockFetch).toHaveBeenCalledWith(
       expect.stringContaining("/api/drafts"),
-      expect.objectContaining({ method: "DELETE" })
+      expect.objectContaining({ method: "DELETE", keepalive: true })
     );
+  });
+
+  it("deletes the server draft only after a save already on its way has finished", async () => {
+    let finishSave: () => void = () => {};
+    mockFetch.mockImplementation((_url: string, init?: RequestInit) =>
+      init?.method === "PUT"
+        ? new Promise((resolve) => {
+            finishSave = () => resolve({ ok: true, json: async () => ({}) });
+          })
+        : Promise.resolve({ ok: true, json: async () => ({ draft: null }) })
+    );
+    const { result } = renderHook(() => usePostDraftAutosave("listing", "user-1", true));
+    await act(async () => {
+      await result.current.restore();
+    });
+    await act(async () => {
+      result.current.save(1, { title: "Earlier post" });
+      result.current.discard();
+    });
+    const methods = () => mockFetch.mock.calls.map(([, init]) => init?.method ?? "GET");
+    expect(methods()).not.toContain("DELETE");
+    await act(async () => {
+      finishSave();
+    });
+    expect(methods().slice(-2)).toEqual(["PUT", "DELETE"]);
   });
 });

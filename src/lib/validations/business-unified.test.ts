@@ -268,4 +268,131 @@ describe("businessSchema", () => {
       whatsapp: "Enter a valid SA number",
     });
   });
+
+  describe("new business fields", () => {
+    const access = {
+      ...base,
+      business_type: "home_business",
+      category_details: {
+        customer_access: {
+          version: 2,
+          methods: ["visit"],
+          premises: "home_business",
+          publishAddress: false,
+        },
+      },
+      contact_methods: ["form"],
+    };
+
+    it("accepts the access form as it is today", () => {
+      expect(businessSchema.safeParse(access).success).toBe(true);
+    });
+
+    it("accepts public holidays, open 24 hours and by appointment", () => {
+      const result = businessSchema.safeParse({
+        ...access,
+        operating_hours: {
+          Mon_Fri: "08:00 - 17:00",
+          Public_holidays: "Closed",
+          Open_24_hours: false,
+          By_appointment: true,
+          Other: "dropped",
+        },
+      });
+      expect(result.success).toBe(true);
+      if (result.success)
+        expect(result.data.operating_hours).toEqual({
+          Mon_Fri: "08:00 - 17:00",
+          Public_holidays: "Closed",
+          Open_24_hours: false,
+          By_appointment: true,
+        });
+      expect(
+        businessSchema.safeParse({ ...access, operating_hours: { Open_24_hours: "yes" } }).success
+      ).toBe(false);
+    });
+
+    it("accepts the four new payment methods and still refuses unknown ones", () => {
+      expect(
+        businessSchema.safeParse({
+          ...access,
+          payment_methods_accepted: ["zapper", "card_machine", "cash_on_delivery", "instant_eft"],
+        }).success
+      ).toBe(true);
+      expect(
+        businessSchema.safeParse({ ...access, payment_methods_accepted: ["bitcoin"] }).success
+      ).toBe(false);
+    });
+
+    it("accepts visit-only business details for any business type", () => {
+      const result = businessSchema.safeParse({
+        ...access,
+        business_details: {
+          type: "home_business",
+          walk_in_policy: "walk_ins_welcome",
+          visitor_features: ["parking", "wheelchair_access", "kid_friendly"],
+        },
+      });
+      expect(result.success).toBe(true);
+      if (result.success)
+        expect(result.data.business_details).toEqual({
+          type: "home_business",
+          walk_in_policy: "walk_ins_welcome",
+          visitor_features: ["parking", "wheelchair_access", "kid_friendly"],
+        });
+    });
+
+    it("refuses unknown visitor features and walk-in answers", () => {
+      expect(
+        businessSchema.safeParse({
+          ...access,
+          business_details: { type: "home_business", visitor_features: ["pool"] },
+        }).success
+      ).toBe(false);
+      expect(
+        businessSchema.safeParse({
+          ...access,
+          business_details: { type: "home_business", walk_in_policy: "always" },
+        }).success
+      ).toBe(false);
+    });
+
+    it("keeps visitor features on full older details", () => {
+      const result = businessSchema.safeParse({
+        ...base,
+        business_type: "standalone_shop",
+        business_details: {
+          type: "standalone_shop",
+          street_address: "24 Vilakazi Street",
+          suburb: "Orlando West",
+          walk_in_policy: "appointment_only",
+          visitor_features: ["parking"],
+        },
+      });
+      expect(result.success).toBe(true);
+      if (result.success)
+        expect(result.data.business_details).toMatchObject({
+          walk_in_policy: "appointment_only",
+          visitor_features: ["parking"],
+        });
+    });
+
+    it("checks the booking link for every category", () => {
+      expect(
+        businessSchema.safeParse({
+          ...access,
+          category_details: { ...access.category_details, booking_url: "https://book.example.com" },
+        }).success
+      ).toBe(true);
+      const bad = businessSchema.safeParse({
+        ...access,
+        category_details: { ...access.category_details, booking_url: "not a link" },
+      });
+      expect(bad.success).toBe(false);
+      if (!bad.success)
+        expect(bad.error.issues.map((issue) => issue.path.join("."))).toContain(
+          "category_details.booking_url"
+        );
+    });
+  });
 });

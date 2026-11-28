@@ -46,6 +46,10 @@ const EVENT_TYPE_VALUES = [
 const PRICE_RANGE_VALUES = ["budget", "midrange", "premium", "luxury"] as const;
 
 const CANCELLATION_POLICY_VALUES = [
+  "free_until_days",
+  "deposit_non_refundable",
+  "no_refunds",
+  /* older posts */
   "free",
   "flexible",
   "moderate",
@@ -105,6 +109,7 @@ const sharedFields = {
 
 const tourismCategoryDetailsSchema = z.object({
   subcategory: z.enum(TOURISM_SUBCATEGORY_VALUES).optional(),
+  /** Older posts only: the form keeps only TGCSA grading. */
   star_rating: z.number().int().min(1).max(5).optional(),
   number_of_rooms: z.number().int().min(0).optional(),
   accommodation_types: z.array(z.string().max(80)).optional(),
@@ -116,7 +121,20 @@ const tourismCategoryDetailsSchema = z.object({
     .string()
     .regex(/^\d{2}:\d{2}$/, "Use HH:mm format")
     .optional(),
+  /** Older posts only: replaced by price_from_cents + price_unit. */
   price_range: z.enum(PRICE_RANGE_VALUES).optional(),
+  price_from_cents: z.number().int().min(0).optional(),
+  price_unit: z.enum(["night", "person", "unit", "entry"]).optional(),
+  sleeps: z.number().int().min(1).optional(),
+  bedrooms: z.number().int().min(0).optional(),
+  beds: z.number().int().min(0).optional(),
+  bathrooms: z.number().int().min(0).optional(),
+  backup_utilities: z
+    .array(z.enum(["inverter_solar", "generator", "borehole", "water_tanks"]))
+    .max(4)
+    .optional(),
+  opening_hours: z.string().max(120).optional(),
+  cancellation_free_days: z.number().int().min(1).max(365).optional(),
   amenities: z.array(z.string().max(80)).optional(),
   meal_options: z.array(z.string().max(80)).optional(),
   languages_spoken: z.string().max(500).optional(),
@@ -197,13 +215,34 @@ const eventDetailsSchema = z.object({
   ticket_tiers: z.array(ticketTierSchema).max(10).optional(),
   tickets_url: externalUrlOrEmptySchema("Enter a valid ticketing URL"),
   age_restriction: z.enum(AGE_RESTRICTION_VALUES).optional(),
+  /** Older posts only. */
   dress_code: z.string().max(300).optional(),
+  doors_open: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use a time such as 18:30")
+    .optional(),
+  refund_policy: z.enum(["full_until_days", "only_if_cancelled", "no_refunds"]).optional(),
+  refund_days: z.number().int().min(1).max(365).optional(),
+  ticket_sales: z.enum(["online", "door", "both"]).optional(),
+  gate_payment: z
+    .array(z.enum(["cash", "card"]))
+    .max(2)
+    .optional(),
+  social_links: z
+    .object({
+      facebook: externalUrlOrEmptySchema("Enter a valid Facebook URL"),
+      instagram: externalUrlOrEmptySchema("Enter a valid Instagram URL"),
+      twitter: externalUrlOrEmptySchema("Enter a valid X / Twitter URL"),
+      tiktok: externalUrlOrEmptySchema("Enter a valid TikTok URL"),
+      youtube: externalUrlOrEmptySchema("Enter a valid YouTube URL"),
+    })
+    .optional(),
   lineup: z.string().max(2000).optional(),
   parking_available: z.boolean().optional(),
   accessibility: z.array(z.string().max(80)).optional(),
   food_drinks_available: z.boolean().optional(),
   bring_your_own: z.string().max(500).optional(),
-  /* SA event additions */
+  /* SA event additions (recurring, group_discount_available: older posts only) */
   recurring: z.enum(["one_off", "weekly", "monthly", "annual"]).optional(),
   rain_policy: z
     .enum(["outdoor_rain_or_shine", "moved_indoors", "postponed", "refunded"])

@@ -40,4 +40,53 @@ describe("sanitizeCategoryDetails", () => {
       venue_photos: ["https://media.verifymzansi.com/a.jpg"],
     });
   });
+  it("keeps the newer tourism keys with their fixed choices and whole numbers", () => {
+    const out = sanitizeCategoryDetails("tourism_hospitality", {
+      price_from_cents: 45000.4,
+      price_unit: "night",
+      sleeps: 4,
+      bedrooms: "2",
+      beds: 3,
+      bathrooms: 1,
+      backup_utilities: ["inverter_solar", "Water tanks", "solar_panels", "generator", "generator"],
+      cancellation_policy: "free_until_days",
+      cancellation_free_days: 7,
+      opening_hours: "Daily 08:00 to 17:00",
+    });
+    expect(out).toEqual({
+      price_from_cents: 45000,
+      price_unit: "night",
+      sleeps: 4,
+      bedrooms: 2,
+      beds: 3,
+      bathrooms: 1,
+      backup_utilities: ["inverter_solar", "water_tanks", "generator"],
+      cancellation_policy: "free_until_days",
+      cancellation_free_days: 7,
+      opening_hours: "Daily 08:00 to 17:00",
+    });
+  });
+
+  it("refuses unknown tourism choices and caps opening hours at 120 characters", () => {
+    const out = sanitizeCategoryDetails("tourism_hospitality", {
+      price_unit: "week",
+      cancellation_policy: "maybe",
+      sleeps: 0,
+      opening_hours: "x".repeat(200),
+    });
+    expect(out).toEqual({ opening_hours: "x".repeat(120) });
+  });
+
+  it("still keeps the older tourism values so old posts stay readable", () => {
+    const out = sanitizeCategoryDetails("tourism_hospitality", {
+      price_range: "midrange",
+      cancellation_policy: "moderate",
+      star_rating: 4,
+    });
+    expect(out).toEqual({
+      price_range: "midrange",
+      cancellation_policy: "moderate",
+      star_rating: 4,
+    });
+  });
 });

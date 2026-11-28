@@ -4,7 +4,13 @@ import type { ComponentType, SVGProps } from "react";
 import { Globe, MapPin } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { FacebookIcon, InstagramIcon, TikTokIcon, XIcon } from "@/components/icons/social-icons";
+import {
+  FacebookIcon,
+  InstagramIcon,
+  TikTokIcon,
+  XIcon,
+  YouTubeIcon,
+} from "@/components/icons/social-icons";
 import { cn } from "@/lib/utils";
 
 export type OnlinePresenceField =
@@ -13,7 +19,8 @@ export type OnlinePresenceField =
   | "socialFacebook"
   | "socialInstagram"
   | "socialTwitter"
-  | "socialTiktok";
+  | "socialTiktok"
+  | "socialYoutube";
 
 export type OnlinePresenceValues = Record<OnlinePresenceField, string>;
 
@@ -76,6 +83,14 @@ const LINK_FIELDS: FieldConfig[] = [
     placeholder: "https://tiktok.com/@yourname",
     icon: TikTokIcon,
     iconClass: "bg-black text-white dark:bg-white dark:text-black",
+  },
+  {
+    field: "socialYoutube",
+    errorKey: "socialYoutube",
+    label: "YouTube",
+    placeholder: "https://youtube.com/@yourchannel",
+    icon: YouTubeIcon,
+    iconClass: "bg-[#FF0000] text-white",
   },
 ];
 

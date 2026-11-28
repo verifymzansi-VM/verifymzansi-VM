@@ -6,6 +6,8 @@ import type { ListingCategory, ListingCondition } from "@/types/enums";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { DEFAULT_LISTING_CONTACT_METHODS, withListingEnquiry } from "@/lib/forms/listing-form";
 import { listingPriceModeFromRow } from "@/lib/domains/listings/price-form";
+import { listingAttributesForForm } from "@/lib/domains/listings/market-extras";
+import { marketLinksFromRow } from "@/lib/domains/listings/market-links";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -17,10 +19,11 @@ export function parseCopyId(value: string | null | undefined): string | null {
 /** The form's values from the owner's read of the copy (GET /api/listings/[id]). */
 export function listingCopyFields(row: Record<string, unknown>) {
   const text = (value: unknown) => (typeof value === "string" ? value : "");
-  const attributes =
+  const attributes = listingAttributesForForm(
     row.attributes && typeof row.attributes === "object"
       ? (row.attributes as Record<string, string | boolean | string[]>)
-      : {};
+      : {}
+  );
   return {
     title: text(row.title),
     description: text(row.description),
@@ -41,6 +44,7 @@ export function listingCopyFields(row: Record<string, unknown>) {
       Array.isArray(row.contact_methods) && row.contact_methods.length > 0
         ? withListingEnquiry(row.contact_methods as string[])
         : DEFAULT_LISTING_CONTACT_METHODS,
+    links: marketLinksFromRow(row),
     photos: Array.isArray(row.photos) ? (row.photos as string[]) : [],
     logo: typeof row.logo_url === "string" ? row.logo_url : null,
     focal: {

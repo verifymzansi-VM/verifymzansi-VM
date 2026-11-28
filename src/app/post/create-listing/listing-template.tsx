@@ -7,6 +7,10 @@ import type { toast as showToast } from "@/hooks/use-toast";
 import { SHOW_POST_TEMPLATES } from "@/lib/hidden-features";
 import { parsePostTemplateList, type PostTemplate } from "@/lib/post-templates";
 import type { DraftEnvelope, ListingDraftData } from "@/lib/post-drafts/storage";
+import type { OnlinePresenceValues } from "@/components/post/online-presence-fields";
+
+/** The form's draft: the stored listing draft plus its links (absent on older drafts). */
+export type MarketDraftData = ListingDraftData & { links?: OnlinePresenceValues };
 
 /** How long the form waits for a template before it opens the saved draft instead. */
 const TEMPLATE_WAIT_MS = 5000;
@@ -116,7 +120,7 @@ export function TemplateLoading() {
 }
 
 /** The saved fields of the form in a fixed order, to tell whether it changed. */
-export function draftSnapshot(data: ListingDraftData) {
+export function draftSnapshot(data: MarketDraftData) {
   return JSON.stringify([
     data.category,
     data.condition,
@@ -131,5 +135,6 @@ export function draftSnapshot(data: ListingDraftData) {
     data.town,
     data.address,
     data.contactMethods,
+    data.links ?? null,
   ]);
 }

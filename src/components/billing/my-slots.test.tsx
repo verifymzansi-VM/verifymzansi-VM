@@ -274,4 +274,45 @@ describe("MySlots", () => {
     expect(within(three).getByText("3 places empty")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /Renew/ })).toBeNull();
   });
+
+  it("shows identical free slots as one card with counts instead of many look-alike cards", () => {
+    const grants = Array.from({ length: 25 }, (_, index) =>
+      slot({
+        id: uuid(100 + index),
+        source: "staff_grant",
+        individual: false,
+        posts:
+          index < 9
+            ? [
+                {
+                  id: uuid(200 + index),
+                  kind: "listing",
+                  area: "market",
+                  title: `Post ${index + 1}`,
+                  status: "live",
+                  deletes_at: null,
+                },
+              ]
+            : [],
+      })
+    );
+    render(<MySlots now={now} buyHref={buyHref} individual={individual} slots={grants} />);
+    const cards = screen.getAllByTestId("my-slot");
+    expect(cards).toHaveLength(1);
+    expect(within(cards[0]!).getByText("25 free slots, 16 empty")).toBeInTheDocument();
+    expect(within(cards[0]!).getByText("16 empty")).toBeInTheDocument();
+    expect(within(cards[0]!).getAllByRole("link", { name: /^Post \d+$/ })).toHaveLength(9);
+  });
+
+  it("keeps each Individual slot on its own card", () => {
+    render(
+      <MySlots
+        now={now}
+        buyHref={buyHref}
+        individual={individual}
+        slots={[slot({ id: uuid(1) }), slot({ id: uuid(2) })]}
+      />
+    );
+    expect(screen.getAllByTestId("my-slot")).toHaveLength(2);
+  });
 });

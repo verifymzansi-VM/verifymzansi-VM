@@ -167,6 +167,12 @@ describe("CreateBusinessPage", () => {
     (useRouter as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ push: mockPush });
     (useToast as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ toast: mockToast });
     (useSearchParams as unknown as ReturnType<typeof vi.fn>).mockReturnValue(new URLSearchParams());
+    // The account's verified number: Call and WhatsApp publish it.
+    useAuthMock.mockReturnValue({
+      user: null,
+      profile: { phone: "0821234567" },
+      isLoading: false,
+    });
     global.URL.createObjectURL = vi.fn(() => "blob:business-media-preview");
     global.URL.revokeObjectURL = vi.fn();
     ({
@@ -182,14 +188,10 @@ describe("CreateBusinessPage", () => {
 
   function fillCoreBusinessFields({
     businessName = "Nomsa Fashion",
-    slug = "nomsa-fashion",
     category = "fashion_accessories",
   } = {}) {
     fireEvent.change(screen.getByLabelText(/Business Name/i), {
       target: { value: businessName },
-    });
-    fireEvent.change(screen.getByLabelText(/^Custom profile link/i), {
-      target: { value: slug },
     });
     // Description is required (min 20 chars) since the create-flow unification.
     fireEvent.change(screen.getByLabelText(/About Your Business/i), {
@@ -215,8 +217,7 @@ describe("CreateBusinessPage", () => {
       target: { value: "Johannesburg" },
     });
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Next" })));
-    fireEvent.click(screen.getByRole("checkbox", { name: "Phone calls" }));
-    fireEvent.change(screen.getByLabelText(/Phone Number/i), { target: { value: "0821234567" } });
+    expect(screen.getByRole("switch", { name: "Call" })).toBeChecked();
   }
 
   async function completeLocationStep() {
@@ -282,8 +283,7 @@ describe("CreateBusinessPage", () => {
       target: { value: "Johannesburg" },
     });
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Next" })));
-    fireEvent.click(screen.getByRole("checkbox", { name: "Phone calls" }));
-    fireEvent.change(screen.getByLabelText(/Phone Number/i), { target: { value: "0821234567" } });
+    expect(screen.getByRole("switch", { name: "Call" })).toBeChecked();
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Next" })));
   }
 
@@ -712,9 +712,7 @@ describe("CreateBusinessPage", () => {
     });
 
     expect(screen.queryByText("Promo video upload failed. Retry the selected file.")).toBeNull();
-    expect(mockPush).toHaveBeenCalledWith(
-      "/dashboard/listings?area=MZANSI_BUSINESS&created=business"
-    );
+    expect(await screen.findByRole("heading", { name: "Submitted" })).toBeInTheDocument();
   });
 
   it("reviews the structured customer access choices", async () => {
@@ -768,13 +766,13 @@ describe("CreateBusinessPage", () => {
     expect(screen.getByText(/Step 3 of 4/i)).toBeInTheDocument();
     expect(screen.queryByText("Optional extras")).not.toBeInTheDocument();
     expect(screen.getByText("Website, social media & location pin")).toBeVisible();
-    for (const name of ["Website", "Facebook", "Instagram", "X (Twitter)", "TikTok"]) {
+    for (const name of ["Website", "Facebook", "Instagram", "X (Twitter)", "TikTok", "YouTube"]) {
       const label = `${name} (Optional)`;
       expect(screen.getByLabelText(label)).toBeVisible();
     }
   });
 
-  it("shows an inline slug error when the API rejects a duplicate slug", async () => {
+  it("shows a taken profile link on the business name, made fresh on the next submit", async () => {
     fetchMock.mockResolvedValue({
       ok: false,
       json: async () => ({
@@ -793,9 +791,9 @@ describe("CreateBusinessPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
 
-    expect((await screen.findAllByText("This URL slug is already taken.")).length).toBeGreaterThan(
-      0
-    );
+    expect(
+      (await screen.findAllByText("This business link is already taken. Submit again.")).length
+    ).toBeGreaterThan(0);
     expect(screen.getByText(/Please fix 1 field on Step 1/i)).toBeInTheDocument();
     expect(screen.getByText(/Step 1 of 4/i)).toBeInTheDocument();
     expect(mockPush).not.toHaveBeenCalled();
@@ -937,7 +935,7 @@ describe("CreateBusinessPage", () => {
     expect(mockPush).not.toHaveBeenCalledWith("https://evil.example/phish");
   });
 
-  it("keeps the submitted-for-review state after redirecting to the dashboard", async () => {
+  it("shows the submitted screen in place of the form after submit", async () => {
     fetchMock.mockResolvedValue({
       ok: true,
       json: async () => ({ success: true }),
@@ -952,14 +950,18 @@ describe("CreateBusinessPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
 
-    await waitFor(() => {
-      expect(mockToast).toHaveBeenCalledWith(
-        expect.objectContaining({ title: "Business submitted for review.", variant: "success" })
-      );
-    });
-    expect(mockPush).toHaveBeenCalledWith(
-      "/dashboard/listings?area=MZANSI_BUSINESS&created=business"
+    expect(await screen.findByRole("heading", { name: "Submitted" })).toBeInTheDocument();
+    expect(screen.getByText("Nomsa Fashion")).toBeInTheDocument();
+    expect(screen.getByText("In review")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Go to My posts" })).toHaveAttribute(
+      "href",
+      "/dashboard/listings?area=MZANSI_BUSINESS"
     );
+    expect(screen.queryByRole("button", { name: /Submit for review/i })).not.toBeInTheDocument();
+    expect(mockToast).not.toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Business submitted for review." })
+    );
+    expect(mockPush).not.toHaveBeenCalled();
   });
 
   it("keeps delivery areas separate from online customer access", async () => {
@@ -973,6 +975,149 @@ describe("CreateBusinessPage", () => {
     expect(screen.queryByLabelText(/Delivery areas/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("checkbox", { name: "I deliver orders" }));
     expect(screen.getByLabelText(/Delivery areas/)).toHaveValue("Soweto");
+  });
+
+  it("shows one line under the title and no profile-link field", () => {
+    render(<CreateBusinessPage />);
+    expect(screen.getByText("Required fields are marked.")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Custom profile link/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/customise your link/i)).not.toBeInTheDocument();
+    // No help is offered twice.
+    const helpNames = screen
+      .getAllByRole("button", { name: /Help with/ })
+      .map((button) => button.getAttribute("aria-label"));
+    expect(new Set(helpNames).size).toBe(helpNames.length);
+    expect(screen.getAllByRole("button", { name: "Help with business category" })).toHaveLength(1);
+  });
+
+  it("shows short category names and labels the suggestion chips", () => {
+    render(<CreateBusinessPage />);
+    const withChips = BUSINESS_CATEGORIES.find((c) => c.serviceSuggestions.length > 0)!;
+    const card = screen.getByRole("button", { name: withChips.label });
+    expect(card.textContent).toBe(withChips.label);
+    expect(screen.queryByText(withChips.description)).not.toBeInTheDocument();
+    fireEvent.click(card);
+    expect(screen.getByText("Tap to add")).toBeInTheDocument();
+  });
+
+  it("publishes the verified number for Call and WhatsApp, with nothing to type", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ success: true }));
+    render(<CreateBusinessPage />);
+    await termsLoaded();
+    await completeStandaloneStepOne();
+    await completeAccessStep();
+    expect(screen.queryByLabelText(/Phone Number/i)).not.toBeInTheDocument();
+    expect(screen.getAllByText(/Your verified number 08/).length).toBe(2);
+    fireEvent.click(screen.getByRole("switch", { name: "WhatsApp" }));
+    fireEvent.click(screen.getByRole("switch", { name: "VerifyMzansi inbox" }));
+    expect(screen.getByText("Enquiries arrive in your account")).toBeInTheDocument();
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Next" })));
+    acceptBusinessTerms();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+    });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const payload = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(payload.contact_methods).toEqual(["call", "form"]);
+    expect(payload.phone).toBe("0821234567");
+    expect(payload.whatsapp).toBeUndefined();
+    expect(payload.slug).toMatch(/^nomsa-fashion-[a-z0-9]{4}$/);
+  });
+
+  it("keeps Call and WhatsApp off without a verified number", async () => {
+    useAuthMock.mockReturnValue({ user: null, profile: null, isLoading: false });
+    render(<CreateBusinessPage />);
+    await completeStandaloneStepOne();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Customers visit me" }));
+    fireEvent.change(screen.getByLabelText(/Where do customers visit you/), {
+      target: { value: "standalone_shop" },
+    });
+    fireEvent.change(screen.getByLabelText(/Province/i), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText(/^City or town$/i), {
+      target: { value: "Johannesburg" },
+    });
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Next" })));
+    expect(screen.getByRole("switch", { name: "Call" })).toBeDisabled();
+    expect(screen.getByRole("switch", { name: "Call" })).not.toBeChecked();
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Next" })));
+    expect(screen.getAllByText("Choose at least one contact method.").length).toBeGreaterThan(0);
+  });
+
+  it("submits hours, booking, visitors, payment methods and YouTube", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ success: true }));
+    render(<CreateBusinessPage />);
+    await termsLoaded();
+    await completeStandaloneStepOne();
+    await completeAccessStep();
+
+    expect(screen.queryByRole("combobox", { name: /Mon - Fri/ })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Mon – Fri opens"), { target: { value: "08:00" } });
+    fireEvent.change(screen.getByLabelText("Mon – Fri closes"), { target: { value: "17:30" } });
+    fireEvent.change(screen.getByLabelText("Public holidays opens"), {
+      target: { value: "09:00" },
+    });
+    fireEvent.change(screen.getByLabelText("Public holidays closes"), {
+      target: { value: "13:00" },
+    });
+    fireEvent.click(screen.getByLabelText("By appointment"));
+    fireEvent.change(screen.getByLabelText(/Booking link/), {
+      target: { value: "https://book.example.com/nomsa" },
+    });
+    fireEvent.click(screen.getByLabelText("Walk-ins welcome"));
+    fireEvent.click(screen.getByLabelText("Parking"));
+    fireEvent.click(screen.getByLabelText("Kid-friendly"));
+    fireEvent.click(screen.getByLabelText("Zapper"));
+    fireEvent.click(screen.getByLabelText("Instant EFT"));
+    fireEvent.change(screen.getByLabelText("YouTube (Optional)"), {
+      target: { value: "https://youtube.com/@nomsa" },
+    });
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Next" })));
+    expect(
+      screen.getByText("Photos up to 5 MB · Video up to 2 min, up to 300 MB")
+    ).toBeInTheDocument();
+    acceptBusinessTerms();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+    });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const payload = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(payload.operating_hours).toEqual({
+      Mon_Fri: "08:00 - 17:30",
+      Sun: "Closed",
+      Public_holidays: "09:00 - 13:00",
+      By_appointment: true,
+    });
+    expect(payload.category_details.booking_url).toBe("https://book.example.com/nomsa");
+    expect(payload.business_details).toEqual({
+      type: "standalone_shop",
+      walk_in_policy: "walk_ins_welcome",
+      visitor_features: ["parking", "kid_friendly"],
+    });
+    expect(payload.payment_methods_accepted).toEqual(["zapper", "instant_eft"]);
+    expect(payload.social_links).toEqual({ youtube: "https://youtube.com/@nomsa" });
+  });
+
+  it("stores only the 24-hour flag and checks the booking link", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ success: true }));
+    render(<CreateBusinessPage />);
+    await termsLoaded();
+    await completeStandaloneStepOne();
+    await completeAccessStep();
+    fireEvent.click(screen.getByLabelText("Open 24 hours"));
+    expect(screen.queryByLabelText("Mon – Fri opens")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/Booking link/), { target: { value: "not a link" } });
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Next" })));
+    expect(screen.getAllByText("Enter a valid booking link.").length).toBeGreaterThan(0);
+    fireEvent.change(screen.getByLabelText(/Booking link/), { target: { value: "" } });
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Next" })));
+    acceptBusinessTerms();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+    });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const payload = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(payload.operating_hours).toEqual({ Open_24_hours: true });
+    expect(payload.business_details).toBeUndefined();
   });
 
   describe("draft restore", () => {

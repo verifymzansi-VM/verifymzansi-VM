@@ -14,7 +14,8 @@ AS $function$
        'parking_notes','street_address','suburb','landmark','walk_in_policy','building_name','suite_or_unit',
        'service_suburb','appointment_required','customer_pickup_allowed','visitor_notes','travel_radius_km',
        'callout_fee_from','emergency_callouts','primary_order_channel','order_url','delivery_regions',
-       'support_response_time','market_name','stall_label','trading_days','trading_hours'])
+       'support_response_time','market_name','stall_label','trading_days','trading_hours'
+       ,'visitor_features'])
        - case when h.hidden then array['street_address','suite_or_unit'] else array[]::text[] end
      when 'category_details' then (select c.v-array['customer_access','business_profile']
          || case when a.v is null then '{}'::jsonb else jsonb_build_object('customer_access',a.v) end
@@ -30,7 +31,9 @@ AS $function$
          'pets_allowed','smoking_allowed','treatment_types','activity_types','tour_duration','max_group_size',
          'difficulty_level','equipment_provided','whats_included','age_restriction','guided_tours','audio_guide',
          'visit_duration','services_offered','specializations','vehicle_types','delivery_collection',
-         'min_driver_age','insurance_included','gps_available']) v) c
+         'min_driver_age','insurance_included','gps_available'
+         ,'price_from_cents','price_unit','sleeps','bedrooms','beds','bathrooms','backup_utilities',
+         'cancellation_free_days','opening_hours']) v) c
        cross join lateral (select internal.json_object_keys_only(c.v->'customer_access',array[
          'version','methods','premises','venue','serviceAreas','deliveryAreas','nationwide','publishAddress']) v) a
        cross join lateral (select internal.json_object_keys_only(c.v->'business_profile',array[
@@ -39,7 +42,8 @@ AS $function$
        'event_type','venue_name','venue_capacity','ticket_tiers','tickets_url','website','map_directions',
        'social_links','age_restriction','dress_code','lineup','parking_available','accessibility',
        'food_drinks_available','bring_your_own','recurring','rain_policy','early_bird_deadline',
-       'group_discount_available'])
+       'group_discount_available'
+       ,'doors_open','refund_policy','refund_days','ticket_sales','gate_payment'])
      else e.value end as value
    from jsonb_each(case when jsonb_typeof(p_data)='object' then p_data else '{}'::jsonb end) e
    cross join (select p_kind='business' and p_data#>'{category_details,customer_access}' is not null

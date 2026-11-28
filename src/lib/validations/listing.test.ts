@@ -230,3 +230,102 @@ describe("listingSchema", () => {
     expect(result.success).toBe(false);
   });
 });
+
+describe("listingSchema: Market fields saved with the post", () => {
+  it("accepts and keeps how the buyer gets it, size and gender, and strips unknown keys", () => {
+    const result = listingSchema.parse({
+      ...baseFields,
+      category: "clothing_accessories",
+      attributes: {
+        size: " M ",
+        gender: "women",
+        delivery_methods: ["collect", "meet_public", "courier", "seller_delivers"],
+        not_a_field: "x",
+      },
+    });
+    expect(result.attributes).toEqual({
+      size: "M",
+      gender: "women",
+      delivery_methods: ["collect", "meet_public", "courier", "seller_delivers"],
+    });
+  });
+
+  it("rejects a size over 20 characters, an unknown gender and an unknown delivery method", () => {
+    for (const attributes of [
+      { size: "x".repeat(21) },
+      { gender: "adults" },
+      { delivery_methods: ["teleport"] },
+    ])
+      expect(
+        listingSchema.safeParse({ ...baseFields, category: "sports_hobbies", attributes }).success
+      ).toBe(false);
+  });
+
+  it("accepts the property rental and sale details and the pets choice", () => {
+    const result = listingSchema.parse({
+      ...baseFields,
+      category: "property",
+      attributes: {
+        property_type: "house",
+        listing_intent: "rent",
+        available_from: "2026-12-01",
+        deposit_zar: 9000,
+        lease_term: "12_months",
+        utilities_included: ["prepaid_electricity", "water"],
+        occupation_date: "2027-01-15",
+        pets_policy: "ask",
+      },
+    });
+    expect(result.attributes).toMatchObject({
+      deposit_zar: 9000,
+      lease_term: "12_months",
+      utilities_included: ["prepaid_electricity", "water"],
+      occupation_date: "2027-01-15",
+      pets_policy: "ask",
+    });
+    expect(
+      listingSchema.safeParse({
+        ...baseFields,
+        category: "property",
+        attributes: { property_type: "house", listing_intent: "sale", occupation_date: "soon" },
+      }).success
+    ).toBe(false);
+  });
+
+  it("accepts website and social links, keeps only the known networks, and rejects a bad link", () => {
+    const result = listingSchema.parse({
+      ...baseFields,
+      category: "electronics",
+      attributes: { device_type: "Laptop", brand: "Dell" },
+      website: "https://shop.example.co.za",
+      social_links: {
+        facebook: "https://facebook.com/shop",
+        youtube: "https://youtube.com/@shop",
+        myspace: "https://myspace.com/shop",
+      },
+    });
+    expect(result.website).toBe("https://shop.example.co.za");
+    expect(result.social_links).toEqual({
+      facebook: "https://facebook.com/shop",
+      youtube: "https://youtube.com/@shop",
+    });
+    expect(
+      listingSchema.safeParse({
+        ...baseFields,
+        category: "electronics",
+        attributes: { device_type: "Laptop", brand: "Dell" },
+        website: "not a link",
+      }).success
+    ).toBe(false);
+  });
+
+  it("still accepts older posts without the new fields", () => {
+    expect(
+      listingSchema.safeParse({
+        ...baseFields,
+        category: "property",
+        attributes: { property_type: "house", listing_intent: "sale", pets_allowed: true },
+      }).success
+    ).toBe(true);
+  });
+});

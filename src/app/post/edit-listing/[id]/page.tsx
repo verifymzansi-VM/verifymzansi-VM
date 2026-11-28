@@ -6,7 +6,26 @@ import { settleMediaUploads } from "@/app/post/_lib/settle-media-uploads";
 import { useEffect, useMemo, useState, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { usePostTransport } from "@/hooks/use-post-transport";
-import { Loader2, X, Phone, MessageCircle, Inbox } from "lucide-react";
+import { Loader2, X } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
+import { ContactSwitches, type ContactSwitchOption } from "@/components/post/contact-switches";
+import {
+  OnlinePresenceFields,
+  type OnlinePresenceValues,
+} from "@/components/post/online-presence-fields";
+import { MediaLimitsLine } from "@/components/post/media-limits-line";
+import {
+  finishListingAttributes,
+  listingAttributesForForm,
+  sentContactMethods,
+} from "@/lib/domains/listings/market-extras";
+import {
+  EMPTY_MARKET_LINKS,
+  MARKET_LINK_ERROR_ALIASES,
+  marketLinksErrors,
+  marketLinksFromRow,
+  marketLinksPayload,
+} from "@/lib/domains/listings/market-links";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PostLabel as Label } from "@/components/post/post-label";
@@ -61,7 +80,7 @@ import { ListingDetailContent } from "@/components/listings/listing-detail-conte
 import { createLogger } from "@/lib/utils/logger";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 import { readMediaDimensions } from "@/lib/utils/media-metadata";
-import { VIDEO_GUIDANCE, VIDEO_SOUND_OFF_TIP } from "@/lib/media/video-length";
+import { VIDEO_SOUND_OFF_TIP } from "@/lib/media/video-length";
 import { SaveTemplateButton } from "@/components/post-templates/save-template-button";
 import { templateDataFromForm } from "@/lib/post-templates";
 import { ListingPriceFields } from "@/components/posting/listing-price-fields";
@@ -76,9 +95,24 @@ const log = createLogger("EditListingPage");
 const TITLE_MAX = 100;
 const DESC_MAX = 5000;
 
+/** Call and WhatsApp use the account's verified number; private enquiry is always on (withListingEnquiry). */
+const CONTACT_OPTIONS: readonly ContactSwitchOption[] = [
+  { id: "call", label: "Phone call", usesVerifiedNumber: true },
+  { id: "whatsapp", label: "WhatsApp", usesVerifiedNumber: true },
+  { id: "in_app", label: "Private enquiry", locked: true },
+];
+
+/** Server error keys as this form shows them (social_links.facebook → socialFacebook). */
+function formFieldErrors(errors: Record<string, string>) {
+  return Object.fromEntries(
+    Object.entries(errors).map(([key, message]) => [MARKET_LINK_ERROR_ALIASES[key] ?? key, message])
+  );
+}
+
 export default function EditListingPage() {
   const params = useParams();
   const id = params.id as string;
+  const { profile } = useAuth();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
@@ -100,6 +134,7 @@ export default function EditListingPage() {
     priceForm
   );
   const [contactMethods, setContactMethods] = useState<string[]>(DEFAULT_LISTING_CONTACT_METHODS);
+  const [links, setLinks] = useState<OnlinePresenceValues>(EMPTY_MARKET_LINKS);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submissionInFlightRef = useRef(false);
@@ -227,8 +262,11 @@ export default function EditListingPage() {
             "") as ListingCondition | ""
         );
         setCategoryAttributes(
-          (data.attributes as Record<string, string | boolean | string[]>) || {}
+          listingAttributesForForm(
+            (data.attributes as Record<string, string | boolean | string[]>) || {}
+          )
         );
+        setLinks(marketLinksFromRow(data as Record<string, unknown>));
         setProvince(data.location_province || "");
         setCity(data.location_city || "");
         setTown(
@@ -355,16 +393,8 @@ export default function EditListingPage() {
     });
   }
 
-  /** Private enquiry is always on (see withListingEnquiry); its tile is shown locked. */
-  const CONTACT_OPTIONS = [
-    { id: "call", label: "Phone call", icon: Phone },
-    { id: "whatsapp", label: "WhatsApp", icon: MessageCircle },
-    { id: "in_app", label: "Private enquiry", icon: Inbox },
-  ] as const;
-
-  function toggleContact(id: string) {
-    if (id === "in_app") return;
-    setContactMethods((prev) => (prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id]));
+  function changeContacts(next: string[]) {
+    setContactMethods(withListingEnquiry(next));
     clearErrors("contactMethods");
   }
 
@@ -374,8 +404,9 @@ export default function EditListingPage() {
   }
 
   const normalizedPreviewAttributes = category
-    ? coerceListingAttributes(category, categoryAttributes)
+    ? finishListingAttributes(category, coerceListingAttributes(category, categoryAttributes))
     : {};
+  const previewLinks = marketLinksPayload(links);
   const displayExistingVideos = useMemo(() => normalizeMediaUrls(existingVideos), [existingVideos]);
   const previewVideos = previewVideoUrls.length > 0 ? previewVideoUrls : existingVideos;
   // A one-video slot swaps the saved video for the new pick. The saved video's cover
@@ -420,6 +451,7 @@ export default function EditListingPage() {
     if (contactMethods.length === 0) {
       errors.contactMethods = "Choose at least one contact method.";
     }
+    Object.assign(errors, marketLinksErrors(links));
 
     const totalPhotos = keptPhotos.length + newPhotoFiles.length;
     const hasVideo = existingVideos.length > 0 || newVideoFile.length > 0;
@@ -477,7 +509,7 @@ export default function EditListingPage() {
       const priced = listingPriceSubmission(category, priceForm);
       if ("error" in priced) throw new Error(priced.error);
       const normalizedAttributes = category
-        ? coerceListingAttributes(category, categoryAttributes)
+        ? finishListingAttributes(category, coerceListingAttributes(category, categoryAttributes))
         : {};
 
       // The terms first: if accepting fails, nothing has been uploaded.
@@ -565,7 +597,8 @@ export default function EditListingPage() {
           videos: allVideos,
           videoThumbnail,
           logo_url: finalLogoUrl,
-          contactMethods,
+          contactMethods: sentContactMethods(contactMethods, profile),
+          ...marketLinksPayload(links),
           media_width: mediaDimensions?.width,
           media_height: mediaDimensions?.height,
           focal_x: focalPoint.x,
@@ -593,7 +626,7 @@ export default function EditListingPage() {
           return;
         }
         const normalized = normalizeCreatePostError(data, "Something went wrong");
-        setFieldErrors(normalized.fieldErrors);
+        setFieldErrors(formFieldErrors(normalized.fieldErrors));
         setFormError(normalized.formError);
         return;
       }
@@ -857,6 +890,7 @@ export default function EditListingPage() {
                   title="Photos and video"
                   description={category === "jobs_services" ? undefined : PHOTO_OR_VIDEO_RULE}
                 >
+                  <MediaLimitsLine />
                   <MediaUpload
                     id="edit-listing-photos-input"
                     label="Photos"
@@ -894,7 +928,7 @@ export default function EditListingPage() {
                   <MediaUpload
                     id="edit-listing-video-input"
                     label={`Video (max ${maxVideos})${!videoAllowed ? " — Upgrade to unlock" : ""}`}
-                    description={`${VIDEO_GUIDANCE} ${VIDEO_SOUND_OFF_TIP}`}
+                    description={`Upright clips work best; put the best part first. ${VIDEO_SOUND_OFF_TIP}`}
                     maxFiles={Math.max(maxVideos, existingVideos.length)}
                     files={newVideoFile}
                     existing={existingVideos.map((url, i) => ({
@@ -960,36 +994,27 @@ export default function EditListingPage() {
                   )}
                 </PostFormSection>
 
-                {/* ── Contact Methods ──────────────────────── */}
-                <PostFormSection title="How buyers reach you *">
-                  <div role="group" aria-label="Contact methods" className="grid grid-cols-3 gap-2">
-                    {CONTACT_OPTIONS.map((opt) => {
-                      const Icon = opt.icon;
-                      const isSelected = contactMethods.includes(opt.id);
-                      return (
-                        <button
-                          key={opt.id}
-                          type="button"
-                          aria-pressed={isSelected}
-                          disabled={opt.id === "in_app"}
-                          onClick={() => toggleContact(opt.id)}
-                          className={cn(
-                            "flex min-h-[4.5rem] flex-col items-center justify-center gap-1.5 rounded-2xl border p-3 text-center text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                            isSelected
-                              ? "border-brand-green-600 bg-brand-green-50 text-brand-green-800 ring-1 ring-brand-green-600 dark:border-brand-green-400 dark:bg-brand-green-950/50 dark:text-brand-gold-200 dark:ring-brand-green-400"
-                              : "border-border bg-card text-foreground/80 hover:border-foreground/25 hover:bg-muted/50"
-                          )}
-                        >
-                          <Icon className="h-5 w-5" aria-hidden="true" />
-                          {opt.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {fieldErrors.contactMethods && (
-                    <p className="inline-form-error">{fieldErrors.contactMethods}</p>
-                  )}
-                </PostFormSection>
+                {/* ── Contact methods and links ─────────────── */}
+                <ContactSwitches
+                  id="listing-contact-methods"
+                  legend="How buyers reach you"
+                  options={CONTACT_OPTIONS}
+                  selected={contactMethods}
+                  onChange={changeContacts}
+                  verifiedPhone={profile?.phone}
+                  error={fieldErrors.contactMethods}
+                />
+                <OnlinePresenceFields
+                  values={links}
+                  onChange={(field, value) => {
+                    setLinks((current) => ({ ...current, [field]: value }));
+                    clearErrors(field);
+                  }}
+                  errors={fieldErrors}
+                  showMapPin={false}
+                  title="Website and social media"
+                  description="Optional. Buyers can tap them on your post."
+                />
               </div>
 
               <section
@@ -1041,7 +1066,9 @@ export default function EditListingPage() {
                     location_city: city || null,
                     location_suburb: town || null,
                     location_address: locationAddress || null,
-                    contact_methods: contactMethods,
+                    contact_methods: sentContactMethods(contactMethods, profile),
+                    website: previewLinks.website,
+                    social_links: previewLinks.social_links,
                     created_at: new Date().toISOString(),
                   }}
                   seller={{

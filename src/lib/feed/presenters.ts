@@ -27,6 +27,11 @@ import type {
 } from "@/lib/feed/types";
 import { CUSTOMER_ACCESS_OPTIONS, customerAccessSchema } from "@/lib/forms/customer-access";
 import { getCategoryDetailFields } from "@/lib/forms/business-category-details";
+import {
+  EVENT_ID_CHECK_LINE,
+  eventChecksId,
+  eventEntryFacts,
+} from "@/lib/forms/event-entry-details";
 import { hasBusinessDeliveryAvailable } from "@/lib/forms/business-type-details";
 import {
   acceptsInboxEnquiries,
@@ -41,7 +46,6 @@ import {
 import {
   buildEventCalendarUrl,
   EVENT_RAIN_POLICY_LABELS,
-  EVENT_RECURRING_LABELS,
   formatLooseDate,
   getEventAgeLabel,
   formatEventWhen,
@@ -495,7 +499,10 @@ export function presentBusinessSlide(
 
   // Every field of the tourism form, grouped; anything left empty stays out.
   const stay = getTourismViewerDetails(details);
-  const stayPrice = stay.facts.find((fact) => fact.label === "Price range");
+  // The "From R___" price; older posts show their price band instead.
+  const stayPrice =
+    stay.facts.find((fact) => fact.label === "Price") ??
+    stay.facts.find((fact) => fact.label === "Price range");
   const stayLists: FeedSection[] = stay.lists.map((list) => ({
     type: "chips",
     id: `list-${list.label}`,
@@ -518,7 +525,7 @@ export function presentBusinessSlide(
           type: "facts",
           id: "glance",
           title: "Stay details",
-          facts: stay.facts.filter((fact) => fact.label !== "Price range"),
+          facts: stay.facts.filter((fact) => fact !== stayPrice),
         },
         { type: "facts", id: "registration", title: "Registration", facts: verificationFacts },
         ...stayLists,
@@ -765,18 +772,13 @@ export function presentEventSlide(
     getEventAgeLabel(details.age_restriction)
       ? { label: "Age restriction", value: getEventAgeLabel(details.age_restriction)! }
       : null,
-    details.dress_code ? { label: "Dress code", value: details.dress_code } : null,
+    eventChecksId(details.age_restriction) ? { label: "ID", value: EVENT_ID_CHECK_LINE } : null,
+    ...eventEntryFacts(details),
     yesNo(details.parking_available)
       ? { label: "Parking", value: yesNo(details.parking_available)! }
       : null,
     yesNo(details.food_drinks_available)
       ? { label: "Food & drinks", value: yesNo(details.food_drinks_available)! }
-      : null,
-    details.recurring
-      ? {
-          label: "Recurring",
-          value: EVENT_RECURRING_LABELS[details.recurring] ?? details.recurring,
-        }
       : null,
     details.rain_policy
       ? {
@@ -786,9 +788,6 @@ export function presentEventSlide(
       : null,
     details.early_bird_deadline
       ? { label: "Early-bird deadline", value: formatLooseDate(details.early_bird_deadline) }
-      : null,
-    yesNo(details.group_discount_available)
-      ? { label: "Group discounts", value: yesNo(details.group_discount_available)! }
       : null,
   ].filter((fact): fact is FeedFact => Boolean(fact));
 

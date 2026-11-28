@@ -130,6 +130,87 @@ const business: BusinessDetailRecord = {
 };
 
 describe("UnifiedLayout", () => {
+  function renderPublic(overrides: Partial<BusinessDetailRecord>, family = "showroom" as const) {
+    return render(
+      <UnifiedLayout
+        family={family}
+        business={{ ...business, ...overrides }}
+        trustLevel={null}
+        ownerProfile={{ display_name: "Aphiwe" }}
+        promotions={[]}
+        showPromotions={false}
+        showPublicActions
+        galleryPhotos={[]}
+        deliveryAvailable={false}
+      />
+    );
+  }
+
+  it("shows public holidays, open 24 hours and by appointment", () => {
+    renderPublic({
+      operating_hours: {
+        Mon_Fri: "08:00 - 17:00",
+        Public_holidays: "Closed",
+        By_appointment: true,
+      },
+    });
+    expect(screen.getByText("Public holidays")).toBeVisible();
+    expect(screen.getByText("Closed")).toBeVisible();
+    expect(screen.getByText("By appointment")).toBeVisible();
+    renderPublic({ operating_hours: { Open_24_hours: true, Mon_Fri: "08:00 - 17:00" } });
+    expect(screen.getByText("Open 24 hours")).toBeVisible();
+  });
+
+  it("shows payment methods with plain labels", () => {
+    renderPublic({
+      payment_methods_accepted: ["zapper", "card_machine", "cash_on_delivery", "instant_eft"],
+    });
+    for (const label of ["Zapper", "Card machine", "Cash on delivery", "Instant EFT"])
+      expect(screen.getByText(label)).toBeVisible();
+  });
+
+  it("shows walk-ins, visitor features and the booking link for any business", () => {
+    renderPublic({
+      business_type: "home_business",
+      category_details: { booking_url: "https://book.example.com/studio" },
+      business_details: {
+        type: "home_business",
+        walk_in_policy: "walk_ins_welcome",
+        visitor_features: ["parking", "wheelchair_access", "kid_friendly"],
+      } as unknown as BusinessDetailRecord["business_details"],
+    });
+    expect(screen.getByText("Walk-ins welcome")).toBeVisible();
+    const features = screen.getByRole("list", { name: "For visitors" });
+    expect(features).toHaveTextContent("Parking");
+    expect(features).toHaveTextContent("Wheelchair access");
+    expect(features).toHaveTextContent("Kid-friendly");
+    expect(screen.getByRole("link", { name: "Book online" })).toHaveAttribute(
+      "href",
+      "https://book.example.com/studio"
+    );
+    // Visit-only details do not draw the older home-business rows.
+    expect(screen.queryByText("Service suburb")).not.toBeInTheDocument();
+    expect(screen.queryByText("Appointment required")).not.toBeInTheDocument();
+  });
+
+  it("shows the website and social links once, as tappable links, YouTube included", () => {
+    renderPublic({
+      website: "https://studio.example.com",
+      social_links: {
+        facebook: "https://facebook.com/studio",
+        youtube: "https://youtube.com/@studio",
+      },
+    });
+    expect(screen.getAllByRole("link", { name: "Website" })).toHaveLength(1);
+    expect(screen.getByRole("link", { name: "Website" })).toHaveAttribute(
+      "href",
+      expect.stringContaining("https://studio.example.com")
+    );
+    expect(screen.getAllByRole("link", { name: "Facebook" })).toHaveLength(1);
+    expect(screen.getAllByRole("link", { name: "YouTube" })).toHaveLength(1);
+    expect(screen.queryByRole("link", { name: /Visit website|Visit public website/ })).toBeNull();
+  });
+
   it.each(["showroom", "tourism"] as const)(
     "shows details and contact methods without expanding %s profiles",
     (family) => {

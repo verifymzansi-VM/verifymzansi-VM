@@ -34,7 +34,7 @@ describe("categories", () => {
       for (const field of cat.attributeFields) {
         expect(field.name).toBeTruthy();
         expect(field.label).toBeTruthy();
-        expect(["text", "number", "select", "boolean", "checklist"]).toContain(field.type);
+        expect(["text", "number", "select", "boolean", "checklist", "date"]).toContain(field.type);
         expect(typeof field.required).toBe("boolean");
       }
     }
@@ -82,6 +82,55 @@ describe("categories", () => {
       expect(requiredFields).toContain("make");
       expect(requiredFields).toContain("model");
       expect(requiredFields).toContain("year");
+    });
+  });
+
+  describe("Market form fields", () => {
+    const names = (value: string) =>
+      getCategory(value as ListingCategory)!.attributeFields.map((f) => f.name);
+
+    it("asks size and who it is for on clothing and sports, never a power rating", () => {
+      for (const value of ["clothing_accessories", "sports_hobbies"]) {
+        expect(names(value)).toEqual(expect.arrayContaining(["size", "gender"]));
+        expect(names(value)).not.toContain("power_rating");
+      }
+      const gender = getCategory("clothing_accessories" as ListingCategory)!.attributeFields.find(
+        (f) => f.name === "gender"
+      )!;
+      expect(gender.options!.map((o) => (typeof o === "string" ? o : o.value))).toEqual([
+        "women",
+        "men",
+        "unisex",
+        "girls",
+        "boys",
+      ]);
+    });
+
+    it("asks how the buyer gets it for items, not for property or jobs", () => {
+      for (const cat of CATEGORIES) {
+        const asks = cat.attributeFields.some((f) => f.name === "delivery_methods");
+        expect(asks).toBe(cat.value !== "property" && cat.value !== "jobs_services");
+      }
+    });
+
+    it("asks property dates, rental terms and a pets choice", () => {
+      const fields = getCategory("property" as ListingCategory)!.attributeFields;
+      const byName = (name: string) => fields.find((f) => f.name === name)!;
+      expect(byName("available_from").type).toBe("date");
+      expect(byName("occupation_date")).toMatchObject({ type: "date", dependsOnValue: "sale" });
+      for (const name of ["deposit_zar", "lease_term", "utilities_included"])
+        expect(byName(name).dependsOnValue).toBe("rent");
+      expect(byName("pets_allowed").formHidden).toBe(true);
+      expect(byName("pets_policy").type).toBe("select");
+    });
+
+    it("keeps fields that are not search fields out of the filters", () => {
+      for (const name of ["size", "gender", "delivery_methods"])
+        expect(
+          getCategory("clothing_accessories" as ListingCategory)!.attributeFields.find(
+            (f) => f.name === name
+          )!.filterable
+        ).toBe(false);
     });
   });
 

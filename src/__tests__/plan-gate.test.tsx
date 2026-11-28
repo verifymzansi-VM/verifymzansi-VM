@@ -101,15 +101,16 @@ describe("PlanGate", () => {
 
   afterEach(() => vi.unstubAllGlobals());
 
-  it("shows the form with the plan bar when a paid slot is free", async () => {
+  it("shows the form without plan badges when a paid slot is free", async () => {
     fetchPostingAllowance.mockResolvedValue(
       allowance({ tier: "month", capacity: 1, used: 0, creation_remaining: 1 })
     );
     renderGate();
 
     expect(await screen.findByText("Protected Content")).toBeInTheDocument();
-    expect(screen.getByText("30 Days plan")).toBeInTheDocument();
-    expect(screen.getByText("0/1 listings used")).toBeInTheDocument();
+    // Plan, photo and slot counts live on My slots, not above the form.
+    expect(screen.queryByText("30 Days plan")).toBeNull();
+    expect(screen.queryByText(/listings used/)).toBeNull();
     expect(fetchPostingAllowance).toHaveBeenCalledWith("MZANSI_MARKET");
   });
 
@@ -173,7 +174,7 @@ describe("PlanGate", () => {
 
     expect(selectedTrial).toHaveBeenCalledWith(7);
     expect(screen.getByText("Protected Content")).toBeInTheDocument();
-    expect(screen.getByText(/Introductory trial — 7 days/)).toBeInTheDocument();
+    expect(screen.queryByText(/Introductory trial — 7 days/)).toBeNull();
   });
 
   it("reads the allowance again when the signed-in account changes", async () => {
@@ -188,6 +189,20 @@ describe("PlanGate", () => {
 
     unmount();
     expect(unsubscribe).toHaveBeenCalledOnce();
+  });
+
+  it("does not read the allowance twice for the account already signed in", async () => {
+    renderGate();
+    await act(async () => {
+      authChanged("INITIAL_SESSION", { user: { id: OWNER } });
+    });
+    await screen.findByRole("button", { name: "Choose 30 Days" });
+    expect(fetchPostingAllowance).toHaveBeenCalledTimes(1);
+    // A later change of account still reads again.
+    await act(async () => {
+      authChanged("SIGNED_IN", { user: { id: "another-account" } });
+    });
+    await waitFor(() => expect(fetchPostingAllowance).toHaveBeenCalledTimes(2));
   });
 });
 

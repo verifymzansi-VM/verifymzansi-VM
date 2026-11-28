@@ -214,3 +214,63 @@ it("reads the key after the configured media address's own path, and only there"
   vi.stubEnv("NEXT_PUBLIC_MEDIA_URL", "not a url");
   expect(restoredMediaKey(photo)).toBe(`media/${id}`);
 });
+/** The listing command, typed as one (the builder returns any of the three kinds). */
+function listingCommand(input: Record<string, unknown>) {
+  const command = buildRestoredPostInput("listings", input);
+  return command as Extract<typeof command, { listing_terms: unknown }>;
+}
+it("saves a listing's links and new Market answers in its presentation", () => {
+  const command = listingCommand({
+    ...listing,
+    attributes: {
+      property_type: "house",
+      listing_intent: "rent",
+      available_from: "2026-12-01",
+      deposit_zar: 9000,
+      lease_term: "12_months",
+      utilities_included: ["water"],
+      occupation_date: "2027-01-01",
+      pets_policy: "allowed",
+    },
+    website: "https://home.example.co.za",
+    social_links: { facebook: "https://facebook.com/home", youtube: "", tiktok: undefined },
+  });
+  expect(command.presentation).toMatchObject({
+    website: "https://home.example.co.za",
+    social_links: { facebook: "https://facebook.com/home" },
+    source_attributes: {
+      available_from: "2026-12-01",
+      deposit_zar: 9000,
+      lease_term: "12_months",
+      utilities_included: ["water"],
+      pets_policy: "allowed",
+      pets_allowed: true,
+    },
+  });
+  expect(command.presentation.social_links).toEqual({ facebook: "https://facebook.com/home" });
+  // A sale date is not kept on a rental; the pets choice reaches the searchable field.
+  expect(command.presentation.source_attributes).not.toHaveProperty("occupation_date");
+  expect(command.attributes).toMatchObject({ pets_allowed: true, available_from: "2026-12-01" });
+});
+it("leaves pets_allowed out for 'Ask', and links out when none are given", () => {
+  const command = listingCommand({
+    ...listing,
+    attributes: { property_type: "house", listing_intent: "sale", pets_policy: "ask" },
+  });
+  expect(command.presentation.source_attributes).not.toHaveProperty("pets_allowed");
+  expect(command.attributes).not.toHaveProperty("pets_allowed");
+  expect(command.presentation).not.toHaveProperty("website");
+  expect(command.presentation).not.toHaveProperty("social_links");
+});
+it("keeps how the buyer gets it, size and gender for clothing", () => {
+  const command = listingCommand({
+    ...listing,
+    category: "clothing_accessories",
+    attributes: { size: "M", gender: "unisex", delivery_methods: ["collect", "courier"] },
+  });
+  expect(command.presentation.source_attributes).toEqual({
+    size: "M",
+    gender: "unisex",
+    delivery_methods: ["collect", "courier"],
+  });
+});

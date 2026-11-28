@@ -9,7 +9,6 @@ import {
   ChevronRight,
   Clock3,
   CreditCard,
-  Globe,
   Mail,
   MapPin,
   MessageCircle,
@@ -31,6 +30,8 @@ import { formatVideoLength, formatVideoLimit } from "@/lib/media/video-length";
 import { normalizeMediaUrl, normalizeVideoUrl } from "@/lib/utils/media-url";
 import { cn } from "@/lib/utils";
 import { getContentEditChanges, type ContentEditChange } from "@/lib/content-edit-diff";
+import { PAYMENT_METHOD_LABELS } from "@/lib/forms/business-form";
+import { SubmittedDetails, plainCategoryName } from "./submitted-details";
 import {
   hasBusinessDeliveryAvailable,
   PRIMARY_ORDER_CHANNEL_LABELS,
@@ -93,6 +94,11 @@ export interface ModerationItem {
   service_areas?: { areas?: string[] } | null;
   map_directions?: string | null;
   business_details?: BusinessDetails | null;
+  category_details?: Record<string, unknown> | null;
+  event_details?: Record<string, unknown> | null;
+  subcategory?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
   isEditRequest?: boolean;
   targetId?: string;
   current_snapshot?: Record<string, unknown>;
@@ -117,25 +123,6 @@ interface ModerationMediaItem {
   isVideo: boolean;
 }
 
-const ATTRIBUTE_LABELS: Record<string, string> = {
-  condition: "Condition",
-  make: "Make",
-  model: "Model",
-  year: "Year",
-  mileage_km: "Mileage (km)",
-  fuel_type: "Fuel Type",
-  transmission: "Transmission",
-  colour: "Colour",
-  brand: "Brand",
-  storage: "Storage",
-  bedrooms: "Bedrooms",
-  bathrooms: "Bathrooms",
-  size_sqm: "Size (m²)",
-  property_type: "Property Type",
-  furnished: "Furnished",
-  parking: "Parking",
-};
-
 function formatEnumLabel(value: string) {
   return value.replace(/_/g, " ");
 }
@@ -147,7 +134,9 @@ function formatOperatingHourLabel(key: string) {
     case "Sat":
       return "Saturday";
     case "Sun":
-      return "Sunday / Holidays";
+      return "Sunday";
+    case "Public_holidays":
+      return "Public holidays";
     default:
       return formatEnumLabel(key);
   }
@@ -499,9 +488,6 @@ function BusinessModerationPreview({ item }: ModerationPreviewPanelProps) {
     item.delivery_options,
     item.business_details
   );
-  const socialLinks = Object.entries(item.social_links ?? {}).filter(
-    ([, value]) => typeof value === "string" && value.trim().length > 0
-  );
   const editChanges = item.isEditRequest ? getChangeSummary(item) : [];
 
   function goTo(index: number) {
@@ -793,7 +779,9 @@ function BusinessModerationPreview({ item }: ModerationPreviewPanelProps) {
           </div>
         )}
 
-        {(item.phone || item.whatsapp || item.email || item.website || socialLinks.length > 0) && (
+        <SubmittedDetails item={{ ...item, contentType: "business" }} />
+
+        {(item.phone || item.whatsapp || item.email) && (
           <>
             <Separator />
             <div className="space-y-2">
@@ -820,26 +808,7 @@ function BusinessModerationPreview({ item }: ModerationPreviewPanelProps) {
                     value={item.email}
                   />
                 )}
-                {item.website && (
-                  <BusinessInfoCard
-                    icon={<Globe className="h-3.5 w-3.5" />}
-                    label="Website"
-                    value={item.website}
-                  />
-                )}
               </div>
-              {socialLinks.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground">Social profiles</p>
-                  <div className="flex flex-wrap gap-2">
-                    {socialLinks.map(([platform]) => (
-                      <Badge key={platform} variant="outline" className="capitalize">
-                        {formatEnumLabel(platform)}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           </>
         )}
@@ -895,8 +864,9 @@ function BusinessModerationPreview({ item }: ModerationPreviewPanelProps) {
                   </h4>
                   <div className="flex flex-wrap gap-2">
                     {paymentMethods.map((method) => (
-                      <Badge key={method} variant="outline" className="capitalize">
-                        {formatEnumLabel(method)}
+                      <Badge key={method} variant="outline">
+                        {PAYMENT_METHOD_LABELS[method as keyof typeof PAYMENT_METHOD_LABELS] ??
+                          formatEnumLabel(method)}
                       </Badge>
                     ))}
                   </div>
@@ -951,6 +921,8 @@ function BusinessModerationPreview({ item }: ModerationPreviewPanelProps) {
 }
 
 function isBusinessModerationItem(item: ModerationItem) {
+  // Every owner row carries business_name (the title), so the kind decides.
+  if (item.contentType) return item.contentType === "business";
   return (
     item.area === "MZANSI_BUSINESS" ||
     item.itemType.toLowerCase().includes("business") ||
@@ -1090,9 +1062,6 @@ export function ModerationPreviewPanel({ item }: ModerationPreviewPanelProps) {
   }
 
   const attributes = item.attributes ?? {};
-  const attributeEntries = Object.entries(attributes).filter(
-    ([, v]) => v !== null && v !== undefined && v !== ""
-  );
 
   const locationParts = [item.location_suburb, item.location_city, item.location_province].filter(
     Boolean
@@ -1256,9 +1225,9 @@ export function ModerationPreviewPanel({ item }: ModerationPreviewPanelProps) {
             <Badge variant="secondary" className="text-[10px]">
               {item.areaLabel}
             </Badge>
-            {item.category && (
-              <Badge variant="secondary" className="text-[10px] capitalize">
-                {item.category.replace(/_/g, " ")}
+            {plainCategoryName({ ...item, contentType: item.contentType ?? "listing" }) && (
+              <Badge variant="secondary" className="text-[10px]">
+                {plainCategoryName({ ...item, contentType: item.contentType ?? "listing" })}
               </Badge>
             )}
             {typeof attributes.condition === "string" && (
@@ -1303,46 +1272,9 @@ export function ModerationPreviewPanel({ item }: ModerationPreviewPanelProps) {
           </div>
         )}
 
-        {/* ── Category Attributes ──────────────────── */}
-        {attributeEntries.length > 0 && (
-          <>
-            <Separator />
-            <div className="space-y-1.5">
-              <h4 className="text-sm font-semibold flex items-center gap-1.5">
-                <Tag className="h-3.5 w-3.5" />
-                Details
-              </h4>
-              <div className="grid grid-cols-1 gap-x-4 gap-y-1.5 sm:grid-cols-2">
-                {attributeEntries.map(([key, value]) => (
-                  <div key={key} className="text-sm">
-                    <span className="text-muted-foreground">
-                      {ATTRIBUTE_LABELS[key] || key.replace(/_/g, " ")}:
-                    </span>{" "}
-                    <span className="font-medium capitalize">
-                      {typeof value === "boolean"
-                        ? value
-                          ? "Yes"
-                          : "No"
-                        : String(value).replace(/_/g, " ")}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* ── Contact Methods ──────────────────────── */}
-        {item.contact_methods && item.contact_methods.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-xs text-muted-foreground">Contact:</span>
-            {item.contact_methods.map((m) => (
-              <Badge key={m} variant="outline" className="text-[10px] capitalize">
-                {m}
-              </Badge>
-            ))}
-          </div>
-        )}
+        {/* ── Everything entered, links as real links ── */}
+        <Separator />
+        <SubmittedDetails item={{ ...item, contentType: item.contentType ?? "listing" }} />
 
         {/* ── Account Info ─────────────────────────── */}
         <Separator />

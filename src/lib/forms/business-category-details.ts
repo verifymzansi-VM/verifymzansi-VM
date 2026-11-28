@@ -16,6 +16,32 @@ import {
   TOURISM_TRAVEL_SPECIALIZATIONS,
 } from "@/lib/constants/categories";
 
+/** Tourism "From R___" price units (category_details.price_unit). */
+export const TOURISM_PRICE_UNITS = [
+  { value: "night", label: "per night" },
+  { value: "person", label: "per person" },
+  { value: "unit", label: "per unit" },
+  { value: "entry", label: "entry fee" },
+] as const;
+
+/** Backup power and water a tourism place has (category_details.backup_utilities). */
+export const TOURISM_BACKUP_UTILITIES = [
+  { value: "inverter_solar", label: "Inverter or solar" },
+  { value: "generator", label: "Generator" },
+  { value: "borehole", label: "Borehole" },
+  { value: "water_tanks", label: "Water tanks" },
+] as const;
+
+/**
+ * The cancellation choices the tourism form offers. Older posts may still hold
+ * the earlier values (free, flexible, moderate, strict, non_refundable).
+ */
+export const TOURISM_CANCELLATION_CHOICES = [
+  { value: "free_until_days", label: "Free cancellation until __ days before" },
+  { value: "deposit_non_refundable", label: "Deposit is non-refundable" },
+  { value: "no_refunds", label: "No refunds" },
+] as const;
+
 /**
  * Extra fields that appear on the form when a specific business category is
  * selected.  These are stored in the `category_details` JSONB column.
@@ -145,6 +171,7 @@ const CATEGORY_DETAIL_FIELDS: Partial<Record<BusinessCategory, BusinessDetailsFi
 
   tourism_hospitality: [
     {
+      // Older posts only: the tourism form keeps only the TGCSA grading.
       name: "star_rating",
       label: "Star rating",
       kind: "number",
@@ -184,11 +211,73 @@ const CATEGORY_DETAIL_FIELDS: Partial<Record<BusinessCategory, BusinessDetailsFi
       description: "Standard guest check-out time.",
     },
     {
+      name: "price_from_cents",
+      label: "Price from (in cents)",
+      kind: "number",
+      min: 0,
+      step: "1",
+      placeholder: "e.g. 45000",
+      description: 'R450 is 45000. Shown as "From R450".',
+    },
+    {
+      name: "price_unit",
+      label: "Price is",
+      kind: "select",
+      options: TOURISM_PRICE_UNITS.map((p) => ({ value: p.value, label: p.label })),
+    },
+    // Older posts only: the form now asks for a "From R___" price instead.
+    {
       name: "price_range",
       label: "Price range",
       kind: "select",
       options: TOURISM_PRICE_RANGES.map((p) => ({ value: p.value, label: p.label })),
       description: "Gives visitors a quick idea of your pricing.",
+    },
+    {
+      name: "sleeps",
+      label: "Sleeps",
+      kind: "number",
+      min: 1,
+      step: "1",
+      placeholder: "e.g. 4",
+    },
+    {
+      name: "bedrooms",
+      label: "Bedrooms",
+      kind: "number",
+      min: 0,
+      step: "1",
+      placeholder: "e.g. 2",
+    },
+    {
+      name: "beds",
+      label: "Beds",
+      kind: "number",
+      min: 0,
+      step: "1",
+      placeholder: "e.g. 3",
+    },
+    {
+      name: "bathrooms",
+      label: "Bathrooms",
+      kind: "number",
+      min: 0,
+      step: "1",
+      placeholder: "e.g. 1",
+    },
+    {
+      name: "backup_utilities",
+      label: "Backup power and water",
+      kind: "list",
+      options: TOURISM_BACKUP_UTILITIES.map((p) => ({ value: p.value, label: p.label })),
+      placeholder: TOURISM_BACKUP_UTILITIES.map((p) => p.label).join(", "),
+      description: "Separate items with commas.",
+    },
+    {
+      name: "opening_hours",
+      label: "Opening hours",
+      kind: "text",
+      placeholder: "e.g. Daily 08:00 to 17:00",
     },
     {
       name: "amenities",
@@ -215,8 +304,19 @@ const CATEGORY_DETAIL_FIELDS: Partial<Record<BusinessCategory, BusinessDetailsFi
       name: "cancellation_policy",
       label: "Cancellation policy",
       kind: "select",
-      options: TOURISM_CANCELLATION_POLICIES.map((p) => ({ value: p.value, label: p.label })),
+      options: [...TOURISM_CANCELLATION_CHOICES, ...TOURISM_CANCELLATION_POLICIES].map((p) => ({
+        value: p.value,
+        label: p.label,
+      })),
       description: "Your standard terms for cancellations and refunds.",
+    },
+    {
+      name: "cancellation_free_days",
+      label: "Free cancellation until (days before)",
+      kind: "number",
+      min: 1,
+      step: "1",
+      placeholder: "e.g. 7",
     },
     {
       name: "booking_url",
@@ -441,6 +541,8 @@ export function getDefaultCategoryDetails(
 }
 
 const MAX_TEXT = 500;
+/** Shorter caps than MAX_TEXT for a few text fields. */
+const FIELD_MAX_TEXT: Record<string, number> = { opening_hours: 120 };
 const MAX_LIST_ITEMS = 30;
 const MAX_LIST_ITEM = 120;
 
@@ -459,16 +561,28 @@ function cleanField(field: BusinessDetailsFieldConfig, value: unknown): unknown 
     case "checkbox":
       return typeof value === "boolean" ? value : undefined;
     case "number": {
-      const n = typeof value === "number" ? value : Number(value);
+      const raw = typeof value === "number" ? value : Number(value);
+      // Whole-number fields (step "1") store whole numbers.
+      const n = field.step === "1" ? Math.round(raw) : raw;
       return Number.isFinite(n) && n >= (field.min ?? 0) && n <= 1_000_000 ? n : undefined;
     }
-    case "list":
-      return Array.isArray(value)
-        ? value
-            .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
-            .map((item) => item.trim().slice(0, MAX_LIST_ITEM))
-            .slice(0, MAX_LIST_ITEMS)
-        : undefined;
+    case "list": {
+      if (!Array.isArray(value)) return undefined;
+      const items = value
+        .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+        .map((item) => item.trim().slice(0, MAX_LIST_ITEM));
+      // A list with fixed options keeps only those values (a typed label counts too).
+      const options = field.options;
+      const kept = options
+        ? items.flatMap((item) => {
+            const match = options.find(
+              (option) => option.value === item || option.label.toLowerCase() === item.toLowerCase()
+            );
+            return match ? [match.value] : [];
+          })
+        : items;
+      return [...new Set(kept)].slice(0, MAX_LIST_ITEMS);
+    }
     case "select":
       return typeof value === "string" &&
         (!field.options || field.options.some((option) => option.value === value))
@@ -479,7 +593,9 @@ function cleanField(field: BusinessDetailsFieldConfig, value: unknown): unknown 
         ? value.trim().slice(0, MAX_TEXT)
         : undefined;
     default:
-      return typeof value === "string" ? value.trim().slice(0, MAX_TEXT) : undefined;
+      return typeof value === "string"
+        ? value.trim().slice(0, FIELD_MAX_TEXT[field.name] ?? MAX_TEXT)
+        : undefined;
   }
 }
 

@@ -39,6 +39,12 @@ import type { AccountVerificationStatus } from "@/types/enums";
 import { placeLine } from "@/lib/utils/place-line";
 import { SHOW_ENGAGEMENT_TOTALS } from "@/lib/hidden-features";
 import { POST_MEDIA_FIRST_SCREEN_HEIGHT } from "@/components/listings/poster-caption";
+import { PostLinks } from "@/components/listings/post-links";
+import {
+  JOB_SAFETY_LINE,
+  MEET_SAFELY_LINE,
+  hasDeliveryMethods,
+} from "@/lib/domains/listings/market-extras";
 
 export interface ListingDetailRecord {
   id: string;
@@ -64,6 +70,9 @@ export interface ListingDetailRecord {
   contact_methods: string[] | null;
   view_count?: number | null;
   created_at: string;
+  /** The seller's links (presentation website / social_links). */
+  website?: string | null;
+  social_links?: Record<string, string | null | undefined> | null;
   media_width?: number | null;
   media_height?: number | null;
   focal_x?: number | null;
@@ -190,10 +199,25 @@ export function ListingDetailContent({
         }
       : null;
   const showStickyBar = layoutMode === "public" && (canCall || canWhatsapp || Boolean(revealable));
-  const facts = useMemo(() => buildListingFacts(listing), [listing]);
+  const facts = useMemo(
+    () =>
+      buildListingFacts({
+        category: listing.category,
+        attributes: listing.attributes,
+      }),
+    [listing.category, listing.attributes]
+  );
   const [viewCount, setViewCount] = useState(listing.view_count ?? 0);
   const quickFacts = facts.slice(0, 6);
   const detailFacts = facts.slice(6);
+  // The meet-safely line sits with the "How the buyer gets it" answer, which is
+  // every item category's last question, so the last fact shown.
+  const meetSafely = hasDeliveryMethods(listing.attributes) ? (
+    <p className="text-xs text-muted-foreground" data-meet-safely>
+      {MEET_SAFELY_LINE}
+    </p>
+  ) : null;
+  const deliveryInQuickFacts = detailFacts.length === 0;
   const handleViewRecorded = useCallback(() => {
     setViewCount((currentCount) => currentCount + 1);
   }, []);
@@ -326,6 +350,7 @@ export function ListingDetailContent({
                       </div>
                     ))}
                   </div>
+                  {deliveryInQuickFacts ? meetSafely : null}
                 </CardContent>
               </Card>
             ) : null}
@@ -340,6 +365,17 @@ export function ListingDetailContent({
                 </CardContent>
               </Card>
             ) : null}
+
+            {listing.category === "jobs_services" ? (
+              <p
+                role="note"
+                className="rounded-2xl border border-brand-gold-300/70 bg-brand-gold-50 px-4 py-3 text-sm font-semibold text-brand-gold-900 dark:border-brand-gold-700/60 dark:bg-brand-gold-950/40 dark:text-brand-gold-100"
+              >
+                {JOB_SAFETY_LINE}
+              </p>
+            ) : null}
+
+            <PostLinks website={listing.website} social={listing.social_links} />
 
             {(listing.location_province ||
               listing.location_city ||
@@ -386,6 +422,7 @@ export function ListingDetailContent({
                     </div>
                   ))}
                 </div>
+                {deliveryInQuickFacts ? null : meetSafely}
               </CardContent>
             </Card>
           ) : null}
