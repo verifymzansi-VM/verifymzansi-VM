@@ -34,4 +34,3 @@ begin
 end$function$;
 alter function internal.get_frontend_seen_queue(text) owner to postgres;
 revoke all on function internal.get_frontend_seen_queue(text) from public;
-grant execute on function internal.get_frontend_seen_queue(text) to authenticated;

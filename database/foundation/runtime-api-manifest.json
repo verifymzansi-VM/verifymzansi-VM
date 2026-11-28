@@ -1529,25 +1529,6 @@
       "authority": "Current business owner; attachment is bound to the open Seen case and stays private until sent."
     },
     {
-      "name": "get_my_frontend_business_checks",
-      "updates": ["updates/20261105094316_restored_business_seen_requests.sql"],
-      "arguments": [
-        {
-          "name": "p_business",
-          "sqlType": "uuid",
-          "optional": false
-        }
-      ],
-      "returns": "jsonb",
-      "volatility": "v",
-      "execute": {
-        "anon": false,
-        "authenticated": true,
-        "service_role": false
-      },
-      "authority": "Current owner only; business case and current Seen sticker state, no staff findings or private evidence."
-    },
-    {
       "name": "request_frontend_business_seen",
       "updates": ["updates/20261105094316_restored_business_seen_requests.sql"],
       "arguments": [
@@ -1609,28 +1590,6 @@
         "service_role": false
       },
       "authority": "Current owner of the represented open check; closes the native evidence case and starts existing retention."
-    },
-    {
-      "name": "get_frontend_seen_queue",
-      "updates": [
-        "updates/20261105094316_restored_business_seen_requests.sql",
-        "updates/20261118072601_staff_data_minimisation.sql"
-      ],
-      "arguments": [
-        {
-          "name": "p_tab",
-          "sqlType": "text",
-          "optional": false
-        }
-      ],
-      "returns": "jsonb",
-      "volatility": "v",
-      "execute": {
-        "anon": false,
-        "authenticated": true,
-        "service_role": false
-      },
-      "authority": "Current queue staff; bounded visit queue summaries and counts with no visit address or photo content. Members are named by their public short name."
     },
     {
       "name": "get_frontend_seen_case",
@@ -2658,38 +2617,6 @@
       "authority": "Current independent account-restoration reviewer and fresh TOTP; subject, proposer, approver and reporter conflicts are denied. Represented restriction version and bounded rationale. Any separate active restriction still applies."
     },
     {
-      "name": "release_frontend_content_hold",
-      "updates": [
-        "updates/20261105043010_native_report_content_holds.sql",
-        "updates/20261105053509_restored_member_appeals.sql"
-      ],
-      "arguments": [
-        {
-          "name": "p_hold",
-          "sqlType": "uuid",
-          "optional": false
-        },
-        {
-          "name": "p_expected_version",
-          "sqlType": "integer",
-          "optional": false
-        },
-        {
-          "name": "p_reason",
-          "sqlType": "text",
-          "optional": false
-        }
-      ],
-      "returns": "jsonb",
-      "volatility": "v",
-      "execute": {
-        "anon": false,
-        "authenticated": true,
-        "service_role": false
-      },
-      "authority": "Current independent content-restoration reviewer and recent TOTP; represented hold version, subject locks, immutable cause and exact retry. Other active holds and later owner changes prevent republishing; unchanged content requires current native identity, time and funding eligibility."
-    },
-    {
       "name": "execute_frontend_report_action_v2",
       "updates": [
         "updates/20261105043010_native_report_content_holds.sql",
@@ -2835,63 +2762,6 @@
       "authority": "Trusted mail worker only; bounded declared supported kinds, current due leases, owner-confirmed recipient and warning reason. Old workers cannot consume new warning deliveries; completion remains fenced by the original claim token."
     },
     {
-      "name": "execute_frontend_report_action",
-      "updates": [
-        "updates/20261104231625_restored_report_actions.sql",
-        "updates/20261105035413_native_report_warning_delivery.sql"
-      ],
-      "arguments": [
-        {
-          "name": "p_report",
-          "sqlType": "uuid",
-          "optional": false
-        },
-        {
-          "name": "p_expected_revision",
-          "sqlType": "integer",
-          "optional": false
-        },
-        {
-          "name": "p_claim_generation",
-          "sqlType": "text",
-          "optional": false
-        },
-        {
-          "name": "p_claim_nonce",
-          "sqlType": "uuid",
-          "optional": false
-        },
-        {
-          "name": "p_action",
-          "sqlType": "text",
-          "optional": false
-        },
-        {
-          "name": "p_reason",
-          "sqlType": "text",
-          "optional": false
-        },
-        {
-          "name": "p_duration_days",
-          "sqlType": "integer",
-          "optional": true
-        },
-        {
-          "name": "p_emergency",
-          "sqlType": "boolean",
-          "optional": true
-        }
-      ],
-      "returns": "jsonb",
-      "volatility": "v",
-      "execute": {
-        "anon": false,
-        "authenticated": true,
-        "service_role": false
-      },
-      "authority": "Current independent native reviewer and recent TOTP; represented report revision/lease. Native dismissal or informational warning, one exact bounded retry receipt, owner-only notice and durable delivery event. Remaining enforcement actions fail without success."
-    },
-    {
       "name": "get_frontend_area_activity",
       "updates": ["updates/20261104224230_restored_staff_report_queue.sql"],
       "arguments": [
@@ -2914,25 +2784,6 @@
         "service_role": false
       },
       "authority": "Current native queue reviewer; bounded program moderation/report resolution metadata and exact South African daily action counts. No report body, reviewer rationale, reporter identity, evidence key or role escalation."
-    },
-    {
-      "name": "get_frontend_report_queue",
-      "updates": ["updates/20261104224230_restored_staff_report_queue.sql"],
-      "arguments": [
-        {
-          "name": "p_area",
-          "sqlType": "text",
-          "optional": true
-        }
-      ],
-      "returns": "jsonb",
-      "volatility": "v",
-      "execute": {
-        "anon": false,
-        "authenticated": true,
-        "service_role": false
-      },
-      "authority": "Current native queue reviewer; independent bounded report summaries, own held review bodies/fences and private foreign lease secrets. Waiting totals include claimed work; revision and original program are derived from native report writes."
     },
     {
       "name": "submit_frontend_report",
@@ -3482,25 +3333,6 @@
         "service_role": false
       },
       "authority": "Current staff queue capability and independent subjects; bounded minimal waiting summaries. Submitted bodies, private presentation and exact lease tuple are returned only after the native claim-scoped review check"
-    },
-    {
-      "name": "get_my_frontend_posting_allowance",
-      "updates": ["updates/20261104110442_restored_posting_allowance.sql"],
-      "arguments": [
-        {
-          "name": "p_area",
-          "sqlType": "text",
-          "optional": false
-        }
-      ],
-      "returns": "jsonb",
-      "volatility": "v",
-      "execute": {
-        "anon": false,
-        "authenticated": true,
-        "service_role": false
-      },
-      "authority": "Current live member; self-only current paid/shared/trial capacity and claim eligibility display facts. No grant, caller-selected owner, identity fingerprint, fabricated scarcity or metadata-based bypass"
     },
     {
       "name": "execute_my_frontend_post_action",
@@ -4090,38 +3922,6 @@
         "service_role": false
       },
       "authority": "Native self-only inbox with canonical owned post kind/area for accurate reply links; no caller-selected subject or base-table grants"
-    },
-    {
-      "name": "list_my_frontend_notifications",
-      "updates": [
-        "updates/20261103231355_owner_notification_dismissals.sql",
-        "updates/20261105035413_native_report_warning_delivery.sql"
-      ],
-      "arguments": [
-        {
-          "name": "p_limit",
-          "sqlType": "integer",
-          "optional": true
-        },
-        {
-          "name": "p_unread",
-          "sqlType": "boolean",
-          "optional": true
-        },
-        {
-          "name": "p_before",
-          "sqlType": "timestamp with time zone",
-          "optional": true
-        }
-      ],
-      "returns": "jsonb",
-      "volatility": "s",
-      "execute": {
-        "anon": false,
-        "authenticated": true,
-        "service_role": false
-      },
-      "authority": "Current active member and live matching session; notification ownership derived from auth.uid(), no direct table grants"
     },
     {
       "name": "dismiss_my_notifications",
@@ -5728,53 +5528,6 @@
         "service_role": true
       },
       "authority": "Trusted server only (service_role): records that a timed job whose success the website decides ran and succeeded, after the whole run succeeded; only payment_checks and refund_check (22023 otherwise). Writes the job name and the time (never later than now), nothing else."
-    },
-    {
-      "name": "open_identity_disclosure",
-      "updates": [
-        "updates/20261121043124_identity_record_disclosure.sql",
-        "updates/20261122013616_authority_request_types.sql"
-      ],
-      "arguments": [
-        {
-          "name": "p_request_type",
-          "sqlType": "text",
-          "optional": false
-        },
-        {
-          "name": "p_reference",
-          "sqlType": "text",
-          "optional": false
-        },
-        {
-          "name": "p_reason",
-          "sqlType": "text",
-          "optional": false
-        },
-        {
-          "name": "p_lookup_kind",
-          "sqlType": "text",
-          "optional": false
-        },
-        {
-          "name": "p_lookup_value",
-          "sqlType": "text",
-          "optional": false
-        },
-        {
-          "name": "p_attested",
-          "sqlType": "boolean",
-          "optional": false
-        }
-      ],
-      "returns": "jsonb",
-      "volatility": "v",
-      "execute": {
-        "anon": false,
-        "authenticated": true,
-        "service_role": false
-      },
-      "authority": "Retired by rule D9 (updates/20261122013616_authority_request_types.sql): runs the same checks as open_authority_request with no issuer, number called or confirmer, so every call is refused (an earlier type with disclosure_request_type_invalid, a D9 type with disclosure_issued_by_required) and nothing is logged. To be removed by a later contract step."
     },
     {
       "name": "open_authority_request",

@@ -71,7 +71,6 @@ const ALLOWED_VIEWS = new Map([
   ["orgAdmin:org_list_applications:businessDraftId", "the application names A's business"],
   // The administrator's own notices of that application link the business.
   ["orgAdmin:list_my_frontend_notices:businessDraftId", "own notice of A's application"],
-  ["orgAdmin:list_my_frontend_notifications:businessDraftId", "own notice of A's application"],
   // Staff with organisation:manage act for any organisation and see the same
   // minimal application list.
   ["admin:org_list_applications:applicationId", "organisation:manage, same minimal list"],

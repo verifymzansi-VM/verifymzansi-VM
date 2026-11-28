@@ -52,4 +52,3 @@ begin
 end$function$;
 alter function internal.execute_frontend_report_action(uuid,integer,text,uuid,text,text,integer,boolean) owner to postgres;
 revoke all on function internal.execute_frontend_report_action(uuid,integer,text,uuid,text,text,integer,boolean) from public;
-grant execute on function internal.execute_frontend_report_action(uuid,integer,text,uuid,text,text,integer,boolean) to authenticated;
