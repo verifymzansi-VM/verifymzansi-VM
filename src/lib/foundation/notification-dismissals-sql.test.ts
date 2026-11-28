@@ -38,17 +38,15 @@ beforeEach(async () => {
     insert into private.notifications values ('${id(1)}','${owner}','enquiry_received','${id(11)}',null,null,now()-interval '1 minute',null),('${id(2)}','${owner}','enquiry_received','${id(12)}',null,null,now()-interval '2 minutes',null),('${id(3)}','${other}','enquiry_received','${id(13)}',null,null,now(),null);`);
 });
 afterAll(async () => db?.close());
-async function list(unread = false) {
+/** The caller's newest notification (the inbox read the website uses). */
+async function list() {
   return (
-    await db.query<{ v: { items: { id: string }[]; unread_count: number } }>(
-      "select api.list_my_frontend_notifications(1,$1) v",
-      [unread]
+    await db.query<{ v: { items: { id: string }[] } }>(
+      "select internal.list_my_notifications(null,null,1) v"
     )
   ).rows[0].v;
 }
-it("filters unread notifications before limiting and scopes every row to the caller", async () => {
-  await db.exec(`update private.notifications set read_at=now() where id='${id(1)}'`);
-  expect((await list(true)).items.map((n) => n.id)).toEqual([id(2)]);
+it("scopes the inbox to the caller", async () => {
   expect((await list()).items.map((n) => n.id)).toEqual([id(1)]);
 });
 it("dismisses only owned rows, preserves delivery deduplication and updates the old native list", async () => {

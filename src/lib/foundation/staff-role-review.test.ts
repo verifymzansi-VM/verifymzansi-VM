@@ -24,7 +24,7 @@ const review = (overrides: Record<string, unknown> = {}) => ({
     },
   ],
   history: [{ ...change, reason: "Earlier change", reviewer_id: uuid(3), decided_at: at }],
-  people: [{ user_id: uuid(11), email: "member@example.test", display_name: null }],
+  people: [{ user_id: uuid(11), display_name: null }],
   ...overrides,
 });
 const apiReturning = (result: { data: unknown; error: unknown }) => {

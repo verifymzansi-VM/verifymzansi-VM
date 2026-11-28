@@ -356,8 +356,7 @@ describe("member and service limits", () => {
 
   test("LIM-SQL-inbox-page-size: owner inbox pages of 1 to 50", async () => {
     const user = await member("limits-inbox");
-    const page = (limit) =>
-      asMember(user, `select api.list_my_frontend_notifications(${limit},false,null)`);
+    const page = (limit) => asMember(user, `select api.list_my_notifications(${limit},null,null)`);
     await page(50);
     await refused(page(51), "22023");
     await refused(page(0), "22023");
