@@ -277,7 +277,7 @@ test("an event is submitted through its form", async ({ page }) => {
 
 test("a tourism stay is submitted through its form", async ({ page }) => {
   const name = `Foundation Form Lodge ${ref}`;
-  const nameField = page.getByLabel(/^Business Name|^Listing name/).first();
+  const nameField = page.getByLabel(/^Name of your stay or activity/).first();
   await openForm(page, "/post/create-tourism?type=tourism_business", nameField);
   await nameField.fill(name);
   await page.locator("select#subcategory").selectOption("guest_house_bnb");

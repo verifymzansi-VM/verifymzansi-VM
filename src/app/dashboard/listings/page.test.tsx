@@ -360,6 +360,10 @@ describe("Dashboard listings page", () => {
     expect(document.querySelector('a[href="/post/edit-listing/listing-rejected"]')).toBeTruthy();
     expect(document.querySelector('a[href="/post/edit-business/business-rejected"]')).toBeTruthy();
     expect(document.querySelector('a[href="/post/edit-tourism/promo-rejected"]')).toBeTruthy();
+    // A post in review cannot be edited until it has been reviewed: no Edit link.
+    expect(document.querySelector('a[href="/post/edit-listing/listing-active"]')).toBeTruthy();
+    expect(screen.getByText("Senzo Repairs")).toBeInTheDocument();
+    expect(document.querySelector('a[href="/post/edit-business/business-pending"]')).toBeNull();
 
     expect(screen.getAllByRole("button", { name: "Resubmit" })).toHaveLength(3);
     expect(screen.getAllByText(/Edit your content then resubmit for review/i)).toHaveLength(3);

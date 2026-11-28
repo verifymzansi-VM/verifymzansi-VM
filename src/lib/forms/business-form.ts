@@ -241,10 +241,11 @@ export const BUSINESS_HOURS_GROUPS = [
 
 const EMPTY_DAY: DayHours = { open: "", close: "", closed: false };
 
+/** Nothing is set (or saved) until the poster sets hours; Sunday is not assumed closed. */
 export const EMPTY_BUSINESS_HOURS: BusinessHours = {
   monFri: EMPTY_DAY,
   sat: EMPTY_DAY,
-  sun: { ...EMPTY_DAY, closed: true },
+  sun: EMPTY_DAY,
   publicHolidays: EMPTY_DAY,
   open24: false,
   byAppointment: false,

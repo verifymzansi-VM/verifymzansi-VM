@@ -319,11 +319,14 @@ function getR2Client(attempts: R2ClientAttempts = "default"): S3Client {
 
 /**
  * Deadlines for S3-API calls to R2 (used only when no native R2 binding is
- * available). Object transfers (up to the 50 MB video limit) get a generous
- * budget; metadata calls (HEAD/DELETE) should answer quickly. Without these a
- * hung connection holds the request until the platform kills it.
+ * available). An object transfer gets 2 minutes plus 1 second per 125 KB
+ * (a 1 Mbps floor), at most 10 minutes, so a 50 MB video has 9 minutes;
+ * metadata calls (HEAD/DELETE) should answer quickly. Without these a hung
+ * connection holds the request until the platform kills it.
  */
-const R2_TRANSFER_TIMEOUT_MS = 120_000;
+function r2TransferTimeoutMs(bytes = 0): number {
+  return Math.min(600_000, 120_000 + Math.ceil(bytes / 125_000) * 1000);
+}
 const R2_METADATA_TIMEOUT_MS = 15_000;
 
 /** A caller's signal (for example a whole job's deadline) still gets the per-call timeout. */
@@ -418,7 +421,7 @@ export async function uploadToR2(params: UploadParams): Promise<UploadResult> {
       ContentType: params.contentType,
       CacheControl: cacheControl,
     });
-    await getR2Client().send(command, r2SendOptions(R2_TRANSFER_TIMEOUT_MS));
+    await getR2Client().send(command, r2SendOptions(r2TransferTimeoutMs(buffer.byteLength)));
   }
 
   // Generate public URL (trim trailing slash from base to avoid double-slash)
@@ -475,7 +478,7 @@ export async function putImmutableR2Bytes(
           CacheControl: metadata.cacheControl ?? "private, no-store",
           IfNoneMatch: "*",
         }),
-        r2SendOptions(R2_TRANSFER_TIMEOUT_MS)
+        r2SendOptions(r2TransferTimeoutMs(bytes.byteLength))
       );
       return bytes;
     } catch (error) {
@@ -671,7 +674,7 @@ export async function getR2ObjectBytes(
       Bucket: bucket,
       Key: key,
     }),
-    r2SendOptions(R2_TRANSFER_TIMEOUT_MS)
+    r2SendOptions(r2TransferTimeoutMs())
   );
 
   if (!response.Body) {

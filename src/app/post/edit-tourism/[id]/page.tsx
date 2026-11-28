@@ -628,10 +628,6 @@ export default function EditPromotionPage() {
       if (!res.ok) {
         if (data?.code === "edit_limit_reached") {
           setError(editLimitReachedMessage("event"));
-        } else if (data?.code === "pending_edit_exists") {
-          setError(
-            "Your latest changes were not submitted. An earlier edit is still awaiting admin review. Please wait for that review before submitting again."
-          );
         } else {
           setError(data.error || "Failed to update tourism and events listing");
         }
@@ -693,7 +689,7 @@ export default function EditPromotionPage() {
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" aria-hidden="true" />
           <p className="text-sm text-muted-foreground">Loading your post…</p>
         </main>
-        <Footer />
+        <Footer showPostBand={false} />
       </div>
     );
   }
@@ -1548,7 +1544,7 @@ export default function EditPromotionPage() {
         </div>
       </main>
 
-      <Footer />
+      <Footer showPostBand={false} />
     </div>
   );
 }

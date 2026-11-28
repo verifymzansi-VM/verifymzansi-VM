@@ -29,9 +29,12 @@ function slotName(slot: Slot) {
 
 /** The post's own page to manage it from (the edit flow for its kind). */
 function postHref(post: SlotPost) {
+  // As My posts: businesses (tourism stays included) and events have their own forms.
   return post.kind === "business"
     ? `/post/edit-business/${post.id}`
-    : `/post/edit-listing/${post.id}`;
+    : post.kind === "event"
+      ? `/post/edit-tourism/${post.id}`
+      : `/post/edit-listing/${post.id}`;
 }
 
 const FREE_SOURCES = new Set<Slot["source"]>([

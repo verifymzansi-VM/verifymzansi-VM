@@ -3,6 +3,10 @@ import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import { hasDatabaseReason } from "./error-reasons";
 import { videoLengthRefusalMessage } from "./video-length-refusal";
 
+/** A blocked duplicate event (the database's duplicate check). */
+export const DUPLICATE_EVENT_MESSAGE =
+  "A matching event is already pending or live on your account; edit that event instead";
+
 const request = z.strictObject({
   id: z.uuid().transform((value) => value.toLowerCase()),
   expected_revision: z.number().int().min(1).max(2147483646),
@@ -42,9 +46,7 @@ export async function submitFoundationPost(api: FoundationAuthenticatedApi, inpu
     if (error.code === "PT409" && hasDatabaseReason(error, "contact_phone_required"))
       throw new Error("Verify your account phone before using Call or WhatsApp");
     if (error.code === "PT409" && hasDatabaseReason(error, "duplicate_event"))
-      throw new Error(
-        "A matching event is already pending or live on your account; edit that event instead"
-      );
+      throw new Error(DUPLICATE_EVENT_MESSAGE);
     if (error.code === "PT409")
       throw new Error("Foundation post changed; reload before submitting");
     if (error.code === "PT429") throw new Error("Foundation posting allowance reached");

@@ -220,7 +220,10 @@ export function UploadProgressPanel({ slots, visible, progress }: UploadProgress
                     {current.phase === "preparing"
                       ? `Converting ${current.percent}%`
                       : current.phase === "uploading"
-                        ? `Uploading ${current.percent}%`
+                        ? // Only a video has an uploading phase; at 100% the server is still checking it.
+                          current.percent >= 100
+                          ? "Checking video…"
+                          : `Uploading ${current.percent}%`
                         : `${current.percent}%`}
                   </span>
                 </div>

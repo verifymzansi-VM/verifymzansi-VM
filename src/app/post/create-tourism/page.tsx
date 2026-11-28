@@ -639,102 +639,108 @@ function CreateTourismContent() {
         });
         return;
       }
+      // A late restore fills only what is still empty: never text already typed.
+      const keep =
+        <T,>(saved: T) =>
+        (current: T) =>
+          current || saved;
       queueMicrotask(() => {
         setStep(draft.step);
         if (d.listingType && !requestedListingType)
           setListingType(d.listingType as TourismListingType);
-        if (d.title) setTitle(d.title);
-        if (d.description) setDescription(d.description);
-        if (d.subcategory) setSubcategory(d.subcategory);
-        if (d.numberOfRooms) setNumberOfRooms(d.numberOfRooms);
+        if (d.title) setTitle(keep(d.title));
+        if (d.description) setDescription(keep(d.description));
+        if (d.subcategory) setSubcategory(keep(d.subcategory));
+        if (d.numberOfRooms) setNumberOfRooms(keep(d.numberOfRooms));
         if (d.accommodationTypes?.length) setAccommodationTypes(d.accommodationTypes);
-        if (d.checkInTime) setCheckInTime(d.checkInTime);
-        if (d.checkOutTime) setCheckOutTime(d.checkOutTime);
-        if (d.priceFrom) setPriceFrom(d.priceFrom);
-        if (d.priceUnit) setPriceUnit(d.priceUnit);
-        if (d.sleeps) setSleeps(d.sleeps);
-        if (d.bedrooms) setBedrooms(d.bedrooms);
-        if (d.beds) setBeds(d.beds);
-        if (d.bathrooms) setBathrooms(d.bathrooms);
+        if (d.checkInTime) setCheckInTime(keep(d.checkInTime));
+        if (d.checkOutTime) setCheckOutTime(keep(d.checkOutTime));
+        if (d.priceFrom) setPriceFrom(keep(d.priceFrom));
+        if (d.priceUnit) setPriceUnit(keep(d.priceUnit));
+        if (d.sleeps) setSleeps(keep(d.sleeps));
+        if (d.bedrooms) setBedrooms(keep(d.bedrooms));
+        if (d.beds) setBeds(keep(d.beds));
+        if (d.bathrooms) setBathrooms(keep(d.bathrooms));
         if (d.backupUtilities?.length) setBackupUtilities(d.backupUtilities);
-        if (d.cancellationFreeDays) setCancellationFreeDays(d.cancellationFreeDays);
-        if (d.openingHours) setOpeningHours(d.openingHours);
-        if (d.tgcsaGrading) setTgcsaGrading(d.tgcsaGrading);
-        if (d.minimumStayNights) setMinimumStayNights(d.minimumStayNights);
-        if (d.childPolicy) setChildPolicy(d.childPolicy);
-        if (d.seasonalPricing) setSeasonalPricing(d.seasonalPricing);
-        if (d.nearbyAttractions) setNearbyAttractions(d.nearbyAttractions);
+        if (d.cancellationFreeDays) setCancellationFreeDays(keep(d.cancellationFreeDays));
+        if (d.openingHours) setOpeningHours(keep(d.openingHours));
+        if (d.tgcsaGrading) setTgcsaGrading(keep(d.tgcsaGrading));
+        if (d.minimumStayNights) setMinimumStayNights(keep(d.minimumStayNights));
+        if (d.childPolicy) setChildPolicy(keep(d.childPolicy));
+        if (d.seasonalPricing) setSeasonalPricing(keep(d.seasonalPricing));
+        if (d.nearbyAttractions) setNearbyAttractions(keep(d.nearbyAttractions));
         if (d.amenities?.length) setAmenities(d.amenities);
         if (d.mealOptions?.length) setMealOptions(d.mealOptions);
-        if (d.languagesSpoken) setLanguagesSpoken(d.languagesSpoken);
-        if (d.cancellationPolicy) setCancellationPolicy(d.cancellationPolicy);
-        if (d.bookingUrl) setBookingUrl(d.bookingUrl);
-        if (d.petsAllowed) setPetsAllowed(d.petsAllowed);
-        if (d.smokingAllowed) setSmokingAllowed(d.smokingAllowed);
+        if (d.languagesSpoken) setLanguagesSpoken(keep(d.languagesSpoken));
+        if (d.cancellationPolicy) setCancellationPolicy(keep(d.cancellationPolicy));
+        if (d.bookingUrl) setBookingUrl(keep(d.bookingUrl));
+        if (d.petsAllowed) setPetsAllowed(keep(d.petsAllowed));
+        if (d.smokingAllowed) setSmokingAllowed(keep(d.smokingAllowed));
         if (d.treatmentTypes?.length) setTreatmentTypes(d.treatmentTypes);
         if (d.activityTypes?.length) setActivityTypes(d.activityTypes);
-        if (d.tourDuration) setTourDuration(d.tourDuration);
-        if (d.maxGroupSize) setMaxGroupSize(d.maxGroupSize);
-        if (d.difficultyLevel) setDifficultyLevel(d.difficultyLevel);
-        if (d.equipmentProvided) setEquipmentProvided(d.equipmentProvided);
-        if (d.whatsIncluded) setWhatsIncluded(d.whatsIncluded);
-        if (d.tourismAgeRestriction) setTourismAgeRestriction(d.tourismAgeRestriction);
+        if (d.tourDuration) setTourDuration(keep(d.tourDuration));
+        if (d.maxGroupSize) setMaxGroupSize(keep(d.maxGroupSize));
+        if (d.difficultyLevel) setDifficultyLevel(keep(d.difficultyLevel));
+        if (d.equipmentProvided) setEquipmentProvided(keep(d.equipmentProvided));
+        if (d.whatsIncluded) setWhatsIncluded(keep(d.whatsIncluded));
+        if (d.tourismAgeRestriction) setTourismAgeRestriction(keep(d.tourismAgeRestriction));
         if (d.servicesOffered?.length) setServicesOffered(d.servicesOffered);
         if (d.tourismSpecializations?.length) setTourismSpecializations(d.tourismSpecializations);
-        if (d.guidedTours) setGuidedTours(d.guidedTours);
-        if (d.audioGuide) setAudioGuide(d.audioGuide);
-        if (d.visitDuration) setVisitDuration(d.visitDuration);
+        if (d.guidedTours) setGuidedTours(keep(d.guidedTours));
+        if (d.audioGuide) setAudioGuide(keep(d.audioGuide));
+        if (d.visitDuration) setVisitDuration(keep(d.visitDuration));
         if (d.vehicleTypes?.length) setVehicleTypes(d.vehicleTypes);
-        if (d.deliveryCollection) setDeliveryCollection(d.deliveryCollection);
-        if (d.minDriverAge) setMinDriverAge(d.minDriverAge);
-        if (d.insuranceIncluded) setInsuranceIncluded(d.insuranceIncluded);
-        if (d.gpsAvailable) setGpsAvailable(d.gpsAvailable);
-        if (d.hoursMonFri) setHoursMonFri(d.hoursMonFri);
-        if (d.hoursSat) setHoursSat(d.hoursSat);
-        if (d.hoursSun) setHoursSun(d.hoursSun);
-        if (d.eventType) setEventType(d.eventType);
-        if (d.startDate) setStartDate(d.startDate);
-        if (d.endDate) setEndDate(d.endDate);
-        if (d.priceZar) setPriceZar(d.priceZar);
-        if (d.negotiable) setNegotiable(d.negotiable);
-        if (d.venueName) setVenueName(d.venueName);
-        if (d.venueCapacity) setVenueCapacity(d.venueCapacity);
+        if (d.deliveryCollection) setDeliveryCollection(keep(d.deliveryCollection));
+        if (d.minDriverAge) setMinDriverAge(keep(d.minDriverAge));
+        if (d.insuranceIncluded) setInsuranceIncluded(keep(d.insuranceIncluded));
+        if (d.gpsAvailable) setGpsAvailable(keep(d.gpsAvailable));
+        if (d.hoursMonFri) setHoursMonFri(keep(d.hoursMonFri));
+        if (d.hoursSat) setHoursSat(keep(d.hoursSat));
+        if (d.hoursSun) setHoursSun(keep(d.hoursSun));
+        if (d.eventType) setEventType(keep(d.eventType));
+        if (d.startDate) setStartDate(keep(d.startDate));
+        if (d.endDate) setEndDate(keep(d.endDate));
+        if (d.priceZar) setPriceZar(keep(d.priceZar));
+        if (d.negotiable) setNegotiable(keep(d.negotiable));
+        if (d.venueName) setVenueName(keep(d.venueName));
+        if (d.venueCapacity) setVenueCapacity(keep(d.venueCapacity));
         if (d.ticketTiers?.length) setTicketTiers(d.ticketTiers);
-        if (d.ticketsUrl) setTicketsUrl(d.ticketsUrl);
-        if (d.ageRestriction) setAgeRestriction(d.ageRestriction);
-        if (d.doorsOpen) setDoorsOpen(d.doorsOpen);
-        if (d.refundPolicy) setRefundPolicy(d.refundPolicy);
-        if (d.refundDays) setRefundDays(d.refundDays);
-        if (d.ticketSales) setTicketSales(d.ticketSales);
+        if (d.ticketsUrl) setTicketsUrl(keep(d.ticketsUrl));
+        if (d.ageRestriction) setAgeRestriction(keep(d.ageRestriction));
+        if (d.doorsOpen) setDoorsOpen(keep(d.doorsOpen));
+        if (d.refundPolicy) setRefundPolicy(keep(d.refundPolicy));
+        if (d.refundDays) setRefundDays(keep(d.refundDays));
+        if (d.ticketSales) setTicketSales(keep(d.ticketSales));
         if (d.gatePayment?.length) setGatePayment(d.gatePayment);
-        if (d.rainPolicy) setRainPolicy(d.rainPolicy);
-        if (d.earlyBirdDeadline) setEarlyBirdDeadline(d.earlyBirdDeadline);
-        if (d.lineup) setLineup(d.lineup);
-        if (d.parkingAvailable) setParkingAvailable(d.parkingAvailable);
+        if (d.rainPolicy) setRainPolicy(keep(d.rainPolicy));
+        if (d.earlyBirdDeadline) setEarlyBirdDeadline(keep(d.earlyBirdDeadline));
+        if (d.lineup) setLineup(keep(d.lineup));
+        if (d.parkingAvailable) setParkingAvailable(keep(d.parkingAvailable));
         if (d.accessibility?.length) setEventAccessibility(d.accessibility);
-        if (d.foodDrinksAvailable) setFoodDrinksAvailable(d.foodDrinksAvailable);
-        if (d.bringYourOwn) setBringYourOwn(d.bringYourOwn);
+        if (d.foodDrinksAvailable) setFoodDrinksAvailable(keep(d.foodDrinksAvailable));
+        if (d.bringYourOwn) setBringYourOwn(keep(d.bringYourOwn));
+        // The profile may have filled the area already; the draft's area wins, as before.
         if (d.province) setProvince(d.province);
         if (d.city) setCity(d.city);
-        if (d.locationTown) setLocationTown(d.locationTown);
-        if (d.locationAddress) setLocationAddress(d.locationAddress);
+        if (d.locationTown) setLocationTown(keep(d.locationTown));
+        if (d.locationAddress) setLocationAddress(keep(d.locationAddress));
         if (d.publishAddress) setPublishAddress(true);
         if (d.joinMethods?.length) setJoinMethods(d.joinMethods);
-        if (d.meetingPoint) setMeetingPoint(d.meetingPoint);
-        if (d.pickupAreas) setPickupAreas(d.pickupAreas);
+        if (d.meetingPoint) setMeetingPoint(keep(d.meetingPoint));
+        if (d.pickupAreas) setPickupAreas(keep(d.pickupAreas));
         if (d.contactMethods?.length) setContactMethods(d.contactMethods);
-        if (d.website) setWebsite(d.website);
-        if (d.socialFacebook) setSocialFacebook(d.socialFacebook);
-        if (d.socialInstagram) setSocialInstagram(d.socialInstagram);
-        if (d.socialTwitter) setSocialTwitter(d.socialTwitter);
-        if (d.socialTiktok) setSocialTiktok(d.socialTiktok);
-        if (d.socialYoutube) setSocialYoutube(d.socialYoutube);
-        if (d.mapDirections) setMapDirections(d.mapDirections);
-        if (d.businessId) setBusinessId(d.businessId);
+        if (d.website) setWebsite(keep(d.website));
+        if (d.socialFacebook) setSocialFacebook(keep(d.socialFacebook));
+        if (d.socialInstagram) setSocialInstagram(keep(d.socialInstagram));
+        if (d.socialTwitter) setSocialTwitter(keep(d.socialTwitter));
+        if (d.socialTiktok) setSocialTiktok(keep(d.socialTiktok));
+        if (d.socialYoutube) setSocialYoutube(keep(d.socialYoutube));
+        if (d.mapDirections) setMapDirections(keep(d.mapDirections));
+        if (d.businessId) setBusinessId(keep(d.businessId));
         toast({ title: "Draft restored", description: "Continuing where you left off." });
       });
     });
-  }, [user?.id, isLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user?.id, isLoading, restoreDraft, requestedListingType, toast]);
 
   // Auto-save draft
   useEffect(() => {
@@ -837,12 +843,16 @@ function CreateTourismContent() {
       businessId,
     };
 
-    const autosaveSignature = JSON.stringify({ step, draftData });
-    if (autosaveSignature === lastAutosaveSignatureRef.current) return;
+    // Off the key press, as Business and Market do: the signature of about
+    // 100 fields is built after the input has updated.
+    queueMicrotask(() => {
+      const autosaveSignature = JSON.stringify({ step, draftData });
+      if (autosaveSignature === lastAutosaveSignatureRef.current) return;
 
-    lastAutosaveSignatureRef.current = autosaveSignature;
-    saveDraft(step, draftData);
-    setLastSavedAt(Date.now());
+      lastAutosaveSignatureRef.current = autosaveSignature;
+      saveDraft(step, draftData);
+      setLastSavedAt(Date.now());
+    });
   }, [
     user?.id,
     isLoading,
@@ -1995,7 +2005,7 @@ function CreateTourismContent() {
             />
           </div>
         </main>
-        <Footer />
+        <Footer showPostBand={false} />
       </div>
     );
   }
@@ -2149,7 +2159,8 @@ function CreateTourismContent() {
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <Label htmlFor="title">
-                          {listingType === "event" ? "Event name" : "Business Name"} *
+                          {listingType === "event" ? "Event name" : "Name of your stay or activity"}{" "}
+                          *
                         </Label>
                         <span className="text-xs text-muted-foreground" aria-hidden="true">
                           {title.length}/{maxTitleLength}
@@ -3993,7 +4004,7 @@ function CreateTourismContent() {
           </PlanGate>
         </div>
       </main>
-      <Footer />
+      <Footer showPostBand={false} />
     </div>
   );
 }

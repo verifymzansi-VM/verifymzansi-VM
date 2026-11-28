@@ -697,6 +697,9 @@ function ListingList({
     <ul className="space-y-3">
       {listings.map((listing) => {
         const isLive = listing.status === "active" || listing.status === "live";
+        // A post in review cannot be edited until it has been reviewed.
+        const inReview =
+          listing.status === "pending_review" || listing.status === "pending_moderation";
         return (
           <li key={listing.id} id={`post-${listing.id}`} className="scroll-mt-28">
             <Card>
@@ -728,12 +731,14 @@ function ListingList({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-1.5 border-t border-border/60 pt-3">
-                  <Button asChild variant="outline" size="sm" className="h-11 gap-1.5 px-4">
-                    <Link href={getEditHref(listing)}>
-                      <Pencil aria-hidden="true" className="h-3.5 w-3.5" />
-                      Edit
-                    </Link>
-                  </Button>
+                  {!inReview && (
+                    <Button asChild variant="outline" size="sm" className="h-11 gap-1.5 px-4">
+                      <Link href={getEditHref(listing)}>
+                        <Pencil aria-hidden="true" className="h-3.5 w-3.5" />
+                        Edit
+                      </Link>
+                    </Button>
+                  )}
                   <Button asChild variant="ghost" size="sm" className="h-11 gap-1.5 px-3">
                     <Link href={getViewHref(listing)} target="_blank" rel="noopener noreferrer">
                       <ExternalLink aria-hidden="true" className="h-3.5 w-3.5" />

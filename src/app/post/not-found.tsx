@@ -30,7 +30,7 @@ export default function PostNotFound() {
           </Button>
         </div>
       </main>
-      <Footer />
+      <Footer showPostBand={false} />
     </div>
   );
 }

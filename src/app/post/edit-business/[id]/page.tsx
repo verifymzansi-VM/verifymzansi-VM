@@ -741,10 +741,6 @@ export default function EditBusinessPage() {
         );
         if (data?.code === "edit_limit_reached") {
           setError(editLimitReachedMessage("business"));
-        } else if (data?.code === "pending_edit_exists") {
-          setError(
-            "Your latest changes were not submitted. An earlier edit is still awaiting admin review. Please wait for that review before submitting again."
-          );
         } else {
           setError(data.error || "Failed to update business");
         }
@@ -788,7 +784,7 @@ export default function EditBusinessPage() {
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" aria-hidden="true" />
           <p className="text-sm text-muted-foreground">Loading your business…</p>
         </main>
-        <Footer />
+        <Footer showPostBand={false} />
       </div>
     );
   }
@@ -870,7 +866,12 @@ export default function EditBusinessPage() {
 
               {/* Basic Information */}
               <div className="space-y-2">
-                <Label htmlFor="businessName">Business Name *</Label>
+                <Label htmlFor="businessName">
+                  {listingArea === "PROMOTIONS_EVENTS"
+                    ? "Name of your stay or activity"
+                    : "Business Name"}{" "}
+                  *
+                </Label>
                 <Input
                   id="businessName"
                   value={businessName}
@@ -1220,7 +1221,9 @@ export default function EditBusinessPage() {
               </div>
 
               {/* Location: Province / City / Town / Address */}
-              {businessType === "online_only" && (
+              {!readCustomerAccess(categoryDetails.customer_access).methods.some(
+                (method) => method !== "online"
+              ) && (
                 <p className="text-sm text-muted-foreground">
                   Location is optional for online-only businesses. Add a province and city if you
                   want to appear in local search results.
@@ -1256,7 +1259,11 @@ export default function EditBusinessPage() {
                   (method) => method !== "online"
                 )}
                 addressRequired={readCustomerAccess(categoryDetails.customer_access).publishAddress}
-                errors={fieldErrors}
+                errors={{
+                  province: fieldErrors.location_province,
+                  city: fieldErrors.location_city,
+                  address: fieldErrors.location_address,
+                }}
               />
 
               <CustomerAccessFields
@@ -1709,7 +1716,7 @@ export default function EditBusinessPage() {
         </div>
       </main>
 
-      <Footer />
+      <Footer showPostBand={false} />
     </div>
   );
 }

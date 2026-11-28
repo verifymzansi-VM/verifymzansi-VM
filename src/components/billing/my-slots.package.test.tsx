@@ -117,6 +117,47 @@ describe("MySlots with a Multi-listing package (P4a)", () => {
     expect(screen.queryAllByTestId("my-slot")).toHaveLength(0);
   });
 
+  it("sends each package post to the edit form for its kind", () => {
+    render(
+      <MySlots
+        now={now}
+        buyHref="/billing/checkout?plan=x"
+        individual={individual}
+        slotPackage={slotPackage({
+          posts: [
+            post(10, "Demo bakkie 2.4"),
+            { ...post(12, "Jazz night"), kind: "event", area: "tourism_events" },
+            { ...post(13, "Lagoon stay"), kind: "business", area: "tourism_events" },
+          ],
+        })}
+        slots={[slot({ id: grant, individual: false, places: 25 })]}
+      />
+    );
+    const href = (name: string) => screen.getByRole("link", { name }).getAttribute("href");
+    expect(href("Demo bakkie 2.4")).toBe(`/post/edit-listing/${uuid(10)}`);
+    expect(href("Jazz night")).toBe(`/post/edit-tourism/${uuid(12)}`);
+    expect(href("Lagoon stay")).toBe(`/post/edit-business/${uuid(13)}`);
+  });
+
+  it("sends an event in a slot to the event form", () => {
+    render(
+      <MySlots
+        now={now}
+        buyHref="/billing/checkout?plan=x"
+        individual={individual}
+        slots={[
+          slot({
+            posts: [{ ...slotPost(14, "Jazz night"), kind: "event", area: "tourism_events" }],
+          }),
+        ]}
+      />
+    );
+    expect(screen.getByRole("link", { name: "Jazz night" })).toHaveAttribute(
+      "href",
+      `/post/edit-tourism/${uuid(14)}`
+    );
+  });
+
   it("offers 'Add slots' only while packages are on sale and 7 or more whole days are left (P4b)", () => {
     const { unmount } = render(
       <MySlots

@@ -100,6 +100,7 @@ export function OperatingHoursInput({
               id={`${id}-closed`}
               type="checkbox"
               checked={closed}
+              aria-label={`${label} closed`}
               onChange={(e) => onClosedChange(e.target.checked)}
               className="h-4 w-4 rounded accent-foreground"
             />
@@ -113,6 +114,7 @@ export function OperatingHoursInput({
           <input
             type="checkbox"
             checked={!closed && open === "appointment"}
+            aria-label={`${label} by appointment only`}
             onChange={(e) => {
               onClosedChange(false);
               onOpenChange(e.target.checked ? "appointment" : "");

@@ -64,7 +64,8 @@ function SouthAfricanFlagMark() {
 interface FooterProps {
   /**
    * The "Got something to sell" band. Pages whose own hero or closing band
-   * already offers "Post for free" (Pricing, Advertise) hide it.
+   * already offers "Post for free" (Pricing, Advertise) hide it, and so do the
+   * posting pages (/post/...), where the visitor is already posting.
    */
   showPostBand?: boolean;
 }

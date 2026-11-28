@@ -188,6 +188,37 @@ it("keeps an uncertain transfer reserved instead of rejecting its potentially st
   expect(attest).not.toHaveBeenCalled();
 });
 
+it("tells the member a storage timeout took too long, not to check the format", async () => {
+  vi.mocked(putImmutableR2Bytes).mockRejectedValueOnce(
+    new DOMException("The operation timed out.", "TimeoutError")
+  );
+  const rpc = vi.fn().mockResolvedValue({
+    data: {
+      object_id: objectId,
+      object_key: key,
+      max_bytes: 52428800,
+      state: "intent",
+      kind: "video",
+      width: null,
+      height: null,
+      sha256: null,
+      size_bytes: null,
+      mime: null,
+    },
+    error: null,
+  });
+  await expect(
+    uploadFoundationMedia(
+      { rpc } as unknown as FoundationAuthenticatedApi,
+      { rpc: vi.fn() } as unknown as FoundationServiceApi,
+      new File([fixture().slice().buffer], "fixture.mp4", { type: "video/mp4" })
+    )
+  ).rejects.toMatchObject({
+    status: 503,
+    detail: "The upload took too long. Try again on a stronger connection.",
+  });
+});
+
 function imageIntent() {
   return vi.fn().mockResolvedValue({
     data: {

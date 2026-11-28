@@ -281,6 +281,17 @@ describe("CreateBusinessPage", () => {
     expect(screen.getAllByText("Add at least one service area.").length).toBeGreaterThan(0);
   });
 
+  it("shows the area errors, not Optional, when customers visit and no area is chosen", async () => {
+    render(<CreateBusinessPage />);
+    await completeStandaloneStepOne();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Customers visit me" }));
+    // Premises not chosen yet: the area is still required, so it is not marked Optional.
+    expect(screen.queryByText("Add an area to show up in local searches.")).not.toBeInTheDocument();
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Next" })));
+    expect(screen.getAllByText("Select a province.").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Select a city.").length).toBeGreaterThan(0);
+  });
+
   async function completeTravelAccessStep() {
     fireEvent.click(screen.getByRole("checkbox", { name: "I travel to customers" }));
     fireEvent.change(screen.getByLabelText(/Service areas/), {
@@ -1135,7 +1146,6 @@ describe("CreateBusinessPage", () => {
     const payload = JSON.parse(fetchMock.mock.calls[0][1].body as string);
     expect(payload.operating_hours).toEqual({
       Mon_Fri: "08:00 - 17:30",
-      Sun: "Closed",
       Public_holidays: "09:00 - 13:00",
       By_appointment: true,
     });

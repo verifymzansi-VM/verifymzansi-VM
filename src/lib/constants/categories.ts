@@ -1170,7 +1170,15 @@ CATEGORIES.push(
     label: "Clothing & Accessories",
     icon: Shirt,
     description: "Clothing, shoes, bags and accessories",
-    attributeFields: [...sizeAndGenderFields, ...clothingFields],
+    // Material and Dimensions are furniture details; Brand gets a clothing example.
+    attributeFields: [
+      ...sizeAndGenderFields,
+      ...clothingFields
+        .filter((field) => field.name !== "material" && field.name !== "dimensions")
+        .map((field) =>
+          field.name === "brand" ? { ...field, placeholder: "e.g. Nike, Woolworths" } : field
+        ),
+    ],
   },
   {
     value: "sports_hobbies",

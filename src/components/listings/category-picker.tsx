@@ -192,8 +192,7 @@ export function CategoryPicker({
           {/* Smart tip */}
           {selectedCategory.value === "property" && (
             <p className="text-xs text-muted-foreground bg-background/60 rounded-md px-2.5 py-1.5">
-              <span aria-hidden="true">💡</span> Add levies, rates and security. Buyers ask about
-              these first.
+              Add levies, rates and security. Buyers ask about these first.
             </p>
           )}
           {selectedCategory.value === "vehicles" && (

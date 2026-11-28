@@ -92,6 +92,9 @@ export function MediaLightbox({ items, startIndex = 0, isOpen, onClose }: MediaL
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const { isMuted, toggleMute } = useGlobalMute(videoRef);
+  // The shown video's width / height, so its box (and the controls on it)
+  // fits a portrait or landscape video instead of a 16:9 frame.
+  const [videoShape, setVideoShape] = useState<{ url: string; ratio: number } | null>(null);
 
   /* ---- navigation ---- */
   const canPrev = index > 0;
@@ -366,6 +369,8 @@ export function MediaLightbox({ items, startIndex = 0, isOpen, onClose }: MediaL
 
   const normalizedUrl = normalizeMediaUrl(item.url);
   const normalizedPoster = item.poster ? normalizeMediaUrl(item.poster) : undefined;
+  const videoRatio =
+    item.kind === "video" && videoShape?.url === normalizedUrl ? videoShape.ratio : null;
 
   const transitionClass = reducedMotion ? "" : "transition-transform duration-200 ease-out";
 
@@ -449,10 +454,21 @@ export function MediaLightbox({ items, startIndex = 0, isOpen, onClose }: MediaL
               ref={mediaTransformRef}
               className={cn(
                 "relative w-full max-w-5xl mx-4 select-none",
-                item.kind === "photo" ? "aspect-[3/4] sm:aspect-video" : "aspect-video",
+                item.kind === "photo"
+                  ? "aspect-[3/4] sm:aspect-video"
+                  : !videoRatio && "aspect-video",
                 transitionClass,
                 isZoomed && "cursor-grab active:cursor-grabbing"
               )}
+              style={
+                videoRatio
+                  ? {
+                      aspectRatio: String(videoRatio),
+                      // Leaves room for the top bar and the thumbnail strip.
+                      width: `min(100%, calc((100dvh - 10rem) * ${videoRatio}))`,
+                    }
+                  : undefined
+              }
             >
               {item.kind === "video" ? (
                 <>
@@ -466,6 +482,11 @@ export function MediaLightbox({ items, startIndex = 0, isOpen, onClose }: MediaL
                     playsInline
                     onPlay={() => setIsPlaying(true)}
                     onPause={() => setIsPlaying(false)}
+                    onLoadedMetadata={(event) => {
+                      const { videoWidth, videoHeight } = event.currentTarget;
+                      if (videoWidth && videoHeight)
+                        setVideoShape({ url: normalizedUrl, ratio: videoWidth / videoHeight });
+                    }}
                     className="absolute inset-0 h-full w-full rounded-xl object-contain bg-black"
                     aria-label="Video player"
                   >

@@ -38,6 +38,26 @@ describe("UploadProgressPanel", () => {
     expect(screen.getByText("Keep this page open until it finishes.")).toBeInTheDocument();
   });
 
+  it("says the video is being checked once its upload reaches 100%", () => {
+    const { rerender } = render(
+      <UploadProgressPanel
+        visible
+        slots={slots}
+        progress={{ video: { phase: "uploading", percent: 99 } }}
+      />
+    );
+    expect(screen.getByText("Uploading 99%")).toBeInTheDocument();
+    rerender(
+      <UploadProgressPanel
+        visible
+        slots={slots}
+        progress={{ video: { phase: "uploading", percent: 100 } }}
+      />
+    );
+    expect(screen.getByText("Checking video…")).toBeInTheDocument();
+    expect(screen.queryByText("Uploading 100%")).not.toBeInTheDocument();
+  });
+
   it("drops the note once only saving is left", () => {
     render(
       <UploadProgressPanel

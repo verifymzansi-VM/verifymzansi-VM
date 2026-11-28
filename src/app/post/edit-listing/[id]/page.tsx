@@ -585,7 +585,7 @@ export default function EditListingPage() {
           ...priced,
           category: mapListingCategory(category),
           condition:
-            category === "jobs_services" || category === "auto_parts"
+            category === "jobs_services" || category === "auto_parts" || category === "property"
               ? undefined
               : condition || undefined,
           attributes: normalizedAttributes,
@@ -614,14 +614,10 @@ export default function EditListingPage() {
             setFormError(editLimitReachedMessage("listing"));
             return;
           }
-          if (data?.code === "pending_edit_exists") {
-            setFormError(
-              "Your latest changes were not submitted. An earlier edit is still awaiting admin review. Please wait for that review before submitting again."
-            );
-            return;
-          }
           setFormError(
-            "This listing was modified in another tab or session. Please reload the page and try again."
+            data?.reason === "post_in_review" && typeof data.error === "string"
+              ? data.error
+              : "This listing was modified in another tab or session. Please reload the page and try again."
           );
           return;
         }
@@ -689,7 +685,7 @@ export default function EditListingPage() {
             </Button>
           </div>
         </main>
-        <Footer />
+        <Footer showPostBand={false} />
       </div>
     );
   }
@@ -758,25 +754,27 @@ export default function EditListingPage() {
                     <p className="inline-form-error">{fieldErrors.category}</p>
                   )}
 
-                  {category !== "jobs_services" && category !== "auto_parts" && (
-                    <div className="space-y-2">
-                      <Label htmlFor="condition">Condition</Label>
-                      <PostSelect
-                        id="condition"
-                        aria-label="Condition"
-                        className="flex h-11 w-full rounded-xl border border-input bg-card px-3.5 py-2 text-base shadow-xs transition-colors hover:border-foreground/30 focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 sm:h-10 sm:text-sm"
-                        value={condition}
-                        onChange={(e) => setCondition(e.target.value as ListingCondition | "")}
-                      >
-                        <option value="">Condition not specified</option>
-                        {LISTING_CONDITIONS.map((item) => (
-                          <option key={item.value} value={item.value}>
-                            {item.label}
-                          </option>
-                        ))}
-                      </PostSelect>
-                    </div>
-                  )}
+                  {category !== "jobs_services" &&
+                    category !== "auto_parts" &&
+                    category !== "property" && (
+                      <div className="space-y-2">
+                        <Label htmlFor="condition">Condition</Label>
+                        <PostSelect
+                          id="condition"
+                          aria-label="Condition"
+                          className="flex h-11 w-full rounded-xl border border-input bg-card px-3.5 py-2 text-base shadow-xs transition-colors hover:border-foreground/30 focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 sm:h-10 sm:text-sm"
+                          value={condition}
+                          onChange={(e) => setCondition(e.target.value as ListingCondition | "")}
+                        >
+                          <option value="">Condition not specified</option>
+                          {LISTING_CONDITIONS.map((item) => (
+                            <option key={item.value} value={item.value}>
+                              {item.label}
+                            </option>
+                          ))}
+                        </PostSelect>
+                      </div>
+                    )}
 
                   {/* ── Title ──────────────────────────────────── */}
                   <div className="space-y-2">
@@ -1141,7 +1139,7 @@ export default function EditListingPage() {
         </div>
       </main>
 
-      <Footer />
+      <Footer showPostBand={false} />
     </div>
   );
 }

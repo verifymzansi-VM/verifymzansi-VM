@@ -157,6 +157,28 @@ it("explains the 12-month event limit and keeps the general message for other re
     reason: "invalid_post",
   });
 });
+it("explains an edit of a post in review and a blocked duplicate event", async () => {
+  const refuse = (error: { code: string; details?: string; message?: string }) =>
+    rpc.mockImplementation(async (name) =>
+      name === "resolve_my_frontend_media" ? resolved() : { data: null, error }
+    );
+  refuse({ code: "PT409", message: "post cannot be edited now" });
+  const inReview = await handleRestoredPostMutation(request(body()), "listings");
+  expect(inReview.status).toBe(409);
+  expect(await inReview.json()).toMatchObject({
+    error: "You can edit this post after it has been reviewed.",
+    reason: "post_in_review",
+  });
+  refuse({ code: "PT409", details: "duplicate_event", message: "matching event exists" });
+  const duplicate = await handleRestoredPostMutation(request(body()), "listings");
+  expect(await duplicate.json()).toMatchObject({
+    error: "A matching event is already pending or live on your account; edit that event instead",
+    reason: "duplicate_event",
+  });
+  refuse({ code: "PT409", message: "post changed; reload before saving" });
+  const changed = await handleRestoredPostMutation(request(body()), "listings");
+  expect(await changed.json()).toMatchObject({ reason: "post_changed" });
+});
 it("validates fields and CSRF before staging a command", async () => {
   expect((await handleRestoredPostMutation(request(body(), false), "listings")).status).toBe(403);
   const invalid = await handleRestoredPostMutation(request(body({ title: "x" })), "listings");

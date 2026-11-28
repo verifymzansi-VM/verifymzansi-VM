@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import type { MarketplaceArea } from "@/types/enums";
 import { usePostActionFields } from "@/hooks/use-post-action-fields";
+import { useToast } from "@/hooks/use-toast";
 
 interface DeletePostButtonProps {
   itemId: string;
@@ -29,6 +30,7 @@ export function DeletePostButton({
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const router = useRouter();
+  const { toast } = useToast();
 
   async function handleDelete() {
     setLoading(true);
@@ -51,6 +53,7 @@ export function DeletePostButton({
         return;
       }
 
+      toast({ title: "Post deleted", variant: "success" });
       router.refresh();
     } catch {
       setError("Network error. Please try again.");
@@ -67,6 +70,7 @@ export function DeletePostButton({
         role="group"
         aria-label="Delete this post?"
       >
+        <p className="w-full text-xs text-muted-foreground">This can&apos;t be undone.</p>
         <Button
           variant="destructive"
           size="sm"
