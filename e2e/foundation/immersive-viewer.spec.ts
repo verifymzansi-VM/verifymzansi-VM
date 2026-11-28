@@ -241,14 +241,16 @@ test("panel scrolling and dialogs keep the profile, and playback stays exclusive
   await expect(page.locator("video")).toHaveCount(1);
 });
 
-test("the video's seek bar is easy to grab and shows the time and length", async ({ page }) => {
+test("the video's progress line is easy to grab and states the time and length", async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/dev/immersive");
   const seek = active(page).getByRole("slider", { name: "Seek playback" });
   await expect(seek).toBeVisible();
   expect((await seek.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(24);
-  // The length shows even when the video read it before the page was interactive.
-  await expect(active(page).getByText(/^\d+:\d{2} \/ \d+:\d{2}$/)).not.toHaveText(/\/ 0:00$/);
+  // The length is known even when the video read it before the page was interactive.
+  await expect(seek).not.toHaveAttribute("aria-valuetext", /of 0:00$/);
   await expect(seek).not.toHaveAttribute("max", "0");
 });
 

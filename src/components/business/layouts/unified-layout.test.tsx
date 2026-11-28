@@ -167,7 +167,7 @@ describe("UnifiedLayout", () => {
     }
   );
 
-  it("shows the profile identity overlay over the video on phones only, above the controls", () => {
+  it("draws no identity overlay over the video; on phones the logo sits beside the name", () => {
     render(
       <UnifiedLayout
         family="showroom"
@@ -182,11 +182,12 @@ describe("UnifiedLayout", () => {
       />
     );
 
-    // From 768 px up the video keeps the whole frame, as before; on phones the
-    // name sits above the controls so the first screen says what the business is.
+    // The video keeps a clear picture; the name and logo follow under it.
     const overlay = screen.getByText("Featured Profile").closest("[data-post-caption]");
-    expect(overlay).toHaveAttribute("aria-hidden", "true");
-    expect(overlay).toHaveClass("md:hidden", "bottom-16", "pointer-events-none");
+    expect(overlay).toHaveClass("hidden");
+    const heading = screen.getByRole("heading", { name: business.business_name });
+    const logo = heading.parentElement?.querySelector("img");
+    expect(logo).toHaveClass("md:hidden");
     expect(screen.getByLabelText("Unified Studio video")).toHaveAttribute(
       "data-poster-priority",
       "true"

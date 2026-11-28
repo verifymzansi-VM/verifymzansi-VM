@@ -10,7 +10,8 @@ import {
   type ReactNode,
 } from "react";
 import Image from "next/image";
-import { Volume2, VolumeX, Play, Pause, AlertTriangle } from "lucide-react";
+import { Play, Pause, AlertTriangle } from "lucide-react";
+import { VideoSoundButton } from "@/components/ui/video-sound-button";
 import { cn } from "@/lib/utils";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import {
@@ -31,7 +32,6 @@ const SMART_FIT_CROP_THRESHOLD = 0.2;
 
 export type MediaFitStrategy = "cover" | "smart" | "contain";
 export type MuteControlVisibility = "auto" | "always" | "hidden";
-export type MediaControlVariant = "default" | "hero";
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -237,49 +237,16 @@ function SmartFitStaticBackdrop() {
 function MuteButton({
   videoRef,
   showMuteControl,
-  controlVariant = "default",
 }: {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   showMuteControl: boolean;
-  controlVariant?: MediaControlVariant;
 }) {
   const { isMuted, toggleMute } = useGlobalMute(videoRef);
 
   if (!showMuteControl) return null;
 
-  return (
-    <div className="absolute right-0.5 top-0.5 z-[14] sm:right-2 sm:top-2">
-      {/* Keep the full touch target inside the media frame. */}
-      <button
-        type="button"
-        data-carousel-control="true"
-        onPointerDown={(e) => {
-          e.stopPropagation();
-        }}
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          toggleMute();
-        }}
-        className={cn(
-          // No backdrop-blur here: the button floats over playing video, and
-          // backdrop-filter forces the GPU to re-blur the video region every
-          // frame — a major mobile battery/perf drain. Solid bg is cheap.
-          "relative flex items-center justify-center rounded-full text-white transition-colors select-none touch-manipulation before:absolute before:inset-1.5 before:rounded-full before:border before:border-white/20 before:bg-black/60 before:shadow-lg sm:before:inset-0",
-          controlVariant === "hero"
-            ? "h-11 w-11 p-0 sm:min-h-[46px] sm:min-w-[46px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-            : "h-11 w-11 p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-        )}
-        aria-label={isMuted ? "Unmute" : "Mute"}
-      >
-        {isMuted ? (
-          <VolumeX className="relative h-3.5 w-3.5 sm:h-4 sm:w-4" />
-        ) : (
-          <Volume2 className="relative h-3.5 w-3.5 sm:h-4 sm:w-4" />
-        )}
-      </button>
-    </div>
-  );
+  // The same sound button as every other player, at the top centre of the video.
+  return <VideoSoundButton muted={isMuted} onToggle={toggleMute} className="z-[14]" />;
 }
 
 /* ------------------------------------------------------------------ */
@@ -325,8 +292,6 @@ export interface VideoCardPlayerProps {
   muteControlVisibility?: MuteControlVisibility;
   /** Shows a persistent play/pause toggle for ambient video previews. */
   showPlaybackControl?: boolean;
-  /** Optional visual treatment for the mute/audio control. */
-  controlVariant?: MediaControlVariant;
   /** Keeps ambient videos poster-only until the user explicitly starts playback. */
   deferVideoLoadUntilPlay?: boolean;
   /** Notifies callers when the ambient playback control changes state. */
@@ -396,7 +361,6 @@ export function VideoCardPlayer({
   mediaHeight,
   muteControlVisibility = "auto",
   showPlaybackControl = false,
-  controlVariant = "default",
   deferVideoLoadUntilPlay = false,
   onPlaybackStateChange,
   stickyAutoplay = false,
@@ -530,7 +494,6 @@ export function VideoCardPlayer({
       mediaHeight={mediaHeight}
       muteControlVisibility={muteControlVisibility}
       showPlaybackControl={showPlaybackControl}
-      controlVariant={controlVariant}
       deferVideoLoadUntilPlay={deferVideoLoadUntilPlay}
       onPlaybackStateChange={onPlaybackStateChange}
       stickyAutoplay={stickyAutoplay}
@@ -673,7 +636,6 @@ interface VideoCardPlayerInnerProps {
   mediaHeight?: number | null;
   muteControlVisibility: MuteControlVisibility;
   showPlaybackControl: boolean;
-  controlVariant: MediaControlVariant;
   deferVideoLoadUntilPlay: boolean;
   onPlaybackStateChange?: (isPlaying: boolean) => void;
   stickyAutoplay: boolean;
@@ -703,7 +665,6 @@ function VideoCardPlayerInner({
   mediaHeight,
   muteControlVisibility,
   showPlaybackControl,
-  controlVariant,
   deferVideoLoadUntilPlay,
   onPlaybackStateChange,
   stickyAutoplay,
@@ -1127,11 +1088,7 @@ function VideoCardPlayerInner({
           onDragStart={disableNativeDrag ? handleNativeDragStart : undefined}
         />
 
-        <MuteButton
-          videoRef={videoRef}
-          showMuteControl={showMuteControl}
-          controlVariant={controlVariant}
-        />
+        <MuteButton videoRef={videoRef} showMuteControl={showMuteControl} />
         {hasError && fallback ? (
           <MediaFallback fallback={fallback} className="z-20 bg-black/25 backdrop-blur-sm" />
         ) : hasError && showPlaybackToggle ? (
@@ -1154,7 +1111,7 @@ function VideoCardPlayerInner({
             <button
               type="button"
               data-carousel-control="true"
-              className="absolute bottom-3 left-1/2 z-[12] inline-flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/20 bg-black/52 min-h-11 px-3 py-2 text-xs font-medium text-white shadow-lg transition-colors hover:bg-black/62 sm:bottom-4"
+              className="absolute bottom-2 left-1/2 z-[12] inline-flex h-11 w-11 -translate-x-1/2 items-center justify-center rounded-full text-white before:absolute before:inset-1.5 before:rounded-full before:bg-brand-green-950/75 before:ring-1 before:ring-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold-300"
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -1173,11 +1130,10 @@ function VideoCardPlayerInner({
               aria-label={!isPlaying ? "Play video" : "Pause video"}
             >
               {!isPlaying ? (
-                <Play className="h-3.5 w-3.5 fill-white" />
+                <Play className="relative h-4 w-4 fill-white" aria-hidden="true" />
               ) : (
-                <Pause className="h-3.5 w-3.5 fill-white" />
+                <Pause className="relative h-4 w-4 fill-white" aria-hidden="true" />
               )}
-              <span>{!isPlaying ? "Play" : "Pause"}</span>
             </button>
             {tapIndicator ? (
               <FeedTapIndicator key={tapIndicator.key} action={tapIndicator.action} />
@@ -1586,12 +1542,12 @@ function HoverVideoPlayer({
         </button>
       ) : null}
 
-      {/* YouTube-style red progress bar during hover playback */}
+      {/* The quiet 2 px white line, as on every player, during hover playback */}
       {isHovering && videoReady && !hasError && !reducedMotion ? (
-        <div className="absolute bottom-0 left-0 z-[9] h-[3px] w-full bg-white/20">
+        <div className="absolute bottom-0 left-0 z-[9] h-0.5 w-full bg-white/25">
           <div
             className={cn(
-              "h-full bg-red-600 transition-[width] duration-200 ease-linear",
+              "h-full bg-white/75 transition-[width] duration-200 ease-linear",
               getProgressWidthClassName(hoverProgress)
             )}
           />

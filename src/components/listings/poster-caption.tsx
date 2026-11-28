@@ -73,12 +73,6 @@ const POST_CAPTION_SCRIM =
   "bg-[linear-gradient(to_top,rgb(0_0_0/0.8),rgb(0_0_0/0.65)_calc(100%_-_2.5rem),transparent)] pt-10";
 
 /**
- * Over a video the caption moves up above the controls and stays under the
- * play button, which draws over it.
- */
-export const POST_CAPTION_ABOVE_CONTROLS = "bottom-16 z-[5]";
-
-/**
  * Phones only (below `md`): from `md` up the post's heading and price are
  * already on the first screen, beside or just under the photo.
  */
@@ -111,8 +105,8 @@ export function useMediaPlaying(mediaKey: string) {
 /**
  * The showroom card's caption over a post page's main photo (phones). It
  * repeats the page heading, so screen readers skip it; taps go through to the
- * photo or video under it. Over a video it sits above the controls and fades
- * while the video plays, like the card's.
+ * photo under it. Over a video it is not drawn: the video keeps a clear
+ * picture and the page's heading follows under it.
  */
 export function PostMediaCaption({
   eyebrow,
@@ -129,6 +123,7 @@ export function PostMediaCaption({
   overVideo?: boolean;
   playing?: boolean;
 }) {
+  if (overVideo) return null;
   return (
     <div
       aria-hidden="true"
@@ -137,7 +132,7 @@ export function PostMediaCaption({
         "pointer-events-none absolute inset-x-0 flex items-end gap-2 px-2.5 pb-3 text-white transition-opacity duration-300 motion-reduce:transition-none",
         POST_CAPTION_SCRIM,
         POST_CAPTION_PHONE_ONLY,
-        overVideo ? POST_CAPTION_ABOVE_CONTROLS : "bottom-0 z-[15]",
+        "bottom-0 z-[15]",
         playing ? "opacity-0" : "opacity-100"
       )}
     >

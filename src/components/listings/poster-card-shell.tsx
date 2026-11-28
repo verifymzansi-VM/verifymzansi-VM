@@ -38,7 +38,6 @@ function CardMediaPlaceholder() {
 }
 
 type PosterCardVariant = "default" | "showcase" | "hero";
-type MediaControlVariant = "default" | "hero";
 
 interface PosterCardShellProps {
   /** Homepage media-only card with fading details over the image. */
@@ -98,8 +97,6 @@ interface PosterCardShellProps {
   stickyAutoplay?: boolean;
   /** Visual treatment used by homepage refresh surfaces. */
   cardVariant?: PosterCardVariant;
-  /** Optional hero-specific chrome for media controls. */
-  mediaControlVariant?: MediaControlVariant;
   /** Makes the entire card surface clickable even when playback controls are shown. */
   makeEntireCardClickable?: boolean;
   /** Prevents the browser from treating card surfaces as native drag sources. */
@@ -156,7 +153,6 @@ export function PosterCardShell({
   cardVariant = "default",
   viewTarget,
   viewSurface,
-  mediaControlVariant = "default",
   makeEntireCardClickable = false,
   disableNativeDrag: disableNativeDragProp = false,
   feedPlaybackActive = true,
@@ -381,7 +377,6 @@ export function PosterCardShell({
               onEnded={onVideoEnded}
               showPlaybackControl={showPlaybackControl}
               stickyAutoplay={stickyAutoplay}
-              controlVariant={mediaControlVariant}
               feedPlaybackActive={feedPlaybackActive}
               deferVideoLoadUntilPlay={deferVideoLoadUntilPlay}
               disableNativeDrag={disableNativeDrag}

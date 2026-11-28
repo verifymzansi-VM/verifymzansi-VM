@@ -2,17 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
+import { VideoSoundButton } from "@/components/ui/video-sound-button";
 import { useGlobalMute } from "@/hooks/use-global-mute";
-import {
-  ChevronLeft,
-  ChevronRight,
-  Maximize2,
-  Pause,
-  Play,
-  Volume2,
-  VolumeX,
-  X,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight, Maximize2, Pause, Play, X } from "lucide-react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { cn } from "@/lib/utils";
 import { triggerHaptic } from "@/lib/utils/haptics";
@@ -494,6 +486,9 @@ export function MediaLightbox({ items, startIndex = 0, isOpen, onClose }: MediaL
                     />
                   )}
 
+                  {/* The shared sound button, top centre, as on every player. */}
+                  <VideoSoundButton muted={isMuted} onToggle={toggleMute} />
+
                   {/* video controls overlay */}
                   <div className="absolute bottom-4 right-4 z-20 flex items-center gap-2">
                     <button
@@ -510,17 +505,6 @@ export function MediaLightbox({ items, startIndex = 0, isOpen, onClose }: MediaL
                       ) : (
                         <Play className="h-5 w-5 fill-white" />
                       )}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleMute();
-                      }}
-                      className="rounded-full bg-black/60 p-2.5 text-white transition-colors hover:bg-black/80"
-                      aria-label={isMuted ? "Unmute" : "Mute"}
-                    >
-                      {isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
                     </button>
                     <button
                       type="button"

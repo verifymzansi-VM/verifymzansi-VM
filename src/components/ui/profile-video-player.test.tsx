@@ -83,16 +83,27 @@ describe("ProfileVideoPlayer", () => {
     render(<ProfileVideoPlayer src="/video.mp4" title="Profile clip" poster="/poster.jpg" />);
 
     const fullscreenButton = screen.getByRole("button", { name: "Fullscreen" });
-    const volumeSlider = screen.getByLabelText("Volume");
     const video = screen.getByLabelText("Profile clip video");
 
     expect(fullscreenButton).toBeInTheDocument();
-    expect(volumeSlider).not.toHaveClass("sm:block");
 
     fireEvent.click(fullscreenButton);
     expect(requestFullscreenMock).toHaveBeenCalledWith();
     expect(video).toBeInTheDocument();
     expect(video).toHaveClass("object-contain");
+  });
+
+  it("keeps only the calm controls: shared sound button, full screen and the thin line", () => {
+    render(<ProfileVideoPlayer src="/video.mp4" title="Profile clip" />);
+    const sound = screen.getByRole("button", { name: "Turn sound on" });
+    expect(sound).toHaveAttribute("data-video-sound");
+    expect(sound).toHaveClass("left-1/2", "top-1");
+    expect(screen.queryByRole("button", { name: /Rewind|Forward/ })).toBeNull();
+    expect(screen.queryByLabelText("Volume")).toBeNull();
+    expect(screen.queryByText(/\d:\d\d \/ \d:\d\d/)).toBeNull();
+    expect(screen.getByRole("slider", { name: "Seek playback" })).not.toHaveClass(
+      "accent-brand-red"
+    );
   });
 
   it("serves the native video poster through the media proxy", () => {
@@ -238,7 +249,8 @@ describe("ProfileVideoPlayer", () => {
     video.pause = pauseMock;
 
     fireEvent.play(video);
-    fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+    // Tapping the picture pauses.
+    fireEvent.click(video);
 
     expect(pauseMock).toHaveBeenCalled();
     expect(managerMock.updateVisibility).toHaveBeenCalledWith(video, 0);
@@ -250,7 +262,7 @@ describe("ProfileVideoPlayer", () => {
     expect(playMock).toHaveBeenCalled();
   });
 
-  it("shows the time and length, and seeks from a 24 px tall bar", () => {
+  it("states the time and length, and seeks from a 24 px tall line", () => {
     render(<ProfileVideoPlayer src="/video.mp4" title="Profile clip" />);
     const video = screen.getByLabelText("Profile clip video") as HTMLVideoElement;
     Object.defineProperty(video, "duration", { configurable: true, get: () => 45 });
@@ -264,13 +276,19 @@ describe("ProfileVideoPlayer", () => {
     });
     fireEvent.loadedMetadata(video);
 
-    expect(screen.getByText("0:12 / 0:45")).toBeInTheDocument();
+    expect(screen.getByRole("slider", { name: "Seek playback" })).toHaveAttribute(
+      "aria-valuetext",
+      "0:12 of 0:45"
+    );
     const bar = screen.getByRole("slider", { name: "Seek playback" });
     expect(Number.parseFloat(window.getComputedStyle(bar).height)).toBeGreaterThanOrEqual(24);
 
     fireEvent.change(bar, { target: { value: "30" } });
     expect(position).toBe(30);
-    expect(screen.getByText("0:30 / 0:45")).toBeInTheDocument();
+    expect(screen.getByRole("slider", { name: "Seek playback" })).toHaveAttribute(
+      "aria-valuetext",
+      "0:30 of 0:45"
+    );
   });
 
   it("reads the length of a video that loaded before the page was interactive", () => {
@@ -289,7 +307,10 @@ describe("ProfileVideoPlayer", () => {
     try {
       // No loadedmetadata event reaches the player: it already happened.
       render(<ProfileVideoPlayer src="/video.mp4" title="Profile clip" />);
-      expect(screen.getByText("0:00 / 0:45")).toBeInTheDocument();
+      expect(screen.getByRole("slider", { name: "Seek playback" })).toHaveAttribute(
+        "aria-valuetext",
+        "0:00 of 0:45"
+      );
       expect(screen.getByRole("slider", { name: "Seek playback" })).toHaveAttribute("max", "45");
     } finally {
       for (const [name, descriptor] of Object.entries(descriptors)) {
