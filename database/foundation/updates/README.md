@@ -82,8 +82,8 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Posting form display fields; business numbers from the verified phone, 28 November 2026
 
-`20261128012529_posting_form_display_fields.sql` is pending (see the applied
-register). The posting forms batch (launch checklist item 84, ledger group 955).
+`20261128012529_posting_form_display_fields.sql` was applied on 28 November 2026
+(see the applied register). The posting forms batch (launch checklist item 84, ledger group 956).
 
 - **New display keys on the public read.**
   `internal.public_post_presentation_data` (full body) lists the new details the
@@ -9188,6 +9188,9 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   website-first (after the #395 deploy); production fingerprint after it
   (fingerprint.sql, read-only, 02:10 UTC) matched the full replay (except the
   known schema grant difference)
-- `20261128012529_posting_form_display_fields.sql`: pending; apply-first
+- `20261128012529_posting_form_display_fields.sql`: applied 2026-11-28 06:21 UTC;
+  apply-first; preflight before it: not applied, 0 business posts with a
+  different stored number; production fingerprint after it (fingerprint.sql,
+  read-only) matched the full replay (except the known schema grant difference)
 
 <!-- applied-register:end -->
