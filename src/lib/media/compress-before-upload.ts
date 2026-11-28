@@ -130,7 +130,7 @@ async function transcode(
     ]);
   } catch (error) {
     if (timeout.timedOut()) throw new VideoTranscodeError(VIDEO_TOO_SLOW_MESSAGE);
-    console.warn(`[video] ${mode === "remuxed" ? "remux" : "conversion"} failed`, error);
+    console.warn("[video] preparation failed", { mode, error });
     throw new VideoTranscodeError();
   } finally {
     timeout.cancel();
