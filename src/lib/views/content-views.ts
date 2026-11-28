@@ -11,7 +11,10 @@
  */
 
 import type { ContentTargetType } from "@/lib/engagement";
-import { obtainViewerIdentifier } from "@/components/engagement/viewer-challenge";
+import {
+  RETRY_AFTER_FAILURE_MS,
+  obtainViewerIdentifier,
+} from "@/components/engagement/viewer-challenge";
 
 export type ViewSource = "video" | "page";
 
@@ -95,6 +98,22 @@ function forgetMarker(key: string, previous: SentMarker | null) {
   }
 }
 
+/**
+ * The server did not count these views because the browser has no identifier
+ * yet (`needs_challenge`) and the check could not finish. Their stored
+ * markers are forgotten, so the next open of the page sends them again; until
+ * the check may run again (10 minutes) a memory-only hold keeps this page from
+ * sending them on every scroll. A reload starts afresh.
+ */
+function holdUntilChallengeRetry(batch: Pending[]) {
+  const at = Date.now() - (VIEW_WINDOW_MS - RETRY_AFTER_FAILURE_MS);
+  for (const pending of batch) {
+    const key = markerKey(pending.event);
+    forgetMarker(key, pending.previous);
+    if (!pending.previous) memoryMarkers.set(key, { at, engaged: Boolean(pending.event.engaged) });
+  }
+}
+
 function announce(event: ContentViewEvent) {
   window.dispatchEvent(
     new CustomEvent(VIEW_RECORDED_EVENT, { detail: { targetId: event.id, targetType: event.type } })
@@ -126,8 +145,12 @@ async function send(batch: Pending[], useBeacon: boolean, again = false): Promis
     } | null;
     // A first visit: the browser has no signed identifier yet. Get one (a
     // Turnstile check) and send the views once more.
-    if (payload?.needs_challenge && !again && (await obtainViewerIdentifier()))
-      return send(batch, false, true);
+    if (payload?.needs_challenge) {
+      if (!again && (await obtainViewerIdentifier())) return send(batch, false, true);
+      holdUntilChallengeRetry(batch);
+      batch.forEach((pending) => pending.resolve(false));
+      return;
+    }
     // The server lists each post it counted as a new view once; credit it to
     // the first event for that post so the page number moves by exactly one.
     const counted = new Set(payload?.counted ?? []);

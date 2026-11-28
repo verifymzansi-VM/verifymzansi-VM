@@ -47,3 +47,15 @@ export function maskEmail(email: string): string {
   if (!domain || !local || local.length < 2) return `***@${domain || "***"}`;
   return `${local[0]}***${local[local.length - 1]}@${domain}`;
 }
+
+/**
+ * A South African number masked the way the posting forms show the verified
+ * number: the first two digits and the last four.
+ * @example maskLocalPhone("+27821234567") → "08• ••• 4567"
+ */
+export function maskLocalPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  const local = digits.startsWith("27") ? `0${digits.slice(2)}` : digits;
+  if (local.length < 6) return "••• ••• ••••";
+  return `${local.slice(0, 2)}• ••• ${local.slice(-4)}`;
+}

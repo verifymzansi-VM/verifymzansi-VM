@@ -33,6 +33,12 @@ vi.mock("@/hooks/use-toast", () => ({
   useToast: vi.fn(),
 }));
 
+// Call and WhatsApp use the account's verified number.
+const authMock = vi.hoisted(() => ({ phone: "0821234567" as string | null }));
+vi.mock("@/hooks/use-auth", () => ({
+  useAuth: () => ({ user: { id: "user-1" }, profile: { phone: authMock.phone }, isLoading: false }),
+}));
+
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: { children: React.ReactNode; href: string }) => (
     <a href={href} {...props}>
@@ -171,6 +177,7 @@ describe("EditPromotionPage", () => {
     planGateMock.maxPhotos = 5;
     planGateMock.maxVideos = 1;
     planGateMock.videoAllowed = true;
+    authMock.phone = "0821234567";
     (useRouter as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ push: mockPush });
     (useParams as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ id: "promotion-1" });
     (useToast as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ toast: mockToast });
@@ -186,7 +193,7 @@ describe("EditPromotionPage", () => {
       expect(screen.getByDisplayValue("Night Market")).toBeInTheDocument();
     });
     expect(screen.getByLabelText("Free entry")).toBeChecked();
-    expect(screen.queryByLabelText(/Starting entry price/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Entry price from/)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
     await waitFor(() => {
@@ -290,7 +297,8 @@ describe("EditPromotionPage", () => {
     fireEvent.change(screen.getByLabelText("Facebook (Optional)"), {
       target: { value: "facebook.com/nightmarket" },
     });
-    expect(screen.getByLabelText("Recurring")).toHaveValue("monthly");
+    // Recurring is no longer asked, but an edit keeps the saved answer.
+    expect(screen.queryByLabelText("Recurring")).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Rain policy"), { target: { value: "postponed" } });
     fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
 
@@ -439,5 +447,101 @@ describe("EditPromotionPage", () => {
 
     expect(await screen.findByText("At least one photo or video is required.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Save Changes/i })).toBeDisabled();
+  });
+  it("round-trips the new event details and keeps answers the form no longer asks", async () => {
+    mockEditPromotionFetch({
+      event_details: {
+        event_type: "market_expo",
+        age_restriction: "18_plus",
+        dress_code: "Smart casual",
+        group_discount_available: true,
+        doors_open: "17:30",
+        ticket_sales: "both",
+        gate_payment: ["card"],
+        refund_policy: "full_until_days",
+        refund_days: 5,
+        social_links: { youtube: "https://youtube.com/@nightmarket" },
+      },
+    });
+    render(<EditPromotionPage />);
+    await termsLoaded();
+    await waitFor(() => expect(screen.getByDisplayValue("Night Market")).toBeInTheDocument());
+
+    // Loaded and shown.
+    expect(screen.getByLabelText("Doors open (Optional)")).toHaveValue("17:30");
+    expect(screen.getByLabelText("Online and at the door")).toBeChecked();
+    expect(screen.getByLabelText("Card")).toBeChecked();
+    expect(screen.getByLabelText("Refunds (Optional)")).toHaveValue("full_until_days");
+    expect(screen.getByLabelText(/Full refund until/)).toHaveValue(5);
+    expect(screen.getByDisplayValue("https://youtube.com/@nightmarket")).toBeInTheDocument();
+    expect(screen.getByText("ID will be checked at the door")).toBeInTheDocument();
+    expect(
+      screen.getByText("Ends at midnight? Choose the next day and 00:00.")
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Video up to 1 min/)).toBeInTheDocument();
+    // Removed inputs.
+    expect(screen.queryByLabelText(/Dress Code/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Group discounts/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText("Cash"));
+    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    const payload = JSON.parse(fetchMock.mock.calls[2][1].body as string);
+    expect(payload.event_details).toMatchObject({
+      doors_open: "17:30",
+      ticket_sales: "both",
+      gate_payment: ["card", "cash"],
+      refund_policy: "full_until_days",
+      refund_days: 5,
+      dress_code: "Smart casual",
+      group_discount_available: true,
+      social_links: { youtube: "https://youtube.com/@nightmarket" },
+    });
+  });
+
+  it("shows contact switches using the verified number, with no typed number", async () => {
+    render(<EditPromotionPage />);
+    await termsLoaded();
+    await waitFor(() => expect(screen.getByDisplayValue("Night Market")).toBeInTheDocument());
+
+    expect(screen.getByRole("switch", { name: "Call" })).toBeChecked();
+    expect(screen.getByRole("switch", { name: "WhatsApp" })).not.toBeChecked();
+    expect(screen.getByRole("switch", { name: "Contact form" })).toBeChecked();
+    expect(screen.getByText("Enquiries arrive in your VerifyMzansi inbox")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Phone number/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("switch", { name: "WhatsApp" }));
+    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    const payload = JSON.parse(fetchMock.mock.calls[2][1].body as string);
+    expect(payload.contact_methods).toEqual(["call", "form", "whatsapp"]);
+  });
+
+  it("does not send Call when the account has no verified number", async () => {
+    authMock.phone = null;
+    render(<EditPromotionPage />);
+    await termsLoaded();
+    await waitFor(() => expect(screen.getByDisplayValue("Night Market")).toBeInTheDocument());
+
+    expect(screen.getByRole("switch", { name: "Call" })).toBeDisabled();
+    expect(screen.getAllByRole("link", { name: "Verify a number" }).length).toBe(2);
+    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    const payload = JSON.parse(fetchMock.mock.calls[2][1].body as string);
+    expect(payload.contact_methods).toEqual(["form"]);
+  });
+
+  it("shows the entry as Free or Paid from R", async () => {
+    render(<EditPromotionPage />);
+    await termsLoaded();
+    await waitFor(() => expect(screen.getByDisplayValue("Night Market")).toBeInTheDocument());
+
+    expect(screen.getByLabelText("Paid entry")).toBeChecked();
+    expect(screen.getByLabelText("Entry price from (R)")).toHaveValue(50);
+    expect(screen.queryByText(/This is separate from posting/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Free entry"));
+    expect(screen.queryByLabelText("Entry price from (R)")).not.toBeInTheDocument();
+    // Paid-only answers are hidden for a free event.
+    expect(screen.queryByLabelText("Refunds (Optional)")).not.toBeInTheDocument();
   });
 });

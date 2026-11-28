@@ -430,7 +430,12 @@ function HoursTable({ hours }: { hours: NonNullable<FeedSlide["headline"]["hours
     { key: "Mon_Fri", label: "Monday to Friday" },
     { key: "Sat", label: "Saturday" },
     { key: "Sun", label: "Sunday" },
+    { key: "Public_holidays", label: "Public holidays" },
   ] as const;
+  // A day already reading "By appointment" says it; otherwise one extra line.
+  const appointmentLine =
+    hours.By_appointment &&
+    !(["Mon_Fri", "Sat", "Sun"] as const).some((key) => hours[key] === "By appointment");
   return (
     <dl className="divide-y divide-[color:var(--viewer-border)] text-sm">
       {rows
@@ -460,6 +465,12 @@ function HoursTable({ hours }: { hours: NonNullable<FeedSlide["headline"]["hours
             </dd>
           </div>
         ))}
+      {appointmentLine ? (
+        <div className="flex items-center justify-between gap-4 py-2">
+          <dt className="text-[color:var(--viewer-muted)]">By appointment</dt>
+          <dd className="text-right font-medium text-[color:var(--viewer-foreground)]">Yes</dd>
+        </div>
+      ) : null}
     </dl>
   );
 }

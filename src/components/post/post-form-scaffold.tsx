@@ -6,7 +6,6 @@ import {
   Building2,
   Check,
   CloudUpload,
-  Lightbulb,
   Loader2,
   ShoppingBag,
   TreePalm,
@@ -87,8 +86,10 @@ interface PostFormScaffoldProps {
   badgeClassName?: string;
   /** Product area colour. Inferred from `badgeLabel` when omitted. */
   area?: PostFormArea;
+  /** @deprecated The step guide was removed (one line under the title is enough). */
   guideTitle?: string;
-  guideDescription: string;
+  /** @deprecated The step guide was removed (one line under the title is enough). */
+  guideDescription?: string;
   steps: readonly PostFormStep[];
   currentStep: number;
   error?: string | null;
@@ -134,8 +135,6 @@ export function PostFormScaffold({
   breadcrumbs,
   badgeLabel,
   area: areaProp,
-  guideTitle = "Quick guide",
-  guideDescription,
   steps,
   currentStep,
   error,
@@ -201,10 +200,6 @@ export function PostFormScaffold({
               Change
             </Link>
           </div>
-          <p className="text-sm text-muted-foreground">
-            Complete fields marked Required. You can leave Optional fields blank. Use the
-            question-mark help for examples.
-          </p>
           <div className="flex items-start gap-4">
             <span
               aria-hidden="true"
@@ -390,19 +385,10 @@ export function PostFormScaffold({
               </div>
             </div>
             <div className="space-y-6 px-4 pb-6 pt-5 sm:px-6">
-              {safeStep === 0 ? (
-                <div className="flex items-start gap-2.5 rounded-xl bg-muted/60 px-3 py-2.5 text-sm">
-                  <Lightbulb
-                    className="mt-0.5 h-4 w-4 shrink-0 text-brand-gold-700 dark:text-brand-gold-300"
-                    aria-hidden="true"
-                  />
-                  <p className="leading-6 text-muted-foreground">
-                    <span className="font-semibold text-foreground">{guideTitle}</span>
-                    <span aria-hidden="true">: </span>
-                    <span className="sr-only">. </span>
-                    {guideDescription}
-                  </p>
-                </div>
+              {safeStep === steps.length - 1 ? (
+                <p className="rounded-xl bg-muted/60 px-3 py-2.5 text-sm text-muted-foreground">
+                  Nothing goes live until our team has reviewed it.
+                </p>
               ) : null}
               {children}
             </div>
@@ -516,7 +502,7 @@ export function PostDraftStatus({ lastSavedAt, onDiscard }: PostDraftStatusProps
 }
 
 const ACTION_BAR_CLASS =
-  "sticky bottom-0 z-30 -mx-4 flex items-center gap-3 border-t border-border/70 bg-background/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:bottom-4 sm:mx-0 sm:rounded-2xl sm:border sm:bg-card/95 sm:py-3 sm:elev-md";
+  "sticky bottom-0 z-30 -mx-4 flex items-center justify-between gap-3 [@media(max-height:720px)]:static border-t border-border/70 bg-background/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:bottom-4 sm:mx-0 sm:rounded-2xl sm:border sm:bg-card/95 sm:py-3 sm:elev-md";
 
 interface PostEditActionBarProps {
   onCancel: () => void;
@@ -604,10 +590,6 @@ export function PostFormFooter({
         Back
       </Button>
 
-      <p className="hidden flex-1 text-sm text-muted-foreground sm:block">
-        {isLastStep ? "Nothing goes live until our team has checked it." : null}
-      </p>
-
       {isLastStep ? (
         <Button
           key="submit-action"
@@ -616,7 +598,7 @@ export function PostFormFooter({
           onClick={submitType === "button" ? onSubmitClick : undefined}
           disabled={submitDisabled || isSubmitting}
           aria-busy={isSubmitting}
-          className="h-11 min-w-36 flex-1 gap-2 rounded-full px-6 font-semibold sm:flex-none"
+          className="ml-auto h-11 min-w-36 flex-1 gap-2 rounded-full px-6 font-semibold sm:flex-none"
         >
           {isSubmitting ? (
             <>
@@ -634,7 +616,7 @@ export function PostFormFooter({
           variant="trust-verified"
           onClick={onNext}
           disabled={nextDisabled}
-          className="h-11 flex-1 rounded-full px-8 font-semibold sm:flex-none"
+          className="ml-auto h-11 flex-1 rounded-full px-8 font-semibold sm:flex-none"
         >
           Next
         </Button>

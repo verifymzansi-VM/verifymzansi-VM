@@ -36,6 +36,8 @@ const PER_ITEM_DETAILS = new Set([
   "registration_province",
   "available_from",
   "application_deadline",
+  "occupation_date",
+  "deposit_zar",
   "age_months",
   "quantity",
 ]);

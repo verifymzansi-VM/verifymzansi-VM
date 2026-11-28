@@ -13,3 +13,7 @@ interface _ContentEngagementSnapshot {
 /** The Turnstile action of the check that issues the view-and-like identifier
  * (src/components/engagement/viewer-challenge.tsx, /api/engagement/viewer). */
 export const VIEWER_CHALLENGE_ACTION = "engagement_viewer";
+
+/** Sent with `detail: { pending }` while the "not a robot" check is on screen,
+ * so an open pop-up can step aside (the welcome pop-up does). */
+export const VIEWER_CHECK_EVENT = "vmz:viewer-check";

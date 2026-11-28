@@ -1,7 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { PostFormFooter } from "./post-form-scaffold";
+import { Check } from "lucide-react";
+import { PostFormFooter, PostFormScaffold } from "./post-form-scaffold";
 
 describe("PostFormFooter", () => {
   beforeEach(() => {
@@ -76,5 +77,49 @@ describe("PostFormFooter", () => {
     expect(submitButton).toBeDisabled();
     expect(submitButton).toHaveAttribute("aria-busy", "true");
     expect(container.querySelector("svg")).toBeInTheDocument();
+  });
+});
+
+describe("PostFormScaffold", () => {
+  const steps = [
+    { label: "Details", description: "What it is", icon: Check },
+    { label: "Review", description: "Check and submit", icon: Check },
+  ];
+
+  it("shows one line under the title and no step guide", () => {
+    render(
+      <PostFormScaffold
+        title="Sell an item"
+        description="Required fields are marked."
+        breadcrumbs={[]}
+        badgeLabel="Mzansi Market"
+        steps={steps}
+        currentStep={0}
+      >
+        <p>fields</p>
+      </PostFormScaffold>
+    );
+    expect(screen.getByText("Required fields are marked.")).toBeInTheDocument();
+    expect(screen.queryByText(/Quick guide/)).toBeNull();
+    expect(screen.queryByText(/Complete fields marked Required/)).toBeNull();
+    expect(screen.queryByText(/Nothing goes live/)).toBeNull();
+  });
+
+  it("says nothing goes live before review on the review step, not in the bottom bar", () => {
+    render(
+      <PostFormScaffold
+        title="Sell an item"
+        description="Required fields are marked."
+        breadcrumbs={[]}
+        badgeLabel="Mzansi Market"
+        steps={steps}
+        currentStep={1}
+        footer={<PostFormFooter currentStep={1} totalSteps={2} />}
+      >
+        <p>fields</p>
+      </PostFormScaffold>
+    );
+    const line = screen.getByText("Nothing goes live until our team has reviewed it.");
+    expect(line.closest("[data-post-action-bar]")).toBeNull();
   });
 });

@@ -34,6 +34,41 @@ function postHref(post: SlotPost) {
     : `/post/edit-listing/${post.id}`;
 }
 
+const FREE_SOURCES = new Set<Slot["source"]>([
+  "intro_trial",
+  "staff_grant",
+  "free_credit",
+  "sponsorship",
+]);
+
+/**
+ * Identical slots (same kind, sponsor, state and dates) show as one card with
+ * counts, e.g. "25 free slots, 16 empty", instead of 25 look-alike cards. An
+ * Individual slot is renewed on its own, so it always keeps its own card.
+ */
+function groupSlots(slots: Slot[]): Slot[][] {
+  const groups = new Map<string, Slot[]>();
+  for (const slot of slots) {
+    const key = slot.individual
+      ? `own:${slot.id}`
+      : [
+          slot.source,
+          slot.sponsor ?? "",
+          slot.places,
+          slot.state,
+          slot.starts_at,
+          slot.ends_at,
+        ].join("|");
+    groups.set(key, [...(groups.get(key) ?? []), slot]);
+  }
+  return [...groups.values()];
+}
+
+function groupCount(group: Slot[], empty: number) {
+  const free = FREE_SOURCES.has(group[0]!.source) ? "free " : "";
+  return `${group.length} ${free}slots, ${empty} empty`;
+}
+
 function daysLeft(endsAt: string, now: Date) {
   const days = saCalendarDaysBetween(now, endsAt);
   return days <= 0 ? "Ends today" : days === 1 ? "1 day left" : `${days} days left`;
@@ -127,11 +162,17 @@ export function MySlots({
         )
       ) : (
         <ul className="space-y-3" aria-label="Your slots">
-          {listed.map((slot) => {
+          {groupSlots(listed).map((group) => {
+            const slot = group[0]!;
+            const grouped = group.length > 1;
+            const posts = group.flatMap((each) => each.posts);
             const Icon = SOURCE[slot.source].icon;
             const ended = slot.state === "ended";
             const upcoming = slot.state === "upcoming";
-            const empty = Math.max(0, slot.places - slot.posts.length);
+            const empty = group.reduce(
+              (sum, each) => sum + Math.max(0, each.places - each.posts.length),
+              0
+            );
             const canRenew = individual.verified && !closed && slot.individual && slot.renewable;
             const opensLater =
               individual.verified &&
@@ -163,6 +204,11 @@ export function MySlots({
                             ? `Starts ${formatSaLongDate(slot.starts_at)}`
                             : `Ends ${formatSaLongDate(slot.ends_at)}`}
                       </p>
+                      {grouped ? (
+                        <p className="text-sm font-medium text-foreground">
+                          {groupCount(group, empty)}
+                        </p>
+                      ) : null}
                       {slot.renewed_until && slot.renewals.length > 0 ? (
                         <p className="text-xs font-medium text-brand-green-700 dark:text-brand-gold-300">
                           {`Renewed until ${formatSaLongDate(slot.renewed_until)}`}
@@ -182,7 +228,7 @@ export function MySlots({
                   </span>
                 </div>
                 <ul className="mt-3 space-y-2 border-t border-border/60 pt-3 text-sm">
-                  {slot.posts.map((post) => (
+                  {posts.map((post) => (
                     <li key={post.id} className="flex flex-wrap items-center justify-between gap-2">
                       <Link
                         href={postHref(post)}
@@ -207,7 +253,13 @@ export function MySlots({
                   ))}
                   {!ended && !upcoming && empty > 0 ? (
                     <li className="flex items-center justify-between gap-2 text-muted-foreground">
-                      <span>{empty === 1 ? "Empty" : `${empty} places empty`}</span>
+                      <span>
+                        {grouped
+                          ? `${empty} empty`
+                          : empty === 1
+                            ? "Empty"
+                            : `${empty} places empty`}
+                      </span>
                       <Link
                         href="/post/create"
                         className="inline-flex min-h-11 items-center font-medium text-brand-green-700 underline underline-offset-2 dark:text-brand-gold-300"

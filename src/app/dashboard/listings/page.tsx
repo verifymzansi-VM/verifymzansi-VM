@@ -698,7 +698,7 @@ function ListingList({
       {listings.map((listing) => {
         const isLive = listing.status === "active" || listing.status === "live";
         return (
-          <li key={listing.id}>
+          <li key={listing.id} id={`post-${listing.id}`} className="scroll-mt-28">
             <Card>
               <CardContent className="flex flex-col gap-3 p-4 sm:p-5">
                 <div className="flex items-start gap-3 sm:gap-4">

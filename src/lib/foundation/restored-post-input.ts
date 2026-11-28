@@ -5,11 +5,45 @@ import { promotionSchema } from "../validations/promotion";
 import { parseListingAttributes, parseAttributeMoney } from "../domains/taxonomy/attributes";
 import { postContactSelectionSchema } from "../domains/posts/contact-channels";
 import { storeListingPriceTerms } from "../domains/listings/price-terms";
+import { finishListingAttributes } from "../domains/listings/market-extras";
 import { resolveRestoredLocality } from "./restored-locality";
 import reference from "../domains/taxonomy/reference.json";
 import { isTrustedPlatformMediaUrl } from "../utils/media-url";
 import { buildBusinessMutationPayload } from "@/lib/forms/business-mutation-payload";
 import { getBusinessVenuePhotoUrls } from "../business/venue-photos";
+import { normalizeSaPhone } from "../utils/phone";
+
+export const VERIFIED_NUMBER_ONLY_MESSAGE =
+  "Call and WhatsApp use your verified number. Verify it in your profile, then try again.";
+/** The page was opened before the account's verified number changed. */
+export const VERIFIED_NUMBER_CHANGED_MESSAGE =
+  "Your verified number changed. Refresh the page and try again.";
+
+/**
+ * A business's Call and WhatsApp numbers: always the account's verified
+ * number, never a number typed in the browser. The browser only says which
+ * channels are on (contact_methods); a number it sends must be the verified
+ * one, or the post is refused. An older client without contact_methods turns
+ * a channel on by sending a number.
+ */
+function verifiedBusinessContacts(
+  methods: readonly string[] | undefined,
+  sent: { phone?: string | null; whatsapp?: string | null },
+  verifiedPhone: string | null | undefined
+) {
+  const verified = verifiedPhone || null;
+  for (const number of [sent.phone, sent.whatsapp])
+    if (number && normalizeSaPhone(number) !== verified)
+      throw new RestoredPostInputError(
+        verified ? VERIFIED_NUMBER_CHANGED_MESSAGE : VERIFIED_NUMBER_ONLY_MESSAGE
+      );
+  const on = (method: "call" | "whatsapp", number: string | null | undefined) =>
+    methods ? methods.includes(method) : Boolean(number);
+  return {
+    phone: verified && on("call", sent.phone) ? verified : null,
+    whatsapp: verified && on("whatsapp", sent.whatsapp) ? verified : null,
+  };
+}
 
 const envelope = z.looseObject({
   postRequestId: z.uuid().transform((value) => value.toLowerCase()),
@@ -128,7 +162,9 @@ export function buildRestoredPostInput(
   collection: "listings" | "businesses" | "promotions",
   input: unknown,
   fallbackLocality?: { province: string; city: string },
-  editing = false
+  editing = false,
+  /** The account's verified phone (+27…), the only number a business may show. */
+  verifiedPhone?: string | null
 ) {
   const transport = envelope.parse(input);
   if (editing && transport.expectedRevision === undefined)
@@ -138,7 +174,11 @@ export function buildRestoredPostInput(
     if (!editing && !data.termsAccepted)
       throw new RestoredPostInputError("Accept the posting terms before submitting");
     const pair = resolveRestoredLocality(data.province, data.city);
-    const sourceAttrs = data.attributes as Record<string, unknown>;
+    // Pets choice mirrored to pets_allowed, answers to hidden questions dropped.
+    const sourceAttrs: Record<string, unknown> = finishListingAttributes(
+      data.category,
+      data.attributes as Parameters<typeof finishListingAttributes>[1]
+    );
     const canonical: Record<string, unknown> = {};
     for (const field of reference.listingFields.filter((f) => f.category === data.category)) {
       const value = field.key === "condition" ? data.condition : sourceAttrs[field.sourceKey];
@@ -183,6 +223,15 @@ export function buildRestoredPostInput(
         location_town: data.town || null,
         location_address: data.address || null,
         source_attributes: sourceAttrs,
+        // The seller's links, shown as tappable buttons (public allow-list keys).
+        ...(data.website ? { website: data.website } : {}),
+        ...(data.social_links && Object.values(data.social_links).some(Boolean)
+          ? {
+              social_links: Object.fromEntries(
+                Object.entries(data.social_links).filter(([, url]) => Boolean(url))
+              ),
+            }
+          : {}),
         layout_width: data.videos.length ? (data.media_width ?? null) : null,
         layout_height: data.videos.length ? (data.media_height ?? null) : null,
       },
@@ -230,7 +279,7 @@ export function buildRestoredPostInput(
       trial_days: data.trialDays,
       terms: transport.postingTerms,
       terms_accepted: !editing && data.termsAccepted,
-      contacts: { phone: phone || null, whatsapp: whatsapp || null },
+      contacts: verifiedBusinessContacts(data.contact_methods, { phone, whatsapp }, verifiedPhone),
       ...media(
         [cover_photo, ...gallery_photos].filter((v): v is string => !!v),
         cover_video ? [cover_video] : [],

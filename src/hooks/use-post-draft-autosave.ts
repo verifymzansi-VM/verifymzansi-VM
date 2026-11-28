@@ -22,16 +22,26 @@ async function saveToServer<T>(
   step: number,
   data: T
 ): Promise<void> {
+  // A stalled save gives up, so it can never hold back the delete queued
+  // behind it (the delete after a successful submit).
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), DRAFT_SAVE_TIMEOUT_MS);
   try {
     await fetch("/api/drafts", {
       method: "PUT",
       headers: withCsrfHeaders({ "Content-Type": "application/json", "X-Draft-Account": owner }),
       body: JSON.stringify({ flow: serverFlow(flow), step, data }),
+      signal: controller.signal,
     });
   } catch {
     // Server save is best-effort; localStorage is the primary store.
+  } finally {
+    clearTimeout(timer);
   }
 }
+
+/** How long one draft save to the server may take. */
+export const DRAFT_SAVE_TIMEOUT_MS = 10_000;
 
 // Tourism replaced the promotion wizard; retain its persisted database key.
 function serverFlow(flow: DraftFlow): DraftFlow {
@@ -63,9 +73,11 @@ async function loadFromServer<T>(
 
 async function deleteFromServer(flow: DraftFlow, owner: string): Promise<void> {
   try {
+    // keepalive: the form navigates away straight after a successful submit.
     await fetch(`/api/drafts?flow=${encodeURIComponent(serverFlow(flow))}`, {
       method: "DELETE",
       headers: withCsrfHeaders({ "X-Draft-Account": owner }),
+      keepalive: true,
     });
   } catch {
     // Best-effort.
@@ -101,9 +113,16 @@ export function usePostDraftAutosave<T>(
     saveDraft<T>(flow, userId, step, data);
   }, 800);
 
+  // Server requests run one after another, so a save still on its way can
+  // never land after the delete that follows a successful submit.
+  const serverQueue = useRef<Promise<void>>(Promise.resolve());
+  const queueServer = useCallback((request: () => Promise<void>) => {
+    serverQueue.current = serverQueue.current.then(request, request);
+  }, []);
+
   const serverSync = useDebouncedCallback((step: number, data: T) => {
     if (!userId || !enabled || !restoreRef.current?.canSync) return;
-    void saveToServer<T>(flow, userId, step, data);
+    queueServer(() => saveToServer<T>(flow, userId, step, data));
   }, 5_000);
 
   const saveAll = useCallback(
@@ -150,8 +169,8 @@ export function usePostDraftAutosave<T>(
     serverSync.cancel();
     restoreRef.current = null;
     clearDraft(flow, userId);
-    void deleteFromServer(flow, userId);
-  }, [userId, flow, save, serverSync]);
+    queueServer(() => deleteFromServer(flow, userId));
+  }, [userId, flow, save, serverSync, queueServer]);
 
   /* Cancel pending saves on unmount */
   useEffect(

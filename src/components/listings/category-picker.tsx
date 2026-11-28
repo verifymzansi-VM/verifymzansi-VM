@@ -12,8 +12,9 @@ import { Input } from "@/components/ui/input";
 import { PostLabel as Label } from "@/components/post/post-label";
 import { FieldHelp } from "@/components/post/field-help";
 import { POST_FIELD_GUIDANCE } from "@/lib/forms/post-guidance";
+import { MEET_SAFELY_LINE } from "@/lib/domains/listings/market-extras";
 import { cn } from "@/lib/utils";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { Check, ChevronDown } from "lucide-react";
 
 /* ─── Collapsible field groups by category ──────────────────────── */
 const COLLAPSIBLE_GROUPS: Partial<Record<ListingCategory, { label: string; fields: string[] }[]>> =
@@ -65,6 +66,8 @@ export function CategoryPicker({
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const categoryLabelId = `${useId()}-category-label`;
   const selectedCategory = CATEGORIES.find((c) => c.value === expanded);
+  // Fields kept only for search and older posts are not asked here.
+  const formFields = selectedCategory?.attributeFields.filter((f) => !f.formHidden) ?? [];
 
   function handleSelect(cat: CategoryDefinition) {
     setExpanded(cat.value);
@@ -112,12 +115,6 @@ export function CategoryPicker({
       <p id={categoryLabelId} className="text-sm font-medium leading-none">
         What are you listing? (Required)
       </p>
-
-      <FieldHelp label="market category">
-        Choose the item you are advertising. Property is for sales and residential rentals. Holiday
-        stays belong in Tourism. Jobs are vacancies; if you provide services, create a business
-        profile instead.
-      </FieldHelp>
       {/* Category Grid */}
       <div
         role="group"
@@ -161,15 +158,31 @@ export function CategoryPicker({
                 {cat.label}
               </span>
               {isSelected && (
-                <ChevronRight className="absolute right-2 top-2 h-4 w-4 text-brand-green" />
+                <span className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-brand-green text-white">
+                  <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                </span>
+              )}
+              {isSelected && (
+                <span className="text-[11px] font-semibold text-brand-green">Selected</span>
               )}
             </button>
           );
         })}
       </div>
 
+      {selectedCategory && (
+        <p
+          role="status"
+          className="flex items-center gap-1.5 text-sm font-medium text-brand-green"
+          data-selected-category
+        >
+          <Check className="h-4 w-4" aria-hidden="true" />
+          Category: {selectedCategory.label}
+        </p>
+      )}
+
       {/* Expanded Attribute Fields */}
-      {selectedCategory && selectedCategory.attributeFields.length > 0 && (
+      {selectedCategory && formFields.length > 0 && (
         <div className="rounded-xl border border-brand-green/30 bg-brand-green/5 p-3 space-y-3 animate-in fade-in-0 slide-in-from-top-2 duration-300">
           <p className="text-sm font-semibold text-brand-green flex items-center gap-1.5">
             <selectedCategory.icon className="h-4 w-4" />
@@ -195,26 +208,20 @@ export function CategoryPicker({
             </p>
           )}
 
-          {/* Required field legend */}
-          <p className="text-xs text-muted-foreground">
-            Fields marked <span className="font-medium text-foreground">*</span> are required.
-            Optional fields help your listing stand out.
-          </p>
-
           {(() => {
             const groups = COLLAPSIBLE_GROUPS[selectedCategory.value as ListingCategory] ?? [];
             // Required questions are never hidden inside a collapsed group.
             const isRequiredField = (name: string) =>
-              selectedCategory.attributeFields.some((f) => f.name === name && f.required);
+              formFields.some((f) => f.name === name && f.required);
             const groupedFieldNames = new Set(
               groups.flatMap((g) => g.fields).filter((name) => !isRequiredField(name))
             );
-            const mainFields = selectedCategory.attributeFields.filter(
+            const mainFields = formFields.filter(
               (f) => !groupedFieldNames.has(f.name) && isConditionallyVisible(f)
             );
 
             function renderField(field: AttributeField) {
-              return (
+              const input = (
                 <AttributeInput
                   key={field.name}
                   field={field}
@@ -232,6 +239,15 @@ export function CategoryPicker({
                   error={errors[`attributes.${field.name}`]}
                 />
               );
+              if (field.name !== "delivery_methods") return input;
+              return (
+                <div key={field.name} className="space-y-2 sm:col-span-2">
+                  {input}
+                  <p className="text-xs text-muted-foreground" data-meet-safely>
+                    {MEET_SAFELY_LINE}
+                  </p>
+                </div>
+              );
             }
 
             return (
@@ -243,7 +259,7 @@ export function CategoryPicker({
                 )}
                 {groups.map((group) => {
                   const groupFields = group.fields
-                    .map((name) => selectedCategory.attributeFields.find((f) => f.name === name))
+                    .map((name) => formFields.find((f) => f.name === name))
                     .filter(
                       (f): f is AttributeField => !!f && !f.required && isConditionallyVisible(f)
                     );
@@ -410,6 +426,27 @@ function AttributeInput({
         </div>
       );
 
+    case "date":
+      return (
+        <div className="space-y-1.5">
+          <Label htmlFor={inputId}>
+            {field.label} {field.required && "*"}
+          </Label>
+          <Input
+            id={inputId}
+            data-listing-attribute={field.name}
+            type="date"
+            value={value as string}
+            onChange={(e) => onChange(e.target.value)}
+            required={field.required}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={describedBy}
+            className={cn(error && "border-destructive")}
+          />
+          {errorNode}
+        </div>
+      );
+
     case "boolean":
       return (
         <div className="space-y-1">
@@ -450,6 +487,7 @@ function AttributeInput({
             id={inputId}
             data-listing-attribute={field.name}
             placeholder={field.placeholder}
+            maxLength={field.maxLength}
             value={value as string}
             onChange={(e) => onChange(e.target.value)}
             required={field.required}

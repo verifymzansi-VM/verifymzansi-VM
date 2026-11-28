@@ -1,6 +1,8 @@
 "use client";
 import { getBusinessVenuePhotoUrls } from "@/lib/business/venue-photos";
 import { CustomerAccessSummary } from "@/components/business/customer-access-summary";
+import { PostLinks } from "@/components/listings/post-links";
+import { isVisitOnlyDetails } from "@/lib/forms/business-form";
 
 import { VideoViewTracker } from "@/components/ui/video-view-tracker";
 
@@ -11,7 +13,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Eye,
-  Globe,
   MapPin,
   Maximize2,
   Play,
@@ -62,7 +63,6 @@ import {
   getBusinessQuickFacts,
   getSubcategoryLabel,
   getTourismSpotlightFacts,
-  SOCIAL_LABELS,
 } from "@/lib/presentation/business-facts";
 import { placeLine } from "@/lib/utils/place-line";
 import { SHOW_ENGAGEMENT_TOTALS } from "@/lib/hidden-features";
@@ -514,7 +514,7 @@ export function UnifiedLayout({
     business.category_details
   );
   const bookingUrl =
-    family === "tourism" && typeof tourismDetails.booking_url === "string"
+    typeof tourismDetails.booking_url === "string" && tourismDetails.booking_url.trim()
       ? tourismDetails.booking_url
       : null;
   const servicesHeading =
@@ -620,7 +620,8 @@ export function UnifiedLayout({
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {family === "tourism" && bookingUrl ? (
+        {/* The website and social links show once, in Contact. */}
+        {bookingUrl ? (
           <Button asChild className="gap-2">
             <a
               href={safeExternalHref(bookingUrl)}
@@ -628,18 +629,7 @@ export function UnifiedLayout({
               rel="noopener noreferrer nofollow ugc"
             >
               <CalendarDays className="h-4 w-4" />
-              {ctaConfig?.primaryCta ?? "Book Now"}
-            </a>
-          </Button>
-        ) : business.website ? (
-          <Button asChild className="gap-2">
-            <a
-              href={safeExternalHref(business.website)}
-              target="_blank"
-              rel="noopener noreferrer nofollow ugc"
-            >
-              <Globe className="h-4 w-4" />
-              Visit website
+              {family === "tourism" ? (ctaConfig?.primaryCta ?? "Book Now") : "Book online"}
             </a>
           </Button>
         ) : null}
@@ -715,18 +705,7 @@ export function UnifiedLayout({
       </div>
     );
 
-  const hasSpotlight =
-    family !== "tourism" ||
-    [
-      "tgcsa_grading",
-      "minimum_stay_nights",
-      "child_policy",
-      "seasonal_pricing",
-      "nearby_attractions",
-    ].some((key) => {
-      const value = tourismDetails[key];
-      return Array.isArray(value) ? value.length > 0 : typeof value === "number" || Boolean(value);
-    });
+  const hasSpotlight = family !== "tourism" || getTourismSpotlightFacts(tourismDetails).length > 0;
 
   const infoColumn = (
     <div className="space-y-5">
@@ -835,7 +814,9 @@ export function UnifiedLayout({
       <BusinessDetailsAccordion
         business={business}
         businessType={businessType}
-        businessDetails={business.business_details}
+        businessDetails={
+          isVisitOnlyDetails(business.business_details) ? null : business.business_details
+        }
         serviceAreas={business.service_areas}
         servicesOffered={business.services_offered ?? []}
         servicesHeading={servicesHeading}
@@ -907,37 +888,15 @@ export function UnifiedLayout({
             <CardContent className="space-y-4 p-5">
               <h2 className="font-display text-lg font-semibold">Contact</h2>
 
+              <PostLinks website={business.website} social={business.social_links} />
+
               <div className="space-y-2 text-sm">
-                {Object.entries(business.social_links ?? {})
-                  .filter(([, url]) => Boolean(url))
-                  .map(([platform, url]) => (
-                    <a
-                      key={platform}
-                      href={safeExternalHref(url)}
-                      target="_blank"
-                      rel="noopener noreferrer nofollow ugc"
-                      className="block rounded-xl border px-3 py-2"
-                    >
-                      {SOCIAL_LABELS[platform] ?? humanizeKey(platform)}
-                    </a>
-                  ))}
                 {business.email ? (
                   <a
                     href={`mailto:${business.email}`}
                     className="block break-all rounded-xl border px-3 py-2"
                   >
                     {business.email}
-                  </a>
-                ) : null}
-                {business.website ? (
-                  <a
-                    href={safeExternalHref(business.website)}
-                    target="_blank"
-                    rel="noopener noreferrer nofollow ugc"
-                    className="flex items-center gap-2 rounded-xl border px-3 py-2"
-                  >
-                    <Globe className="h-4 w-4 text-brand-blue" />
-                    <span className="font-medium">Visit public website</span>
                   </a>
                 ) : null}
                 {business.map_directions ? (

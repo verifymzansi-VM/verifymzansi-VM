@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { mockUsePathname } = vi.hoisted(() => ({ mockUsePathname: vi.fn() }));
@@ -9,6 +9,7 @@ const { mockUsePathname } = vi.hoisted(() => ({ mockUsePathname: vi.fn() }));
 vi.mock("next/navigation", () => ({ usePathname: mockUsePathname }));
 
 import { PrelaunchBanner } from "./prelaunch-banner";
+import { VIEWER_CHECK_EVENT } from "@/lib/engagement";
 
 describe("PrelaunchBanner", () => {
   beforeEach(() => {
@@ -55,5 +56,28 @@ describe("PrelaunchBanner", () => {
     render(<PrelaunchBanner />);
     await new Promise((resolve) => setTimeout(resolve, 500));
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it.each(["/post/create", "/post/create-listing", "/dashboard/slots", "/admin/moderation"])(
+    "stays off the task page %s",
+    async (path) => {
+      mockUsePathname.mockReturnValue(path);
+      render(<PrelaunchBanner />);
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      expect(screen.queryByRole("dialog")).toBeNull();
+    }
+  );
+
+  it("steps aside while a check asks for a click, and comes back after it", async () => {
+    render(<PrelaunchBanner />);
+    await screen.findByRole("dialog");
+    act(() => {
+      window.dispatchEvent(new CustomEvent(VIEWER_CHECK_EVENT, { detail: { pending: true } }));
+    });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    act(() => {
+      window.dispatchEvent(new CustomEvent(VIEWER_CHECK_EVENT, { detail: { pending: false } }));
+    });
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
   });
 });

@@ -1,5 +1,6 @@
 import { customerAccessSchema } from "@/lib/forms/customer-access";
 import { z } from "zod";
+import { PAYMENT_METHODS, VISITOR_FEATURES } from "@/lib/forms/business-choices";
 import { isTrustedPlatformMediaUrl } from "@/lib/utils/media-url";
 import { businessNumber, WHATSAPP_NEEDS_MOBILE } from "@/lib/utils/phone";
 import { BUSINESS_TEXT_LIMITS } from "./business-limits";
@@ -48,6 +49,18 @@ const BUSINESS_CATEGORIES = [
   "general_other",
 ] as const;
 
+const WALK_IN_POLICIES = [
+  "walk_ins_welcome",
+  "appointments_preferred",
+  "appointment_only",
+] as const;
+
+/** Visit facts any business type may carry inside business_details. */
+const visitFields = {
+  walk_in_policy: z.enum(WALK_IN_POLICIES).optional(),
+  visitor_features: z.array(z.enum(VISITOR_FEATURES)).max(VISITOR_FEATURES.length).optional(),
+};
+
 const optionalText = (max: number) => z.string().trim().max(max).optional().or(z.literal(""));
 const mediaUrlField = (label: string) =>
   z
@@ -58,6 +71,9 @@ const mediaUrlField = (label: string) =>
     })
     .optional()
     .or(z.literal(""));
+
+/** category_details.booking_url: an external link, or empty. */
+export const bookingUrlSchema = externalUrlOrEmptySchema("Enter a valid booking link.");
 
 const serviceAreasSchema = z.object({
   areas: z.array(z.string().trim().min(1).max(120)).min(1, "Add at least one service area."),
@@ -80,6 +96,7 @@ const mallStoreDetailsSchema = z.object({
   floor_or_wing: optionalText(80),
   nearest_entrance: optionalText(120),
   parking_notes: optionalText(300),
+  ...visitFields,
 });
 
 const standaloneShopDetailsSchema = z.object({
@@ -89,9 +106,7 @@ const standaloneShopDetailsSchema = z.object({
   street_address: z.string().trim().min(1, "Street address is required.").max(160),
   suburb: z.string().trim().min(1, "Suburb is required.").max(80),
   landmark: optionalText(120),
-  walk_in_policy: z
-    .enum(["walk_ins_welcome", "appointments_preferred", "appointment_only"])
-    .optional(),
+  ...visitFields,
 });
 
 const homeBusinessDetailsSchema = z.object({
@@ -100,6 +115,7 @@ const homeBusinessDetailsSchema = z.object({
   appointment_required: z.boolean(),
   customer_pickup_allowed: z.boolean(),
   visitor_notes: optionalText(300),
+  ...visitFields,
 });
 
 const mobileServiceDetailsSchema = z.object({
@@ -107,6 +123,7 @@ const mobileServiceDetailsSchema = z.object({
   travel_radius_km: z.number().finite().min(0).optional(),
   callout_fee_from: z.number().finite().min(0).optional(),
   emergency_callouts: z.boolean(),
+  ...visitFields,
 });
 
 const onlineOnlyDetailsSchema = z.object({
@@ -124,6 +141,7 @@ const onlineOnlyDetailsSchema = z.object({
   order_url: externalUrlSchema("Enter a valid order URL."),
   delivery_regions: z.array(z.string().trim().min(1).max(120)).optional(),
   support_response_time: optionalText(120),
+  ...visitFields,
 });
 
 const marketStallDetailsSchema = z.object({
@@ -132,6 +150,7 @@ const marketStallDetailsSchema = z.object({
   stall_label: optionalText(80),
   trading_days: z.array(z.string().trim().min(1).max(40)).min(1, "Add at least one trading day."),
   trading_hours: z.string().trim().min(1, "Trading hours are required.").max(120),
+  ...visitFields,
 });
 
 const businessDetailsSchema = z.discriminatedUnion("type", [
@@ -142,6 +161,26 @@ const businessDetailsSchema = z.discriminatedUnion("type", [
   onlineOnlyDetailsSchema,
   marketStallDetailsSchema,
 ]);
+
+/**
+ * Forms that describe access with customer_access keep only the visit facts
+ * (walk-ins, visitor features) in business_details, without the older
+ * type-specific address fields.
+ */
+const visitOnlyDetailsSchema = z.strictObject({ type: z.enum(BUSINESS_TYPES), ...visitFields });
+const VISIT_ONLY_KEYS = new Set(["type", ...Object.keys(visitFields)]);
+
+/** Visit-only details, or the full type-specific details with their own errors. */
+const businessDetailsField = z.unknown().transform((value, ctx) => {
+  const visitOnly =
+    typeof value === "object" &&
+    value !== null &&
+    Object.keys(value).every((key) => VISIT_ONLY_KEYS.has(key));
+  const result = (visitOnly ? visitOnlyDetailsSchema : businessDetailsSchema).safeParse(value);
+  if (result.success) return result.data;
+  for (const issue of result.error.issues) ctx.addIssue({ ...issue });
+  return z.NEVER;
+});
 
 /**
  * Zod schema for creating or updating a unified Mzansi Business.
@@ -233,7 +272,7 @@ export const businessSchema = z
       .optional(),
     services_offered: z.array(z.string().max(200)).max(30).optional().default([]),
     service_areas: serviceAreasSchema.optional(),
-    business_details: businessDetailsSchema.nullable().optional(),
+    business_details: businessDetailsField.nullable().optional(),
     // Shape-checked per category by sanitizeCategoryDetails; the size cap
     // stops a single post bloating the row.
     category_details: z
@@ -262,20 +301,21 @@ export const businessSchema = z
     languages_spoken: optionalText(200),
     load_shedding_ready: z.boolean().optional(),
     number_of_employees: z.enum(["1", "2_5", "6_10", "11_50", "51_200", "200_plus"]).optional(),
-    // Mon_Fri / Sat / Sun free text (e.g. "08:00-17:00", "Closed"); other keys
-    // are dropped. Non-text values used to crash the public page.
+    // Mon_Fri / Sat / Sun / Public_holidays free text (e.g. "08:00 - 17:00",
+    // "Closed") and two yes/no flags; other keys are dropped. Readers that
+    // expect text skip the flags.
     operating_hours: z
       .object({
         Mon_Fri: z.string().trim().max(60).optional(),
         Sat: z.string().trim().max(60).optional(),
         Sun: z.string().trim().max(60).optional(),
+        Public_holidays: z.string().trim().max(60).optional(),
+        Open_24_hours: z.boolean().optional(),
+        By_appointment: z.boolean().optional(),
       })
       .optional()
       .default({}),
-    payment_methods_accepted: z
-      .array(z.enum(["cash", "card", "eft", "snapscan", "capitec_pay", "other"]))
-      .optional()
-      .default([]),
+    payment_methods_accepted: z.array(z.enum(PAYMENT_METHODS)).optional().default([]),
     delivery_options: z
       .array(z.enum(["in_store", "delivery", "collection", "nationwide"]))
       .optional()
@@ -290,6 +330,14 @@ export const businessSchema = z
     termsAccepted: z.boolean().optional().default(false),
   })
   .superRefine((data, ctx) => {
+    // Any business may link to its own booking page (category_details.booking_url).
+    const bookingUrl = data.category_details?.booking_url;
+    if (bookingUrl !== undefined && !bookingUrlSchema.safeParse(bookingUrl).success)
+      ctx.addIssue({
+        code: "custom",
+        path: ["category_details", "booking_url"],
+        message: "Enter a valid booking link.",
+      });
     if (data.category_details?.customer_access !== undefined) {
       const result = customerAccessSchema.safeParse(data.category_details.customer_access);
       if (!result.success) {

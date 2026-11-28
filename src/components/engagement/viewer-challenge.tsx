@@ -2,7 +2,7 @@
 
 import { createRoot } from "react-dom/client";
 import { TurnstileWidget } from "@/components/ui/turnstile-widget";
-import { VIEWER_CHALLENGE_ACTION } from "@/lib/engagement";
+import { VIEWER_CHALLENGE_ACTION, VIEWER_CHECK_EVENT } from "@/lib/engagement";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf-client";
 
 /**
@@ -14,18 +14,58 @@ import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf-client";
  * never loops. Resolves true when the browser now holds an identifier.
  */
 
-const RETRY_AFTER_FAILURE_MS = 10 * 60 * 1000;
+export const RETRY_AFTER_FAILURE_MS = 10 * 60 * 1000;
+/**
+ * Above every overlay (the welcome dialog, the desktop post viewer, Video
+ * mode): the check may need a click, and a covered check can never finish.
+ */
+export const CHALLENGE_Z_INDEX = 2147483647;
 const CHALLENGE_TIMEOUT_MS = 60 * 1000;
 
+// Kept for the browser tab, so a reload does not start a check that just
+// failed again (the 10-minute back-off holds across page opens).
+const FAILED_AT_KEY = "vmz:viewer-check-failed-at";
+
 let pending: Promise<boolean> | null = null;
-let failedAt = 0;
+
+function readFailedAt(): number {
+  try {
+    const value = Number(window.sessionStorage.getItem(FAILED_AT_KEY));
+    return Number.isFinite(value) ? value : 0;
+  } catch {
+    return memoryFailedAt;
+  }
+}
+let memoryFailedAt = 0;
+function rememberFailure(at: number) {
+  memoryFailedAt = at;
+  try {
+    window.sessionStorage.setItem(FAILED_AT_KEY, String(at));
+  } catch {
+    // Storage can be blocked; this page still remembers it.
+  }
+}
+
+/** Test helper: forget a failed check (a reload keeps the tab's storage). */
+export function resetViewerChallengeForTests({ keepStorage = false } = {}) {
+  memoryFailedAt = 0;
+  pending = null;
+  if (keepStorage) return;
+  try {
+    window.sessionStorage.removeItem(FAILED_AT_KEY);
+  } catch {
+    // Nothing stored.
+  }
+}
 
 export function obtainViewerIdentifier(): Promise<boolean> {
   if (typeof window === "undefined") return Promise.resolve(false);
-  if (Date.now() - failedAt < RETRY_AFTER_FAILURE_MS) return Promise.resolve(false);
+  const failedAt = Math.max(readFailedAt(), memoryFailedAt);
+  const now = Date.now();
+  if (now >= failedAt && now - failedAt < RETRY_AFTER_FAILURE_MS) return Promise.resolve(false);
   pending ??= run()
     .then((ok) => {
-      if (!ok) failedAt = Date.now();
+      if (!ok) rememberFailure(Date.now());
       return ok;
     })
     .finally(() => {
@@ -54,14 +94,29 @@ function challengeToken(): Promise<string | null> {
   return new Promise((resolve) => {
     const host = document.createElement("div");
     host.setAttribute("data-viewer-challenge", "");
-    host.style.cssText =
-      "position:fixed;right:16px;bottom:16px;z-index:60;max-width:calc(100vw - 32px)";
+    // Found by screen readers, and reached by Tab at the end of the page.
+    host.setAttribute("role", "region");
+    host.setAttribute("aria-label", "Security check");
+    // pointer-events: an open modal dialog switches pointer events off on the
+    // page body; the check must stay clickable.
+    host.style.cssText = `position:fixed;right:16px;bottom:16px;z-index:${CHALLENGE_Z_INDEX};pointer-events:auto;max-width:calc(100vw - 32px)`;
     document.body.appendChild(host);
     const root = createRoot(host);
     let done = false;
+    // Only a check that asks the visitor to click is announced (the welcome
+    // pop-up steps aside for it); an invisible pass changes nothing on screen.
+    let shown = false;
+    const announce = (isPending: boolean) =>
+      window.dispatchEvent(new CustomEvent(VIEWER_CHECK_EVENT, { detail: { pending: isPending } }));
+    const interactive = () => {
+      if (done || shown) return;
+      shown = true;
+      announce(true);
+    };
     const finish = (token: string | null) => {
       if (done) return;
       done = true;
+      if (shown) announce(false);
       window.clearTimeout(timer);
       // Unmount after the widget's own callback has returned.
       window.setTimeout(() => {
@@ -77,6 +132,7 @@ function challengeToken(): Promise<string | null> {
         action={VIEWER_CHALLENGE_ACTION}
         size="compact"
         onSuccess={(token) => finish(token)}
+        onInteractive={interactive}
         onError={() => finish(null)}
         onUnavailable={() => finish(null)}
       />

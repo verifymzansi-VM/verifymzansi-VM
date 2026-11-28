@@ -32,11 +32,12 @@ function getFilterableAttributeFields(category?: string) {
   return (
     CATEGORIES.find((entry) => entry.value === category)?.attributeFields.filter(
       (field) =>
-        field.type === "select" ||
-        field.type === "boolean" ||
-        field.type === "number" ||
-        field.type === "text" ||
-        field.type === "checklist"
+        field.filterable !== false &&
+        (field.type === "select" ||
+          field.type === "boolean" ||
+          field.type === "number" ||
+          field.type === "text" ||
+          field.type === "checklist")
     ) ?? []
   );
 }

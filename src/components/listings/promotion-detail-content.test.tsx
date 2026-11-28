@@ -360,4 +360,87 @@ describe("PromotionDetailContent", () => {
       expect(screen.getAllByRole("heading", { name: "Zululand Craft Market" })).toHaveLength(1);
     }
   );
+  it("shows the new entry details in plain words, the ID line for 18+, and links once", () => {
+    render(
+      <PromotionDetailContent
+        promotion={{
+          id: "promotion-2",
+          owner_id: "owner-1",
+          business_id: null,
+          title: "Soweto Jazz Night",
+          description: "An evening of live jazz in Soweto with local artists.",
+          promotion_type: "event",
+          category: null,
+          category_key: null,
+          photos: ["https://example.com/photo.jpg"],
+          videos: [],
+          video_thumbnail: null,
+          price_cents: 15000,
+          price_negotiable: false,
+          location_province: "Gauteng",
+          location_city: "Johannesburg",
+          location_town: "Soweto",
+          location_address: null,
+          contact_methods: ["form"],
+          start_date: "2099-03-10T16:00:00.000Z",
+          end_date: null,
+          boost_until: null,
+          featured_until: null,
+          view_count: 0,
+          created_at: "2099-03-01T00:00:00.000Z",
+          event_details: {
+            event_type: "festival_concert",
+            age_restriction: "18_plus",
+            doors_open: "17:30",
+            ticket_sales: "door",
+            gate_payment: ["cash", "card"],
+            refund_policy: "full_until_days",
+            refund_days: 7,
+            dress_code: "Smart casual",
+            recurring: "monthly",
+            group_discount_available: true,
+            website: "https://jazz.example.com",
+            map_directions: "https://maps.app.goo.gl/jazz",
+            social_links: {
+              facebook: "https://facebook.com/jazz",
+              youtube: "https://youtube.com/@jazz",
+            },
+          },
+        }}
+        advertiserProfile={{
+          display_name: "Organiser",
+          account_verification_status: null,
+          phone: null,
+          masked_phone_public: null,
+        }}
+        linkedBusiness={null}
+        showContactActions={false}
+        showContactSummary={false}
+        layoutMode="review"
+      />
+    );
+
+    for (const [label, value] of [
+      ["Doors open", "17:30"],
+      ["Tickets sold", "At the door"],
+      ["Pay at the door", "Cash, Card"],
+      ["Refunds", "Full refund until 7 days before"],
+    ]) {
+      expect(screen.getByText(label)).toBeInTheDocument();
+      expect(screen.getByText(value)).toBeInTheDocument();
+    }
+    expect(screen.getByText("ID will be checked at the door")).toBeInTheDocument();
+    // Removed fields are no longer shown.
+    expect(screen.queryByText("Smart casual")).not.toBeInTheDocument();
+    expect(screen.queryByText("Recurring")).not.toBeInTheDocument();
+    expect(screen.queryByText("Group discounts")).not.toBeInTheDocument();
+    // Links are tappable, YouTube included, each shown once.
+    expect(screen.getByRole("link", { name: "YouTube" })).toHaveAttribute(
+      "href",
+      "https://youtube.com/@jazz"
+    );
+    expect(screen.getAllByRole("link", { name: "Facebook" })).toHaveLength(1);
+    expect(screen.getAllByRole("link", { name: "Website" })).toHaveLength(1);
+    expect(screen.getByRole("link", { name: /Open location pin/ })).toBeInTheDocument();
+  });
 });

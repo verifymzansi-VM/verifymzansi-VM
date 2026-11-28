@@ -10,10 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { safeExternalHref } from "@/lib/utils/sanitize-html";
 import { type BusinessCategory, type BusinessType } from "@/types/enums";
 
-import {
-  PRIMARY_ORDER_CHANNEL_LABELS,
-  WALK_IN_POLICY_LABELS,
-} from "@/lib/forms/business-type-details";
+import { PRIMARY_ORDER_CHANNEL_LABELS } from "@/lib/forms/business-type-details";
 import {
   TOURISM_ACCOMMODATION_TYPES,
   TOURISM_CANCELLATION_POLICIES,
@@ -29,6 +26,7 @@ import type { BusinessDetails } from "@/types/business-details";
 import type { RegisteredOfficeView } from "@/lib/business-verification/public";
 
 import { formatZARShort } from "@/lib/utils/format";
+import { tourismCancellationText } from "@/lib/presentation/business-facts";
 
 export interface BusinessDetailRecord {
   id: string;
@@ -46,7 +44,8 @@ export interface BusinessDetailRecord {
   video_thumbnail: string | null;
   gallery_photos: string[] | null;
   social_links: Record<string, string> | null;
-  operating_hours: Record<string, string> | null;
+  /** Text per group (Mon_Fri, Sat, Sun, Public_holidays) and the Open_24_hours / By_appointment flags. */
+  operating_hours: Record<string, string | boolean> | null;
   services_offered: string[] | null;
   payment_methods_accepted: string[] | null;
   delivery_options: string[] | null;
@@ -224,14 +223,6 @@ export function BusinessDetailsCard({
               <div className="flex items-start justify-between gap-4">
                 <span className="text-muted-foreground">Landmark</span>
                 <span className="text-right font-medium">{businessDetails.landmark}</span>
-              </div>
-            )}
-            {businessDetails.walk_in_policy && (
-              <div className="flex items-start justify-between gap-4">
-                <span className="text-muted-foreground">Walk-in policy</span>
-                <span className="text-right font-medium">
-                  {WALK_IN_POLICY_LABELS[businessDetails.walk_in_policy]}
-                </span>
               </div>
             )}
           </>
@@ -531,14 +522,15 @@ export function TourismDetailsCard({ details }: { details: TourismCategoryDetail
           </div>
         )}
 
-        {details.cancellation_policy && (
-          <div className="flex items-start justify-between gap-4">
-            <span className="text-muted-foreground">Cancellation</span>
-            <span className="font-medium">
-              {lookupLabel(TOURISM_CANCELLATION_POLICIES, details.cancellation_policy)}
-            </span>
-          </div>
-        )}
+        {details.cancellation_policy &&
+          !tourismCancellationText(details as Record<string, unknown>) && (
+            <div className="flex items-start justify-between gap-4">
+              <span className="text-muted-foreground">Cancellation</span>
+              <span className="font-medium">
+                {lookupLabel(TOURISM_CANCELLATION_POLICIES, details.cancellation_policy)}
+              </span>
+            </div>
+          )}
 
         {(details.pets_allowed != null || details.smoking_allowed != null) && (
           <div className="grid grid-cols-2 gap-4">

@@ -19,6 +19,22 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { MediaUpload } from "@/components/ui/media-upload";
 import { OnlinePresenceFields } from "@/components/post/online-presence-fields";
+import { ContactSwitches, type ContactSwitchOption } from "@/components/post/contact-switches";
+import { MediaLimitsLine } from "@/components/post/media-limits-line";
+import { PostSubmittedScreen, createdPostId } from "@/components/post/post-submitted-screen";
+import {
+  TOURISM_BACKUP_UTILITIES,
+  TOURISM_CANCELLATION_CHOICES,
+  TOURISM_PRICE_UNITS,
+} from "@/lib/forms/business-category-details";
+import {
+  EVENT_GATE_PAYMENTS,
+  EVENT_ID_CHECK_LINE,
+  EVENT_REFUND_POLICIES,
+  EVENT_TICKET_SALES,
+  eventChecksId,
+  eventSellsAtDoor,
+} from "@/lib/forms/event-entry-details";
 import {
   UploadProgressPanel,
   useUploadProgress,
@@ -38,8 +54,6 @@ import {
   TOURISM_SUBCATEGORIES,
   TOURISM_AMENITIES,
   TOURISM_MEAL_OPTIONS,
-  TOURISM_PRICE_RANGES,
-  TOURISM_CANCELLATION_POLICIES,
   TOURISM_ACCOMMODATION_TYPES,
   TOURISM_SUBCATEGORY_FIELD_GROUPS,
   TOURISM_TREATMENT_TYPES,
@@ -82,8 +96,9 @@ import {
   prepareVideoForCover,
   prewarmVideosForFastUpload,
   videoCoverForSubmit,
+  VideoCoverMissingError,
 } from "@/app/post/_lib/video-fast-upload";
-import { VIDEO_GUIDANCE, videoLimitSeconds, VIDEO_SOUND_OFF_TIP } from "@/lib/media/video-length";
+import { videoLimitSeconds, VIDEO_SOUND_OFF_TIP } from "@/lib/media/video-length";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { usePostDraftAutosave } from "@/hooks/use-post-draft-autosave";
@@ -108,7 +123,6 @@ import {
   type PromotionAdvertiserRecord,
 } from "@/components/listings/promotion-detail-content";
 import { normalizeUserEnteredUrl } from "@/lib/utils/external-url";
-import { businessNumber } from "@/lib/utils/phone";
 import {
   TOURISM_FIELD_STEPS,
   stepForField,
@@ -133,14 +147,63 @@ const STEPS: PostFormStep[] = [
   { label: "Photos & review", icon: Camera, description: "Photos, video and review" },
 ];
 
+/** Call and WhatsApp use the account's verified number: nothing to type. */
+const CONTACT_OPTIONS: ContactSwitchOption[] = [
+  { id: "call", label: "Call", usesVerifiedNumber: true },
+  { id: "whatsapp", label: "WhatsApp", usesVerifiedNumber: true },
+  { id: "form", label: "Contact form", hint: "Enquiries arrive in your VerifyMzansi inbox" },
+];
+
+/** The usual "From R___" unit for each tourism field group. */
+function defaultPriceUnit(group: string): string {
+  if (group === "A") return "night";
+  if (group === "E") return "entry";
+  if (group === "F") return "unit";
+  return "person";
+}
+
+/** This form's draft: the shared tourism draft plus the newer answers. */
+type CreateTourismDraft = TourismDraftData & {
+  socialYoutube?: string;
+  priceFrom?: string;
+  priceUnit?: string;
+  sleeps?: string;
+  bedrooms?: string;
+  beds?: string;
+  bathrooms?: string;
+  backupUtilities?: string[];
+  cancellationFreeDays?: string;
+  openingHours?: string;
+  tgcsaGrading?: string;
+  minimumStayNights?: string;
+  childPolicy?: string;
+  seasonalPricing?: boolean;
+  nearbyAttractions?: string;
+  doorsOpen?: string;
+  refundPolicy?: string;
+  refundDays?: string;
+  ticketSales?: string;
+  gatePayment?: string[];
+  rainPolicy?: string;
+  earlyBirdDeadline?: string;
+};
+
 const FIELD_IDS: Record<string, string> = {
   listingType: "listing-type-group",
   title: "title",
   description: "description",
   subcategory: "subcategory",
   eventType: "eventType",
-  starRating: "starRating",
   numberOfRooms: "numberOfRooms",
+  priceFrom: "priceFrom",
+  sleeps: "sleeps",
+  bedrooms: "bedrooms",
+  beds: "beds",
+  bathrooms: "bathrooms",
+  cancellationFreeDays: "cancellationFreeDays",
+  openingHours: "openingHours",
+  doorsOpen: "doorsOpen",
+  refundDays: "refundDays",
   bookingUrl: "bookingUrl",
   startDate: "start_date",
   endDate: "end_date",
@@ -153,14 +216,13 @@ const FIELD_IDS: Record<string, string> = {
   joinMethods: "tourism-join-methods",
   meetingPoint: "meetingPoint",
   pickupAreas: "pickupAreas",
-  phone: "phone",
-  whatsapp: "whatsapp",
   website: "website",
   mapDirections: "mapDirections",
   socialFacebook: "socialFacebook",
   socialInstagram: "socialInstagram",
   socialTwitter: "socialTwitter",
   socialTiktok: "socialTiktok",
+  socialYoutube: "socialYoutube",
   locationAddress: "locationAddress",
   locationTown: "locationTown",
   logo_url: "tourism-logo",
@@ -184,6 +246,9 @@ const FIELD_KEY_ALIASES: Record<string, string> = {
   start_date: "startDate",
   end_date: "endDate",
   contact_methods: "contactMethods",
+  // Call and WhatsApp use the verified account number, set on the contact switches.
+  phone: "contactMethods",
+  whatsapp: "contactMethods",
   location_province: "province",
   location_city: "city",
   location_town: "locationTown",
@@ -192,17 +257,25 @@ const FIELD_KEY_ALIASES: Record<string, string> = {
   social_instagram: "socialInstagram",
   social_twitter: "socialTwitter",
   social_tiktok: "socialTiktok",
+  social_youtube: "socialYoutube",
   map_directions: "mapDirections",
   "social_links.facebook": "socialFacebook",
   "social_links.instagram": "socialInstagram",
   "social_links.twitter": "socialTwitter",
   "social_links.tiktok": "socialTiktok",
+  "social_links.youtube": "socialYoutube",
   "event_details.website": "website",
   "event_details.map_directions": "mapDirections",
   "event_details.social_links.facebook": "socialFacebook",
   "event_details.social_links.instagram": "socialInstagram",
   "event_details.social_links.twitter": "socialTwitter",
   "event_details.social_links.tiktok": "socialTiktok",
+  "event_details.social_links.youtube": "socialYoutube",
+  "event_details.doors_open": "doorsOpen",
+  "event_details.refund_days": "refundDays",
+  "category_details.price_from_cents": "priceFrom",
+  "category_details.cancellation_free_days": "cancellationFreeDays",
+  "category_details.opening_hours": "openingHours",
   "business_details.street_address": "locationAddress",
   "business_details.suburb": "locationTown",
 };
@@ -221,14 +294,13 @@ const FIELD_LABELS: Record<string, string> = {
   joinMethods: "How visitors join",
   meetingPoint: "Meeting point",
   pickupAreas: "Pickup areas",
-  phone: "Phone",
-  whatsapp: "WhatsApp",
   website: "Website",
   mapDirections: "Location pin",
   socialFacebook: "Facebook",
   socialInstagram: "Instagram",
   socialTwitter: "X / Twitter",
   socialTiktok: "TikTok",
+  socialYoutube: "YouTube",
   images: "Photos",
   videos: "Videos",
   eventType: "Event type",
@@ -239,8 +311,16 @@ const FIELD_LABELS: Record<string, string> = {
   venueCapacity: "Venue capacity",
   ticketsUrl: "Tickets URL",
   bookingUrl: "Booking URL",
-  starRating: "Star rating",
   numberOfRooms: "Number of rooms",
+  priceFrom: "Price from",
+  sleeps: "Sleeps",
+  bedrooms: "Bedrooms",
+  beds: "Beds",
+  bathrooms: "Bathrooms",
+  cancellationFreeDays: "Free cancellation days",
+  openingHours: "Opening hours",
+  doorsOpen: "Doors open",
+  refundDays: "Refund days",
   termsAccepted: "Posting terms",
 };
 
@@ -330,6 +410,7 @@ function CreateTourismContent() {
   const [formError, setFormError] = useState<string | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
   const [submitSucceeded, setSubmitSucceeded] = useState(false);
+  const [submittedId, setSubmittedId] = useState<string | null>(null);
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
 
   /* ── Shared state ────────────────────────────────────────── */
@@ -345,14 +426,13 @@ function CreateTourismContent() {
   const [locationTown, setLocationTown] = useState("");
   const [locationAddress, setLocationAddress] = useState("");
   const [contactMethods, setContactMethods] = useState<string[]>(["call"]);
-  const [phone, setPhone] = useState("");
-  const [whatsapp, setWhatsapp] = useState("");
   const [publishAddress, setPublishAddress] = useState(false);
   const [website, setWebsite] = useState("");
   const [socialFacebook, setSocialFacebook] = useState("");
   const [socialInstagram, setSocialInstagram] = useState("");
   const [socialTwitter, setSocialTwitter] = useState("");
   const [socialTiktok, setSocialTiktok] = useState("");
+  const [socialYoutube, setSocialYoutube] = useState("");
   const [mapDirections, setMapDirections] = useState("");
   const rawBusinessId = searchParams.get("business_id") || "";
   const [businessId, setBusinessId] = useState(
@@ -363,12 +443,19 @@ function CreateTourismContent() {
 
   /* ── Tourism business state ──────────────────────────────── */
   const [subcategory, setSubcategory] = useState("");
-  const [starRating, setStarRating] = useState("");
   const [numberOfRooms, setNumberOfRooms] = useState("");
   const [accommodationTypes, setAccommodationTypes] = useState<string[]>([]);
   const [checkInTime, setCheckInTime] = useState("");
   const [checkOutTime, setCheckOutTime] = useState("");
-  const [priceRange, setPriceRange] = useState("");
+  const [priceFrom, setPriceFrom] = useState("");
+  const [priceUnit, setPriceUnit] = useState("");
+  const [sleeps, setSleeps] = useState("");
+  const [bedrooms, setBedrooms] = useState("");
+  const [beds, setBeds] = useState("");
+  const [bathrooms, setBathrooms] = useState("");
+  const [backupUtilities, setBackupUtilities] = useState<string[]>([]);
+  const [cancellationFreeDays, setCancellationFreeDays] = useState("");
+  const [openingHours, setOpeningHours] = useState("");
   const [amenities, setAmenities] = useState<string[]>([]);
   const [mealOptions, setMealOptions] = useState<string[]>([]);
   const [languagesSpoken, setLanguagesSpoken] = useState("");
@@ -423,17 +510,19 @@ function CreateTourismContent() {
   >([]);
   const [ticketsUrl, setTicketsUrl] = useState("");
   const [ageRestriction, setAgeRestriction] = useState("");
-  const [dressCode, setDressCode] = useState("");
+  const [doorsOpen, setDoorsOpen] = useState("");
+  const [refundPolicy, setRefundPolicy] = useState("");
+  const [refundDays, setRefundDays] = useState("");
+  const [ticketSales, setTicketSales] = useState("");
+  const [gatePayment, setGatePayment] = useState<string[]>([]);
   const [lineup, setLineup] = useState("");
   const [parkingAvailable, setParkingAvailable] = useState(false);
   const [eventAccessibility, setEventAccessibility] = useState<string[]>([]);
   const [foodDrinksAvailable, setFoodDrinksAvailable] = useState(false);
   const [bringYourOwn, setBringYourOwn] = useState("");
   /* SA event additions */
-  const [recurring, setRecurring] = useState("");
   const [rainPolicy, setRainPolicy] = useState("");
   const [earlyBirdDeadline, setEarlyBirdDeadline] = useState("");
-  const [groupDiscountAvailable, setGroupDiscountAvailable] = useState(false);
 
   /* ── Media state ─────────────────────────────────────────── */
   const [logoFiles, setLogoFiles] = useState<File[]>([]);
@@ -449,7 +538,7 @@ function CreateTourismContent() {
     save: saveDraft,
     restore: restoreDraft,
     discard: discardDraft,
-  } = usePostDraftAutosave<TourismDraftData>("tourism", user?.id, !isLoading);
+  } = usePostDraftAutosave<CreateTourismDraft>("tourism", user?.id, !isLoading);
   const lastAutosaveSignatureRef = useRef<string>("");
 
   const locationValue: LocationValue = {
@@ -520,16 +609,13 @@ function CreateTourismContent() {
     });
   }, [profile, province, city]);
 
-  // Pre-fill phone and WhatsApp from the profile number, as Business does.
-  // Never replaces a typed or restored number.
-  const profilePhone = profile?.phone ?? "";
-  useEffect(() => {
-    if (!profilePhone) return;
-    queueMicrotask(() => {
-      setPhone((current) => current || profilePhone);
-      setWhatsapp((current) => current || profilePhone);
-    });
-  }, [profilePhone]);
+  // Call and WhatsApp use the account's verified number; without one they stay off.
+  const verifiedPhone = profile?.phone?.trim() ?? "";
+  const activeContactMethods = contactMethods.filter(
+    (method) => verifiedPhone || (method !== "call" && method !== "whatsapp")
+  );
+  const phone = activeContactMethods.includes("call") ? verifiedPhone : "";
+  const whatsapp = activeContactMethods.includes("whatsapp") ? verifiedPhone : "";
 
   // Reset category-specific fields when subcategory changes
   // Keep compatible answers when temporarily changing activity; the payload builder
@@ -560,12 +646,24 @@ function CreateTourismContent() {
         if (d.title) setTitle(d.title);
         if (d.description) setDescription(d.description);
         if (d.subcategory) setSubcategory(d.subcategory);
-        if (d.starRating) setStarRating(d.starRating);
         if (d.numberOfRooms) setNumberOfRooms(d.numberOfRooms);
         if (d.accommodationTypes?.length) setAccommodationTypes(d.accommodationTypes);
         if (d.checkInTime) setCheckInTime(d.checkInTime);
         if (d.checkOutTime) setCheckOutTime(d.checkOutTime);
-        if (d.priceRange) setPriceRange(d.priceRange);
+        if (d.priceFrom) setPriceFrom(d.priceFrom);
+        if (d.priceUnit) setPriceUnit(d.priceUnit);
+        if (d.sleeps) setSleeps(d.sleeps);
+        if (d.bedrooms) setBedrooms(d.bedrooms);
+        if (d.beds) setBeds(d.beds);
+        if (d.bathrooms) setBathrooms(d.bathrooms);
+        if (d.backupUtilities?.length) setBackupUtilities(d.backupUtilities);
+        if (d.cancellationFreeDays) setCancellationFreeDays(d.cancellationFreeDays);
+        if (d.openingHours) setOpeningHours(d.openingHours);
+        if (d.tgcsaGrading) setTgcsaGrading(d.tgcsaGrading);
+        if (d.minimumStayNights) setMinimumStayNights(d.minimumStayNights);
+        if (d.childPolicy) setChildPolicy(d.childPolicy);
+        if (d.seasonalPricing) setSeasonalPricing(d.seasonalPricing);
+        if (d.nearbyAttractions) setNearbyAttractions(d.nearbyAttractions);
         if (d.amenities?.length) setAmenities(d.amenities);
         if (d.mealOptions?.length) setMealOptions(d.mealOptions);
         if (d.languagesSpoken) setLanguagesSpoken(d.languagesSpoken);
@@ -604,7 +702,13 @@ function CreateTourismContent() {
         if (d.ticketTiers?.length) setTicketTiers(d.ticketTiers);
         if (d.ticketsUrl) setTicketsUrl(d.ticketsUrl);
         if (d.ageRestriction) setAgeRestriction(d.ageRestriction);
-        if (d.dressCode) setDressCode(d.dressCode);
+        if (d.doorsOpen) setDoorsOpen(d.doorsOpen);
+        if (d.refundPolicy) setRefundPolicy(d.refundPolicy);
+        if (d.refundDays) setRefundDays(d.refundDays);
+        if (d.ticketSales) setTicketSales(d.ticketSales);
+        if (d.gatePayment?.length) setGatePayment(d.gatePayment);
+        if (d.rainPolicy) setRainPolicy(d.rainPolicy);
+        if (d.earlyBirdDeadline) setEarlyBirdDeadline(d.earlyBirdDeadline);
         if (d.lineup) setLineup(d.lineup);
         if (d.parkingAvailable) setParkingAvailable(d.parkingAvailable);
         if (d.accessibility?.length) setEventAccessibility(d.accessibility);
@@ -619,13 +723,12 @@ function CreateTourismContent() {
         if (d.meetingPoint) setMeetingPoint(d.meetingPoint);
         if (d.pickupAreas) setPickupAreas(d.pickupAreas);
         if (d.contactMethods?.length) setContactMethods(d.contactMethods);
-        if (d.phone) setPhone(d.phone);
-        if (d.whatsapp) setWhatsapp(d.whatsapp);
         if (d.website) setWebsite(d.website);
         if (d.socialFacebook) setSocialFacebook(d.socialFacebook);
         if (d.socialInstagram) setSocialInstagram(d.socialInstagram);
         if (d.socialTwitter) setSocialTwitter(d.socialTwitter);
         if (d.socialTiktok) setSocialTiktok(d.socialTiktok);
+        if (d.socialYoutube) setSocialYoutube(d.socialYoutube);
         if (d.mapDirections) setMapDirections(d.mapDirections);
         if (d.businessId) setBusinessId(d.businessId);
         toast({ title: "Draft restored", description: "Continuing where you left off." });
@@ -636,17 +739,31 @@ function CreateTourismContent() {
   // Auto-save draft
   useEffect(() => {
     if (!user?.id || isLoading || isSubmitting || submitSucceeded) return;
-    const draftData: TourismDraftData = {
+    const draftData: CreateTourismDraft = {
       listingType,
       title,
       description,
       subcategory,
-      starRating,
+      starRating: "",
       numberOfRooms,
       accommodationTypes,
       checkInTime,
       checkOutTime,
-      priceRange,
+      priceRange: "",
+      priceFrom,
+      priceUnit,
+      sleeps,
+      bedrooms,
+      beds,
+      bathrooms,
+      backupUtilities,
+      cancellationFreeDays,
+      openingHours,
+      tgcsaGrading,
+      minimumStayNights,
+      childPolicy,
+      seasonalPricing,
+      nearbyAttractions,
       amenities,
       mealOptions,
       languagesSpoken,
@@ -682,7 +799,14 @@ function CreateTourismContent() {
       ticketTiers,
       ticketsUrl,
       ageRestriction,
-      dressCode,
+      dressCode: "",
+      doorsOpen,
+      refundPolicy,
+      refundDays,
+      ticketSales,
+      gatePayment,
+      rainPolicy,
+      earlyBirdDeadline,
       lineup,
       parkingAvailable,
       accessibility: eventAccessibility,
@@ -697,8 +821,9 @@ function CreateTourismContent() {
       meetingPoint,
       pickupAreas,
       contactMethods,
-      phone,
-      whatsapp,
+      // Call and WhatsApp use the verified account number; nothing typed to keep.
+      phone: "",
+      whatsapp: "",
       website,
       hoursMonFri,
       hoursSat,
@@ -707,6 +832,7 @@ function CreateTourismContent() {
       socialInstagram,
       socialTwitter,
       socialTiktok,
+      socialYoutube,
       mapDirections,
       businessId,
     };
@@ -728,12 +854,24 @@ function CreateTourismContent() {
     title,
     description,
     subcategory,
-    starRating,
     numberOfRooms,
     accommodationTypes,
     checkInTime,
     checkOutTime,
-    priceRange,
+    priceFrom,
+    priceUnit,
+    sleeps,
+    bedrooms,
+    beds,
+    bathrooms,
+    backupUtilities,
+    cancellationFreeDays,
+    openingHours,
+    tgcsaGrading,
+    minimumStayNights,
+    childPolicy,
+    seasonalPricing,
+    nearbyAttractions,
     amenities,
     mealOptions,
     languagesSpoken,
@@ -769,7 +907,13 @@ function CreateTourismContent() {
     ticketTiers,
     ticketsUrl,
     ageRestriction,
-    dressCode,
+    doorsOpen,
+    refundPolicy,
+    refundDays,
+    ticketSales,
+    gatePayment,
+    rainPolicy,
+    earlyBirdDeadline,
     lineup,
     parkingAvailable,
     eventAccessibility,
@@ -784,8 +928,6 @@ function CreateTourismContent() {
     meetingPoint,
     pickupAreas,
     contactMethods,
-    phone,
-    whatsapp,
     website,
     hoursMonFri,
     hoursSat,
@@ -794,6 +936,7 @@ function CreateTourismContent() {
     socialInstagram,
     socialTwitter,
     socialTiktok,
+    socialYoutube,
     mapDirections,
     businessId,
   ]);
@@ -819,27 +962,34 @@ function CreateTourismContent() {
       [
         "subcategory",
         "eventType",
-        "starRating",
+        "priceFrom",
+        "sleeps",
+        "bedrooms",
+        "beds",
+        "bathrooms",
+        "openingHours",
         "numberOfRooms",
+        "cancellationFreeDays",
         "bookingUrl",
         "startDate",
         "endDate",
+        "doorsOpen",
         "priceZar",
         "venueCapacity",
         "ticketsUrl",
+        "refundDays",
       ],
       [
         "province",
         "city",
         "contactMethods",
-        "phone",
-        "whatsapp",
         "website",
         "mapDirections",
         "socialFacebook",
         "socialInstagram",
         "socialTwitter",
         "socialTiktok",
+        "socialYoutube",
       ],
       ["images", "videos", "termsAccepted"],
     ][targetStep];
@@ -848,6 +998,8 @@ function CreateTourismContent() {
     if (!targetId) return;
     requestAnimationFrame(() => {
       const el = document.getElementById(targetId);
+      // A field folded under "More details (optional)" is opened first.
+      el?.closest("details")?.setAttribute("open", "");
       el?.focus();
       el?.scrollIntoView({ behavior: "smooth", block: "center" });
     });
@@ -902,12 +1054,20 @@ function CreateTourismContent() {
         description,
         province,
         city,
-        contactMethods,
+        contactMethods: activeContactMethods,
         subcategory,
-        starRating,
+        starRating: "",
         numberOfRooms,
         bookingUrl,
         languagesSpoken,
+        priceFrom,
+        sleeps,
+        bedrooms,
+        beds,
+        bathrooms,
+        cancellationPolicy,
+        cancellationFreeDays,
+        openingHours,
         treatmentTypes,
         activityTypes,
         tourDuration,
@@ -926,13 +1086,14 @@ function CreateTourismContent() {
         minDriverAge,
         insuranceIncluded,
         gpsAvailable,
-        phone,
-        whatsapp,
+        phone: verifiedPhone,
+        whatsapp: verifiedPhone,
         website,
         socialFacebook,
         socialInstagram,
         socialTwitter,
         socialTiktok,
+        socialYoutube,
         mapDirections,
         eventType,
         startDate,
@@ -941,6 +1102,9 @@ function CreateTourismContent() {
         venueName,
         venueCapacity,
         ticketsUrl,
+        doorsOpen,
+        refundPolicy,
+        refundDays,
         locationAddress,
         locationTown,
         joinMethods,
@@ -969,6 +1133,18 @@ function CreateTourismContent() {
     return errors;
   }
 
+  /** Paid events only: where tickets are sold, door payment and refunds. */
+  function buildPaidEntryDetails(): Record<string, unknown> {
+    const details: Record<string, unknown> = {};
+    if (ticketSales) details.ticket_sales = ticketSales;
+    if (eventSellsAtDoor(ticketSales) && gatePayment.length) details.gate_payment = gatePayment;
+    if (refundPolicy) details.refund_policy = refundPolicy;
+    if (refundPolicy === "full_until_days" && refundDays.trim()) {
+      details.refund_days = Number(refundDays);
+    }
+    return details;
+  }
+
   /* ── Category details builder (shared by submit + preview) ── */
 
   function buildTourismCategoryDetails(): Record<string, unknown> {
@@ -978,7 +1154,6 @@ function CreateTourismContent() {
 
     // Group A/B: Accommodation & Spa
     if (group === "A" || group === "B") {
-      if (starRating) categoryDetails.star_rating = Number(starRating);
       if (numberOfRooms) categoryDetails.number_of_rooms = Number(numberOfRooms);
       if (accommodationTypes.length) categoryDetails.accommodation_types = accommodationTypes;
       if (checkInTime) categoryDetails.check_in_time = checkInTime;
@@ -1021,13 +1196,33 @@ function CreateTourismContent() {
       categoryDetails.insurance_included = insuranceIncluded || undefined;
       categoryDetails.gps_available = gpsAvailable || undefined;
     }
-    // Shared fields
-    if (priceRange) categoryDetails.price_range = priceRange;
+    // Stays: guests and rooms
+    if (group === "A") {
+      for (const [key, value] of [
+        ["sleeps", sleeps],
+        ["bedrooms", bedrooms],
+        ["beds", beds],
+        ["bathrooms", bathrooms],
+      ] as const) {
+        if (value.trim()) categoryDetails[key] = Number(value);
+      }
+    }
+    // Attractions: opening hours as one line
+    if (group === "E" && openingHours.trim()) categoryDetails.opening_hours = openingHours.trim();
+    // Shared fields: "From R___ per night / person / unit / entry fee"
+    if (Number(priceFrom) > 0) {
+      categoryDetails.price_from_cents = Math.round(Number(priceFrom) * 100);
+      categoryDetails.price_unit = priceUnit || defaultPriceUnit(group);
+    }
+    if (backupUtilities.length) categoryDetails.backup_utilities = backupUtilities;
     if (amenities.length && group !== "D" && group !== "F") {
       categoryDetails.amenities = amenities;
     }
     if (languagesSpoken) categoryDetails.languages_spoken = languagesSpoken;
     if (cancellationPolicy) categoryDetails.cancellation_policy = cancellationPolicy;
+    if (cancellationPolicy === "free_until_days" && cancellationFreeDays.trim()) {
+      categoryDetails.cancellation_free_days = Number(cancellationFreeDays);
+    }
     if (bookingUrl) categoryDetails.booking_url = normalizeUserEnteredUrl(bookingUrl);
 
     // SA tourism additions
@@ -1113,7 +1308,7 @@ function CreateTourismContent() {
             }
             return urls;
           }),
-          videoCoverForSubmit(videoFiles[0], videoThumbnailFile)
+          videoCoverForSubmit(videoFiles[0], videoThumbnailFile, photoFiles.length === 0)
             .then((files) =>
               uploadRequiredPromotionMedia({ files, area: uploadArea, field: "video_thumbnail" })
             )
@@ -1168,6 +1363,7 @@ function CreateTourismContent() {
             instagram: socialInstagram,
             twitter: socialTwitter,
             tiktok: socialTiktok,
+            youtube: socialYoutube,
           })
             .map(([key, value]) => [key, normalizeUserEnteredUrl(value)] as const)
             .filter(([, value]) => value.length > 0)
@@ -1201,7 +1397,11 @@ function CreateTourismContent() {
               ? normalizeUserEnteredUrl(mapDirections)
               : undefined,
           social_links: Object.keys(socialLinks).length > 0 ? socialLinks : undefined,
-          operating_hours: Object.keys(operatingHours).length > 0 ? operatingHours : undefined,
+          // Attractions give one opening-hours line on step 2 instead.
+          operating_hours:
+            fieldGroup !== "E" && Object.keys(operatingHours).length > 0
+              ? operatingHours
+              : undefined,
           category_details: {
             ...categoryDetails,
             ...(fieldGroup === "C" && joinMethods.includes("meeting_point")
@@ -1209,7 +1409,7 @@ function CreateTourismContent() {
               : {}),
             customer_access: buildTourismAccess(),
           },
-          contact_methods: contactMethods,
+          contact_methods: activeContactMethods,
           termsAccepted,
 
           trialDays,
@@ -1220,6 +1420,8 @@ function CreateTourismContent() {
           headers: withCsrfHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify({ ...body, ...postFields() }),
         });
+        // The new post's id, for the Submitted screen's link (read from a copy of the answer).
+        if (res.ok) setSubmittedId(await createdPostId(res));
         const payload = await res.json().catch(() => null);
 
         if (!res.ok) {
@@ -1295,8 +1497,6 @@ function CreateTourismContent() {
           }
           return;
         }
-
-        toast({ title: "Tourism listing submitted for review.", variant: "success" });
       } else {
         /* ── Event submission ── */
         setSubmitProgress("Saving event...");
@@ -1309,7 +1509,8 @@ function CreateTourismContent() {
         if (Number(priceZar) > 0 && ticketTiers.length) eventDetails.ticket_tiers = ticketTiers;
         if (Number(priceZar) > 0 && ticketsUrl) eventDetails.tickets_url = ticketsUrl;
         if (ageRestriction) eventDetails.age_restriction = ageRestriction;
-        if (dressCode) eventDetails.dress_code = dressCode;
+        if (doorsOpen) eventDetails.doors_open = doorsOpen;
+        if (Number(priceZar) > 0) Object.assign(eventDetails, buildPaidEntryDetails());
         if (lineup) eventDetails.lineup = lineup;
         eventDetails.parking_available = parkingAvailable || undefined;
         if (eventAccessibility.length) eventDetails.accessibility = eventAccessibility;
@@ -1317,10 +1518,8 @@ function CreateTourismContent() {
         if (bringYourOwn) eventDetails.bring_your_own = bringYourOwn;
 
         // SA event additions
-        if (recurring) eventDetails.recurring = recurring;
         if (rainPolicy) eventDetails.rain_policy = rainPolicy;
         if (earlyBirdDeadline) eventDetails.early_bird_deadline = earlyBirdDeadline;
-        if (groupDiscountAvailable) eventDetails.group_discount_available = groupDiscountAvailable;
 
         // Links shown on the event page
         if (website.trim()) eventDetails.website = normalizeUserEnteredUrl(website);
@@ -1332,6 +1531,7 @@ function CreateTourismContent() {
             instagram: socialInstagram,
             twitter: socialTwitter,
             tiktok: socialTiktok,
+            youtube: socialYoutube,
           })
             .map(([key, value]) => [key, normalizeUserEnteredUrl(value)] as const)
             .filter(([, value]) => value.length > 0)
@@ -1350,7 +1550,7 @@ function CreateTourismContent() {
           city,
           location_town: locationTown || undefined,
           location_address: locationAddress || undefined,
-          contact_methods: contactMethods,
+          contact_methods: activeContactMethods,
           images: photoUrls,
           videos: videoUrls,
           video_thumbnail: uploadedVideoThumbnailUrl,
@@ -1373,6 +1573,8 @@ function CreateTourismContent() {
           headers: withCsrfHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify({ ...body, ...postFields() }),
         });
+        // The new post's id, for the Submitted screen's link (read from a copy of the answer).
+        if (res.ok) setSubmittedId(await createdPostId(res));
         const payload = await res.json().catch(() => null);
 
         if (!res.ok) {
@@ -1448,15 +1650,22 @@ function CreateTourismContent() {
           }
           return;
         }
-
-        toast({ title: "Event submitted for review.", variant: "success" });
       }
 
+      // The "Submitted" screen replaces the form (see the render below).
       setSubmitSucceeded(true);
       setUploadStatuses((c) => ({ ...c, saving: "done" }));
       discardDraft();
-      router.push("/dashboard/listings?area=PROMOTIONS_EVENTS&created=tourism");
     } catch (error: unknown) {
+      // No cover frame could be taken for a post with only a video: the poster picks one.
+      if (error instanceof VideoCoverMissingError) {
+        const errors = { video_thumbnail: error.message };
+        setStep(3);
+        setFieldErrors((current) => ({ ...current, ...errors }));
+        setFormError(`Please fix 1 field on Step 4 — ${STEPS[3].label}.`);
+        focusFirstError(errors, 3);
+        return;
+      }
       const uploadFailure = getPromotionMediaUploadErrorState(error);
       if (uploadFailure) {
         const normalizedFieldErrors = normalizeTourismFieldErrors(uploadFailure.fieldErrors);
@@ -1483,23 +1692,7 @@ function CreateTourismContent() {
     setListingType(requestedListingType ?? "tourism_business");
     setTitle("");
     setDescription("");
-    setSubcategory("");
-    setStarRating("");
-    setNumberOfRooms("");
-    setAccommodationTypes([]);
-    setCheckInTime("");
-    setCheckOutTime("");
-    setPriceRange("");
-    setAmenities([]);
-    setMealOptions([]);
-    setLanguagesSpoken("");
-    setCancellationPolicy("");
-    setBookingUrl("");
-    setPetsAllowed(false);
-    setSmokingAllowed(false);
-    setHoursMonFri("");
-    setHoursSat("");
-    setHoursSun("");
+    resetTourismSpecificFields();
     setEventType("");
     setStartDate("");
     setEndDate("");
@@ -1510,7 +1703,13 @@ function CreateTourismContent() {
     setTicketTiers([]);
     setTicketsUrl("");
     setAgeRestriction("");
-    setDressCode("");
+    setDoorsOpen("");
+    setRefundPolicy("");
+    setRefundDays("");
+    setTicketSales("");
+    setGatePayment([]);
+    setRainPolicy("");
+    setEarlyBirdDeadline("");
     setLineup("");
     setParkingAvailable(false);
     setEventAccessibility([]);
@@ -1521,14 +1720,13 @@ function CreateTourismContent() {
     setLocationTown("");
     setLocationAddress("");
     setContactMethods(["call"]);
-    setPhone(profile?.phone ?? "");
-    setWhatsapp(profile?.phone ?? "");
     setPublishAddress(false);
     setWebsite("");
     setSocialFacebook("");
     setSocialInstagram("");
     setSocialTwitter("");
     setSocialTiktok("");
+    setSocialYoutube("");
     setMapDirections("");
     setBusinessId("");
     setPhotoFiles([]);
@@ -1544,12 +1742,24 @@ function CreateTourismContent() {
 
   function resetTourismSpecificFields() {
     setSubcategory("");
-    setStarRating("");
     setNumberOfRooms("");
     setAccommodationTypes([]);
     setCheckInTime("");
     setCheckOutTime("");
-    setPriceRange("");
+    setPriceFrom("");
+    setPriceUnit("");
+    setSleeps("");
+    setBedrooms("");
+    setBeds("");
+    setBathrooms("");
+    setBackupUtilities([]);
+    setCancellationFreeDays("");
+    setOpeningHours("");
+    setTgcsaGrading("");
+    setMinimumStayNights("");
+    setChildPolicy("");
+    setSeasonalPricing(false);
+    setNearbyAttractions("");
     setAmenities([]);
     setMealOptions([]);
     setLanguagesSpoken("");
@@ -1579,6 +1789,7 @@ function CreateTourismContent() {
           instagram: socialInstagram,
           twitter: socialTwitter,
           tiktok: socialTiktok,
+          youtube: socialYoutube,
         }).filter(([, v]) => v.trim().length > 0)
       );
       const operatingHours: Record<string, string> = {};
@@ -1606,7 +1817,8 @@ function CreateTourismContent() {
         video_thumbnail: videoThumbnailUrl,
         gallery_photos: photoPreviewUrls,
         social_links: Object.keys(socialLinks).length > 0 ? socialLinks : null,
-        operating_hours: Object.keys(operatingHours).length > 0 ? operatingHours : null,
+        operating_hours:
+          fieldGroup !== "E" && Object.keys(operatingHours).length > 0 ? operatingHours : null,
         services_offered: null,
         payment_methods_accepted: null,
         delivery_options: null,
@@ -1664,17 +1876,28 @@ function CreateTourismContent() {
     if (Number(priceZar) > 0 && ticketTiers.length) previewEventDetails.ticket_tiers = ticketTiers;
     if (Number(priceZar) > 0 && ticketsUrl) previewEventDetails.tickets_url = ticketsUrl;
     if (ageRestriction) previewEventDetails.age_restriction = ageRestriction;
-    if (dressCode) previewEventDetails.dress_code = dressCode;
+    if (doorsOpen) previewEventDetails.doors_open = doorsOpen;
+    if (Number(priceZar) > 0) Object.assign(previewEventDetails, buildPaidEntryDetails());
     if (lineup) previewEventDetails.lineup = lineup;
     previewEventDetails.parking_available = parkingAvailable;
     if (eventAccessibility.length) previewEventDetails.accessibility = eventAccessibility;
     previewEventDetails.food_drinks_available = foodDrinksAvailable;
     if (bringYourOwn) previewEventDetails.bring_your_own = bringYourOwn;
-    if (recurring) previewEventDetails.recurring = recurring;
     if (rainPolicy) previewEventDetails.rain_policy = rainPolicy;
     if (earlyBirdDeadline) previewEventDetails.early_bird_deadline = earlyBirdDeadline;
-    if (groupDiscountAvailable)
-      previewEventDetails.group_discount_available = groupDiscountAvailable;
+    const previewSocialLinks = Object.fromEntries(
+      Object.entries({
+        facebook: socialFacebook,
+        instagram: socialInstagram,
+        twitter: socialTwitter,
+        tiktok: socialTiktok,
+        youtube: socialYoutube,
+      }).filter(([, v]) => v.trim().length > 0)
+    );
+    if (website.trim()) previewEventDetails.website = website.trim();
+    if (mapDirections.trim()) previewEventDetails.map_directions = mapDirections.trim();
+    if (Object.keys(previewSocialLinks).length > 0)
+      previewEventDetails.social_links = previewSocialLinks;
 
     const previewPromotion: PromotionDetailRecord = {
       id: "preview-event",
@@ -1695,7 +1918,7 @@ function CreateTourismContent() {
       location_city: city || "City",
       location_town: locationTown || null,
       location_address: locationAddress || null,
-      contact_methods: contactMethods,
+      contact_methods: activeContactMethods,
       start_date: startDate ? eventTimeToIso(startDate) : null,
       end_date: endDate ? eventTimeToIso(endDate, true) : null,
       boost_until: null,
@@ -1759,6 +1982,24 @@ function CreateTourismContent() {
 
   const fieldGroup = TOURISM_SUBCATEGORY_FIELD_GROUPS[subcategory] ?? "";
 
+  if (submitSucceeded) {
+    return (
+      <div className="flex min-h-screen flex-col">
+        <Header isAuthenticated />
+        <main id="main-content" className="flex-1">
+          <div className="container-page py-10">
+            <PostSubmittedScreen
+              postTitle={title.trim()}
+              area="PROMOTIONS_EVENTS"
+              postId={submittedId}
+            />
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen flex-col">
       <Header isAuthenticated />
@@ -1781,11 +2022,7 @@ function CreateTourismContent() {
                     ? "List a stay or experience"
                     : "Create an event"
                 }
-                description={
-                  listingType === "tourism_business"
-                    ? "Stays, tours, attractions and experiences."
-                    : "Festivals, gigs, markets and community events."
-                }
+                description="Required fields are marked."
                 breadcrumbs={[
                   { label: "Dashboard", href: "/dashboard" },
                   { label: "Create Post", href: "/post/create" },
@@ -1793,7 +2030,6 @@ function CreateTourismContent() {
                 ]}
                 badgeLabel="Tourism & Events"
                 area="tourism"
-                guideDescription="Describe what visitors can expect. Use the question-mark help to understand a choice."
                 steps={STEPS.map((s, i) =>
                   listingType === "event"
                     ? {
@@ -2073,685 +2309,821 @@ function CreateTourismContent() {
                           </p>
                         )}
 
-                        {/* ── Group A / B: Accommodation & Spa ── */}
-                        {(fieldGroup === "A" || fieldGroup === "B") && (
-                          <>
-                            {/* Star rating */}
+                        {/* ── Always visible: price, stay size, attraction hours ── */}
+                        {fieldGroup && (
+                          <div className="space-y-4">
                             <div className="space-y-2">
-                              <Label htmlFor="starRating">Official star grading</Label>
-                              <p className="text-xs text-muted-foreground">
-                                Official grading (1–5 stars), if applicable.
-                              </p>
-                              <PostSelect
-                                id="starRating"
-                                value={starRating}
-                                onChange={(e) => setStarRating(e.target.value)}
-                                className={SELECT_CLASS}
-                                aria-label="Official star grading"
-                              >
-                                <option value="">Not rated</option>
-                                {[1, 2, 3, 4, 5].map((n) => (
-                                  <option key={n} value={String(n)}>
-                                    {"★".repeat(n)} {n} Star{n > 1 ? "s" : ""}
-                                  </option>
-                                ))}
-                              </PostSelect>
-                              {fieldErrors.starRating && (
-                                <p className="inline-form-error">{fieldErrors.starRating}</p>
-                              )}
-                            </div>
-
-                            {/* Number of rooms */}
-                            <div className="space-y-2">
-                              <Label htmlFor="numberOfRooms">Number of Rooms / Units</Label>
-                              <p className="text-xs text-muted-foreground">
-                                Total available rooms or self-catering units.
-                              </p>
-                              <Input
-                                id="numberOfRooms"
-                                type="number"
-                                min={0}
-                                value={numberOfRooms}
-                                onChange={(e) => setNumberOfRooms(e.target.value)}
-                                placeholder="e.g. 24"
-                              />
-                              {fieldErrors.numberOfRooms && (
-                                <p className="inline-form-error">{fieldErrors.numberOfRooms}</p>
-                              )}
-                            </div>
-
-                            {/* Accommodation types */}
-                            <fieldset className="space-y-2">
-                              <legend className="text-sm font-medium">Accommodation Types</legend>
-                              <p className="text-xs text-muted-foreground">
-                                Select all accommodation styles you offer.
-                              </p>
-                              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                                {TOURISM_ACCOMMODATION_TYPES.map((type) => (
-                                  <label key={type} className="flex items-center gap-2 text-sm">
-                                    <input
-                                      type="checkbox"
-                                      checked={accommodationTypes.includes(type)}
-                                      onChange={() => toggleArrayItem(setAccommodationTypes, type)}
-                                      className="rounded border-gray-300"
-                                    />
-                                    {type}
-                                  </label>
-                                ))}
-                              </div>
-                            </fieldset>
-
-                            {/* Check-in / Check-out */}
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="space-y-2">
-                                <Label htmlFor="checkInTime">Check-in Time</Label>
-                                <p className="text-xs text-muted-foreground">
-                                  Standard guest check-in time.
-                                </p>
+                              <Label htmlFor="priceFrom">Price</Label>
+                              <div className="flex flex-wrap items-center gap-2 text-sm">
+                                <span aria-hidden="true">From R</span>
                                 <Input
-                                  id="checkInTime"
-                                  type="time"
-                                  value={checkInTime}
-                                  onChange={(e) => setCheckInTime(e.target.value)}
+                                  id="priceFrom"
+                                  type="number"
+                                  inputMode="decimal"
+                                  min={0}
+                                  step="0.01"
+                                  className="w-32"
+                                  value={priceFrom}
+                                  onChange={(e) => {
+                                    setPriceFrom(e.target.value);
+                                    clearErrors("priceFrom");
+                                  }}
+                                  placeholder="450"
+                                  aria-invalid={!!fieldErrors.priceFrom}
                                 />
-                              </div>
-                              <div className="space-y-2">
-                                <Label htmlFor="checkOutTime">Check-out Time</Label>
-                                <p className="text-xs text-muted-foreground">
-                                  Standard guest check-out time.
-                                </p>
-                                <Input
-                                  id="checkOutTime"
-                                  type="time"
-                                  value={checkOutTime}
-                                  onChange={(e) => setCheckOutTime(e.target.value)}
-                                />
-                              </div>
-                            </div>
-
-                            {/* Meal options */}
-                            <fieldset className="space-y-2">
-                              <legend className="text-sm font-medium">Meal options</legend>
-                              <p className="text-xs text-muted-foreground">
-                                Tick all meal plans or dining options available to guests.
-                              </p>
-                              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                                {TOURISM_MEAL_OPTIONS.map((m) => (
-                                  <label key={m} className="flex items-center gap-2 text-sm">
-                                    <input
-                                      type="checkbox"
-                                      checked={mealOptions.includes(m)}
-                                      onChange={() => toggleArrayItem(setMealOptions, m)}
-                                      className="rounded border-gray-300"
-                                    />
-                                    {m}
-                                  </label>
-                                ))}
-                              </div>
-                            </fieldset>
-
-                            {/* Smoking / Pet-friendly */}
-                            <div className="flex flex-wrap gap-6">
-                              <label className="flex items-center gap-2 text-sm">
-                                <input
-                                  type="checkbox"
-                                  checked={petsAllowed}
-                                  onChange={(e) => setPetsAllowed(e.target.checked)}
-                                  className="rounded border-gray-300"
-                                />
-                                Pet-friendly
-                              </label>
-                              <label className="flex items-center gap-2 text-sm">
-                                <input
-                                  type="checkbox"
-                                  checked={smokingAllowed}
-                                  onChange={(e) => setSmokingAllowed(e.target.checked)}
-                                  className="rounded border-gray-300"
-                                />
-                                Smoking allowed
-                              </label>
-                            </div>
-                          </>
-                        )}
-
-                        {/* ── Group B extra: Spa treatment types ── */}
-                        {fieldGroup === "B" && (
-                          <fieldset className="space-y-2">
-                            <legend className="text-sm font-medium">Treatment Types</legend>
-                            <p className="text-xs text-muted-foreground">
-                              Select the treatments your spa offers.
-                            </p>
-                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                              {TOURISM_TREATMENT_TYPES.map((t) => (
-                                <label key={t} className="flex items-center gap-2 text-sm">
-                                  <input
-                                    type="checkbox"
-                                    checked={treatmentTypes.includes(t)}
-                                    onChange={() => toggleArrayItem(setTreatmentTypes, t)}
-                                    className="rounded border-gray-300"
-                                  />
-                                  {t}
-                                </label>
-                              ))}
-                            </div>
-                          </fieldset>
-                        )}
-
-                        {/* ── Group C: Tours & Safaris ── */}
-                        {fieldGroup === "C" && (
-                          <>
-                            {/* Activity types */}
-                            {TOURISM_ACTIVITY_TYPES[subcategory] && (
-                              <fieldset className="space-y-2">
-                                <legend className="text-sm font-medium">Activity Types</legend>
-                                <p className="text-xs text-muted-foreground">
-                                  Select the activities included in your offering.
-                                </p>
-                                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                                  {TOURISM_ACTIVITY_TYPES[subcategory].map((a) => (
-                                    <label key={a} className="flex items-center gap-2 text-sm">
-                                      <input
-                                        type="checkbox"
-                                        checked={activityTypes.includes(a)}
-                                        onChange={() => toggleArrayItem(setActivityTypes, a)}
-                                        className="rounded border-gray-300"
-                                      />
-                                      {a}
-                                    </label>
-                                  ))}
-                                </div>
-                              </fieldset>
-                            )}
-
-                            {/* Tour duration */}
-                            <div className="space-y-2">
-                              <Label htmlFor="tourDuration">Tour duration</Label>
-                              <p className="text-xs text-muted-foreground">
-                                Typical length of the tour or experience.
-                              </p>
-                              <PostSelect
-                                id="tourDuration"
-                                value={tourDuration}
-                                onChange={(e) => setTourDuration(e.target.value)}
-                                className={SELECT_CLASS}
-                                aria-label="Tour duration"
-                              >
-                                <option value="">Select...</option>
-                                {TOURISM_TOUR_DURATIONS.map((d) => (
-                                  <option key={d.value} value={d.value}>
-                                    {d.label}
-                                  </option>
-                                ))}
-                              </PostSelect>
-                            </div>
-
-                            {/* Max group size */}
-                            <div className="space-y-2">
-                              <Label htmlFor="maxGroupSize">Max Group Size</Label>
-                              <p className="text-xs text-muted-foreground">
-                                Maximum participants per group or booking.
-                              </p>
-                              <Input
-                                id="maxGroupSize"
-                                type="number"
-                                min={1}
-                                value={maxGroupSize}
-                                onChange={(e) => setMaxGroupSize(e.target.value)}
-                                placeholder="e.g. 12"
-                              />
-                            </div>
-
-                            {/* Difficulty (adventure only) */}
-                            {subcategory === "adventure_activities" && (
-                              <div className="space-y-2">
-                                <Label htmlFor="difficultyLevel">Difficulty level</Label>
-                                <p className="text-xs text-muted-foreground">
-                                  Physical effort required for this activity.
-                                </p>
-                                <PostSelect
-                                  id="difficultyLevel"
-                                  value={difficultyLevel}
-                                  onChange={(e) => setDifficultyLevel(e.target.value)}
-                                  className={SELECT_CLASS}
-                                  aria-label="Difficulty level"
+                                <select
+                                  id="priceUnit"
+                                  aria-label="Price is"
+                                  className={`${SELECT_CLASS} w-auto`}
+                                  value={priceUnit || defaultPriceUnit(fieldGroup)}
+                                  onChange={(e) => setPriceUnit(e.target.value)}
                                 >
-                                  <option value="">Select...</option>
-                                  {TOURISM_DIFFICULTY_LEVELS.map((d) => (
-                                    <option key={d.value} value={d.value}>
-                                      {d.label}
+                                  {TOURISM_PRICE_UNITS.map((unit) => (
+                                    <option key={unit.value} value={unit.value}>
+                                      {unit.label}
                                     </option>
                                   ))}
-                                </PostSelect>
+                                </select>
                               </div>
-                            )}
-
-                            {/* Equipment provided (adventure only) */}
-                            {subcategory === "adventure_activities" && (
-                              <label className="flex items-center gap-2 text-sm">
-                                <input
-                                  type="checkbox"
-                                  checked={equipmentProvided}
-                                  onChange={(e) => setEquipmentProvided(e.target.checked)}
-                                  className="rounded border-gray-300"
-                                />
-                                Equipment provided
-                              </label>
-                            )}
-
-                            {/* What's included */}
-                            <div className="space-y-2">
-                              <Label htmlFor="whatsIncluded">What&apos;s Included</Label>
-                              <p className="text-xs text-muted-foreground">
-                                List everything guests receive with the booking.
-                              </p>
-                              <Textarea
-                                id="whatsIncluded"
-                                value={whatsIncluded}
-                                onChange={(e) => setWhatsIncluded(e.target.value)}
-                                placeholder="e.g. Transport, lunch, park fees..."
-                                rows={3}
-                              />
-                            </div>
-
-                            {/* Age restriction */}
-                            <div className="space-y-2">
-                              <Label htmlFor="tourismAgeRestriction">Age restriction</Label>
-                              <p className="text-xs text-muted-foreground">
-                                Minimum age requirement, if any.
-                              </p>
-                              <PostSelect
-                                id="tourismAgeRestriction"
-                                value={tourismAgeRestriction}
-                                onChange={(e) => setTourismAgeRestriction(e.target.value)}
-                                className={SELECT_CLASS}
-                                aria-label="Age restriction"
-                              >
-                                <option value="">No restriction</option>
-                                {TOURISM_AGE_RESTRICTIONS.map((a) => (
-                                  <option key={a.value} value={a.value}>
-                                    {a.label}
-                                  </option>
-                                ))}
-                              </PostSelect>
-                            </div>
-                          </>
-                        )}
-
-                        {/* ── Group D: Travel Agency ── */}
-                        {fieldGroup === "D" && (
-                          <>
-                            {/* Services offered */}
-                            <fieldset className="space-y-2">
-                              <legend className="text-sm font-medium">Services Offered</legend>
-                              <p className="text-xs text-muted-foreground">
-                                Select all travel services your agency provides.
-                              </p>
-                              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                                {TOURISM_TRAVEL_SERVICES.map((s) => (
-                                  <label key={s} className="flex items-center gap-2 text-sm">
-                                    <input
-                                      type="checkbox"
-                                      checked={servicesOffered.includes(s)}
-                                      onChange={() => toggleArrayItem(setServicesOffered, s)}
-                                      className="rounded border-gray-300"
-                                    />
-                                    {s}
-                                  </label>
-                                ))}
-                              </div>
-                            </fieldset>
-
-                            {/* Specializations */}
-                            <fieldset className="space-y-2">
-                              <legend className="text-sm font-medium">Specializations</legend>
-                              <p className="text-xs text-muted-foreground">
-                                Select your areas of travel expertise.
-                              </p>
-                              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                                {TOURISM_TRAVEL_SPECIALIZATIONS.map((s) => (
-                                  <label key={s} className="flex items-center gap-2 text-sm">
-                                    <input
-                                      type="checkbox"
-                                      checked={tourismSpecializations.includes(s)}
-                                      onChange={() => toggleArrayItem(setTourismSpecializations, s)}
-                                      className="rounded border-gray-300"
-                                    />
-                                    {s}
-                                  </label>
-                                ))}
-                              </div>
-                            </fieldset>
-                          </>
-                        )}
-
-                        {/* ── Group E: Attractions ── */}
-                        {fieldGroup === "E" && (
-                          <>
-                            <div className="flex flex-wrap gap-6">
-                              <label className="flex items-center gap-2 text-sm">
-                                <input
-                                  type="checkbox"
-                                  checked={guidedTours}
-                                  onChange={(e) => setGuidedTours(e.target.checked)}
-                                  className="rounded border-gray-300"
-                                />
-                                Guided tours available
-                              </label>
-                              <label className="flex items-center gap-2 text-sm">
-                                <input
-                                  type="checkbox"
-                                  checked={audioGuide}
-                                  onChange={(e) => setAudioGuide(e.target.checked)}
-                                  className="rounded border-gray-300"
-                                />
-                                Audio guide available
-                              </label>
-                            </div>
-
-                            {/* Visit duration */}
-                            <div className="space-y-2">
-                              <Label htmlFor="visitDuration">Typical visit duration</Label>
-                              <p className="text-xs text-muted-foreground">
-                                How long a typical visit takes.
-                              </p>
-                              <PostSelect
-                                id="visitDuration"
-                                value={visitDuration}
-                                onChange={(e) => setVisitDuration(e.target.value)}
-                                className={SELECT_CLASS}
-                                aria-label="Typical visit duration"
-                              >
-                                <option value="">Select...</option>
-                                {TOURISM_VISIT_DURATIONS.map((d) => (
-                                  <option key={d.value} value={d.value}>
-                                    {d.label}
-                                  </option>
-                                ))}
-                              </PostSelect>
-                            </div>
-
-                            {/* Age restriction */}
-                            <div className="space-y-2">
-                              <Label htmlFor="tourismAgeRestrictionAttr">Age restriction</Label>
-                              <p className="text-xs text-muted-foreground">
-                                Minimum age requirement, if any.
-                              </p>
-                              <PostSelect
-                                id="tourismAgeRestrictionAttr"
-                                value={tourismAgeRestriction}
-                                onChange={(e) => setTourismAgeRestriction(e.target.value)}
-                                className={SELECT_CLASS}
-                                aria-label="Age restriction"
-                              >
-                                <option value="">No restriction</option>
-                                {TOURISM_AGE_RESTRICTIONS.map((a) => (
-                                  <option key={a.value} value={a.value}>
-                                    {a.label}
-                                  </option>
-                                ))}
-                              </PostSelect>
-                            </div>
-                          </>
-                        )}
-
-                        {/* ── Group F: Car Rental ── */}
-                        {fieldGroup === "F" && (
-                          <>
-                            {/* Vehicle types */}
-                            <fieldset className="space-y-2">
-                              <legend className="text-sm font-medium">Vehicle Types</legend>
-                              <p className="text-xs text-muted-foreground">
-                                Select all vehicle categories available for hire.
-                              </p>
-                              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                                {TOURISM_VEHICLE_TYPES.map((v) => (
-                                  <label key={v} className="flex items-center gap-2 text-sm">
-                                    <input
-                                      type="checkbox"
-                                      checked={vehicleTypes.includes(v)}
-                                      onChange={() => toggleArrayItem(setVehicleTypes, v)}
-                                      className="rounded border-gray-300"
-                                    />
-                                    {v}
-                                  </label>
-                                ))}
-                              </div>
-                            </fieldset>
-
-                            {/* Min driver age */}
-                            <div className="space-y-2">
-                              <Label htmlFor="minDriverAge">Minimum Driver Age</Label>
-                              <p className="text-xs text-muted-foreground">
-                                Minimum age to rent a vehicle.
-                              </p>
-                              <Input
-                                id="minDriverAge"
-                                type="number"
-                                min={16}
-                                max={99}
-                                value={minDriverAge}
-                                onChange={(e) => setMinDriverAge(e.target.value)}
-                                placeholder="e.g. 21"
-                              />
-                            </div>
-
-                            {/* Toggles */}
-                            <div className="flex flex-wrap gap-6">
-                              <label className="flex items-center gap-2 text-sm">
-                                <input
-                                  type="checkbox"
-                                  checked={deliveryCollection}
-                                  onChange={(e) => setDeliveryCollection(e.target.checked)}
-                                  className="rounded border-gray-300"
-                                />
-                                Delivery &amp; Collection
-                              </label>
-                              <label className="flex items-center gap-2 text-sm">
-                                <input
-                                  type="checkbox"
-                                  checked={insuranceIncluded}
-                                  onChange={(e) => setInsuranceIncluded(e.target.checked)}
-                                  className="rounded border-gray-300"
-                                />
-                                Insurance included
-                              </label>
-                              <label className="flex items-center gap-2 text-sm">
-                                <input
-                                  type="checkbox"
-                                  checked={gpsAvailable}
-                                  onChange={(e) => setGpsAvailable(e.target.checked)}
-                                  className="rounded border-gray-300"
-                                />
-                                GPS Available
-                              </label>
-                            </div>
-                          </>
-                        )}
-
-                        {/* ── Shared fields (shown when a category is selected) ── */}
-                        {fieldGroup && (
-                          <>
-                            {/* Price range */}
-                            <div className="space-y-2">
-                              <Label htmlFor="priceRange">Price range</Label>
-                              <p className="text-xs text-muted-foreground">
-                                Gives visitors a quick idea of your pricing.
-                              </p>
-                              <PostSelect
-                                id="priceRange"
-                                value={priceRange}
-                                onChange={(e) => setPriceRange(e.target.value)}
-                                className={SELECT_CLASS}
-                                aria-label="Price range"
-                              >
-                                <option value="">Select...</option>
-                                {TOURISM_PRICE_RANGES.map((r) => (
-                                  <option key={r.value} value={r.value}>
-                                    {r.label}
-                                  </option>
-                                ))}
-                              </PostSelect>
-                            </div>
-
-                            {/* Amenities (not for D/F) */}
-                            {fieldGroup !== "D" && fieldGroup !== "F" && (
-                              <fieldset className="space-y-2">
-                                <legend className="text-sm font-medium">Amenities</legend>
-                                <p className="text-xs text-muted-foreground">
-                                  Select all facilities and amenities available on site.
-                                </p>
-                                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                                  {TOURISM_AMENITIES.map((a) => (
-                                    <label key={a} className="flex items-center gap-2 text-sm">
-                                      <input
-                                        type="checkbox"
-                                        checked={amenities.includes(a)}
-                                        onChange={() => toggleArrayItem(setAmenities, a)}
-                                        className="rounded border-gray-300"
-                                      />
-                                      {a}
-                                    </label>
-                                  ))}
-                                </div>
-                              </fieldset>
-                            )}
-
-                            {/* Languages */}
-                            <div className="space-y-2">
-                              <Label htmlFor="languagesSpoken">Languages Spoken</Label>
-                              <p className="text-xs text-muted-foreground">
-                                Comma-separated list of languages your staff speaks.
-                              </p>
-                              <Input
-                                id="languagesSpoken"
-                                value={languagesSpoken}
-                                onChange={(e) => setLanguagesSpoken(e.target.value)}
-                                placeholder="e.g. English, Zulu, Afrikaans"
-                              />
-                            </div>
-
-                            {/* Cancellation policy */}
-                            <div className="space-y-2">
-                              <Label htmlFor="cancellationPolicy">Cancellation policy</Label>
-                              <p className="text-xs text-muted-foreground">
-                                Your standard terms for cancellations and refunds.
-                              </p>
-                              <PostSelect
-                                id="cancellationPolicy"
-                                value={cancellationPolicy}
-                                onChange={(e) => setCancellationPolicy(e.target.value)}
-                                className={SELECT_CLASS}
-                                aria-label="Cancellation policy"
-                              >
-                                <option value="">Select...</option>
-                                {TOURISM_CANCELLATION_POLICIES.map((c) => (
-                                  <option key={c.value} value={c.value}>
-                                    {c.label}
-                                  </option>
-                                ))}
-                              </PostSelect>
-                            </div>
-
-                            {/* Booking URL */}
-                            <div className="space-y-2">
-                              <Label htmlFor="bookingUrl">Booking URL</Label>
-                              <p className="text-xs text-muted-foreground">
-                                Direct link where customers can make bookings online.
-                              </p>
-                              <Input
-                                id="bookingUrl"
-                                type="url"
-                                value={bookingUrl}
-                                onChange={(e) => {
-                                  setBookingUrl(e.target.value);
-                                  clearErrors("bookingUrl");
-                                }}
-                                placeholder="https://www.booking.com/..."
-                                aria-invalid={!!fieldErrors.bookingUrl}
-                              />
-                              {fieldErrors.bookingUrl && (
-                                <p className="inline-form-error">{fieldErrors.bookingUrl}</p>
+                              {fieldErrors.priceFrom && (
+                                <p className="inline-form-error">{fieldErrors.priceFrom}</p>
                               )}
                             </div>
 
-                            {/* SA Tourism additions */}
-                            <div className="space-y-4 rounded-lg border bg-muted/30 p-4">
-                              <p className="text-sm font-medium">South African Tourism Details</p>
-                              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                <div className="space-y-1">
-                                  <Label htmlFor="tgcsaGrading">TGCSA Grading</Label>
-                                  <PostSelect
-                                    id="tgcsaGrading"
-                                    aria-label="TGCSA Grading"
-                                    className="w-full rounded-md border px-3 py-2 text-sm"
-                                    value={tgcsaGrading}
-                                    onChange={(e) => setTgcsaGrading(e.target.value)}
-                                  >
-                                    <option value="">Select…</option>
-                                    <option value="1_star">1 Star</option>
-                                    <option value="2_star">2 Stars</option>
-                                    <option value="3_star">3 Stars</option>
-                                    <option value="4_star">4 Stars</option>
-                                    <option value="5_star">5 Stars</option>
-                                  </PostSelect>
-                                  <p className="text-xs text-muted-foreground">
-                                    Tourism Grading Council SA rating.
-                                  </p>
-                                </div>
-
-                                <div className="space-y-1">
-                                  <Label htmlFor="minimumStayNights">Minimum stay</Label>
-                                  <Input
-                                    id="minimumStayNights"
-                                    type="number"
-                                    min={1}
-                                    value={minimumStayNights}
-                                    onChange={(e) => setMinimumStayNights(e.target.value)}
-                                    placeholder="e.g. 2"
-                                  />
-                                  <p className="text-xs text-muted-foreground">Nights</p>
-                                </div>
+                            {fieldGroup === "A" && (
+                              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                                {(
+                                  [
+                                    ["sleeps", "Sleeps", sleeps, setSleeps, 1],
+                                    ["bedrooms", "Bedrooms", bedrooms, setBedrooms, 0],
+                                    ["beds", "Beds", beds, setBeds, 0],
+                                    ["bathrooms", "Bathrooms", bathrooms, setBathrooms, 0],
+                                  ] as const
+                                ).map(([id, label, value, setter, min]) => (
+                                  <div key={id} className="space-y-2">
+                                    <Label htmlFor={id}>{label}</Label>
+                                    <Input
+                                      id={id}
+                                      type="number"
+                                      inputMode="numeric"
+                                      min={min}
+                                      step={1}
+                                      value={value}
+                                      onChange={(e) => {
+                                        setter(e.target.value);
+                                        clearErrors(id);
+                                      }}
+                                      aria-invalid={!!fieldErrors[id]}
+                                    />
+                                    {fieldErrors[id] && (
+                                      <p className="inline-form-error">{fieldErrors[id]}</p>
+                                    )}
+                                  </div>
+                                ))}
                               </div>
+                            )}
 
-                              <div className="space-y-1">
-                                <Label htmlFor="childPolicy">Child policy</Label>
-                                <PostSelect
-                                  id="childPolicy"
-                                  aria-label="Child policy"
-                                  className="w-full rounded-md border px-3 py-2 text-sm"
-                                  value={childPolicy}
-                                  onChange={(e) => setChildPolicy(e.target.value)}
-                                >
-                                  <option value="">Select…</option>
-                                  <option value="children_welcome">Children Welcome</option>
-                                  <option value="children_over_6">Children Over 6</option>
-                                  <option value="children_over_12">Children Over 12</option>
-                                  <option value="adults_only">Adults Only</option>
-                                </PostSelect>
-                              </div>
-
-                              <div className="space-y-1">
-                                <Label htmlFor="nearbyAttractions">Nearby attractions</Label>
+                            {fieldGroup === "E" && (
+                              <div className="space-y-2">
+                                <Label htmlFor="openingHours">Opening hours</Label>
                                 <Input
-                                  id="nearbyAttractions"
-                                  value={nearbyAttractions}
-                                  onChange={(e) => setNearbyAttractions(e.target.value)}
-                                  placeholder="e.g. Kruger National Park, Table Mountain"
-                                  maxLength={500}
+                                  id="openingHours"
+                                  value={openingHours}
+                                  maxLength={120}
+                                  onChange={(e) => {
+                                    setOpeningHours(e.target.value.slice(0, 120));
+                                    clearErrors("openingHours");
+                                  }}
+                                  placeholder="e.g. Daily 08:00 to 17:00"
+                                  aria-invalid={!!fieldErrors.openingHours}
                                 />
+                                {fieldErrors.openingHours && (
+                                  <p className="inline-form-error">{fieldErrors.openingHours}</p>
+                                )}
                               </div>
+                            )}
+                          </div>
+                        )}
 
-                              <label className="flex items-center gap-2 text-sm">
-                                <input
-                                  type="checkbox"
-                                  checked={seasonalPricing}
-                                  onChange={(e) => setSeasonalPricing(e.target.checked)}
-                                  className="rounded border-gray-300"
-                                />
-                                Has peak / off-peak seasonal pricing
-                              </label>
+                        {fieldGroup && (
+                          <details className="rounded-xl border border-border p-4">
+                            <summary className="flex min-h-11 cursor-pointer items-center text-sm font-semibold">
+                              More details (optional)
+                            </summary>
+                            <div className="mt-4 space-y-6">
+                              {/* ── Group A / B: Accommodation & Spa ── */}
+                              {(fieldGroup === "A" || fieldGroup === "B") && (
+                                <>
+                                  {/* Number of rooms */}
+                                  <div className="space-y-2">
+                                    <Label htmlFor="numberOfRooms">Number of Rooms / Units</Label>
+                                    <p className="text-xs text-muted-foreground">
+                                      Total available rooms or self-catering units.
+                                    </p>
+                                    <Input
+                                      id="numberOfRooms"
+                                      type="number"
+                                      min={0}
+                                      value={numberOfRooms}
+                                      onChange={(e) => setNumberOfRooms(e.target.value)}
+                                      placeholder="e.g. 24"
+                                    />
+                                    {fieldErrors.numberOfRooms && (
+                                      <p className="inline-form-error">
+                                        {fieldErrors.numberOfRooms}
+                                      </p>
+                                    )}
+                                  </div>
+
+                                  {/* Accommodation types */}
+                                  <fieldset className="space-y-2">
+                                    <legend className="text-sm font-medium">
+                                      Accommodation Types
+                                    </legend>
+                                    <p className="text-xs text-muted-foreground">
+                                      Select all accommodation styles you offer.
+                                    </p>
+                                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                                      {TOURISM_ACCOMMODATION_TYPES.map((type) => (
+                                        <label
+                                          key={type}
+                                          className="flex items-center gap-2 text-sm"
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={accommodationTypes.includes(type)}
+                                            onChange={() =>
+                                              toggleArrayItem(setAccommodationTypes, type)
+                                            }
+                                            className="rounded border-gray-300"
+                                          />
+                                          {type}
+                                        </label>
+                                      ))}
+                                    </div>
+                                  </fieldset>
+
+                                  {/* Check-in / Check-out */}
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                      <Label htmlFor="checkInTime">Check-in Time</Label>
+                                      <p className="text-xs text-muted-foreground">
+                                        Standard guest check-in time.
+                                      </p>
+                                      <Input
+                                        id="checkInTime"
+                                        type="time"
+                                        value={checkInTime}
+                                        onChange={(e) => setCheckInTime(e.target.value)}
+                                      />
+                                    </div>
+                                    <div className="space-y-2">
+                                      <Label htmlFor="checkOutTime">Check-out Time</Label>
+                                      <p className="text-xs text-muted-foreground">
+                                        Standard guest check-out time.
+                                      </p>
+                                      <Input
+                                        id="checkOutTime"
+                                        type="time"
+                                        value={checkOutTime}
+                                        onChange={(e) => setCheckOutTime(e.target.value)}
+                                      />
+                                    </div>
+                                  </div>
+
+                                  {/* Meal options */}
+                                  <fieldset className="space-y-2">
+                                    <legend className="text-sm font-medium">Meal options</legend>
+                                    <p className="text-xs text-muted-foreground">
+                                      Tick all meal plans or dining options available to guests.
+                                    </p>
+                                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                                      {TOURISM_MEAL_OPTIONS.map((m) => (
+                                        <label key={m} className="flex items-center gap-2 text-sm">
+                                          <input
+                                            type="checkbox"
+                                            checked={mealOptions.includes(m)}
+                                            onChange={() => toggleArrayItem(setMealOptions, m)}
+                                            className="rounded border-gray-300"
+                                          />
+                                          {m}
+                                        </label>
+                                      ))}
+                                    </div>
+                                  </fieldset>
+
+                                  {/* Smoking / Pet-friendly */}
+                                  <div className="flex flex-wrap gap-6">
+                                    <label className="flex items-center gap-2 text-sm">
+                                      <input
+                                        type="checkbox"
+                                        checked={petsAllowed}
+                                        onChange={(e) => setPetsAllowed(e.target.checked)}
+                                        className="rounded border-gray-300"
+                                      />
+                                      Pet-friendly
+                                    </label>
+                                    <label className="flex items-center gap-2 text-sm">
+                                      <input
+                                        type="checkbox"
+                                        checked={smokingAllowed}
+                                        onChange={(e) => setSmokingAllowed(e.target.checked)}
+                                        className="rounded border-gray-300"
+                                      />
+                                      Smoking allowed
+                                    </label>
+                                  </div>
+                                </>
+                              )}
+
+                              {/* ── Group B extra: Spa treatment types ── */}
+                              {fieldGroup === "B" && (
+                                <fieldset className="space-y-2">
+                                  <legend className="text-sm font-medium">Treatment Types</legend>
+                                  <p className="text-xs text-muted-foreground">
+                                    Select the treatments your spa offers.
+                                  </p>
+                                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                                    {TOURISM_TREATMENT_TYPES.map((t) => (
+                                      <label key={t} className="flex items-center gap-2 text-sm">
+                                        <input
+                                          type="checkbox"
+                                          checked={treatmentTypes.includes(t)}
+                                          onChange={() => toggleArrayItem(setTreatmentTypes, t)}
+                                          className="rounded border-gray-300"
+                                        />
+                                        {t}
+                                      </label>
+                                    ))}
+                                  </div>
+                                </fieldset>
+                              )}
+
+                              {/* ── Group C: Tours & Safaris ── */}
+                              {fieldGroup === "C" && (
+                                <>
+                                  {/* Activity types */}
+                                  {TOURISM_ACTIVITY_TYPES[subcategory] && (
+                                    <fieldset className="space-y-2">
+                                      <legend className="text-sm font-medium">
+                                        Activity Types
+                                      </legend>
+                                      <p className="text-xs text-muted-foreground">
+                                        Select the activities included in your offering.
+                                      </p>
+                                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                                        {TOURISM_ACTIVITY_TYPES[subcategory].map((a) => (
+                                          <label
+                                            key={a}
+                                            className="flex items-center gap-2 text-sm"
+                                          >
+                                            <input
+                                              type="checkbox"
+                                              checked={activityTypes.includes(a)}
+                                              onChange={() => toggleArrayItem(setActivityTypes, a)}
+                                              className="rounded border-gray-300"
+                                            />
+                                            {a}
+                                          </label>
+                                        ))}
+                                      </div>
+                                    </fieldset>
+                                  )}
+
+                                  {/* Tour duration */}
+                                  <div className="space-y-2">
+                                    <Label htmlFor="tourDuration">Tour duration</Label>
+                                    <p className="text-xs text-muted-foreground">
+                                      Typical length of the tour or experience.
+                                    </p>
+                                    <select
+                                      id="tourDuration"
+                                      value={tourDuration}
+                                      onChange={(e) => setTourDuration(e.target.value)}
+                                      className={SELECT_CLASS}
+                                      aria-label="Tour duration"
+                                    >
+                                      <option value="">Select...</option>
+                                      {TOURISM_TOUR_DURATIONS.map((d) => (
+                                        <option key={d.value} value={d.value}>
+                                          {d.label}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+
+                                  {/* Max group size */}
+                                  <div className="space-y-2">
+                                    <Label htmlFor="maxGroupSize">Max Group Size</Label>
+                                    <p className="text-xs text-muted-foreground">
+                                      Maximum participants per group or booking.
+                                    </p>
+                                    <Input
+                                      id="maxGroupSize"
+                                      type="number"
+                                      min={1}
+                                      value={maxGroupSize}
+                                      onChange={(e) => setMaxGroupSize(e.target.value)}
+                                      placeholder="e.g. 12"
+                                    />
+                                  </div>
+
+                                  {/* Difficulty (adventure only) */}
+                                  {subcategory === "adventure_activities" && (
+                                    <div className="space-y-2">
+                                      <Label htmlFor="difficultyLevel">Difficulty level</Label>
+                                      <p className="text-xs text-muted-foreground">
+                                        Physical effort required for this activity.
+                                      </p>
+                                      <select
+                                        id="difficultyLevel"
+                                        value={difficultyLevel}
+                                        onChange={(e) => setDifficultyLevel(e.target.value)}
+                                        className={SELECT_CLASS}
+                                        aria-label="Difficulty level"
+                                      >
+                                        <option value="">Select...</option>
+                                        {TOURISM_DIFFICULTY_LEVELS.map((d) => (
+                                          <option key={d.value} value={d.value}>
+                                            {d.label}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                  )}
+
+                                  {/* Equipment provided (adventure only) */}
+                                  {subcategory === "adventure_activities" && (
+                                    <label className="flex items-center gap-2 text-sm">
+                                      <input
+                                        type="checkbox"
+                                        checked={equipmentProvided}
+                                        onChange={(e) => setEquipmentProvided(e.target.checked)}
+                                        className="rounded border-gray-300"
+                                      />
+                                      Equipment provided
+                                    </label>
+                                  )}
+
+                                  {/* What's included */}
+                                  <div className="space-y-2">
+                                    <Label htmlFor="whatsIncluded">What&apos;s Included</Label>
+                                    <p className="text-xs text-muted-foreground">
+                                      List everything guests receive with the booking.
+                                    </p>
+                                    <Textarea
+                                      id="whatsIncluded"
+                                      value={whatsIncluded}
+                                      onChange={(e) => setWhatsIncluded(e.target.value)}
+                                      placeholder="e.g. Transport, lunch, park fees..."
+                                      rows={3}
+                                    />
+                                  </div>
+
+                                  {/* Age restriction */}
+                                  <div className="space-y-2">
+                                    <Label htmlFor="tourismAgeRestriction">Age restriction</Label>
+                                    <p className="text-xs text-muted-foreground">
+                                      Minimum age requirement, if any.
+                                    </p>
+                                    <select
+                                      id="tourismAgeRestriction"
+                                      value={tourismAgeRestriction}
+                                      onChange={(e) => setTourismAgeRestriction(e.target.value)}
+                                      className={SELECT_CLASS}
+                                      aria-label="Age restriction"
+                                    >
+                                      <option value="">No restriction</option>
+                                      {TOURISM_AGE_RESTRICTIONS.map((a) => (
+                                        <option key={a.value} value={a.value}>
+                                          {a.label}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                </>
+                              )}
+
+                              {/* ── Group D: Travel Agency ── */}
+                              {fieldGroup === "D" && (
+                                <>
+                                  {/* Services offered */}
+                                  <fieldset className="space-y-2">
+                                    <legend className="text-sm font-medium">
+                                      Services Offered
+                                    </legend>
+                                    <p className="text-xs text-muted-foreground">
+                                      Select all travel services your agency provides.
+                                    </p>
+                                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                                      {TOURISM_TRAVEL_SERVICES.map((s) => (
+                                        <label key={s} className="flex items-center gap-2 text-sm">
+                                          <input
+                                            type="checkbox"
+                                            checked={servicesOffered.includes(s)}
+                                            onChange={() => toggleArrayItem(setServicesOffered, s)}
+                                            className="rounded border-gray-300"
+                                          />
+                                          {s}
+                                        </label>
+                                      ))}
+                                    </div>
+                                  </fieldset>
+
+                                  {/* Specializations */}
+                                  <fieldset className="space-y-2">
+                                    <legend className="text-sm font-medium">Specializations</legend>
+                                    <p className="text-xs text-muted-foreground">
+                                      Select your areas of travel expertise.
+                                    </p>
+                                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                                      {TOURISM_TRAVEL_SPECIALIZATIONS.map((s) => (
+                                        <label key={s} className="flex items-center gap-2 text-sm">
+                                          <input
+                                            type="checkbox"
+                                            checked={tourismSpecializations.includes(s)}
+                                            onChange={() =>
+                                              toggleArrayItem(setTourismSpecializations, s)
+                                            }
+                                            className="rounded border-gray-300"
+                                          />
+                                          {s}
+                                        </label>
+                                      ))}
+                                    </div>
+                                  </fieldset>
+                                </>
+                              )}
+
+                              {/* ── Group E: Attractions ── */}
+                              {fieldGroup === "E" && (
+                                <>
+                                  <div className="flex flex-wrap gap-6">
+                                    <label className="flex items-center gap-2 text-sm">
+                                      <input
+                                        type="checkbox"
+                                        checked={guidedTours}
+                                        onChange={(e) => setGuidedTours(e.target.checked)}
+                                        className="rounded border-gray-300"
+                                      />
+                                      Guided tours available
+                                    </label>
+                                    <label className="flex items-center gap-2 text-sm">
+                                      <input
+                                        type="checkbox"
+                                        checked={audioGuide}
+                                        onChange={(e) => setAudioGuide(e.target.checked)}
+                                        className="rounded border-gray-300"
+                                      />
+                                      Audio guide available
+                                    </label>
+                                  </div>
+
+                                  {/* Visit duration */}
+                                  <div className="space-y-2">
+                                    <Label htmlFor="visitDuration">Typical visit duration</Label>
+                                    <p className="text-xs text-muted-foreground">
+                                      How long a typical visit takes.
+                                    </p>
+                                    <select
+                                      id="visitDuration"
+                                      value={visitDuration}
+                                      onChange={(e) => setVisitDuration(e.target.value)}
+                                      className={SELECT_CLASS}
+                                      aria-label="Typical visit duration"
+                                    >
+                                      <option value="">Select...</option>
+                                      {TOURISM_VISIT_DURATIONS.map((d) => (
+                                        <option key={d.value} value={d.value}>
+                                          {d.label}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+
+                                  {/* Age restriction */}
+                                  <div className="space-y-2">
+                                    <Label htmlFor="tourismAgeRestrictionAttr">
+                                      Age restriction
+                                    </Label>
+                                    <p className="text-xs text-muted-foreground">
+                                      Minimum age requirement, if any.
+                                    </p>
+                                    <select
+                                      id="tourismAgeRestrictionAttr"
+                                      value={tourismAgeRestriction}
+                                      onChange={(e) => setTourismAgeRestriction(e.target.value)}
+                                      className={SELECT_CLASS}
+                                      aria-label="Age restriction"
+                                    >
+                                      <option value="">No restriction</option>
+                                      {TOURISM_AGE_RESTRICTIONS.map((a) => (
+                                        <option key={a.value} value={a.value}>
+                                          {a.label}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                </>
+                              )}
+
+                              {/* ── Group F: Car Rental ── */}
+                              {fieldGroup === "F" && (
+                                <>
+                                  {/* Vehicle types */}
+                                  <fieldset className="space-y-2">
+                                    <legend className="text-sm font-medium">Vehicle Types</legend>
+                                    <p className="text-xs text-muted-foreground">
+                                      Select all vehicle categories available for hire.
+                                    </p>
+                                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                                      {TOURISM_VEHICLE_TYPES.map((v) => (
+                                        <label key={v} className="flex items-center gap-2 text-sm">
+                                          <input
+                                            type="checkbox"
+                                            checked={vehicleTypes.includes(v)}
+                                            onChange={() => toggleArrayItem(setVehicleTypes, v)}
+                                            className="rounded border-gray-300"
+                                          />
+                                          {v}
+                                        </label>
+                                      ))}
+                                    </div>
+                                  </fieldset>
+
+                                  {/* Min driver age */}
+                                  <div className="space-y-2">
+                                    <Label htmlFor="minDriverAge">Minimum Driver Age</Label>
+                                    <p className="text-xs text-muted-foreground">
+                                      Minimum age to rent a vehicle.
+                                    </p>
+                                    <Input
+                                      id="minDriverAge"
+                                      type="number"
+                                      min={16}
+                                      max={99}
+                                      value={minDriverAge}
+                                      onChange={(e) => setMinDriverAge(e.target.value)}
+                                      placeholder="e.g. 21"
+                                    />
+                                  </div>
+
+                                  {/* Toggles */}
+                                  <div className="flex flex-wrap gap-6">
+                                    <label className="flex items-center gap-2 text-sm">
+                                      <input
+                                        type="checkbox"
+                                        checked={deliveryCollection}
+                                        onChange={(e) => setDeliveryCollection(e.target.checked)}
+                                        className="rounded border-gray-300"
+                                      />
+                                      Delivery &amp; Collection
+                                    </label>
+                                    <label className="flex items-center gap-2 text-sm">
+                                      <input
+                                        type="checkbox"
+                                        checked={insuranceIncluded}
+                                        onChange={(e) => setInsuranceIncluded(e.target.checked)}
+                                        className="rounded border-gray-300"
+                                      />
+                                      Insurance included
+                                    </label>
+                                    <label className="flex items-center gap-2 text-sm">
+                                      <input
+                                        type="checkbox"
+                                        checked={gpsAvailable}
+                                        onChange={(e) => setGpsAvailable(e.target.checked)}
+                                        className="rounded border-gray-300"
+                                      />
+                                      GPS Available
+                                    </label>
+                                  </div>
+                                </>
+                              )}
+
+                              {/* ── Shared fields (shown when a category is selected) ── */}
+                              {fieldGroup && (
+                                <>
+                                  {/* Amenities (not for D/F) */}
+                                  {fieldGroup !== "D" && fieldGroup !== "F" && (
+                                    <fieldset className="space-y-2">
+                                      <legend className="text-sm font-medium">Amenities</legend>
+                                      <p className="text-xs text-muted-foreground">
+                                        Select all facilities and amenities available on site.
+                                      </p>
+                                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                                        {TOURISM_AMENITIES.map((a) => (
+                                          <label
+                                            key={a}
+                                            className="flex items-center gap-2 text-sm"
+                                          >
+                                            <input
+                                              type="checkbox"
+                                              checked={amenities.includes(a)}
+                                              onChange={() => toggleArrayItem(setAmenities, a)}
+                                              className="rounded border-gray-300"
+                                            />
+                                            {a}
+                                          </label>
+                                        ))}
+                                      </div>
+                                    </fieldset>
+                                  )}
+
+                                  {/* Languages */}
+                                  <div className="space-y-2">
+                                    <Label htmlFor="languagesSpoken">Languages Spoken</Label>
+                                    <p className="text-xs text-muted-foreground">
+                                      Comma-separated list of languages your staff speaks.
+                                    </p>
+                                    <Input
+                                      id="languagesSpoken"
+                                      value={languagesSpoken}
+                                      onChange={(e) => setLanguagesSpoken(e.target.value)}
+                                      placeholder="e.g. English, Zulu, Afrikaans"
+                                    />
+                                  </div>
+
+                                  {/* Cancellation policy */}
+                                  <div className="space-y-2">
+                                    <Label htmlFor="cancellationPolicy">Cancellation policy</Label>
+                                    <p className="text-xs text-muted-foreground">
+                                      Your standard terms for cancellations and refunds.
+                                    </p>
+                                    <select
+                                      id="cancellationPolicy"
+                                      value={cancellationPolicy}
+                                      onChange={(e) => setCancellationPolicy(e.target.value)}
+                                      className={SELECT_CLASS}
+                                      aria-label="Cancellation policy"
+                                    >
+                                      <option value="">Select...</option>
+                                      {TOURISM_CANCELLATION_CHOICES.map((c) => (
+                                        <option key={c.value} value={c.value}>
+                                          {c.label}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    {cancellationPolicy === "free_until_days" && (
+                                      <div className="flex flex-wrap items-center gap-2 text-sm">
+                                        <Label htmlFor="cancellationFreeDays" required>
+                                          Free cancellation until
+                                        </Label>
+                                        <Input
+                                          id="cancellationFreeDays"
+                                          type="number"
+                                          inputMode="numeric"
+                                          min={1}
+                                          max={365}
+                                          step={1}
+                                          className="w-24"
+                                          value={cancellationFreeDays}
+                                          onChange={(e) => {
+                                            setCancellationFreeDays(e.target.value);
+                                            clearErrors("cancellationFreeDays");
+                                          }}
+                                          aria-invalid={!!fieldErrors.cancellationFreeDays}
+                                        />
+                                        <span>days before</span>
+                                      </div>
+                                    )}
+                                    {fieldErrors.cancellationFreeDays && (
+                                      <p className="inline-form-error">
+                                        {fieldErrors.cancellationFreeDays}
+                                      </p>
+                                    )}
+                                  </div>
+
+                                  {/* Backup power and water */}
+                                  <fieldset className="space-y-2">
+                                    <legend className="text-sm font-medium">
+                                      Backup power and water
+                                    </legend>
+                                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                                      {TOURISM_BACKUP_UTILITIES.map((item) => (
+                                        <label
+                                          key={item.value}
+                                          className="flex min-h-11 items-center gap-2 text-sm"
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={backupUtilities.includes(item.value)}
+                                            onChange={() =>
+                                              toggleArrayItem(setBackupUtilities, item.value)
+                                            }
+                                            className="rounded border-gray-300"
+                                          />
+                                          {item.label}
+                                        </label>
+                                      ))}
+                                    </div>
+                                  </fieldset>
+
+                                  {/* Booking URL */}
+                                  <div className="space-y-2">
+                                    <Label htmlFor="bookingUrl">Booking URL</Label>
+                                    <p className="text-xs text-muted-foreground">
+                                      Direct link where customers can make bookings online.
+                                    </p>
+                                    <Input
+                                      id="bookingUrl"
+                                      type="url"
+                                      value={bookingUrl}
+                                      onChange={(e) => {
+                                        setBookingUrl(e.target.value);
+                                        clearErrors("bookingUrl");
+                                      }}
+                                      placeholder="https://www.booking.com/..."
+                                      aria-invalid={!!fieldErrors.bookingUrl}
+                                    />
+                                    {fieldErrors.bookingUrl && (
+                                      <p className="inline-form-error">{fieldErrors.bookingUrl}</p>
+                                    )}
+                                  </div>
+
+                                  {/* SA Tourism additions */}
+                                  <div className="space-y-4 rounded-lg border bg-muted/30 p-4">
+                                    <p className="text-sm font-medium">
+                                      South African Tourism Details
+                                    </p>
+                                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                      <div className="space-y-1">
+                                        <Label htmlFor="tgcsaGrading">TGCSA Grading</Label>
+                                        <select
+                                          id="tgcsaGrading"
+                                          aria-label="TGCSA Grading"
+                                          className="w-full rounded-md border px-3 py-2 text-sm"
+                                          value={tgcsaGrading}
+                                          onChange={(e) => setTgcsaGrading(e.target.value)}
+                                        >
+                                          <option value="">Select…</option>
+                                          <option value="1_star">1 Star</option>
+                                          <option value="2_star">2 Stars</option>
+                                          <option value="3_star">3 Stars</option>
+                                          <option value="4_star">4 Stars</option>
+                                          <option value="5_star">5 Stars</option>
+                                        </select>
+                                        <p className="text-xs text-muted-foreground">
+                                          Tourism Grading Council SA rating.
+                                        </p>
+                                      </div>
+
+                                      <div className="space-y-1">
+                                        <Label htmlFor="minimumStayNights">Minimum stay</Label>
+                                        <Input
+                                          id="minimumStayNights"
+                                          type="number"
+                                          min={1}
+                                          value={minimumStayNights}
+                                          onChange={(e) => setMinimumStayNights(e.target.value)}
+                                          placeholder="e.g. 2"
+                                        />
+                                        <p className="text-xs text-muted-foreground">Nights</p>
+                                      </div>
+                                    </div>
+
+                                    <div className="space-y-1">
+                                      <Label htmlFor="childPolicy">Child policy</Label>
+                                      <select
+                                        id="childPolicy"
+                                        aria-label="Child policy"
+                                        className="w-full rounded-md border px-3 py-2 text-sm"
+                                        value={childPolicy}
+                                        onChange={(e) => setChildPolicy(e.target.value)}
+                                      >
+                                        <option value="">Select…</option>
+                                        <option value="children_welcome">Children Welcome</option>
+                                        <option value="children_over_6">Children Over 6</option>
+                                        <option value="children_over_12">Children Over 12</option>
+                                        <option value="adults_only">Adults Only</option>
+                                      </select>
+                                    </div>
+
+                                    <div className="space-y-1">
+                                      <Label htmlFor="nearbyAttractions">Nearby attractions</Label>
+                                      <Input
+                                        id="nearbyAttractions"
+                                        value={nearbyAttractions}
+                                        onChange={(e) => setNearbyAttractions(e.target.value)}
+                                        placeholder="e.g. Kruger National Park, Table Mountain"
+                                        maxLength={500}
+                                      />
+                                    </div>
+
+                                    <label className="flex items-center gap-2 text-sm">
+                                      <input
+                                        type="checkbox"
+                                        checked={seasonalPricing}
+                                        onChange={(e) => setSeasonalPricing(e.target.checked)}
+                                        className="rounded border-gray-300"
+                                      />
+                                      Has peak / off-peak seasonal pricing
+                                    </label>
+                                  </div>
+                                </>
+                              )}
                             </div>
-                          </>
+                          </details>
                         )}
                       </>
                     ) : (
@@ -2769,6 +3141,23 @@ function CreateTourismContent() {
                         {fieldErrors.endDate && (
                           <p className="inline-form-error">{fieldErrors.endDate}</p>
                         )}
+                        <div className="space-y-2">
+                          <Label htmlFor="doorsOpen">Doors open</Label>
+                          <Input
+                            id="doorsOpen"
+                            type="time"
+                            className="w-40"
+                            value={doorsOpen}
+                            onChange={(e) => {
+                              setDoorsOpen(e.target.value);
+                              clearErrors("doorsOpen");
+                            }}
+                            aria-invalid={!!fieldErrors.doorsOpen}
+                          />
+                          {fieldErrors.doorsOpen && (
+                            <p className="inline-form-error">{fieldErrors.doorsOpen}</p>
+                          )}
+                        </div>
                         {/* Venue */}
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-2">
@@ -2803,71 +3192,69 @@ function CreateTourismContent() {
                         </div>
 
                         <fieldset className="space-y-2">
-                          <legend>Entry (Required)</legend>
-                          <p className="text-sm text-muted-foreground">
-                            Free to post describes the listing fee. Free entry means visitors do not
-                            pay to attend.
-                          </p>
-                          <label className="mr-4 inline-flex min-h-11 items-center gap-2">
-                            <input
-                              type="radio"
-                              name="entry"
-                              checked={priceZar === "0"}
-                              onChange={() => {
-                                if (Number(priceZar) > 0) paidPriceRef.current = priceZar;
-                                setEntryChoice("free");
-                                setPriceZar("0");
-                                setNegotiable(false);
-                              }}
-                            />
-                            Free entry
-                          </label>
-                          <label className="inline-flex min-h-11 items-center gap-2">
-                            <input
-                              type="radio"
-                              name="entry"
-                              checked={
-                                (entryChoice === "paid" && priceZar !== "0") || Number(priceZar) > 0
-                              }
-                              onChange={() => {
-                                setEntryChoice("paid");
-                                setPriceZar(paidPriceRef.current);
-                                setNegotiable(false);
-                              }}
-                            />
-                            Paid entry
-                          </label>
+                          <legend className="text-sm font-medium">Entry (Required)</legend>
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                            <label className="inline-flex min-h-11 items-center gap-2">
+                              <input
+                                type="radio"
+                                name="entry"
+                                aria-label="Free entry"
+                                checked={priceZar === "0"}
+                                onChange={() => {
+                                  if (Number(priceZar) > 0) paidPriceRef.current = priceZar;
+                                  setEntryChoice("free");
+                                  setPriceZar("0");
+                                  setNegotiable(false);
+                                  clearErrors("priceZar");
+                                }}
+                              />
+                              Free
+                            </label>
+                            <label className="inline-flex min-h-11 items-center gap-2">
+                              <input
+                                type="radio"
+                                name="entry"
+                                aria-label="Paid entry"
+                                checked={
+                                  (entryChoice === "paid" && priceZar !== "0") ||
+                                  Number(priceZar) > 0
+                                }
+                                onChange={() => {
+                                  setEntryChoice("paid");
+                                  setPriceZar(paidPriceRef.current);
+                                  setNegotiable(false);
+                                }}
+                              />
+                              Paid
+                            </label>
+                            {(entryChoice === "paid" || Number(priceZar) > 0) &&
+                              priceZar !== "0" && (
+                                <span className="inline-flex items-center gap-2">
+                                  <span aria-hidden="true">from R</span>
+                                  <Input
+                                    id="priceZar"
+                                    type="number"
+                                    inputMode="decimal"
+                                    min={0}
+                                    step="0.01"
+                                    className="w-32"
+                                    aria-label="Entry price from (R)"
+                                    value={priceZar}
+                                    onChange={(e) => {
+                                      setPriceZar(e.target.value);
+                                      clearErrors("priceZar");
+                                    }}
+                                    aria-invalid={!!fieldErrors.priceZar}
+                                  />
+                                </span>
+                              )}
+                          </div>
+                          {fieldErrors.priceZar && (
+                            <p className="inline-form-error">{fieldErrors.priceZar}</p>
+                          )}
                         </fieldset>
                         {(entryChoice === "paid" || Number(priceZar) > 0) && priceZar !== "0" && (
                           <>
-                            {/* Price */}
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="space-y-2">
-                                <Label htmlFor="priceZar" required={priceZar !== "0"}>
-                                  Starting entry price (ZAR)
-                                </Label>
-                                <p className="text-xs text-muted-foreground">
-                                  Enter the lowest standard price for paid entry.
-                                </p>
-                                <Input
-                                  id="priceZar"
-                                  type="number"
-                                  min={0}
-                                  step="0.01"
-                                  disabled={priceZar === "0"}
-                                  value={priceZar}
-                                  onChange={(e) => {
-                                    setPriceZar(e.target.value);
-                                    clearErrors("priceZar");
-                                  }}
-                                  placeholder="0.00 = Free"
-                                  aria-invalid={!!fieldErrors.priceZar}
-                                />
-                                {fieldErrors.priceZar && (
-                                  <p className="inline-form-error">{fieldErrors.priceZar}</p>
-                                )}
-                              </div>
-                            </div>
                             {/* Ticket tiers */}
                             <fieldset className="space-y-3">
                               <legend className="text-sm font-medium">Ticket Tiers</legend>
@@ -2954,6 +3341,99 @@ function CreateTourismContent() {
                                 <p className="inline-form-error">{fieldErrors.ticketsUrl}</p>
                               )}
                             </div>
+
+                            {/* Where to buy tickets */}
+                            <fieldset className="space-y-2">
+                              <legend className="text-sm font-medium">
+                                Where to buy tickets (Optional)
+                              </legend>
+                              <div className="flex flex-wrap gap-x-4">
+                                {EVENT_TICKET_SALES.map((option) => (
+                                  <label
+                                    key={option.value}
+                                    className="inline-flex min-h-11 items-center gap-2 text-sm"
+                                  >
+                                    <input
+                                      type="radio"
+                                      name="ticketSales"
+                                      checked={ticketSales === option.value}
+                                      onChange={() => setTicketSales(option.value)}
+                                    />
+                                    {option.label}
+                                  </label>
+                                ))}
+                              </div>
+                              {eventSellsAtDoor(ticketSales) && (
+                                <div className="flex flex-wrap items-center gap-x-4">
+                                  <span className="text-sm text-muted-foreground">
+                                    Pay at the door:
+                                  </span>
+                                  {EVENT_GATE_PAYMENTS.map((option) => (
+                                    <label
+                                      key={option.value}
+                                      className="inline-flex min-h-11 items-center gap-2 text-sm"
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={gatePayment.includes(option.value)}
+                                        onChange={() =>
+                                          toggleArrayItem(setGatePayment, option.value)
+                                        }
+                                        className="rounded border-gray-300"
+                                      />
+                                      {option.label}
+                                    </label>
+                                  ))}
+                                </div>
+                              )}
+                            </fieldset>
+
+                            {/* Refunds */}
+                            <div className="space-y-2">
+                              <Label htmlFor="refundPolicy">Refunds</Label>
+                              <select
+                                id="refundPolicy"
+                                className={SELECT_CLASS}
+                                value={refundPolicy}
+                                onChange={(e) => {
+                                  setRefundPolicy(e.target.value);
+                                  clearErrors("refundDays");
+                                }}
+                              >
+                                <option value="">Select...</option>
+                                {EVENT_REFUND_POLICIES.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                              {refundPolicy === "full_until_days" && (
+                                <div className="flex flex-wrap items-center gap-2 text-sm">
+                                  <Label htmlFor="refundDays" required>
+                                    Full refund until
+                                  </Label>
+                                  <Input
+                                    id="refundDays"
+                                    type="number"
+                                    inputMode="numeric"
+                                    min={1}
+                                    max={365}
+                                    step={1}
+                                    className="w-24"
+                                    value={refundDays}
+                                    onChange={(e) => {
+                                      setRefundDays(e.target.value);
+                                      clearErrors("refundDays");
+                                    }}
+                                    aria-invalid={!!fieldErrors.refundDays}
+                                  />
+                                  <span>days before</span>
+                                </div>
+                              )}
+                              {fieldErrors.refundDays && (
+                                <p className="inline-form-error">{fieldErrors.refundDays}</p>
+                              )}
+                            </div>
                           </>
                         )}
                         {/* Age restriction */}
@@ -2962,7 +3442,7 @@ function CreateTourismContent() {
                           <p className="text-xs text-muted-foreground">
                             Minimum age for attendees, if any.
                           </p>
-                          <PostSelect
+                          <select
                             id="ageRestriction"
                             value={ageRestriction}
                             onChange={(e) => setAgeRestriction(e.target.value)}
@@ -2975,21 +3455,10 @@ function CreateTourismContent() {
                                 {a.label}
                               </option>
                             ))}
-                          </PostSelect>
-                        </div>
-
-                        {/* Dress code */}
-                        <div className="space-y-2">
-                          <Label htmlFor="dressCode">Dress Code</Label>
-                          <p className="text-xs text-muted-foreground">
-                            Suggested attire for the event.
-                          </p>
-                          <Input
-                            id="dressCode"
-                            value={dressCode}
-                            onChange={(e) => setDressCode(e.target.value)}
-                            placeholder="e.g. Smart casual"
-                          />
+                          </select>
+                          {eventChecksId(ageRestriction) && (
+                            <p className="text-sm font-medium">{EVENT_ID_CHECK_LINE}</p>
+                          )}
                         </div>
 
                         {/* Lineup */}
@@ -3069,25 +3538,8 @@ function CreateTourismContent() {
                           <p className="text-sm font-medium">Event Details (SA)</p>
                           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                             <div className="space-y-1">
-                              <Label htmlFor="recurring">Recurring</Label>
-                              <PostSelect
-                                id="recurring"
-                                aria-label="Recurring"
-                                className="w-full rounded-md border px-3 py-2 text-sm"
-                                value={recurring}
-                                onChange={(e) => setRecurring(e.target.value)}
-                              >
-                                <option value="">Select…</option>
-                                <option value="one_off">One-off</option>
-                                <option value="weekly">Weekly</option>
-                                <option value="monthly">Monthly</option>
-                                <option value="annual">Annual</option>
-                              </PostSelect>
-                            </div>
-
-                            <div className="space-y-1">
                               <Label htmlFor="rainPolicy">Rain Policy</Label>
-                              <PostSelect
+                              <select
                                 id="rainPolicy"
                                 aria-label="Rain policy"
                                 className="w-full rounded-md border px-3 py-2 text-sm"
@@ -3101,7 +3553,7 @@ function CreateTourismContent() {
                                 <option value="moved_indoors">Moved Indoors</option>
                                 <option value="postponed">Postponed</option>
                                 <option value="refunded">Refunded</option>
-                              </PostSelect>
+                              </select>
                             </div>
                           </div>
 
@@ -3115,16 +3567,6 @@ function CreateTourismContent() {
                               maxLength={30}
                             />
                           </div>
-
-                          <label className="flex items-center gap-2 text-sm">
-                            <input
-                              type="checkbox"
-                              checked={groupDiscountAvailable}
-                              onChange={(e) => setGroupDiscountAvailable(e.target.checked)}
-                              className="rounded border-gray-300"
-                            />
-                            Group discounts available
-                          </label>
                         </div>
                       </>
                     )}
@@ -3263,101 +3705,17 @@ function CreateTourismContent() {
                       </fieldset>
                     )}
 
-                    {/* Contact methods */}
-                    <fieldset id="tourism-contact-methods" className="space-y-2">
-                      <legend className="text-sm font-medium">
-                        How should people contact you? (Required)
-                      </legend>
-                      <p className="text-sm text-muted-foreground">
-                        {listingType === "event"
-                          ? "Choose all that apply."
-                          : "Choose all that apply. Phone and WhatsApp show the number you enter. The contact form sends enquiries to your VerifyMzansi inbox."}
-                      </p>
-                      <div className="flex flex-wrap gap-3">
-                        {(["call", "whatsapp", "form"] as const).map((method) => (
-                          <label key={method} className="flex items-center gap-2 text-sm">
-                            <input
-                              type="checkbox"
-                              checked={contactMethods.includes(method)}
-                              onChange={() => {
-                                setContactMethods((c) =>
-                                  c.includes(method)
-                                    ? c.filter((m) => m !== method)
-                                    : [...c, method]
-                                );
-                                clearErrors("contactMethods");
-                              }}
-                              className="rounded border-gray-300"
-                            />
-                            {method === "call"
-                              ? "Phone Call"
-                              : method === "whatsapp"
-                                ? "WhatsApp"
-                                : "Contact Form"}
-                          </label>
-                        ))}
-                      </div>
-                      {fieldErrors.contactMethods && (
-                        <p className="inline-form-error">{fieldErrors.contactMethods}</p>
-                      )}
-                    </fieldset>
-
-                    {listingType === "event" ? (
-                      <p className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
-                        Phone and WhatsApp use the number on your VerifyMzansi account. Contact form
-                        enquiries go to your VerifyMzansi inbox. You can change your account number
-                        in your profile.
-                      </p>
-                    ) : (
-                      <>
-                        {/* Phone & WhatsApp */}
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                          <div className="space-y-2">
-                            <Label htmlFor="phone" required={contactMethods.includes("call")}>
-                              Phone number
-                            </Label>
-                            <Input
-                              id="phone"
-                              type="tel"
-                              value={phone}
-                              onChange={(e) => {
-                                setPhone(e.target.value);
-                                clearErrors("phone");
-                              }}
-                              placeholder="071 234 5678"
-                              aria-invalid={!!fieldErrors.phone}
-                            />
-                            {fieldErrors.phone ? (
-                              <p className="inline-form-error">{fieldErrors.phone}</p>
-                            ) : businessNumber(phone)?.kind === "landline" ? (
-                              <p className="text-sm text-muted-foreground">Landline: calls only</p>
-                            ) : null}
-                          </div>
-                          <div className="space-y-2">
-                            <Label
-                              htmlFor="whatsapp"
-                              required={contactMethods.includes("whatsapp")}
-                            >
-                              WhatsApp Number
-                            </Label>
-                            <Input
-                              id="whatsapp"
-                              type="tel"
-                              value={whatsapp}
-                              onChange={(e) => {
-                                setWhatsapp(e.target.value);
-                                clearErrors("whatsapp");
-                              }}
-                              placeholder="071 234 5678"
-                              aria-invalid={!!fieldErrors.whatsapp}
-                            />
-                            {fieldErrors.whatsapp && (
-                              <p className="inline-form-error">{fieldErrors.whatsapp}</p>
-                            )}
-                          </div>
-                        </div>
-                      </>
-                    )}
+                    <ContactSwitches
+                      id="tourism-contact-methods"
+                      options={CONTACT_OPTIONS}
+                      selected={contactMethods}
+                      onChange={(next) => {
+                        setContactMethods(next);
+                        clearErrors("contactMethods");
+                      }}
+                      verifiedPhone={verifiedPhone}
+                      error={fieldErrors.contactMethods}
+                    />
 
                     <OnlinePresenceFields
                       values={{
@@ -3367,6 +3725,7 @@ function CreateTourismContent() {
                         socialInstagram,
                         socialTwitter,
                         socialTiktok,
+                        socialYoutube,
                       }}
                       onChange={(field, value) => {
                         ({
@@ -3376,6 +3735,7 @@ function CreateTourismContent() {
                           socialInstagram: setSocialInstagram,
                           socialTwitter: setSocialTwitter,
                           socialTiktok: setSocialTiktok,
+                          socialYoutube: setSocialYoutube,
                         })[field](value);
                         clearErrors(field);
                       }}
@@ -3398,8 +3758,8 @@ function CreateTourismContent() {
                       }
                     />
 
-                    {/* Operating hours (tourism business only) */}
-                    {listingType === "tourism_business" && (
+                    {/* Operating hours (tourism business only; attractions give one line on step 2) */}
+                    {listingType === "tourism_business" && fieldGroup !== "E" && (
                       <div className="space-y-3">
                         <p className="text-sm font-medium">Opening hours</p>
                         {(
@@ -3460,6 +3820,7 @@ function CreateTourismContent() {
                       {/* Photos */}
                       <div className="space-y-2">
                         <p className="text-sm font-medium">Photos</p>
+                        <MediaLimitsLine kind={listingType === "event" ? "event" : "other"} />
                         <MediaUpload
                           id="tourism-images-input"
                           label="Upload photos"
@@ -3498,7 +3859,7 @@ function CreateTourismContent() {
                         <MediaUpload
                           id="tourism-videos-input"
                           label="Upload video"
-                          description={`Up to ${maxVideos}. One portrait 9:16 clip works best. ${VIDEO_GUIDANCE} ${VIDEO_SOUND_OFF_TIP}`}
+                          description={`Up to ${maxVideos}. One portrait 9:16 clip works best. ${VIDEO_SOUND_OFF_TIP}`}
                           error={fieldErrors.videos}
                           maxFiles={maxVideos}
                           maxVideoSeconds={videoLimitSeconds(

@@ -7,7 +7,7 @@ import {
 } from "@/lib/forms/customer-access";
 import type { z } from "zod";
 
-import { type businessSchema } from "@/lib/validations/business-unified";
+import { bookingUrlSchema, type businessSchema } from "@/lib/validations/business-unified";
 
 type BusinessMutationInput = z.infer<typeof businessSchema>;
 
@@ -44,6 +44,10 @@ export function buildBusinessMutationPayload(
   );
   const categoryDetails: Record<string, unknown> = { ...clientDetails };
   if (data.contact_methods) categoryDetails.contact_methods = data.contact_methods;
+  // Every business may link its booking page; only some categories list it as a detail field.
+  const bookingUrl = bookingUrlSchema.safeParse(data.category_details?.booking_url);
+  if (bookingUrl.success && bookingUrl.data) categoryDetails.booking_url = bookingUrl.data;
+  else delete categoryDetails.booking_url;
   const parsedAccess = customerAccessSchema.safeParse(categoryDetails.customer_access);
   const access = parsedAccess.success ? cleanCustomerAccess(parsedAccess.data) : undefined;
   if (access) categoryDetails.customer_access = access;

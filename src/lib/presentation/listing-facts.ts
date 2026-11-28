@@ -1,3 +1,4 @@
+import { listingAttributesForDisplay } from "@/lib/domains/listings/market-extras";
 import { CATEGORIES } from "@/lib/constants/categories";
 import { resolveMarketProfileVariant } from "@/lib/presentation/profile-variants";
 import { formatRandAmount, formatZARShort } from "@/lib/utils/format";
@@ -65,10 +66,11 @@ export function buildListingFacts(listing: {
   attributes: Record<string, unknown> | null;
 }): FactItem[] {
   const categoryDefinition = CATEGORIES.find((item) => item.value === listing.category);
+  const attributes = listingAttributesForDisplay(listing.category, listing.attributes);
   const orderedFacts =
     categoryDefinition?.attributeFields
       .map((field) => {
-        const rawValue = listing.attributes?.[field.name];
+        const rawValue = attributes?.[field.name];
         if (isEmptyAttribute(rawValue)) return null;
         return {
           label: field.label,
@@ -77,7 +79,7 @@ export function buildListingFacts(listing: {
       })
       .filter((fact): fact is FactItem => Boolean(fact)) ?? [];
 
-  const fallbackFacts = Object.entries(listing.attributes ?? {})
+  const fallbackFacts = Object.entries(attributes ?? {})
     .map(([key, value]) => {
       if (isEmptyAttribute(value)) return null;
       return { label: humanizeKey(key), value: formatFactValue(value) };

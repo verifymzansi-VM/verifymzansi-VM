@@ -20,6 +20,10 @@ import {
   WALK_IN_POLICY_LABELS,
 } from "@/lib/forms/business-type-details";
 import { formatZARShort } from "@/lib/utils/format";
+import {
+  TOURISM_BACKUP_UTILITIES,
+  TOURISM_PRICE_UNITS,
+} from "@/lib/forms/business-category-details";
 import type { BusinessDetails } from "@/types/business-details";
 
 export interface SpotlightFact extends FactItem {
@@ -188,9 +192,100 @@ export function getBusinessQuickFacts(
   ].filter((fact): fact is FactItem => Boolean(fact));
 }
 
-/** Stay facts the tourism details card does not show (grading, minimum stay, children…). */
+function wholeCount(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? Math.round(value)
+    : null;
+}
+
+/** "From R450 per night", "Entry fee from R80"; null when no "From" price is set. */
+export function formatTourismPriceFrom(details: Record<string, unknown>): string | null {
+  const cents = details.price_from_cents;
+  if (typeof cents !== "number" || !Number.isFinite(cents) || cents <= 0) return null;
+  const amount = formatZARShort(Math.round(cents));
+  if (details.price_unit === "entry") return `Entry fee from ${amount}`;
+  const unit = TOURISM_PRICE_UNITS.find((item) => item.value === details.price_unit);
+  return unit ? `From ${amount} ${unit.label}` : `From ${amount}`;
+}
+
+/**
+ * The tourism form's cancellation choices in plain words. Older values (free,
+ * flexible, strict…) return null: the tourism details card already shows them.
+ */
+export function tourismCancellationText(details: Record<string, unknown>): string | null {
+  switch (details.cancellation_policy) {
+    case "free_until_days": {
+      const days = wholeCount(details.cancellation_free_days);
+      return days
+        ? `Free cancellation until ${days} ${days === 1 ? "day" : "days"} before`
+        : "Free cancellation until shortly before";
+    }
+    case "deposit_non_refundable":
+      return "Deposit is non-refundable";
+    case "no_refunds":
+      return "No refunds";
+    default:
+      return null;
+  }
+}
+
+/** Backup power and water labels, in the form's order. */
+function tourismBackupUtilities(details: Record<string, unknown>): string[] {
+  const values = Array.isArray(details.backup_utilities) ? details.backup_utilities : [];
+  return TOURISM_BACKUP_UTILITIES.filter((item) => values.includes(item.value)).map(
+    (item) => item.label
+  );
+}
+
+/** Stay sizes as facts: sleeps, bedrooms, beds, bathrooms. */
+function tourismSizeFacts(details: Record<string, unknown>): FactItem[] {
+  return (
+    [
+      ["Sleeps", details.sleeps],
+      ["Bedrooms", details.bedrooms],
+      ["Beds", details.beds],
+      ["Bathrooms", details.bathrooms],
+    ] as const
+  ).flatMap(([label, value]) => {
+    const count = wholeCount(value);
+    return count ? [{ label, value: String(count) }] : [];
+  });
+}
+
+/** The tourism keys getTourismSpotlightFacts reads (a page shows the card when one is set). */
+export const TOURISM_SPOTLIGHT_KEYS = [
+  "price_from_cents",
+  "sleeps",
+  "bedrooms",
+  "beds",
+  "bathrooms",
+  "opening_hours",
+  "backup_utilities",
+  "cancellation_policy",
+  "tgcsa_grading",
+  "minimum_stay_nights",
+  "child_policy",
+  "seasonal_pricing",
+  "nearby_attractions",
+] as const;
+
+/**
+ * Stay facts the tourism details card does not show: the "From" price, stay
+ * sizes, opening hours, backup power and water, the newer cancellation
+ * choices, grading, minimum stay, children…
+ */
 export function getTourismSpotlightFacts(details: Record<string, unknown>): SpotlightFact[] {
   const facts: SpotlightFact[] = [];
+  const price = formatTourismPriceFrom(details);
+  if (price) facts.push({ label: "Price", value: price });
+  facts.push(...tourismSizeFacts(details));
+  if (typeof details.opening_hours === "string" && details.opening_hours.trim()) {
+    facts.push({ label: "Opening hours", value: details.opening_hours.trim() });
+  }
+  const backup = tourismBackupUtilities(details);
+  if (backup.length > 0) facts.push({ label: "Backup power and water", value: backup.join(", ") });
+  const cancellation = tourismCancellationText(details);
+  if (cancellation) facts.push({ label: "Cancellation", value: cancellation });
   if (typeof details.tgcsa_grading === "string" && details.tgcsa_grading) {
     facts.push({
       label: "TGCSA Grading",
@@ -256,7 +351,11 @@ export function getTourismViewerDetails(details: Record<string, unknown>): Touri
     typeof value === "number" && value > 0 ? (unit ? `${value} ${unit}` : String(value)) : null;
   const fact = (label: string, value: string | null) => (value ? { label, value } : null);
 
+  const sizes = tourismSizeFacts(details);
   const facts = [
+    fact("Price", formatTourismPriceFrom(details)),
+    ...sizes,
+    fact("Opening hours", text(details.opening_hours)),
     fact("Rooms / units", count(details.number_of_rooms)),
     fact("Check-in", text(details.check_in_time)),
     fact("Check-out", text(details.check_out_time)),
@@ -285,11 +384,19 @@ export function getTourismViewerDetails(details: Record<string, unknown>): Touri
     list("Services", details.services_offered),
     list("Specialisations", details.specializations),
     list("Vehicles", details.vehicle_types),
+    (() => {
+      const items = tourismBackupUtilities(details);
+      return items.length > 0 ? { label: "Backup power and water", items } : null;
+    })(),
   ].filter((item): item is { label: string; items: string[] } => Boolean(item));
 
   const minimumStay = count(details.minimum_stay_nights);
   const rules = [
-    fact("Cancellation", optionLabel(TOURISM_CANCELLATION_POLICIES, details.cancellation_policy)),
+    fact(
+      "Cancellation",
+      tourismCancellationText(details) ??
+        optionLabel(TOURISM_CANCELLATION_POLICIES, details.cancellation_policy)
+    ),
     fact(
       "Minimum stay",
       minimumStay ? `${minimumStay} ${minimumStay === "1" ? "night" : "nights"}` : null

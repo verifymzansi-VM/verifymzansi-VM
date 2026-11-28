@@ -1,5 +1,10 @@
-import { afterEach, it, expect, vi } from "vitest";
-import { buildRestoredPostInput, restoredMediaKey } from "./restored-post-input";
+import { afterEach, describe, it, expect, vi } from "vitest";
+import {
+  buildRestoredPostInput,
+  restoredMediaKey,
+  VERIFIED_NUMBER_CHANGED_MESSAGE,
+  VERIFIED_NUMBER_ONLY_MESSAGE,
+} from "./restored-post-input";
 const id = "11111111-1111-4111-8111-111111111111",
   photo = `https://media.verifymzansi.com/media/${id}`;
 const transport = {
@@ -164,6 +169,52 @@ it("uses the confirmed locality only as an online business's administrative loca
     },
   });
 });
+describe("business Call and WhatsApp use the verified number only", () => {
+  const shop = (extra: Record<string, unknown>) => ({
+    ...transport,
+    business_name: "Example online shop",
+    slug: "example-online-shop",
+    category: "general_other",
+    description: "An example online business.",
+    business_type: "online_only",
+    business_details: {
+      type: "online_only",
+      primary_order_channel: "website",
+      order_url: "https://example.com",
+    },
+    website: "https://example.com",
+    location_province: "Gauteng",
+    location_city: "Johannesburg",
+    ...extra,
+  });
+  const build = (extra: Record<string, unknown>, verified: string | null) =>
+    buildRestoredPostInput("businesses", shop(extra), undefined, false, verified) as {
+      contacts: unknown;
+    };
+
+  it("stores the verified number for the channels switched on", () => {
+    const command = build(
+      { contact_methods: ["call", "website"], phone: "082 123 4567", whatsapp: "" },
+      "+27821234567"
+    );
+    expect(command.contacts).toEqual({ phone: "+27821234567", whatsapp: null });
+  });
+
+  it("refuses any other number, and any number without a verified one", () => {
+    // A page opened before the verified number changed sends the old one.
+    expect(() => build({ contact_methods: ["call"], phone: "0820000000" }, "+27821234567")).toThrow(
+      VERIFIED_NUMBER_CHANGED_MESSAGE
+    );
+    expect(() => build({ contact_methods: ["whatsapp"], whatsapp: "0821234567" }, null)).toThrow(
+      VERIFIED_NUMBER_ONLY_MESSAGE
+    );
+  });
+
+  it("stores no number when Call and WhatsApp are off", () => {
+    const command = build({ contact_methods: ["website"] }, "+27821234567");
+    expect(command.contacts).toEqual({ phone: null, whatsapp: null });
+  });
+});
 it("maps event activity and true SAST window without converting an event into a paid plan", () => {
   const start = new Date(Date.now() + 86400000).toISOString(),
     end = new Date(Date.now() + 90000000).toISOString();
@@ -213,4 +264,64 @@ it("reads the key after the configured media address's own path, and only there"
   ).toThrow("older upload");
   vi.stubEnv("NEXT_PUBLIC_MEDIA_URL", "not a url");
   expect(restoredMediaKey(photo)).toBe(`media/${id}`);
+});
+/** The listing command, typed as one (the builder returns any of the three kinds). */
+function listingCommand(input: Record<string, unknown>) {
+  const command = buildRestoredPostInput("listings", input);
+  return command as Extract<typeof command, { listing_terms: unknown }>;
+}
+it("saves a listing's links and new Market answers in its presentation", () => {
+  const command = listingCommand({
+    ...listing,
+    attributes: {
+      property_type: "house",
+      listing_intent: "rent",
+      available_from: "2026-12-01",
+      deposit_zar: 9000,
+      lease_term: "12_months",
+      utilities_included: ["water"],
+      occupation_date: "2027-01-01",
+      pets_policy: "allowed",
+    },
+    website: "https://home.example.co.za",
+    social_links: { facebook: "https://facebook.com/home", youtube: "", tiktok: undefined },
+  });
+  expect(command.presentation).toMatchObject({
+    website: "https://home.example.co.za",
+    social_links: { facebook: "https://facebook.com/home" },
+    source_attributes: {
+      available_from: "2026-12-01",
+      deposit_zar: 9000,
+      lease_term: "12_months",
+      utilities_included: ["water"],
+      pets_policy: "allowed",
+      pets_allowed: true,
+    },
+  });
+  expect(command.presentation.social_links).toEqual({ facebook: "https://facebook.com/home" });
+  // A sale date is not kept on a rental; the pets choice reaches the searchable field.
+  expect(command.presentation.source_attributes).not.toHaveProperty("occupation_date");
+  expect(command.attributes).toMatchObject({ pets_allowed: true, available_from: "2026-12-01" });
+});
+it("leaves pets_allowed out for 'Ask', and links out when none are given", () => {
+  const command = listingCommand({
+    ...listing,
+    attributes: { property_type: "house", listing_intent: "sale", pets_policy: "ask" },
+  });
+  expect(command.presentation.source_attributes).not.toHaveProperty("pets_allowed");
+  expect(command.attributes).not.toHaveProperty("pets_allowed");
+  expect(command.presentation).not.toHaveProperty("website");
+  expect(command.presentation).not.toHaveProperty("social_links");
+});
+it("keeps how the buyer gets it, size and gender for clothing", () => {
+  const command = listingCommand({
+    ...listing,
+    category: "clothing_accessories",
+    attributes: { size: "M", gender: "unisex", delivery_methods: ["collect", "courier"] },
+  });
+  expect(command.presentation.source_attributes).toEqual({
+    size: "M",
+    gender: "unisex",
+    delivery_methods: ["collect", "courier"],
+  });
 });

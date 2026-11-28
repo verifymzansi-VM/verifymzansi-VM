@@ -202,6 +202,40 @@ describe("presentBusinessSlide shows each fact once", () => {
     ]);
   });
 
+  it("shows Open 24 hours, By appointment and Public holidays from the new hours", () => {
+    const always = presentBusinessSlide(
+      { ...shop, operating_hours: { Open_24_hours: true } } as unknown as BusinessDetailRecord,
+      owner,
+      [],
+      engagement
+    );
+    expect(always.headline.hours).toEqual({
+      Mon_Fri: "Open 24 hours",
+      Sat: "Open 24 hours",
+      Sun: "Open 24 hours",
+    });
+    const booked = presentBusinessSlide(
+      {
+        ...shop,
+        operating_hours: {
+          Mon_Fri: "08:00 - 17:00",
+          Public_holidays: "Closed",
+          By_appointment: true,
+        },
+      } as unknown as BusinessDetailRecord,
+      owner,
+      [],
+      engagement
+    );
+    expect(booked.headline.hours).toEqual({
+      Mon_Fri: "08:00 - 17:00",
+      Sat: "By appointment",
+      Sun: "By appointment",
+      Public_holidays: "Closed",
+      By_appointment: true,
+    });
+  });
+
   it("reads equal opening and closing times as 24 hours and recovers a labelled link", () => {
     const slide = presentBusinessSlide(shop, owner, [], engagement);
     expect(slide.headline.hours).toEqual({ Mon_Fri: "Open 24 hours", Sat: "08:00 - 13:00" });
@@ -236,5 +270,63 @@ describe("presentEventSlide", () => {
       expect(slide.owner.href).toBe(`/mzansi-business/${host.id}`);
       expect(slide.owner).not.toHaveProperty("position");
     }
+  });
+});
+
+describe("presenters: tourism From price and event entry details", () => {
+  it("leads a stay with its From price instead of the price band", () => {
+    const slide = presentBusinessSlide(
+      {
+        ...business,
+        business_type: "physical_store",
+        category: "tourism_hospitality",
+        category_details: { price_from_cents: 45000, price_unit: "night", sleeps: 4 },
+      } as unknown as BusinessDetailRecord,
+      owner,
+      [],
+      engagement
+    );
+    expect(slide.headline.figure?.value).toBe("From R450 per night");
+    const glance = slide.left.find((section) => section.id === "glance");
+    const labels = glance?.type === "facts" ? glance.facts.map((fact) => fact.label) : [];
+    expect(labels).toContain("Sleeps");
+    expect(labels).not.toContain("Price");
+  });
+
+  it("shows doors, tickets, door payment, refunds and the ID line; drops removed fields", () => {
+    const slide = presentEventSlide(
+      {
+        ...event,
+        event_details: {
+          ...event.event_details,
+          age_restriction: "18_plus",
+          doors_open: "17:30",
+          ticket_sales: "both",
+          gate_payment: ["cash"],
+          refund_policy: "only_if_cancelled",
+          dress_code: "Smart casual",
+          recurring: "monthly",
+          group_discount_available: true,
+        },
+      } as PromotionDetailRecord,
+      owner,
+      null,
+      engagement
+    );
+    const know = slide.right.find((section) => section.id === "know");
+    const rows = know?.type === "rows" ? know.rows : [];
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        { label: "ID", value: "ID will be checked at the door" },
+        { label: "Doors open", value: "17:30" },
+        { label: "Tickets sold", value: "Online and at the door" },
+        { label: "Pay at the door", value: "Cash" },
+        { label: "Refunds", value: "Refund only if the event is cancelled" },
+      ])
+    );
+    const labels = rows.map((row) => row.label);
+    expect(labels).not.toContain("Dress code");
+    expect(labels).not.toContain("Recurring");
+    expect(labels).not.toContain("Group discounts");
   });
 });

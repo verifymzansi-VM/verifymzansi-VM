@@ -1,67 +1,40 @@
 "use client";
 
-import { FieldHelp } from "./field-help";
-import { businessNumber } from "@/lib/utils/phone";
-import { Input } from "@/components/ui/input";
-import { PostLabel } from "./post-label";
+import { ContactSwitches, type ContactSwitchOption } from "./contact-switches";
 
-const BUSINESS_CONTACT_CHOICES = [
-  {
-    method: "call",
-    field: "phone",
-    label: "Phone calls",
-    inputLabel: "Phone number",
-    example: "082 123 4567",
-    hint: "Publish a number customers can call.",
-  },
-  {
-    method: "whatsapp",
-    field: "whatsapp",
-    label: "WhatsApp",
-    inputLabel: "WhatsApp Number",
-    example: "082 123 4567",
-    hint: "Publish a number registered on WhatsApp.",
-  },
-  {
-    method: "website",
-    field: "website",
-    label: "Website",
-    inputLabel: "Website",
-    example: "https://example.co.za",
-    hint: "Link to your website. It does not need an online checkout.",
-  },
-  {
-    method: "form",
-    field: null,
-    label: "VerifyMzansi inbox",
-    inputLabel: "",
-    example: "",
-    hint: "Receive enquiries in your account without publishing a number.",
-  },
-] as const;
+/** Call and WhatsApp use the account's verified number; the inbox needs no number. */
+const BUSINESS_CONTACT_SWITCHES: readonly ContactSwitchOption[] = [
+  { id: "call", label: "Call", usesVerifiedNumber: true },
+  { id: "whatsapp", label: "WhatsApp", usesVerifiedNumber: true },
+  { id: "form", label: "VerifyMzansi inbox", hint: "Enquiries arrive in your account" },
+];
 
-/** Website has its own always-visible field; the rest are opt-in checkboxes. */
-const CHECKBOX_CHOICES = BUSINESS_CONTACT_CHOICES.filter((choice) => choice.method !== "website");
+const NUMBER_FIELDS = { call: "phone", whatsapp: "whatsapp" } as const;
 
 export type ContactValues = { phone: string; whatsapp: string; website: string };
+
 /**
- * The website is entered in the always-visible "Website, social media &
- * location pin" section, so it counts as a contact method whenever it is
- * filled in instead of needing its own checkbox.
+ * The chosen contact methods. Call and WhatsApp count only with a number to
+ * publish (the verified number), and the website counts whenever it is filled
+ * in, from the links section. Without a stored choice, Call and WhatsApp
+ * start on when there is a number.
  */
 export function readContactMethods(value: unknown, values: ContactValues): string[] {
   const chosen = Array.isArray(value)
     ? value.filter(
         (method): method is string =>
           typeof method === "string" &&
-          method !== "website" &&
-          BUSINESS_CONTACT_CHOICES.some((choice) => choice.method === method)
+          BUSINESS_CONTACT_SWITCHES.some((option) => option.id === method)
       )
-    : BUSINESS_CONTACT_CHOICES.filter(
-        (choice) => choice.field && choice.field !== "website" && values[choice.field]
-      ).map((choice) => choice.method);
-  return values.website.trim() ? [...chosen, "website"] : chosen;
+    : ["call", "whatsapp"];
+  const available = chosen.filter((method) =>
+    method in NUMBER_FIELDS
+      ? Boolean(values[NUMBER_FIELDS[method as keyof typeof NUMBER_FIELDS]].trim())
+      : true
+  );
+  return values.website.trim() ? [...available, "website"] : available;
 }
+
 export function selectedContacts(methods: string[], values: ContactValues) {
   return {
     phone: methods.includes("call") ? values.phone : "",
@@ -70,82 +43,26 @@ export function selectedContacts(methods: string[], values: ContactValues) {
   };
 }
 
+/** The business contact block: on/off switches, with the verified number shown masked. */
 export function BusinessContactFields({
   methods,
-  values,
+  verifiedPhone,
   onMethods,
-  onValue,
   errors,
 }: {
   methods: string[];
-  values: ContactValues;
+  verifiedPhone: string | null | undefined;
   onMethods: (value: string[]) => void;
-  onValue: (field: keyof ContactValues, value: string) => void;
   errors: Record<string, string>;
 }) {
   return (
-    <fieldset id="business-contact-methods" tabIndex={-1} className="space-y-3">
-      <legend className="font-medium">How should customers contact you? (Required)</legend>
-      <p className="text-sm text-muted-foreground">
-        Choose at least one. Choose all that apply. Details for selected methods will be public.
-        Your website goes in the website and social media section below.
-      </p>
-      <FieldHelp label="contact methods">
-        Use a number you check regularly. The VerifyMzansi inbox sends enquiries to your account. If
-        you deselect a method, its details will not appear on your profile.
-      </FieldHelp>
-      <div className="grid gap-2 sm:grid-cols-2">
-        {CHECKBOX_CHOICES.map((choice) => (
-          <label
-            key={choice.method}
-            className="flex min-h-11 items-start gap-2 rounded-xl border p-3"
-          >
-            <input
-              aria-label={choice.label}
-              type="checkbox"
-              checked={methods.includes(choice.method)}
-              onChange={(event) =>
-                onMethods(
-                  event.target.checked
-                    ? [...methods, choice.method]
-                    : methods.filter((method) => method !== choice.method)
-                )
-              }
-            />
-            <span>
-              <span className="block font-medium">{choice.label}</span>
-              <span className="text-sm text-muted-foreground">{choice.hint}</span>
-            </span>
-          </label>
-        ))}
-      </div>
-      {errors.contact_methods && <p className="inline-form-error">{errors.contact_methods}</p>}
-      <div className="grid gap-4 sm:grid-cols-2">
-        {CHECKBOX_CHOICES.map(
-          (choice) =>
-            choice.field &&
-            methods.includes(choice.method) && (
-              <div key={choice.method}>
-                <PostLabel htmlFor={choice.field} required>
-                  {choice.inputLabel}
-                </PostLabel>
-                <Input
-                  id={choice.field}
-                  value={values[choice.field]}
-                  onChange={(event) => onValue(choice.field!, event.target.value)}
-                  placeholder={choice.example}
-                  aria-invalid={Boolean(errors[choice.field])}
-                />
-                {errors[choice.field] ? (
-                  <p className="inline-form-error">{errors[choice.field]}</p>
-                ) : choice.field === "phone" &&
-                  businessNumber(values.phone)?.kind === "landline" ? (
-                  <p className="mt-1 text-sm text-muted-foreground">Landline: calls only</p>
-                ) : null}
-              </div>
-            )
-        )}
-      </div>
-    </fieldset>
+    <ContactSwitches
+      id="business-contact-methods"
+      options={BUSINESS_CONTACT_SWITCHES}
+      selected={methods.filter((method) => method !== "website")}
+      onChange={onMethods}
+      verifiedPhone={verifiedPhone}
+      error={errors.contact_methods || errors.phone || errors.whatsapp}
+    />
   );
 }

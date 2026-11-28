@@ -23,6 +23,12 @@ const { listingCardSpy } = vi.hoisted(() => ({
 const { listingDetailPreviewSpy } = vi.hoisted(() => ({
   listingDetailPreviewSpy: vi.fn(),
 }));
+const { authState } = vi.hoisted(() => ({
+  authState: { profile: { phone: "+27821234567" } as { phone: string | null } | null },
+}));
+vi.mock("@/hooks/use-auth", () => ({
+  useAuth: () => ({ user: { id: "user-1" }, profile: authState.profile, isLoading: false }),
+}));
 
 // Uploads with a progress bar use XHR; these tests stub fetch, so send them there.
 vi.mock("@/lib/utils/xhr-upload", () => ({
@@ -610,5 +616,101 @@ describe("EditListingPage", () => {
     expect(mockPush).toHaveBeenCalledWith("/dashboard/listings");
     expect(screen.getByText("Unable to load listing")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Back to listings/i })).toBeInTheDocument();
+  });
+
+  describe("contacts, links and Market answers", () => {
+    async function openWith(extra: Record<string, unknown>) {
+      const { data } = await mockMaybeSingle();
+      mockMaybeSingle.mockResolvedValue({ data: { ...data, ...extra }, error: null });
+      render(<EditListingPage />);
+      await termsLoaded();
+      await waitFor(() => expect(screen.getByDisplayValue("Used iPhone 15")).toBeInTheDocument());
+    }
+
+    async function saveAndReadPayload() {
+      fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      return JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    }
+
+    beforeEach(() => {
+      authState.profile = { phone: "+27821234567" };
+    });
+
+    it("shows the contact switches with the masked verified number", async () => {
+      await openWith({});
+      expect(screen.getByRole("switch", { name: "Phone call" })).toBeChecked();
+      expect(screen.getByRole("switch", { name: "WhatsApp" })).toBeChecked();
+      expect(screen.getByRole("switch", { name: "Private enquiry" })).toBeDisabled();
+      expect(screen.getAllByText(/Your verified number 08• ••• 4567/)).toHaveLength(2);
+      fireEvent.click(screen.getByRole("switch", { name: "WhatsApp" }));
+      const payload = await saveAndReadPayload();
+      expect(payload.contactMethods).toEqual(["call", "in_app"]);
+    });
+
+    it("loads the saved website and social links and saves them back", async () => {
+      await openWith({
+        website: "https://shop.example.co.za",
+        social_links: { facebook: "https://facebook.com/shop", youtube: "https://youtube.com/@s" },
+      });
+      expect(screen.getByDisplayValue("https://shop.example.co.za")).toBeInTheDocument();
+      expect(screen.getByDisplayValue("https://facebook.com/shop")).toBeInTheDocument();
+      expect(screen.getByDisplayValue("https://youtube.com/@s")).toBeInTheDocument();
+      fireEvent.change(screen.getByLabelText(/^Instagram/), {
+        target: { value: "https://instagram.com/shop" },
+      });
+      const payload = await saveAndReadPayload();
+      expect(payload.website).toBe("https://shop.example.co.za");
+      expect(payload.social_links).toEqual({
+        facebook: "https://facebook.com/shop",
+        instagram: "https://instagram.com/shop",
+        youtube: "https://youtube.com/@s",
+      });
+    });
+
+    it("round-trips the new Market answers and reads an older post's pets yes/no as the choice", async () => {
+      await openWith({
+        category: "property",
+        condition: null,
+        attributes: {
+          property_type: "house",
+          listing_intent: "rent",
+          pets_allowed: false,
+          available_from: "2026-12-01",
+          deposit_zar: 9000,
+          lease_term: "6_months",
+          utilities_included: ["water"],
+        },
+      });
+      const payload = await saveAndReadPayload();
+      expect(payload.attributes).toMatchObject({
+        pets_policy: "not_allowed",
+        pets_allowed: false,
+        available_from: "2026-12-01",
+        deposit_zar: 9000,
+        lease_term: "6_months",
+        utilities_included: ["water"],
+      });
+    });
+
+    it("keeps clothing size, gender and how the buyer gets it on save", async () => {
+      await openWith({
+        category: "clothing_accessories",
+        attributes: { size: "M", gender: "women", delivery_methods: ["collect", "courier"] },
+      });
+      const payload = await saveAndReadPayload();
+      expect(payload.attributes).toEqual({
+        size: "M",
+        gender: "women",
+        delivery_methods: ["collect", "courier"],
+      });
+    });
+
+    it("shows the media limits by the upload buttons", async () => {
+      await openWith({});
+      expect(
+        screen.getByText("Photos up to 5 MB · Video up to 2 min, up to 300 MB")
+      ).toBeInTheDocument();
+    });
   });
 });

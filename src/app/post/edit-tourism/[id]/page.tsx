@@ -22,6 +22,17 @@ import { editLimitReachedMessage } from "@/lib/posting/package-rules";
 import { MediaUpload } from "@/components/ui/media-upload";
 import { PHOTO_OR_VIDEO_RULE, photosWithVideoCover } from "@/lib/forms/video-cover-photo";
 import { OnlinePresenceFields } from "@/components/post/online-presence-fields";
+import { ContactSwitches, type ContactSwitchOption } from "@/components/post/contact-switches";
+import { MediaLimitsLine } from "@/components/post/media-limits-line";
+import { useAuth } from "@/hooks/use-auth";
+import {
+  EVENT_GATE_PAYMENTS,
+  EVENT_ID_CHECK_LINE,
+  EVENT_REFUND_POLICIES,
+  EVENT_TICKET_SALES,
+  eventChecksId,
+  eventSellsAtDoor,
+} from "@/lib/forms/event-entry-details";
 import { PostingTermsConsent } from "@/components/post/posting-terms-consent";
 import {
   UploadProgressPanel,
@@ -54,12 +65,15 @@ import {
 } from "@/lib/constants/categories";
 import { PromotionDetailContent } from "@/components/listings/promotion-detail-content";
 import { readMediaDimensions } from "@/lib/utils/media-metadata";
-import {
-  MAX_EVENT_VIDEO_SECONDS,
-  VIDEO_GUIDANCE,
-  VIDEO_SOUND_OFF_TIP,
-} from "@/lib/media/video-length";
+import { MAX_EVENT_VIDEO_SECONDS, VIDEO_SOUND_OFF_TIP } from "@/lib/media/video-length";
 import { isValidUserEnteredUrl, normalizeUserEnteredUrl } from "@/lib/utils/external-url";
+/** Call and WhatsApp use the account's verified number: nothing to type. */
+const CONTACT_OPTIONS: ContactSwitchOption[] = [
+  { id: "call", label: "Call", usesVerifiedNumber: true },
+  { id: "whatsapp", label: "WhatsApp", usesVerifiedNumber: true },
+  { id: "form", label: "Contact form", hint: "Enquiries arrive in your VerifyMzansi inbox" },
+];
+
 const selectClass =
   "flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-shadow sm:h-10 sm:text-sm";
 
@@ -77,6 +91,7 @@ export default function EditPromotionPage() {
   const promotionId = params.id;
 
   const { toast } = useToast();
+  const { profile } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submissionInFlightRef = useRef(false);
@@ -134,7 +149,13 @@ export default function EditPromotionPage() {
   );
   const [ticketsUrl, setTicketsUrl] = useState("");
   const [ageRestriction, setAgeRestriction] = useState("");
+  // Older posts only: no longer asked, but kept so an edit does not drop it.
   const [dressCode, setDressCode] = useState("");
+  const [doorsOpen, setDoorsOpen] = useState("");
+  const [refundPolicy, setRefundPolicy] = useState("");
+  const [refundDays, setRefundDays] = useState("");
+  const [ticketSales, setTicketSales] = useState("");
+  const [gatePayment, setGatePayment] = useState<string[]>([]);
   const [lineup, setLineup] = useState("");
   const [parkingAvailable, setParkingAvailable] = useState(false);
   const [accessibility, setAccessibility] = useState<string[]>([]);
@@ -146,6 +167,8 @@ export default function EditPromotionPage() {
   const [socialInstagram, setSocialInstagram] = useState("");
   const [socialTwitter, setSocialTwitter] = useState("");
   const [socialTiktok, setSocialTiktok] = useState("");
+  const [socialYoutube, setSocialYoutube] = useState("");
+  // Older posts only (recurring, group discounts): kept so an edit does not drop them.
   const [recurring, setRecurring] = useState("");
   const [rainPolicy, setRainPolicy] = useState("");
   const [earlyBirdDeadline, setEarlyBirdDeadline] = useState("");
@@ -156,6 +179,12 @@ export default function EditPromotionPage() {
   const maxVideos = usePlanMaxVideos("PROMOTIONS_EVENTS");
   const videoAllowed = usePlanVideoAllowed("PROMOTIONS_EVENTS");
   const effectiveMaxVideos = Math.max(maxVideos, existingVideos.length);
+  // Call and WhatsApp use the account's verified number; without one they stay off.
+  const verifiedPhone = profile?.phone?.trim() ?? "";
+  const activeContactMethods = contactMethods.filter(
+    (method) => verifiedPhone || (method !== "call" && method !== "whatsapp")
+  );
+  const isPaid = Number(priceZar) > 0;
   const previewPhotoUrls = useMemo(
     () => newPhotoFiles.map((file) => URL.createObjectURL(file)),
     [newPhotoFiles]
@@ -212,6 +241,11 @@ export default function EditPromotionPage() {
           setTicketsUrl(ed.tickets_url || "");
           setAgeRestriction(ed.age_restriction || "");
           setDressCode(ed.dress_code || "");
+          setDoorsOpen(ed.doors_open || "");
+          setRefundPolicy(ed.refund_policy || "");
+          setRefundDays(ed.refund_days != null ? String(ed.refund_days) : "");
+          setTicketSales(ed.ticket_sales || "");
+          setGatePayment(Array.isArray(ed.gate_payment) ? ed.gate_payment : []);
           setLineup(ed.lineup || "");
           setParkingAvailable(!!ed.parking_available);
           setAccessibility(Array.isArray(ed.accessibility) ? ed.accessibility : []);
@@ -223,6 +257,7 @@ export default function EditPromotionPage() {
           setSocialInstagram(ed.social_links?.instagram || "");
           setSocialTwitter(ed.social_links?.twitter || "");
           setSocialTiktok(ed.social_links?.tiktok || "");
+          setSocialYoutube(ed.social_links?.youtube || "");
           setRecurring(ed.recurring || "");
           setRainPolicy(ed.rain_policy || "");
           setEarlyBirdDeadline(ed.early_bird_deadline || "");
@@ -278,12 +313,6 @@ export default function EditPromotionPage() {
     });
   }, [newLogoFile]);
 
-  function toggleContact(method: string) {
-    setContactMethods((prev) =>
-      prev.includes(method) ? prev.filter((m) => m !== method) : [...prev, method]
-    );
-  }
-
   function removeExistingImage(index: number) {
     if (!window.confirm("Remove this photo?")) return;
     setExistingImages((prev) => prev.filter((_, i) => i !== index));
@@ -309,7 +338,7 @@ export default function EditPromotionPage() {
         priceZar,
         startDate,
         endDate,
-        contactMethods,
+        contactMethods: activeContactMethods,
       });
       if (!startDate || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(startDate))
         validationErrors.start_date = "Choose a start date and time (SAST).";
@@ -331,8 +360,15 @@ export default function EditPromotionPage() {
       }
 
       if (!province) validationErrors.province = "Select a province.";
-      if (contactMethods.length === 0)
+      if (activeContactMethods.length === 0)
         validationErrors.contact_methods = "Choose at least one contact method.";
+      if (doorsOpen && !/^([01]\d|2[0-3]):[0-5]\d$/.test(doorsOpen))
+        validationErrors.doors_open = "Choose a doors-open time.";
+      if (isPaid && refundPolicy === "full_until_days") {
+        const days = Number(refundDays);
+        if (!refundDays.trim() || !Number.isInteger(days) || days < 1 || days > 365)
+          validationErrors.refund_days = "Enter the number of days (1 to 365).";
+      }
       if (!city) validationErrors.city = "Select a city.";
       if (province.trim().length > 50) {
         validationErrors.province = "Province must be 50 characters or fewer.";
@@ -356,6 +392,7 @@ export default function EditPromotionPage() {
         ["socialInstagram", socialInstagram, "Enter a valid Instagram URL."],
         ["socialTwitter", socialTwitter, "Enter a valid X / Twitter URL."],
         ["socialTiktok", socialTiktok, "Enter a valid TikTok URL."],
+        ["socialYoutube", socialYoutube, "Enter a valid YouTube URL."],
       ] as const) {
         if (value.trim() && !isValidUserEnteredUrl(value)) validationErrors[key] = message;
       }
@@ -506,6 +543,7 @@ export default function EditPromotionPage() {
         instagram: socialInstagram,
         twitter: socialTwitter,
         tiktok: socialTiktok,
+        youtube: socialYoutube,
       })
         .map(([key, value]) => [key, normalizeUserEnteredUrl(value)] as const)
         .filter(([, value]) => value.length > 0);
@@ -525,7 +563,7 @@ export default function EditPromotionPage() {
         city,
         location_town: locationTown || undefined,
         location_address: locationAddress || undefined,
-        contact_methods: contactMethods,
+        contact_methods: activeContactMethods,
         logo_url: uploadedLogoUrl || existingLogoUrl || undefined,
         images: photosWithVideoCover(
           allImages,
@@ -553,6 +591,17 @@ export default function EditPromotionPage() {
           tickets_url: ticketsUrl ? normalizeUserEnteredUrl(ticketsUrl) : undefined,
           age_restriction: ageRestriction || undefined,
           dress_code: dressCode || undefined,
+          doors_open: doorsOpen || undefined,
+          ticket_sales: isPaid && ticketSales ? ticketSales : undefined,
+          gate_payment:
+            isPaid && eventSellsAtDoor(ticketSales) && gatePayment.length > 0
+              ? gatePayment
+              : undefined,
+          refund_policy: isPaid && refundPolicy ? refundPolicy : undefined,
+          refund_days:
+            isPaid && refundPolicy === "full_until_days" && refundDays.trim()
+              ? Number(refundDays)
+              : undefined,
           lineup: lineup || undefined,
           parking_available: parkingAvailable || undefined,
           accessibility: accessibility.length > 0 ? accessibility : undefined,
@@ -752,62 +801,57 @@ export default function EditPromotionPage() {
                 </div>
               )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <fieldset className="space-y-1">
-                  <legend className="text-sm font-medium">Entry (Required)</legend>
-                  <p className="text-xs text-muted-foreground">
-                    Free entry means visitors do not pay to attend. This is separate from posting
-                    being free.
-                  </p>
-                  <label className="flex min-h-11 items-center gap-2">
+              <fieldset className="space-y-2">
+                <legend className="text-sm font-medium">Entry (Required)</legend>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <label className="inline-flex min-h-11 items-center gap-2">
                     <input
                       type="radio"
                       name="entry"
+                      aria-label="Free entry"
                       checked={priceZar === "0"}
                       onChange={() => {
                         setPriceZar("0");
                         setNegotiable(false);
                       }}
                     />
-                    Free entry
+                    Free
                   </label>
-                  <label className="flex min-h-11 items-center gap-2">
+                  <label className="inline-flex min-h-11 items-center gap-2">
                     <input
                       type="radio"
                       name="entry"
+                      aria-label="Paid entry"
                       checked={priceZar !== "0"}
                       onChange={() => {
                         setPriceZar("");
                         setNegotiable(false);
                       }}
                     />
-                    Paid entry
+                    Paid
                   </label>
-                </fieldset>
-                {priceZar !== "0" && (
-                  <div className="space-y-2">
-                    <Label htmlFor="price" required>
-                      Starting entry price (ZAR)
-                    </Label>
-                    <p className="text-xs text-muted-foreground">
-                      The lowest ticket price. Add ticket tiers below if prices vary.
-                    </p>
-                    <Input
-                      id="price"
-                      type="number"
-                      inputMode="decimal"
-                      min="0"
-                      step="0.01"
-                      value={priceZar}
-                      onChange={(e) => setPriceZar(e.target.value)}
-                      aria-invalid={!!fieldErrors.price_zar}
-                    />
-                    {fieldErrors.price_zar && (
-                      <p className="inline-form-error">{fieldErrors.price_zar}</p>
-                    )}
-                  </div>
+                  {priceZar !== "0" && (
+                    <span className="inline-flex items-center gap-2">
+                      <span aria-hidden="true">from R</span>
+                      <Input
+                        id="price"
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        step="0.01"
+                        className="w-32"
+                        aria-label="Entry price from (R)"
+                        value={priceZar}
+                        onChange={(e) => setPriceZar(e.target.value)}
+                        aria-invalid={!!fieldErrors.price_zar}
+                      />
+                    </span>
+                  )}
+                </div>
+                {fieldErrors.price_zar && (
+                  <p className="inline-form-error">{fieldErrors.price_zar}</p>
                 )}
-              </div>
+              </fieldset>
 
               <LocationSelector
                 value={{
@@ -835,6 +879,7 @@ export default function EditPromotionPage() {
                   socialInstagram,
                   socialTwitter,
                   socialTiktok,
+                  socialYoutube,
                 }}
                 onChange={(field, value) => {
                   ({
@@ -844,6 +889,7 @@ export default function EditPromotionPage() {
                     socialInstagram: setSocialInstagram,
                     socialTwitter: setSocialTwitter,
                     socialTiktok: setSocialTiktok,
+                    socialYoutube: setSocialYoutube,
                   })[field](value);
                   const errorKey = field === "mapDirections" ? "map_directions" : field;
                   setFieldErrors((current) => {
@@ -857,35 +903,21 @@ export default function EditPromotionPage() {
                 mapPinHint="Open Google Maps, drop a pin on the venue, tap Share and paste the link here."
               />
 
-              <fieldset className="space-y-2">
-                <legend className="text-sm font-medium">
-                  How should people contact you? (Required)
-                </legend>
-                <p className="text-sm text-muted-foreground">
-                  Choose at least one. Phone and WhatsApp use the number on your VerifyMzansi
-                  account. Contact form enquiries go to your VerifyMzansi inbox.
-                </p>
-                <div className="flex flex-wrap gap-3">
-                  {(["call", "whatsapp", "form"] as const).map((method) => (
-                    <label key={method} className="flex items-center gap-2 text-sm cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={contactMethods.includes(method)}
-                        onChange={() => toggleContact(method)}
-                        className="rounded"
-                      />
-                      {method === "call"
-                        ? "Phone Call"
-                        : method === "whatsapp"
-                          ? "WhatsApp"
-                          : "Contact Form"}
-                    </label>
-                  ))}
-                </div>
-                {fieldErrors.contact_methods && (
-                  <p className="inline-form-error">{fieldErrors.contact_methods}</p>
-                )}
-              </fieldset>
+              <ContactSwitches
+                id="edit-event-contact-methods"
+                options={CONTACT_OPTIONS}
+                selected={contactMethods}
+                onChange={(next) => {
+                  setContactMethods(next);
+                  setFieldErrors((current) => {
+                    const next = { ...current };
+                    delete next.contact_methods;
+                    return next;
+                  });
+                }}
+                verifiedPhone={verifiedPhone}
+                error={fieldErrors.contact_methods}
+              />
 
               <EventDateFields
                 start={startDate}
@@ -893,6 +925,21 @@ export default function EditPromotionPage() {
                 onStart={setStartDate}
                 onEnd={setEndDate}
               />
+
+              <div className="space-y-2">
+                <Label htmlFor="doors_open">Doors open</Label>
+                <Input
+                  id="doors_open"
+                  type="time"
+                  className="w-40"
+                  value={doorsOpen}
+                  onChange={(e) => setDoorsOpen(e.target.value)}
+                  aria-invalid={!!fieldErrors.doors_open}
+                />
+                {fieldErrors.doors_open && (
+                  <p className="inline-form-error">{fieldErrors.doors_open}</p>
+                )}
+              </div>
 
               {/* ── Event Details ─────────────────────────── */}
               <div className="space-y-4 rounded-2xl border border-border bg-muted/30 p-4">
@@ -938,6 +985,9 @@ export default function EditPromotionPage() {
                         </option>
                       ))}
                     </PostSelect>
+                    {eventChecksId(ageRestriction) && (
+                      <p className="text-sm font-medium">{EVENT_ID_CHECK_LINE}</p>
+                    )}
                   </div>
                 </div>
 
@@ -969,18 +1019,6 @@ export default function EditPromotionPage() {
                       placeholder="e.g. 500"
                     />
                   </div>
-                </div>
-
-                <div className="space-y-1">
-                  <Label htmlFor="dress_code">Dress Code</Label>
-                  <p className="text-xs text-muted-foreground">Suggested attire for the event.</p>
-                  <Input
-                    id="dress_code"
-                    value={dressCode}
-                    onChange={(e) => setDressCode(e.target.value)}
-                    maxLength={300}
-                    placeholder="e.g. Smart casual"
-                  />
                 </div>
 
                 <div className="space-y-1">
@@ -1086,6 +1124,97 @@ export default function EditPromotionPage() {
                   )}
                 </div>
 
+                {isPaid && (
+                  <>
+                    <fieldset className="space-y-2">
+                      <legend className="text-sm font-medium">
+                        Where to buy tickets (Optional)
+                      </legend>
+                      <div className="flex flex-wrap gap-x-4">
+                        {EVENT_TICKET_SALES.map((option) => (
+                          <label
+                            key={option.value}
+                            className="inline-flex min-h-11 items-center gap-2 text-sm"
+                          >
+                            <input
+                              type="radio"
+                              name="ticket_sales"
+                              checked={ticketSales === option.value}
+                              onChange={() => setTicketSales(option.value)}
+                            />
+                            {option.label}
+                          </label>
+                        ))}
+                      </div>
+                      {eventSellsAtDoor(ticketSales) && (
+                        <div className="flex flex-wrap items-center gap-x-4">
+                          <span className="text-sm text-muted-foreground">Pay at the door:</span>
+                          {EVENT_GATE_PAYMENTS.map((option) => (
+                            <label
+                              key={option.value}
+                              className="inline-flex min-h-11 items-center gap-2 text-sm"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={gatePayment.includes(option.value)}
+                                onChange={() =>
+                                  setGatePayment((prev) =>
+                                    prev.includes(option.value)
+                                      ? prev.filter((v) => v !== option.value)
+                                      : [...prev, option.value]
+                                  )
+                                }
+                                className="rounded"
+                              />
+                              {option.label}
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </fieldset>
+
+                    <div className="space-y-1">
+                      <Label htmlFor="refund_policy">Refunds</Label>
+                      <select
+                        id="refund_policy"
+                        className={selectClass}
+                        value={refundPolicy}
+                        onChange={(e) => setRefundPolicy(e.target.value)}
+                      >
+                        <option value="">Select…</option>
+                        {EVENT_REFUND_POLICIES.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      {refundPolicy === "full_until_days" && (
+                        <div className="flex flex-wrap items-center gap-2 text-sm">
+                          <Label htmlFor="refund_days" required>
+                            Full refund until
+                          </Label>
+                          <Input
+                            id="refund_days"
+                            type="number"
+                            inputMode="numeric"
+                            min={1}
+                            max={365}
+                            step={1}
+                            className="w-24"
+                            value={refundDays}
+                            onChange={(e) => setRefundDays(e.target.value)}
+                            aria-invalid={!!fieldErrors.refund_days}
+                          />
+                          <span>days before</span>
+                        </div>
+                      )}
+                      {fieldErrors.refund_days && (
+                        <p className="inline-form-error">{fieldErrors.refund_days}</p>
+                      )}
+                    </div>
+                  </>
+                )}
+
                 <div className="flex flex-wrap gap-4">
                   <label className="flex items-center gap-2 text-sm cursor-pointer">
                     <input
@@ -1150,39 +1279,21 @@ export default function EditPromotionPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div className="space-y-1">
-                    <Label htmlFor="recurring">Recurring</Label>
-                    <PostSelect
-                      id="recurring"
-                      aria-label="Recurring"
-                      className="w-full rounded-md border px-3 py-2 text-sm"
-                      value={recurring}
-                      onChange={(e) => setRecurring(e.target.value)}
-                    >
-                      <option value="">Select…</option>
-                      <option value="one_off">One-off</option>
-                      <option value="weekly">Weekly</option>
-                      <option value="monthly">Monthly</option>
-                      <option value="annual">Annual</option>
-                    </PostSelect>
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="rainPolicy">Rain Policy</Label>
-                    <PostSelect
-                      id="rainPolicy"
-                      aria-label="Rain policy"
-                      className="w-full rounded-md border px-3 py-2 text-sm"
-                      value={rainPolicy}
-                      onChange={(e) => setRainPolicy(e.target.value)}
-                    >
-                      <option value="">Select…</option>
-                      <option value="outdoor_rain_or_shine">Outdoor — Rain or Shine</option>
-                      <option value="moved_indoors">Moved Indoors</option>
-                      <option value="postponed">Postponed</option>
-                      <option value="refunded">Refunded</option>
-                    </PostSelect>
-                  </div>
+                <div className="space-y-1">
+                  <Label htmlFor="rainPolicy">Rain Policy</Label>
+                  <select
+                    id="rainPolicy"
+                    aria-label="Rain policy"
+                    className={selectClass}
+                    value={rainPolicy}
+                    onChange={(e) => setRainPolicy(e.target.value)}
+                  >
+                    <option value="">Select…</option>
+                    <option value="outdoor_rain_or_shine">Outdoor — Rain or Shine</option>
+                    <option value="moved_indoors">Moved Indoors</option>
+                    <option value="postponed">Postponed</option>
+                    <option value="refunded">Refunded</option>
+                  </select>
                 </div>
 
                 {Number(priceZar) > 0 && (
@@ -1197,20 +1308,12 @@ export default function EditPromotionPage() {
                         maxLength={30}
                       />
                     </div>
-                    <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={groupDiscountAvailable}
-                        onChange={(e) => setGroupDiscountAvailable(e.target.checked)}
-                        className="rounded"
-                      />
-                      Group discounts available
-                    </label>
                   </>
                 )}
               </div>
 
               <p className="text-sm font-medium">{PHOTO_OR_VIDEO_RULE}</p>
+              <MediaLimitsLine kind="event" />
               <MediaUpload
                 id="edit-event-photos-input"
                 label="Photos"
@@ -1230,7 +1333,7 @@ export default function EditPromotionPage() {
               <MediaUpload
                 id="edit-event-videos-input"
                 label={`Videos${!videoAllowed ? " — Upgrade to unlock" : ""}`}
-                description={`${VIDEO_GUIDANCE} ${VIDEO_SOUND_OFF_TIP}`}
+                description={VIDEO_SOUND_OFF_TIP}
                 maxVideoSeconds={MAX_EVENT_VIDEO_SECONDS}
                 maxFiles={effectiveMaxVideos}
                 files={newVideoFiles}
@@ -1312,7 +1415,7 @@ export default function EditPromotionPage() {
                     location_city: city || "Online",
                     location_town: locationTown || null,
                     location_address: locationAddress || null,
-                    contact_methods: contactMethods,
+                    contact_methods: activeContactMethods,
                     start_date: startDate ? eventTimeToIso(startDate) : null,
                     end_date: endDate ? eventTimeToIso(endDate, true) : null,
                     boost_until: null,

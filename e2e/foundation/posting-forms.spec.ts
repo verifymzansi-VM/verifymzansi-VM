@@ -120,6 +120,20 @@ async function enterPostingForm(page: Page, firstField: Locator) {
   await firstField.waitFor({ state: "visible", timeout: 15_000 });
 }
 
+/** After a successful submit the form shows its "Submitted" screen, which
+ * links to the post in My posts, shown "In review". */
+async function expectSubmitted(page: Page, title: string, area: string) {
+  await expect(page.getByRole("heading", { name: "Submitted" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("Our team reviews every post before it goes live.")).toBeVisible();
+  // The link opens My posts at the new post's card.
+  const href = await page
+    .getByRole("link")
+    .filter({ hasText: title })
+    .filter({ hasText: "In review" })
+    .getAttribute("href");
+  expect(href?.startsWith(`/dashboard/listings?area=${area}#post-`)).toBe(true);
+}
+
 /** Ticks the posting-terms box when the form shows it (accepted terms may hide it). */
 async function acceptTermsIfShown(page: Page) {
   const box = page.getByRole("checkbox", { name: /I accept the VerifyMzansi posting terms/i });
@@ -174,7 +188,7 @@ test("a market listing is submitted through its form, then edited", async ({ pag
   await uploaderFor(page, /^Photos \(max/i).setInputFiles(IMAGE_FIXTURE);
   await acceptTermsIfShown(page);
   await submitFor(page, "/api/listings");
-  await expect(page).toHaveURL(/\/dashboard\/listings/, { timeout: 30_000 });
+  await expectSubmitted(page, title, "MZANSI_MARKET");
 
   const saved = savedPost(title);
   expect(saved.id).toMatch(UUID);
@@ -223,12 +237,12 @@ test("a business is submitted through its form", async ({ page }) => {
   await page.getByLabel("City or town", { exact: true }).selectOption("Johannesburg");
   await page.getByRole("button", { name: "Next", exact: true }).click();
   // Email is no longer a business contact; enquiries arrive in the inbox.
-  await page.getByRole("checkbox", { name: "VerifyMzansi inbox", exact: true }).check();
+  await page.getByRole("switch", { name: "VerifyMzansi inbox", exact: true }).check();
   await page.getByRole("button", { name: "Next", exact: true }).click();
   await uploaderFor(page, /^Profile photos/i).setInputFiles(IMAGE_FIXTURE);
   await acceptTermsIfShown(page);
   await submitFor(page, "/api/businesses");
-  await expect(page).toHaveURL(/\/dashboard\/(?:listings|businesses)/, { timeout: 30_000 });
+  await expectSubmitted(page, name, "MZANSI_BUSINESS");
   const saved = savedPost(name);
   expect(saved.id).toMatch(UUID);
   expect(saved.kind).toBe("business");
@@ -255,9 +269,7 @@ test("an event is submitted through its form", async ({ page }) => {
   await uploaderFor(page, /^Upload photos/i).setInputFiles(IMAGE_FIXTURE);
   await acceptTermsIfShown(page);
   await submitFor(page, "/api/promotions");
-  await expect(page).toHaveURL(/\/dashboard\/(?:listings|promotions|tourism-events)/, {
-    timeout: 30_000,
-  });
+  await expectSubmitted(page, title, "PROMOTIONS_EVENTS");
   const saved = savedPost(title);
   expect(saved.id).toMatch(UUID);
   expect(saved.kind).toBe("event");
@@ -281,13 +293,13 @@ test("a tourism stay is submitted through its form", async ({ page }) => {
   await page.getByLabel("Town / Suburb").fill("Melville");
   await page.getByLabel("Detailed address").fill("12 Synthetic Street");
   // Contact through the website's form instead of a phone number.
-  await page.getByRole("checkbox", { name: "Phone Call" }).uncheck();
-  await page.getByRole("checkbox", { name: "Contact Form" }).check();
+  await page.getByRole("switch", { name: "Call", exact: true }).uncheck();
+  await page.getByRole("switch", { name: "Contact form", exact: true }).check();
   await page.getByRole("button", { name: "Next", exact: true }).click();
   await uploaderFor(page, /^Upload photos/i).setInputFiles(IMAGE_FIXTURE);
   await acceptTermsIfShown(page);
   await submitFor(page, "/api/businesses");
-  await expect(page).toHaveURL(/\/dashboard\//, { timeout: 30_000 });
+  await expectSubmitted(page, name, "PROMOTIONS_EVENTS");
   const saved = savedPost(name);
   expect(saved.id).toMatch(UUID);
   expect(saved).toMatchObject({ kind: "business", area: "tourism_events" });

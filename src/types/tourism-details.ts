@@ -33,7 +33,7 @@ export interface TourismCategorySpecificFormFields {
 export interface TourismCategoryDetails {
   /** Sub‐category key from TOURISM_SUBCATEGORIES */
   subcategory?: string;
-  /** 1–5 star rating */
+  /** Older posts only: 1–5 star rating (the form keeps only TGCSA grading). */
   star_rating?: number;
   /** Total rooms / units available */
   number_of_rooms?: number;
@@ -43,15 +43,33 @@ export interface TourismCategoryDetails {
   check_in_time?: string;
   /** HH:mm format */
   check_out_time?: string;
-  /** Key from TOURISM_PRICE_RANGES */
+  /** Older posts only: key from TOURISM_PRICE_RANGES (replaced by price_from_cents). */
   price_range?: string;
+  /** "From R___" price in cents (whole number). */
+  price_from_cents?: number;
+  /** "night" | "person" | "unit" | "entry" */
+  price_unit?: string;
+  /* Stays: how many guests and rooms */
+  sleeps?: number;
+  bedrooms?: number;
+  beds?: number;
+  bathrooms?: number;
+  /** Subset of "inverter_solar" | "generator" | "borehole" | "water_tanks" */
+  backup_utilities?: string[];
+  /** Attractions: free-text opening hours (max 120) */
+  opening_hours?: string;
+  /** Days before arrival for cancellation_policy "free_until_days" */
+  cancellation_free_days?: number;
   /** Subset of TOURISM_AMENITIES */
   amenities?: string[];
   /** Subset of TOURISM_MEAL_OPTIONS */
   meal_options?: string[];
   /** Free‐text comma list, e.g. "English, Zulu, Afrikaans" */
   languages_spoken?: string;
-  /** Key from TOURISM_CANCELLATION_POLICIES */
+  /**
+   * "free_until_days" | "deposit_non_refundable" | "no_refunds"; older posts may
+   * hold a key from TOURISM_CANCELLATION_POLICIES.
+   */
   cancellation_policy?: string;
   /** External booking URL */
   booking_url?: string;
@@ -136,10 +154,22 @@ export interface EventDetails {
     instagram?: string;
     twitter?: string;
     tiktok?: string;
+    youtube?: string;
   };
   /** Key from EVENT_AGE_RESTRICTIONS */
   age_restriction?: string;
+  /** Older posts only (no longer asked or shown). */
   dress_code?: string;
+  /** Doors-open time, "HH:MM" */
+  doors_open?: string;
+  /** "full_until_days" | "only_if_cancelled" | "no_refunds" */
+  refund_policy?: string;
+  /** Days before the event for refund_policy "full_until_days" */
+  refund_days?: number;
+  /** Where tickets are sold: "online" | "door" | "both" */
+  ticket_sales?: string;
+  /** How the door takes payment when tickets are sold there */
+  gate_payment?: string[];
   /** Performers / speakers / lineup */
   lineup?: string;
   parking_available?: boolean;
@@ -150,11 +180,12 @@ export interface EventDetails {
   bring_your_own?: string;
 
   /* ── SA event additions ── */
-  /** "one_off" | "weekly" | "monthly" | "annual" */
+  /** Older posts only (no longer asked or shown): "one_off" | "weekly" | "monthly" | "annual" */
   recurring?: string;
   /** "outdoor_rain_or_shine" | "moved_indoors" | "postponed" | "refunded" */
   rain_policy?: string;
   /** Free-text early-bird cutoff, e.g. "15 April 2026" */
   early_bird_deadline?: string;
+  /** Older posts only (no longer asked or shown). */
   group_discount_available?: boolean;
 }

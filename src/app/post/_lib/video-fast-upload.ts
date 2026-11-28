@@ -5,6 +5,7 @@ import {
 } from "@/lib/media/compress-before-upload";
 import { MAX_VIDEO_ORIGINAL_BYTES } from "@/lib/media/upload-policy";
 import { extractVideoFrame } from "@/lib/media/video-frame";
+import { VIDEO_COVER_NEEDED } from "@/lib/forms/video-cover-photo";
 import type { VideoSource } from "@/lib/media/video-rule";
 import { MAX_VIDEO_SECONDS, videoLengthProblem } from "@/lib/media/video-length";
 import { readVideoLengthSeconds } from "@/lib/media/video-length-client";
@@ -131,17 +132,33 @@ export function isVideoPreparing(file: File | undefined): boolean {
   return !!file && preparationProgress.has(file);
 }
 
+/** No cover frame could be taken at submit for a post that needs one. */
+export class VideoCoverMissingError extends Error {
+  override name = "VideoCoverMissingError";
+  constructor() {
+    super(VIDEO_COVER_NEEDED);
+  }
+}
+
 /**
  * The cover to upload with a video at submit: the one chosen, or, when the
  * poster submitted before the frame picker had a frame (its original could
  * not be shown and the video was still being prepared), a frame from the
  * prepared video at 1 s. No submit goes out without a cover just because the
- * preparation was still running.
+ * preparation was still running. When no frame can be taken (a 15 s timeout
+ * or a canvas failure) and the post has no photo (`required`), the submit
+ * stops with VideoCoverMissingError instead of saving a post with no cover.
  */
-export async function videoCoverForSubmit(video: File | undefined, cover: File[]): Promise<File[]> {
+export async function videoCoverForSubmit(
+  video: File | undefined,
+  cover: File[],
+  required = false
+): Promise<File[]> {
   if (cover.length > 0 || !video) return cover;
   const frame = await extractVideoFrame(await prepareVideoForCover(video, () => {}));
-  return frame ? [frame] : [];
+  if (frame) return [frame];
+  if (required) throw new VideoCoverMissingError();
+  return [];
 }
 
 export function prewarmVideoForFastUpload(file: File): Promise<PreparedVideo> {

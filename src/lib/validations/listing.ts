@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  externalUrlOrEmptySchema,
   hasSpoofingChars,
   NO_HIDDEN_CHARS_MESSAGE,
   postMediaMetadataFields,
@@ -12,6 +13,17 @@ import type { ContactMethod } from "@/types/enums";
 const CONTACT_METHODS: [ContactMethod, ...ContactMethod[]] = ["call", "whatsapp", "form", "in_app"];
 const trustedMediaUrl = z.string().url().refine(isTrustedPlatformMediaUrl, {
   message: "Media must be hosted on the VerifyMzansi platform",
+});
+
+/** The seller's links, shown as tappable buttons on the post (stored in its presentation). */
+export const listingWebsiteSchema = externalUrlOrEmptySchema("Enter a valid website address.");
+export const listingSocialLinkSchema = externalUrlOrEmptySchema("Enter a valid link.");
+const listingSocialLinksSchema = z.object({
+  facebook: listingSocialLinkSchema.optional(),
+  instagram: listingSocialLinkSchema.optional(),
+  tiktok: listingSocialLinkSchema.optional(),
+  youtube: listingSocialLinkSchema.optional(),
+  twitter: listingSocialLinkSchema.optional(),
 });
 
 // ── Shared listing fields ───────────────────────────────────
@@ -72,7 +84,30 @@ const listingBase = z.object({
     .optional()
     .default(7),
   termsAccepted: z.boolean().optional().default(false),
+  website: listingWebsiteSchema.optional(),
+  social_links: listingSocialLinksSchema.optional(),
 });
+
+// Saved with the post only (presentation source attributes), not search fields.
+/** "How the buyer gets it", for items (not property or jobs). */
+const deliveryAttrs = {
+  delivery_methods: z
+    .array(z.enum(["collect", "meet_public", "courier", "seller_delivers"]))
+    .max(4)
+    .optional(),
+};
+/** Clothing and sports: size and who it is for. */
+const sizeGenderAttrs = {
+  size: z.string().trim().max(20, "Size must be 20 characters or fewer").optional(),
+  gender: z.enum(["women", "men", "unisex", "girls", "boys"]).optional(),
+};
+/** A real calendar date (YYYY-MM-DD): 2026-13-45 or 2026-02-30 is refused. */
+export function isCalendarDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+const isoDate = z.string().refine(isCalendarDate, "Choose a real date").optional();
 
 // ── Category-specific attributes ────────────────────────────
 const propertyAttrs = z.object({
@@ -108,7 +143,16 @@ const propertyAttrs = z.object({
   energy_features: z.array(z.string().max(80)).max(30).optional(),
   water_source: z.array(z.string().max(80)).max(30).optional(),
   fibre: z.enum(["not_available", "fibre_ready", "fibre_installed"]).optional(),
-  available_from: z.string().max(30).optional(),
+  available_from: isoDate,
+  deposit_zar: z.number().min(0).max(1_000_000_000).optional(),
+  lease_term: z.enum(["month_to_month", "6_months", "12_months", "24_months"]).optional(),
+  utilities_included: z
+    .array(z.enum(["prepaid_electricity", "water"]))
+    .max(2)
+    .optional(),
+  occupation_date: isoDate,
+  /** The form's pets choice; "allowed"/"not_allowed" are mirrored to pets_allowed. */
+  pets_policy: z.enum(["allowed", "not_allowed", "ask"]).optional(),
 });
 
 const carsAttrs = z.object({
@@ -135,6 +179,7 @@ const carsAttrs = z.object({
   extras: z.array(z.string().max(80)).max(30).optional(),
   finance_available: z.boolean().optional(),
   trade_in_accepted: z.boolean().optional(),
+  ...deliveryAttrs,
 });
 
 const autoPartsAttrs = z.object({
@@ -146,6 +191,7 @@ const autoPartsAttrs = z.object({
   warranty_included: z.boolean().optional(),
   fitment_included: z.boolean().optional(),
   compatible_year_range: z.string().max(30).optional(),
+  ...deliveryAttrs,
 });
 
 const electronicsAttrs = z.object({
@@ -160,6 +206,7 @@ const electronicsAttrs = z.object({
   ram_gb: z.number().int().min(1).max(256).optional(),
   original_accessories: z.boolean().optional(),
   activation_lock_clear: z.boolean().optional(),
+  ...deliveryAttrs,
 });
 
 const homeLifestyleAttrs = z.object({
@@ -181,6 +228,7 @@ const homeLifestyleAttrs = z.object({
   dimensions: z.string().max(60).optional(),
   delivery_available: z.boolean().optional(),
   power_rating: z.string().max(30).optional(),
+  ...deliveryAttrs,
 });
 
 const jobsAttrs = z.object({
@@ -230,6 +278,7 @@ const farmingAgricultureAttrs = z.object({
   hectares: z.number().min(0).max(1_000_000_000).optional(),
   irrigation: z.enum(["none", "drip", "sprinkler", "pivot", "flood"]).optional(),
   delivery_available: z.boolean().optional(),
+  ...deliveryAttrs,
 });
 
 const babyKidsAttrs = z.object({
@@ -257,6 +306,7 @@ const babyKidsAttrs = z.object({
   gender: z.enum(["unisex", "boys", "girls"]).optional(),
   brand: z.string().max(80).optional(),
   safety_certified: z.boolean().optional(),
+  ...deliveryAttrs,
 });
 
 // ── Discriminated union by category ─────────────────────────
@@ -274,7 +324,7 @@ export const listingSchema = z
     listingBase.extend({ category: z.literal("home_lifestyle"), attributes: homeLifestyleAttrs }),
     listingBase.extend({
       category: z.literal("clothing_accessories"),
-      attributes: homeLifestyleAttrs.omit({ sub_category: true }),
+      attributes: homeLifestyleAttrs.omit({ sub_category: true }).extend(sizeGenderAttrs),
     }),
     listingBase.extend({
       category: z.literal("sports_hobbies"),
@@ -282,6 +332,7 @@ export const listingSchema = z
         sub_category: z
           .enum(["sports_outdoor", "musical_instruments", "books_stationery"])
           .optional(),
+        ...sizeGenderAttrs,
       }),
     }),
     listingBase.extend({

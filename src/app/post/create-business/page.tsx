@@ -6,6 +6,10 @@ import {
   selectedContacts,
 } from "@/components/post/business-contact-fields";
 import { PostSelect } from "@/components/post/post-select";
+import { BusinessHoursFields } from "@/components/post/business-hours-fields";
+import { BusinessVisitFields } from "@/components/post/business-visit-fields";
+import { MediaLimitsLine } from "@/components/post/media-limits-line";
+import { PostSubmittedScreen, createdPostId } from "@/components/post/post-submitted-screen";
 
 import { CustomerAccessFields } from "@/components/post/customer-access-fields";
 import {
@@ -100,7 +104,18 @@ import {
   prewarmVideosForFastUpload,
   videoCoverForSubmit,
 } from "@/app/post/_lib/video-fast-upload";
-import { validateBusinessForm } from "@/lib/forms/business-form";
+import {
+  EMPTY_BUSINESS_HOURS,
+  PAYMENT_METHOD_OPTIONS,
+  businessHoursPayload,
+  readBusinessHours,
+  readVisitDetails,
+  validateBusinessForm,
+  withVisitDetails,
+  type BusinessHours,
+  type VisitDetails,
+} from "@/lib/forms/business-form";
+import { bookingUrlSchema } from "@/lib/validations/business-unified";
 import {
   coerceBusinessDetails,
   getNormalizedDeliveryOptions,
@@ -112,15 +127,10 @@ import { BusinessLayoutRouter } from "@/components/business/layouts/business-lay
 import { BusinessCard } from "@/components/listings/business-card";
 import type { LayoutTemplate } from "@/lib/business/layout-templates";
 import type { BusinessDraftData } from "@/lib/post-drafts/storage";
-import {
-  OperatingHoursInput,
-  formatHoursValue,
-  parseHoursValue,
-} from "@/components/ui/operating-hours-input";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 import { checkUploadServiceReachable } from "@/lib/utils/upload-preflight";
 import { readMediaDimensions } from "@/lib/utils/media-metadata";
-import { VIDEO_GUIDANCE, VIDEO_SOUND_OFF_TIP } from "@/lib/media/video-length";
+import { VIDEO_SOUND_OFF_TIP } from "@/lib/media/video-length";
 
 const SELECT_CLASS =
   "flex h-11 w-full rounded-xl border border-input bg-card px-3.5 py-2 text-base shadow-xs transition-colors hover:border-foreground/30 focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 sm:h-10 sm:text-sm";
@@ -139,14 +149,12 @@ const STEPS: PostFormStep[] = [
   { label: "Photos & review", icon: Camera, description: "Check what customers will see" },
 ];
 
-const PAYMENT_METHOD_OPTIONS = [
-  { value: "cash", label: "Cash" },
-  { value: "card", label: "Card" },
-  { value: "eft", label: "EFT / Bank Transfer" },
-  { value: "snapscan", label: "SnapScan" },
-  { value: "capitec_pay", label: "Capitec Pay" },
-  { value: "other", label: "Other" },
-];
+/** Draft fields added after BusinessDraftData; older drafts lack them. */
+type BusinessDraftExtras = {
+  socialYoutube: string;
+  hours: BusinessHours;
+  visit: VisitDetails;
+};
 
 const FIELD_IDS: Record<string, string> = {
   business_type: "business-type-group",
@@ -158,13 +166,15 @@ const FIELD_IDS: Record<string, string> = {
   location_city: "city",
   store_number: "storeNumber",
   map_directions: "mapDirections",
-  phone: "phone",
-  whatsapp: "whatsapp",
+  phone: "business-contact-methods",
+  whatsapp: "business-contact-methods",
   website: "website",
   socialFacebook: "socialFacebook",
   socialInstagram: "socialInstagram",
   socialTwitter: "socialTwitter",
   socialTiktok: "socialTiktok",
+  socialYoutube: "socialYoutube",
+  "category_details.booking_url": "business-booking-url",
   logo_url: "business-logo",
   cover_photo: "business-cover-photo",
   gallery_photos: "business-gallery",
@@ -180,6 +190,7 @@ const STEP_SOCIAL_FIELDS = [
   "socialInstagram",
   "socialTwitter",
   "socialTiktok",
+  "socialYoutube",
 ] as const;
 
 /** Human-readable labels for each form field key, used in the error alert. */
@@ -206,6 +217,8 @@ const BUSINESS_FIELD_LABELS: Record<string, string> = {
   socialInstagram: "Instagram",
   socialTwitter: "X / Twitter",
   socialTiktok: "TikTok",
+  socialYoutube: "YouTube",
+  "category_details.booking_url": "Booking link",
   logo_url: "Logo",
   cover_photo: "Cover photo",
   gallery_photos: "Gallery photos",
@@ -239,6 +252,11 @@ function getFieldId(key: string | undefined): string | undefined {
 function normalizeBusinessFieldErrors(errors: Record<string, string>): Record<string, string> {
   const normalized: Record<string, string> = {};
   for (const [key, message] of Object.entries(errors)) {
+    // The profile link is made from the name; a taken link gets a new ending on the next submit.
+    if (key === "slug") {
+      normalized.business_name ??= "This business link is already taken. Submit again.";
+      continue;
+    }
     const formKey = key.startsWith("service_areas")
       ? "customer_access.serviceAreas"
       : key.replace(/^category_details\.customer_access/, "customer_access");
@@ -262,6 +280,18 @@ function generateSlug(name: string): string {
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-")
     .slice(0, 60);
+}
+
+/** The profile link, made from the name with a short random ending so it is unique. */
+function profileLink(name: string): string {
+  const ending = Array.from(crypto.getRandomValues(new Uint8Array(4)), (n) =>
+    (n % 36).toString(36)
+  ).join("");
+  const base =
+    generateSlug(name)
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 50) || "business";
+  return `${base}-${ending}`;
 }
 
 export default function CreateBusinessPage() {
@@ -300,8 +330,6 @@ function CreateBusinessContent() {
     initialType ? getDefaultBusinessDetails(initialType) : null
   );
   const [businessName, setBusinessName] = useState("");
-  const [slug, setSlug] = useState("");
-  const [slugManual, setSlugManual] = useState(false);
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState<BusinessCategory | "">(initialCategory);
   const [subcategory, setSubcategory] = useState("");
@@ -317,19 +345,21 @@ function CreateBusinessContent() {
   const [locationAddress, setLocationAddress] = useState("");
   const [storeNumber, setStoreNumber] = useState("");
   const [mapDirections, setMapDirections] = useState("");
-  const [phone, setPhone] = useState("");
-  const [whatsapp, setWhatsapp] = useState("");
   const [website, setWebsite] = useState("");
-  const contactValues = { phone, whatsapp, website };
+  // Call and WhatsApp publish the account's verified number: nothing to type.
+  const verifiedPhone = profile?.phone?.trim() || "";
+  const contactValues = { phone: verifiedPhone, whatsapp: verifiedPhone, website };
   const contactMethods = readContactMethods(categoryDetails.contact_methods, contactValues);
   const publicContacts = selectedContacts(contactMethods, contactValues);
-  const [hoursMonFri, setHoursMonFri] = useState({ open: "", close: "", closed: false });
-  const [hoursSat, setHoursSat] = useState({ open: "", close: "", closed: false });
-  const [hoursSun, setHoursSun] = useState({ open: "", close: "", closed: false });
+  const [hours, setHours] = useState<BusinessHours>(EMPTY_BUSINESS_HOURS);
+  const [visit, setVisit] = useState<VisitDetails>({ walkInPolicy: "", visitorFeatures: [] });
+  const bookingUrl =
+    typeof categoryDetails.booking_url === "string" ? categoryDetails.booking_url : "";
   const [socialFacebook, setSocialFacebook] = useState("");
   const [socialInstagram, setSocialInstagram] = useState("");
   const [socialTwitter, setSocialTwitter] = useState("");
   const [socialTiktok, setSocialTiktok] = useState("");
+  const [socialYoutube, setSocialYoutube] = useState("");
   const [servicesInput, setServicesInput] = useState("");
   const [services, setServices] = useState<string[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<string[]>([]);
@@ -362,6 +392,7 @@ function CreateBusinessContent() {
   const [formError, setFormError] = useState<string | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
   const [submitSucceeded, setSubmitSucceeded] = useState(false);
+  const [submittedId, setSubmittedId] = useState<string | null>(null);
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const { toast } = useToast();
   const {
@@ -446,14 +477,6 @@ function CreateBusinessContent() {
   );
 
   useEffect(() => {
-    if (!slugManual && businessName) {
-      queueMicrotask(() => {
-        setSlug(generateSlug(businessName));
-      });
-    }
-  }, [businessName, slugManual]);
-
-  useEffect(() => {
     if (!profile) return;
 
     queueMicrotask(() => {
@@ -464,16 +487,8 @@ function CreateBusinessContent() {
       if (!city && profile.location_city && (!province || province === profile.location_province)) {
         setCity(profile.location_city);
       }
-
-      if (!phone && profile.phone) {
-        setPhone(profile.phone);
-      }
-
-      if (!whatsapp && profile.phone) {
-        setWhatsapp(profile.phone);
-      }
     });
-  }, [profile, province, city, phone, whatsapp]);
+  }, [profile, province, city]);
 
   useEffect(() => {
     if (!user?.id || isLoading || submitSucceeded) return;
@@ -481,7 +496,7 @@ function CreateBusinessContent() {
     void Promise.resolve(restoreDraft()).then((restored) => {
       if (!restored) return;
 
-      const restoredData = restored.data;
+      const restoredData = restored.data as typeof restored.data & Partial<BusinessDraftExtras>;
       const restoredType = (restoredData.businessType as BusinessType) || "";
       queueMicrotask(() => {
         setStep(Math.min(Math.max(restored.step ?? 0, 0), STEPS.length - 1));
@@ -498,8 +513,6 @@ function CreateBusinessContent() {
         }
 
         setBusinessName(restoredData.businessName ?? "");
-        setSlug(restoredData.slug ?? "");
-        setSlugManual(Boolean(restoredData.slugManual));
         setDescription(restoredData.description ?? "");
         setCategory((restoredData.category as BusinessCategory | "") ?? "");
         setSubcategory(
@@ -522,34 +535,27 @@ function CreateBusinessContent() {
         setLocationAddress(restoredData.locationAddress ?? "");
         setStoreNumber(restoredData.storeNumber ?? "");
         setMapDirections(restoredData.mapDirections ?? "");
-        setPhone(restoredData.phone ?? "");
-        setWhatsapp(restoredData.whatsapp ?? "");
         setWebsite(restoredData.website ?? "");
-        setHoursMonFri(
-          restoredData.hoursMonFri
-            ? typeof restoredData.hoursMonFri === "string"
-              ? parseHoursValue(restoredData.hoursMonFri)
-              : (restoredData.hoursMonFri as { open: string; close: string; closed: boolean })
-            : { open: "", close: "", closed: false }
+        // Older drafts kept each group as text ("08:00 - 17:00").
+        setHours(
+          restoredData.hours ??
+            readBusinessHours({
+              Mon_Fri: restoredData.hoursMonFri,
+              Sat: restoredData.hoursSat,
+              Sun: restoredData.hoursSun || "Closed",
+            })
         );
-        setHoursSat(
-          restoredData.hoursSat
-            ? typeof restoredData.hoursSat === "string"
-              ? parseHoursValue(restoredData.hoursSat)
-              : (restoredData.hoursSat as { open: string; close: string; closed: boolean })
-            : { open: "", close: "", closed: false }
-        );
-        setHoursSun(
-          restoredData.hoursSun
-            ? typeof restoredData.hoursSun === "string"
-              ? parseHoursValue(restoredData.hoursSun)
-              : (restoredData.hoursSun as { open: string; close: string; closed: boolean })
-            : { open: "", close: "", closed: true }
+        setVisit(
+          readVisitDetails({
+            walk_in_policy: restoredData.visit?.walkInPolicy,
+            visitor_features: restoredData.visit?.visitorFeatures,
+          })
         );
         setSocialFacebook(restoredData.socialFacebook ?? "");
         setSocialInstagram(restoredData.socialInstagram ?? "");
         setSocialTwitter(restoredData.socialTwitter ?? "");
         setSocialTiktok(restoredData.socialTiktok ?? "");
+        setSocialYoutube(restoredData.socialYoutube ?? "");
         setServicesInput(restoredData.servicesInput ?? "");
         setServices(Array.isArray(restoredData.services) ? restoredData.services : []);
         setPaymentMethods(
@@ -574,11 +580,11 @@ function CreateBusinessContent() {
   useEffect(() => {
     if (!user?.id || isLoading || isSubmitting || submitSucceeded) return;
 
-    saveDraft(step, {
+    const draft: BusinessDraftData & BusinessDraftExtras = {
       businessType,
       businessName,
-      slug,
-      slugManual,
+      slug: "",
+      slugManual: false,
       description,
       category,
       subcategory,
@@ -589,23 +595,27 @@ function CreateBusinessContent() {
       locationAddress,
       storeNumber,
       mapDirections,
-      phone,
-      whatsapp,
+      phone: "",
+      whatsapp: "",
       website,
-      hoursMonFri: formatHoursValue(hoursMonFri.open, hoursMonFri.close, hoursMonFri.closed),
-      hoursSat: formatHoursValue(hoursSat.open, hoursSat.close, hoursSat.closed),
-      hoursSun: formatHoursValue(hoursSun.open, hoursSun.close, hoursSun.closed),
+      hoursMonFri: "",
+      hoursSat: "",
+      hoursSun: "",
+      hours,
+      visit,
       socialFacebook,
       socialInstagram,
       socialTwitter,
       socialTiktok,
+      socialYoutube,
       servicesInput,
       services,
       paymentMethods,
       deliveryOptions,
       businessDetails: businessDetails as Record<string, unknown> | null,
       selectedLayout: layoutTemplate || "",
-    });
+    };
+    saveDraft(step, draft);
     queueMicrotask(() => {
       setLastSavedAt(Date.now());
     });
@@ -618,8 +628,6 @@ function CreateBusinessContent() {
     step,
     businessType,
     businessName,
-    slug,
-    slugManual,
     description,
     category,
     subcategory,
@@ -630,16 +638,14 @@ function CreateBusinessContent() {
     locationAddress,
     storeNumber,
     mapDirections,
-    phone,
-    whatsapp,
     website,
-    hoursMonFri,
-    hoursSat,
-    hoursSun,
+    hours,
+    visit,
     socialFacebook,
     socialInstagram,
     socialTwitter,
     socialTiktok,
+    socialYoutube,
     servicesInput,
     services,
     paymentMethods,
@@ -672,12 +678,16 @@ function CreateBusinessContent() {
         "service_areas",
         ...businessDetailKeys,
         "business_name",
-        "slug",
         "category",
         "description",
       ],
       ["location_province", "location_city", "location_address"],
-      ["contact_methods", ...STEP_CONTACT_FIELDS, ...STEP_SOCIAL_FIELDS],
+      [
+        "contact_methods",
+        ...STEP_CONTACT_FIELDS,
+        ...STEP_SOCIAL_FIELDS,
+        "category_details.booking_url",
+      ],
       ["gallery_photos", "cover_video", "termsAccepted"],
     ][targetStep];
     const firstKey = orderByStep?.find((key) => errors[key]) ?? Object.keys(errors)[0];
@@ -723,15 +733,12 @@ function CreateBusinessContent() {
       socialInstagram: socialInstagram.trim(),
       socialTwitter: socialTwitter.trim(),
       socialTiktok: socialTiktok.trim(),
+      socialYoutube: socialYoutube.trim(),
     });
     if (targetStep === 0) {
       if (!businessName.trim()) errors.business_name = "Enter a business name.";
       else if (businessName.trim().length < 2)
         errors.business_name = "Business name must be at least 2 characters.";
-      const currentSlug = (slug || generateSlug(businessName)).trim();
-      if (!currentSlug) errors.slug = "Enter a valid URL slug.";
-      else if (!/^[a-z0-9-]+$/.test(currentSlug))
-        errors.slug = "Use lowercase letters, numbers, and hyphens only.";
       if (!category) errors.category = "Select a category.";
       if (!description.trim()) errors.description = "Tell customers about your business.";
     }
@@ -764,6 +771,8 @@ function CreateBusinessContent() {
           errors[field] = businessValidationErrors[field];
         }
       }
+      if (!bookingUrlSchema.safeParse(bookingUrl).success)
+        errors["category_details.booking_url"] = "Enter a valid booking link.";
       const pinVisible = readCustomerAccess(categoryDetails.customer_access).publishAddress;
       for (const key of STEP_SOCIAL_FIELDS) {
         if (key === "map_directions" && !pinVisible) continue;
@@ -786,7 +795,12 @@ function CreateBusinessContent() {
 
   /** Scroll to top and focus the first field of the target step */
   function scrollToStepTop(targetStep: number) {
-    const firstFieldByStep = ["businessName", "business-type-group", "phone", "business-logo"];
+    const firstFieldByStep = [
+      "businessName",
+      "business-type-group",
+      "business-contact-methods",
+      "business-logo",
+    ];
     requestAnimationFrame(() => {
       document
         .getElementById("post-form-top")
@@ -945,7 +959,8 @@ function CreateBusinessContent() {
       if (socialInstagram) socialLinks.instagram = socialInstagram;
       if (socialTwitter) socialLinks.twitter = socialTwitter;
       if (socialTiktok) socialLinks.tiktok = socialTiktok;
-      const operatingHours: Record<string, string> = {};
+      if (socialYoutube) socialLinks.youtube = socialYoutube;
+      let operatingHours: Record<string, string | boolean> = {};
       if (businessType === "market_stall" && !categoryDetails.customer_access) {
         const td = (businessDetails as unknown as Record<string, unknown>).trading_days as
           string[] | undefined;
@@ -962,12 +977,7 @@ function CreateBusinessContent() {
           operatingHours.Sun = hasSun ? th : "Closed";
         }
       } else {
-        const monFriVal = formatHoursValue(hoursMonFri.open, hoursMonFri.close, hoursMonFri.closed);
-        const satVal = formatHoursValue(hoursSat.open, hoursSat.close, hoursSat.closed);
-        const sunVal = formatHoursValue(hoursSun.open, hoursSun.close, hoursSun.closed);
-        if (monFriVal) operatingHours.Mon_Fri = monFriVal;
-        if (satVal) operatingHours.Sat = satVal;
-        if (sunVal) operatingHours.Sun = sunVal;
+        operatingHours = businessHoursPayload(hours);
       }
       const serviceAreas = serviceAreasFromAccess(
         readCustomerAccess(categoryDetails.customer_access)
@@ -980,7 +990,7 @@ function CreateBusinessContent() {
       const body = {
         contact_methods: contactMethods,
         business_name: businessName.trim(),
-        slug: (slug || generateSlug(businessName)).trim(),
+        slug: profileLink(businessName),
         business_type: businessType,
         category,
         subcategory: subcategory || undefined,
@@ -1008,7 +1018,7 @@ function CreateBusinessContent() {
         gallery_photos: galleryUrls.length > 0 ? galleryUrls : undefined,
         services_offered: services.length > 0 ? services : undefined,
         service_areas: serviceAreas,
-        business_details: undefined,
+        business_details: withVisitDetails(null, businessType, visit),
         category_details: {
           ...categoryDetails,
           customer_access: cleanCustomerAccess(readCustomerAccess(categoryDetails.customer_access)),
@@ -1038,6 +1048,8 @@ function CreateBusinessContent() {
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ ...body, ...postFields() }),
       });
+      // The new post's id, for the Submitted screen's link (read from a copy of the answer).
+      if (res.ok) setSubmittedId(await createdPostId(res));
       const payload = await res.json().catch(() => null);
       if (!res.ok) {
         if (res.status === 401) {
@@ -1113,10 +1125,8 @@ function CreateBusinessContent() {
         return;
       }
       setUploadStatuses((c) => ({ ...c, saving: "done" }));
-      toast({ title: "Business submitted for review.", variant: "success" });
       setSubmitSucceeded(true);
       discardDraft();
-      router.push("/dashboard/listings?area=MZANSI_BUSINESS&created=business");
     } catch (error: unknown) {
       const uploadFailure = getBusinessMediaUploadErrorState(error);
       if (uploadFailure) {
@@ -1156,8 +1166,6 @@ function CreateBusinessContent() {
     setBusinessType(initialType);
     setBusinessDetails(initialType ? getDefaultBusinessDetails(initialType) : null);
     setBusinessName("");
-    setSlug("");
-    setSlugManual(false);
     setDescription("");
     setCategory(initialCategory);
     setSubcategory("");
@@ -1168,16 +1176,14 @@ function CreateBusinessContent() {
     setLocationAddress("");
     setStoreNumber("");
     setMapDirections("");
-    setPhone(profile?.phone ?? "");
-    setWhatsapp(profile?.phone ?? "");
     setWebsite("");
-    setHoursMonFri({ open: "", close: "", closed: false });
-    setHoursSat({ open: "", close: "", closed: false });
-    setHoursSun({ open: "", close: "", closed: true });
+    setHours(EMPTY_BUSINESS_HOURS);
+    setVisit({ walkInPolicy: "", visitorFeatures: [] });
     setSocialFacebook("");
     setSocialInstagram("");
     setSocialTwitter("");
     setSocialTiktok("");
+    setSocialYoutube("");
     setServicesInput("");
     setServices([]);
     setPaymentMethods([]);
@@ -1209,6 +1215,7 @@ function CreateBusinessContent() {
         instagram: socialInstagram,
         twitter: socialTwitter,
         tiktok: socialTiktok,
+        youtube: socialYoutube,
       }).filter(([, value]) => value.trim().length > 0)
     );
     const deliveryAvailable = readCustomerAccess(categoryDetails.customer_access).methods.includes(
@@ -1247,17 +1254,7 @@ function CreateBusinessContent() {
       video_thumbnail: videoThumbnailPreviewUrl,
       gallery_photos: galleryPreviewUrls,
       social_links: Object.keys(socialLinks).length > 0 ? socialLinks : null,
-      operating_hours: {
-        ...(formatHoursValue(hoursMonFri.open, hoursMonFri.close, hoursMonFri.closed)
-          ? { Mon_Fri: formatHoursValue(hoursMonFri.open, hoursMonFri.close, hoursMonFri.closed) }
-          : {}),
-        ...(formatHoursValue(hoursSat.open, hoursSat.close, hoursSat.closed)
-          ? { Sat: formatHoursValue(hoursSat.open, hoursSat.close, hoursSat.closed) }
-          : {}),
-        ...(formatHoursValue(hoursSun.open, hoursSun.close, hoursSun.closed)
-          ? { Sun: formatHoursValue(hoursSun.open, hoursSun.close, hoursSun.closed) }
-          : {}),
-      },
+      operating_hours: businessHoursPayload(hours),
       services_offered: services,
       payment_methods_accepted: paymentMethods,
       delivery_options: normalizedDeliveryOptions,
@@ -1275,7 +1272,7 @@ function CreateBusinessContent() {
       map_directions: readCustomerAccess(categoryDetails.customer_access).publishAddress
         ? mapDirections || null
         : null,
-      business_details: null,
+      business_details: withVisitDetails(null, businessType || "standalone_shop", visit) ?? null,
       layout_template: layoutTemplate,
     };
 
@@ -1332,6 +1329,24 @@ function CreateBusinessContent() {
     );
   }
 
+  if (submitSucceeded) {
+    return (
+      <div className="flex min-h-screen flex-col bg-muted/30">
+        <Header isAuthenticated />
+        <main id="main-content" className="flex-1">
+          <div className="container-page py-6">
+            <PostSubmittedScreen
+              postTitle={businessName.trim() || "Your business"}
+              area="MZANSI_BUSINESS"
+              postId={submittedId}
+            />
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen flex-col bg-muted/30">
       <Header isAuthenticated />
@@ -1341,7 +1356,7 @@ function CreateBusinessContent() {
             <form noValidate onSubmit={handleSubmit}>
               <PostFormScaffold
                 title="Add your business"
-                description="Your services, hours and contact details in one place."
+                description="Required fields are marked."
                 breadcrumbs={[
                   { label: "Dashboard", href: "/dashboard" },
                   { label: "Create Post", href: "/post/create" },
@@ -1350,7 +1365,6 @@ function CreateBusinessContent() {
                 badgeLabel="Mzansi Business"
                 area="business"
                 aside={renderPreviewAside()}
-                guideDescription="Tell customers what you offer. Required fields are marked; you can leave optional fields blank."
                 steps={STEPS}
                 onStepChange={setStep}
                 onFieldError={(key) => focusFirstError({ [key]: fieldErrors[key] })}
@@ -1441,7 +1455,7 @@ function CreateBusinessContent() {
                           value={businessName}
                           onChange={(event) => {
                             setBusinessName(event.target.value);
-                            clearErrors("business_name", "slug");
+                            clearErrors("business_name");
                           }}
                           placeholder="e.g. Nomsa's Fashion Boutique"
                           maxLength={100}
@@ -1452,35 +1466,6 @@ function CreateBusinessContent() {
                           <p className="inline-form-error">{fieldErrors.business_name}</p>
                         )}
                       </div>
-
-                      <details className="rounded-xl border border-border bg-muted/30 px-3 py-1">
-                        <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium text-muted-foreground hover:text-foreground">
-                          Advanced: customise your link
-                        </summary>
-                        <div className="space-y-2 pb-3">
-                          <Label htmlFor="slug">Custom profile link (Optional)</Label>
-                          <Input
-                            id="slug"
-                            value={slug}
-                            onChange={(event) => {
-                              setSlugManual(true);
-                              setSlug(generateSlug(event.target.value));
-                              clearErrors("slug");
-                            }}
-                            placeholder="your-business-name"
-                            maxLength={60}
-                            aria-invalid={!!fieldErrors.slug}
-                            className={cn(fieldErrors.slug && "border-destructive")}
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            Made from your business name. Lowercase letters, numbers and hyphens
-                            only.
-                          </p>
-                          {fieldErrors.slug && (
-                            <p className="inline-form-error">{fieldErrors.slug}</p>
-                          )}
-                        </div>
-                      </details>
 
                       <div className="space-y-2">
                         <BusinessCategoryPicker
@@ -1729,17 +1714,22 @@ function CreateBusinessContent() {
                             const unselected = suggestions.filter((s) => !services.includes(s));
                             if (unselected.length === 0) return null;
                             return (
-                              <div className="flex flex-wrap gap-1.5">
-                                {unselected.map((sug) => (
-                                  <button
-                                    key={sug}
-                                    type="button"
-                                    onClick={() => setServices((prev) => [...prev, sug])}
-                                    className="inline-flex min-h-9 items-center rounded-full border border-dashed border-brand-blue-400/60 px-3 text-xs font-medium text-brand-blue-700 transition-colors hover:bg-brand-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-brand-blue-300 dark:hover:bg-brand-blue-950/40"
-                                  >
-                                    + {sug}
-                                  </button>
-                                ))}
+                              <div className="space-y-1.5">
+                                <p className="text-xs font-medium text-muted-foreground">
+                                  Tap to add
+                                </p>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {unselected.map((sug) => (
+                                    <button
+                                      key={sug}
+                                      type="button"
+                                      onClick={() => setServices((prev) => [...prev, sug])}
+                                      className="inline-flex min-h-9 items-center rounded-full border border-dashed border-brand-blue-400/60 px-3 text-xs font-medium text-brand-blue-700 transition-colors hover:bg-brand-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-brand-blue-300 dark:hover:bg-brand-blue-950/40"
+                                    >
+                                      + {sug}
+                                    </button>
+                                  ))}
+                                </div>
                               </div>
                             );
                           })()}
@@ -1883,60 +1873,21 @@ function CreateBusinessContent() {
                   <div className="space-y-6">
                     <BusinessContactFields
                       methods={contactMethods}
-                      values={contactValues}
+                      verifiedPhone={verifiedPhone}
                       errors={fieldErrors}
-                      onMethods={(methods) =>
-                        setCategoryDetails((current) => ({ ...current, contact_methods: methods }))
-                      }
-                      onValue={(field, value) =>
-                        ({
-                          phone: setPhone,
-                          whatsapp: setWhatsapp,
-                          website: setWebsite,
-                        })[field](value)
-                      }
+                      onMethods={(methods) => {
+                        setCategoryDetails((current) => ({ ...current, contact_methods: methods }));
+                        clearErrors("contact_methods", "phone", "whatsapp");
+                      }}
                     />
 
-                    <PostFormSection title="Operating hours">
+                    <PostFormSection title="Opening hours">
                       {businessType === "market_stall" && !categoryDetails.customer_access ? (
                         <p className="rounded-xl bg-muted/50 px-3 py-2.5 text-sm text-muted-foreground">
                           We use the trading days and hours from the previous step.
                         </p>
                       ) : (
-                        <div className="space-y-3">
-                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                            <OperatingHoursInput
-                              id="hoursMonFri"
-                              label="Mon - Fri"
-                              open={hoursMonFri.open}
-                              close={hoursMonFri.close}
-                              closed={hoursMonFri.closed}
-                              onOpenChange={(v) => setHoursMonFri((p) => ({ ...p, open: v }))}
-                              onCloseChange={(v) => setHoursMonFri((p) => ({ ...p, close: v }))}
-                              onClosedChange={(v) => setHoursMonFri((p) => ({ ...p, closed: v }))}
-                            />
-                            <OperatingHoursInput
-                              id="hoursSat"
-                              label="Saturday"
-                              open={hoursSat.open}
-                              close={hoursSat.close}
-                              closed={hoursSat.closed}
-                              onOpenChange={(v) => setHoursSat((p) => ({ ...p, open: v }))}
-                              onCloseChange={(v) => setHoursSat((p) => ({ ...p, close: v }))}
-                              onClosedChange={(v) => setHoursSat((p) => ({ ...p, closed: v }))}
-                            />
-                            <OperatingHoursInput
-                              id="hoursSun"
-                              label="Sunday / Public Holidays"
-                              open={hoursSun.open}
-                              close={hoursSun.close}
-                              closed={hoursSun.closed}
-                              onOpenChange={(v) => setHoursSun((p) => ({ ...p, open: v }))}
-                              onCloseChange={(v) => setHoursSun((p) => ({ ...p, close: v }))}
-                              onClosedChange={(v) => setHoursSun((p) => ({ ...p, closed: v }))}
-                            />
-                          </div>
-                        </div>
+                        <BusinessHoursFields value={hours} onChange={setHours} />
                       )}
                     </PostFormSection>
 
@@ -1948,6 +1899,7 @@ function CreateBusinessContent() {
                         socialInstagram,
                         socialTwitter,
                         socialTiktok,
+                        socialYoutube,
                       }}
                       onChange={(field, value) => {
                         ({
@@ -1957,6 +1909,7 @@ function CreateBusinessContent() {
                           socialInstagram: setSocialInstagram,
                           socialTwitter: setSocialTwitter,
                           socialTiktok: setSocialTiktok,
+                          socialYoutube: setSocialYoutube,
                         })[field](value);
                         clearErrors(field === "mapDirections" ? "map_directions" : field);
                       }}
@@ -1967,6 +1920,19 @@ function CreateBusinessContent() {
                           : 'A location pin is only shown when you publish your address. Tick "Show my exact visitor address publicly" in the Location step to add one.'
                       }
                     />
+
+                    <PostFormSection title="Booking and visitors" optional>
+                      <BusinessVisitFields
+                        bookingUrl={bookingUrl}
+                        onBookingUrlChange={(value) => {
+                          setCategoryDetails((current) => ({ ...current, booking_url: value }));
+                          clearErrors("category_details.booking_url");
+                        }}
+                        bookingUrlError={fieldErrors["category_details.booking_url"]}
+                        visit={visit}
+                        onVisitChange={setVisit}
+                      />
+                    </PostFormSection>
 
                     <PostFormSection title="Payment methods accepted" icon={CreditCard} optional>
                       <div className="flex flex-wrap gap-2">
@@ -1995,6 +1961,7 @@ function CreateBusinessContent() {
                       title="Photos and video"
                       description="Your first photo is the cover on cards."
                     >
+                      <MediaLimitsLine />
                       <div id="business-gallery" className="space-y-2 rounded-lg">
                         <MediaUpload
                           id="business-gallery-input"
@@ -2031,7 +1998,7 @@ function CreateBusinessContent() {
                         <MediaUpload
                           id="business-cover-video-input"
                           label={`Video (optional)${!videoAllowed ? " — Upgrade to unlock" : ""}`}
-                          description={`One short intro clip. Portrait 9:16 works best. ${VIDEO_GUIDANCE} ${VIDEO_SOUND_OFF_TIP}`}
+                          description={`One short intro clip. Portrait 9:16 works best. ${VIDEO_SOUND_OFF_TIP}`}
                           error={fieldErrors.cover_video}
                           maxFiles={1}
                           files={promoVideoFile}

@@ -34,6 +34,8 @@ interface TurnstileWidgetProps {
   onError?: (error: string) => void;
   /** Called when the script/widget is successfully loaded */
   onLoad?: () => void;
+  /** Called when Cloudflare asks the visitor to interact (the widget shows itself). */
+  onInteractive?: () => void;
   /** Called when the widget cannot be rendered in the current environment */
   onUnavailable?: (message: string) => void;
   /** Widget theme */
@@ -145,6 +147,7 @@ export function TurnstileWidget({
   onExpire,
   onError,
   onLoad,
+  onInteractive,
   onUnavailable,
   theme = "auto",
   size = "normal",
@@ -165,6 +168,7 @@ export function TurnstileWidget({
   const onExpireRef = useLatestRef(onExpire);
   const onErrorRef = useLatestRef(onError);
   const onLoadRef = useLatestRef(onLoad);
+  const onInteractiveRef = useLatestRef(onInteractive);
   const onUnavailableRef = useLatestRef(onUnavailable);
   const isHydrated = useHydrated();
   const runtimeConfig = getPublicRuntimeConfig();
@@ -323,6 +327,9 @@ export function TurnstileWidget({
       "expired-callback": () => {
         onExpireRef.current?.();
       },
+      "before-interactive-callback": () => {
+        onInteractiveRef.current?.();
+      },
       "error-callback": (err: string) => {
         errorCountRef.current += 1;
 
@@ -372,6 +379,7 @@ export function TurnstileWidget({
     markUnavailable,
     onErrorRef,
     onExpireRef,
+    onInteractiveRef,
     onLoadRef,
     onSuccessRef,
   ]);

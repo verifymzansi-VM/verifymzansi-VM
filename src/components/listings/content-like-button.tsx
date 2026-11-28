@@ -18,22 +18,49 @@ const CONTENT_TABLES = {
   promotion: "promotions",
 } as const;
 
-/** This browser's note of the posts it liked (only a display hint). */
+/**
+ * This browser's note of the posts it liked (only a display hint): the count
+ * it showed with its own like and when, so a remounted card or a cached page
+ * never shows a red heart with a number that leaves the like out (a like from
+ * a new browser waits 10 minutes before the server total includes it, and
+ * pages are cached for a while). The count is a floor only for
+ * LIKE_FLOOR_WINDOW_MS; after that the page's own count is the truth, so the
+ * number cannot stay inflated when others (or this account elsewhere) unlike.
+ * Older notes hold "1" and no count.
+ */
+export const LIKE_FLOOR_WINDOW_MS = 30 * 60 * 1000;
 const LIKED_KEY = (id: string) => `vmz:liked:${id}`;
-function readLiked(id: string) {
+function readLikeNote(id: string): string | null {
   try {
-    return localStorage.getItem(LIKED_KEY(id)) === "1";
+    return localStorage.getItem(LIKED_KEY(id));
   } catch {
-    return false;
+    return null;
   }
 }
-function rememberLiked(id: string, liked: boolean) {
+export function parseLikeNote(
+  note: string | null,
+  now = Date.now()
+): { liked: boolean; count: number | null } {
+  if (note === null) return { liked: false, count: null };
+  const match = /^count:(\d+):at:(\d+)$/.exec(note);
+  const count = match ? Number(match[1]) : NaN;
+  const at = match ? Number(match[2]) : NaN;
+  const fresh = Number.isFinite(at) && now >= at && now - at < LIKE_FLOOR_WINDOW_MS;
+  return { liked: true, count: fresh && count >= 1 ? count : null };
+}
+function rememberLiked(id: string, liked: boolean, count: number) {
   try {
-    if (liked) localStorage.setItem(LIKED_KEY(id), "1");
+    if (liked) localStorage.setItem(LIKED_KEY(id), `count:${Math.max(1, count)}:at:${Date.now()}`);
     else localStorage.removeItem(LIKED_KEY(id));
   } catch {
     // Storage can be blocked (private mode); the heart then starts empty.
   }
+}
+/** The number shown: once this browser liked the post, never below the count
+ * it confirmed with that like (and never below 1). */
+export function shownLikeCount(pageCount: number, note: { liked: boolean; count: number | null }) {
+  const page = Math.max(0, pageCount);
+  return note.liked ? Math.max(page, note.count ?? 1) : page;
 }
 /** Likes made in another tab of this browser. */
 function subscribeToLikes(onChange: () => void) {
@@ -69,10 +96,12 @@ export function ContentLikeButton({
   const [isPending, startTransition] = useTransition();
   // Pages are the same for everyone, so whether this browser liked the post
   // comes from its own note of its likes (the server keeps the truth).
-  const rememberedLiked = useSyncExternalStore(
-    subscribeToLikes,
-    () => SHOW_ENGAGEMENT_TOTALS && readLiked(targetId),
-    () => false
+  const note = parseLikeNote(
+    useSyncExternalStore(
+      subscribeToLikes,
+      () => (SHOW_ENGAGEMENT_TOTALS ? readLikeNote(targetId) : null),
+      () => null
+    )
   );
 
   const currentState =
@@ -81,8 +110,12 @@ export function ContentLikeButton({
     optimisticState.targetType === targetType
       ? optimisticState
       : null;
-  const liked = currentState?.liked ?? (initialLiked || rememberedLiked);
-  const likeCount = currentState?.likeCount ?? initialLikeCount ?? 0;
+  const liked = currentState?.liked ?? (initialLiked || note.liked);
+  const likeCount =
+    currentState?.likeCount ??
+    (initialLiked && !note.liked
+      ? (initialLikeCount ?? 0)
+      : shownLikeCount(initialLikeCount ?? 0, note));
 
   const displayedLikeCount = Math.min(999, Math.max(0, likeCount ?? 0));
   // The rail shows the full count (compact); cards keep their capped pill.
@@ -145,13 +178,20 @@ export function ContentLikeButton({
               if (payload?.liked) {
                 trackContactAction(CONTENT_TABLES[targetType], targetId, "save", "like");
               }
-              rememberLiked(targetId, Boolean(payload?.liked));
+              const nowLiked = Boolean(payload?.liked);
+              const serverCount = Math.max(0, Number(payload?.likeCount) || 0);
+              // A waiting like is not in the server total yet: the shown
+              // number keeps it, as it does after every remount and reload.
+              const confirmedCount = nowLiked
+                ? Math.max(serverCount, optimisticLiked ? optimisticLikeCount : 1)
+                : serverCount;
+              rememberLiked(targetId, nowLiked, confirmedCount);
 
               setOptimisticState({
                 targetId,
                 targetType,
-                liked: Boolean(payload?.liked),
-                likeCount: Number(payload?.likeCount) || 0,
+                liked: nowLiked,
+                likeCount: confirmedCount,
               });
             } catch (error) {
               setOptimisticState({

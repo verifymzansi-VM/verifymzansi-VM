@@ -444,8 +444,8 @@ describe("CreateTourismPage type switch behavior", () => {
     });
     fireEvent.click(screen.getByLabelText("Free entry"));
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    fireEvent.click(screen.getByLabelText("Phone Call"));
-    fireEvent.click(screen.getByLabelText("Contact Form"));
+    fireEvent.click(screen.getByRole("switch", { name: "Call" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Contact form" }));
     fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
     fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
@@ -467,8 +467,8 @@ describe("CreateTourismPage type switch behavior", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    fireEvent.click(screen.getByLabelText("Phone Call"));
-    fireEvent.click(screen.getByLabelText("Contact Form"));
+    fireEvent.click(screen.getByRole("switch", { name: "Call" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Contact form" }));
     fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
     fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
     fireEvent.change(screen.getByLabelText("Street address"), {
@@ -571,8 +571,8 @@ describe("CreateTourismPage type switch behavior", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    fireEvent.click(screen.getByLabelText("Phone Call"));
-    fireEvent.click(screen.getByLabelText("Contact Form"));
+    fireEvent.click(screen.getByRole("switch", { name: "Call" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Contact form" }));
     fireEvent.change(screen.getByLabelText("Province"), {
       target: { value: "Gauteng" },
     });
@@ -648,9 +648,15 @@ describe("CreateTourismPage type switch behavior", () => {
     fireEvent.change(screen.getByLabelText(/^Minimum stay/), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    expect(screen.getByLabelText(/Phone number/)).toHaveValue("0821234567");
-    expect(screen.getByLabelText(/WhatsApp Number/)).toHaveValue("0821234567");
+    // Call uses the verified account number (shown masked); nothing is typed.
+    expect(screen.queryByLabelText(/Phone number/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/WhatsApp Number/)).not.toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "Call" })).toBeChecked();
+    expect(screen.getByRole("switch", { name: "WhatsApp" })).not.toBeChecked();
+    expect(screen.getAllByText(/Your verified number 08/).length).toBe(2);
     expect(screen.queryByLabelText(/^Email/)).not.toBeInTheDocument();
+    // Attractions are fixed venues: no "How do visitors join" question.
+    expect(screen.queryByText(/How do visitors join/)).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Street address"), {
       target: { value: "8115 Vilakazi Street" },
     });
@@ -676,6 +682,8 @@ describe("CreateTourismPage type switch behavior", () => {
     expect(body.map_directions).toBeUndefined();
     expect(body).not.toHaveProperty("email");
     expect(body.phone).toBe("0821234567");
+    expect(body.whatsapp).toBeUndefined();
+    expect(body.contact_methods).toEqual(["call"]);
     expect(body.category_details.tgcsa_grading).toBe("4_star");
     expect(body.category_details.minimum_stay_nights).toBe(2);
   });
@@ -736,8 +744,8 @@ describe("CreateTourismPage type switch behavior", () => {
     fireEvent.click(screen.getByLabelText("Free entry"));
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    fireEvent.click(screen.getByLabelText("Phone Call"));
-    fireEvent.click(screen.getByLabelText("Contact Form"));
+    fireEvent.click(screen.getByRole("switch", { name: "Call" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Contact form" }));
     fireEvent.change(screen.getByLabelText("Province"), {
       target: { value: "Gauteng" },
     });
@@ -835,8 +843,8 @@ describe("CreateTourismPage type switch behavior", () => {
     fireEvent.click(screen.getByLabelText("Free entry"));
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    fireEvent.click(screen.getByLabelText("Phone Call"));
-    fireEvent.click(screen.getByLabelText("Contact Form"));
+    fireEvent.click(screen.getByRole("switch", { name: "Call" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Contact form" }));
     fireEvent.change(screen.getByLabelText("Province"), {
       target: { value: "Gauteng" },
     });
@@ -891,8 +899,8 @@ describe("CreateTourismPage type switch behavior", () => {
       fireEvent.click(screen.getByRole("button", { name: "Next" }));
       fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-      fireEvent.click(screen.getByLabelText("Phone Call"));
-      fireEvent.click(screen.getByLabelText("Contact Form"));
+      fireEvent.click(screen.getByRole("switch", { name: "Call" }));
+      fireEvent.click(screen.getByRole("switch", { name: "Contact form" }));
       fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
       fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
       fireEvent.change(screen.getByLabelText("Street address"), {
@@ -942,8 +950,8 @@ describe("CreateTourismPage type switch behavior", () => {
     fireEvent.click(screen.getByLabelText("Free entry"));
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    fireEvent.click(screen.getByLabelText("Phone Call"));
-    fireEvent.click(screen.getByLabelText("Contact Form"));
+    fireEvent.click(screen.getByRole("switch", { name: "Call" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Contact form" }));
     fireEvent.change(screen.getByLabelText("Province"), {
       target: { value: "Gauteng" },
     });
@@ -999,8 +1007,8 @@ describe("CreateTourismPage type switch behavior", () => {
     fireEvent.click(screen.getByLabelText("Free entry"));
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    fireEvent.click(screen.getByLabelText("Phone Call"));
-    fireEvent.click(screen.getByLabelText("Contact Form"));
+    fireEvent.click(screen.getByRole("switch", { name: "Call" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Contact form" }));
     fireEvent.change(screen.getByLabelText("Province"), {
       target: { value: "Gauteng" },
     });
@@ -1054,8 +1062,8 @@ describe("CreateTourismPage type switch behavior", () => {
     fireEvent.click(screen.getByLabelText("Free entry"));
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    fireEvent.click(screen.getByLabelText("Phone Call"));
-    fireEvent.click(screen.getByLabelText("Contact Form"));
+    fireEvent.click(screen.getByRole("switch", { name: "Call" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Contact form" }));
     fireEvent.change(screen.getByLabelText("Province"), {
       target: { value: "Gauteng" },
     });
@@ -1119,8 +1127,8 @@ describe("CreateTourismPage type switch behavior", () => {
     fireEvent.click(screen.getByLabelText("Free entry"));
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    fireEvent.click(screen.getByLabelText("Phone Call"));
-    fireEvent.click(screen.getByLabelText("Contact Form"));
+    fireEvent.click(screen.getByRole("switch", { name: "Call" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Contact form" }));
     fireEvent.change(screen.getByLabelText("Province"), {
       target: { value: "Gauteng" },
     });
@@ -1169,8 +1177,8 @@ describe("CreateTourismPage type switch behavior", () => {
     });
     fireEvent.click(screen.getByLabelText("Free entry"));
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    fireEvent.click(screen.getByLabelText("Phone Call"));
-    fireEvent.click(screen.getByLabelText("Contact Form"));
+    fireEvent.click(screen.getByRole("switch", { name: "Call" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Contact form" }));
     fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
     fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
@@ -1226,8 +1234,8 @@ describe("CreateTourismPage type switch behavior", () => {
     });
     fireEvent.click(screen.getByLabelText("Free entry"));
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    fireEvent.click(screen.getByLabelText("Phone Call"));
-    fireEvent.click(screen.getByLabelText("Contact Form"));
+    fireEvent.click(screen.getByRole("switch", { name: "Call" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Contact form" }));
     fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
     fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
@@ -1270,5 +1278,260 @@ describe("CreateTourismPage type switch behavior", () => {
       expect(routerPushMock).toHaveBeenCalledWith("/dashboard/listings");
     });
     expect(routerPushMock).not.toHaveBeenCalledWith("//evil.example/phish");
+  });
+  /** Uploads succeed, and the business and promotion APIs accept the post. */
+  function acceptEverySubmit() {
+    (fetchWithRetry as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        urls: ["https://media.verifymzansi.com/tourism/photo.jpg"],
+        errors: [],
+      }),
+    });
+    fetchMock.mockImplementation(async () => ({
+      ok: true,
+      status: 201,
+      json: async () => ({ success: true, id: "ok" }),
+    }));
+  }
+
+  function postedBody(endpoint: string) {
+    const call = fetchMock.mock.calls.find(([input]) => input === endpoint);
+    return JSON.parse(String(call?.[1]?.body ?? "{}"));
+  }
+
+  /** Step 1 of a tourism business with the given category, then Next. */
+  function startTourismBusiness(subcategory: string) {
+    render(<CreateTourismPage />);
+    fireEvent.change(screen.getByLabelText("Business Name (Required)"), {
+      target: { value: "Kruger Sunset Lodge" },
+    });
+    fireEvent.change(screen.getByLabelText("Description (Required)"), {
+      target: {
+        value: "A detailed tourism business description with enough content to pass validation.",
+      },
+    });
+    fireEvent.change(screen.getByLabelText("Tourism category (Required)"), {
+      target: { value: subcategory },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+  }
+
+  /** Step 3 (location and contact) to the review step, then submit. */
+  function finishTourismBusiness() {
+    fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: /Add media for Upload photos/i }));
+    acceptPostingTerms();
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+  }
+
+  it("folds optional stay details, asks for a From price and stay sizes, and saves them", async () => {
+    acceptEverySubmit();
+    startTourismBusiness("guest_house_bnb");
+    await termsLoaded();
+
+    // The price bands and the duplicate star rating are gone; TGCSA stays.
+    expect(screen.queryByLabelText(/Price range/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Official star grading/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText("TGCSA Grading")).toBeInTheDocument();
+    // Optional inputs sit under a closed "More details (optional)".
+    const more = screen.getByText("More details (optional)").closest("details");
+    expect(more).not.toHaveAttribute("open");
+    expect(more).toContainElement(screen.getByLabelText("Booking URL (Optional)"));
+    expect(more).not.toContainElement(screen.getByLabelText("Price (Optional)"));
+    // At most one "Help me choose" per topic.
+    const helps = screen.getAllByRole("button", { name: /^Help with/ });
+    const topics = helps.map((button) => button.getAttribute("aria-label"));
+    expect(new Set(topics).size).toBe(topics.length);
+    expect(helps.length).toBeLessThanOrEqual(3);
+
+    fireEvent.change(screen.getByLabelText("Price (Optional)"), { target: { value: "450" } });
+    expect(screen.getByLabelText("Price is")).toHaveValue("night");
+    fireEvent.change(screen.getByLabelText("Sleeps (Optional)"), { target: { value: "4" } });
+    fireEvent.change(screen.getByLabelText("Bedrooms (Optional)"), { target: { value: "2" } });
+    fireEvent.change(screen.getByLabelText("Beds (Optional)"), { target: { value: "3" } });
+    fireEvent.change(screen.getByLabelText("Bathrooms (Optional)"), { target: { value: "1" } });
+    fireEvent.click(screen.getByLabelText("Inverter or solar"));
+    fireEvent.click(screen.getByLabelText("Water tanks"));
+    fireEvent.change(screen.getByRole("combobox", { name: "Cancellation policy" }), {
+      target: { value: "free_until_days" },
+    });
+    // The days are required for this choice.
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getAllByText("Enter the number of days (1 to 365).").length).toBeGreaterThan(0);
+    fireEvent.change(screen.getByLabelText(/Free cancellation until/), {
+      target: { value: "7" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    // Stays are fixed venues: no "How do visitors join" question.
+    expect(screen.queryByText(/How do visitors join/)).not.toBeInTheDocument();
+    finishTourismBusiness();
+
+    await waitFor(() => expect(screen.getByText("Submitted")).toBeInTheDocument());
+    const details = postedBody("/api/businesses").category_details;
+    expect(details).toMatchObject({
+      price_from_cents: 45000,
+      price_unit: "night",
+      sleeps: 4,
+      bedrooms: 2,
+      beds: 3,
+      bathrooms: 1,
+      backup_utilities: ["inverter_solar", "water_tanks"],
+      cancellation_policy: "free_until_days",
+      cancellation_free_days: 7,
+    });
+    expect(details).not.toHaveProperty("price_range");
+    expect(details).not.toHaveProperty("star_rating");
+  });
+
+  it("asks a tour how visitors join, and saves a per-person price", async () => {
+    acceptEverySubmit();
+    startTourismBusiness("tour_operator");
+    await termsLoaded();
+    expect(screen.getByLabelText("Price is")).toHaveValue("person");
+    expect(screen.queryByLabelText(/Sleeps/)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Price (Optional)"), { target: { value: "300" } });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(screen.getByText(/How do visitors join your tour or experience/)).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("At a meeting point"));
+    fireEvent.change(screen.getByLabelText(/^Meeting point/), {
+      target: { value: "Outside the museum" },
+    });
+    finishTourismBusiness();
+
+    await waitFor(() => expect(screen.getByText("Submitted")).toBeInTheDocument());
+    const details = postedBody("/api/businesses").category_details;
+    expect(details).toMatchObject({ price_from_cents: 30000, price_unit: "person" });
+  });
+
+  it("saves an attraction's entry fee and opening hours line instead of weekly hours", async () => {
+    acceptEverySubmit();
+    startTourismBusiness("tourist_attraction");
+    await termsLoaded();
+    expect(screen.getByLabelText("Price is")).toHaveValue("entry");
+    fireEvent.change(screen.getByLabelText("Price (Optional)"), { target: { value: "80" } });
+    fireEvent.change(screen.getByLabelText("Opening hours (Optional)"), {
+      target: { value: "Daily 08:00 to 17:00" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.queryByText("Hours Input")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("YouTube (Optional)"), {
+      target: { value: "youtube.com/@museum" },
+    });
+    finishTourismBusiness();
+
+    await waitFor(() => expect(screen.getByText("Submitted")).toBeInTheDocument());
+    const body = postedBody("/api/businesses");
+    expect(body.category_details).toMatchObject({
+      price_from_cents: 8000,
+      price_unit: "entry",
+      opening_hours: "Daily 08:00 to 17:00",
+    });
+    expect(body.social_links).toEqual({ youtube: "https://youtube.com/@museum" });
+    expect(body.operating_hours).toBeUndefined();
+  });
+
+  it("shows the Submitted screen with the post In review instead of leaving the page", async () => {
+    acceptEverySubmit();
+    fillEventToMediaStep();
+    await termsLoaded();
+    fireEvent.click(screen.getByRole("button", { name: /Add media for Upload photos/i }));
+    acceptPostingTerms();
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    expect(await screen.findByRole("heading", { name: "Submitted" })).toBeInTheDocument();
+    expect(
+      screen.getByText("Our team reviews every post before it goes live.")
+    ).toBeInTheDocument();
+    expect(screen.getByText("Soweto Food Festival")).toBeInTheDocument();
+    expect(screen.getByText("In review")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Go to My posts" })).toHaveAttribute(
+      "href",
+      "/dashboard/listings?area=PROMOTIONS_EVENTS"
+    );
+    expect(screen.queryByRole("button", { name: /Submit for review/i })).not.toBeInTheDocument();
+    expect(routerPushMock).not.toHaveBeenCalled();
+  });
+
+  it("saves a paid event's entry, doors, tickets, door payment, refunds and YouTube link", async () => {
+    acceptEverySubmit();
+    searchParamGetMock.mockImplementation((key: string) => (key === "type" ? "event" : null));
+    render(<CreateTourismPage />);
+    await termsLoaded();
+    fireEvent.change(screen.getByLabelText("Event name (Required)"), {
+      target: { value: "Soweto Jazz Night" },
+    });
+    fireEvent.change(screen.getByLabelText("Description (Required)"), {
+      target: { value: "A detailed event description with enough content to pass validation." },
+    });
+    fireEvent.change(screen.getByLabelText("Event category (Required)"), {
+      target: { value: "festival_concert" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(
+      screen.getByText("Ends at midnight? Choose the next day and 00:00.")
+    ).toBeInTheDocument();
+    // Removed inputs.
+    expect(screen.queryByLabelText(/Dress Code/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Recurring/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Group discounts/)).not.toBeInTheDocument();
+    // The old two-sentence entry explanation is gone.
+    expect(screen.queryByText(/Free to post describes the listing fee/)).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Start date (Required)"), {
+      target: { value: "2099-12-01" },
+    });
+    fireEvent.change(screen.getByLabelText("Start time (Required)"), {
+      target: { value: "18:00" },
+    });
+    fireEvent.change(screen.getByLabelText("Doors open (Optional)"), {
+      target: { value: "17:30" },
+    });
+    fireEvent.click(screen.getByLabelText("Paid entry"));
+    fireEvent.change(screen.getByLabelText("Entry price from (R)"), { target: { value: "150" } });
+    fireEvent.click(screen.getByLabelText("At the door"));
+    fireEvent.click(screen.getByLabelText("Cash"));
+    fireEvent.change(screen.getByLabelText("Refunds (Optional)"), {
+      target: { value: "full_until_days" },
+    });
+    fireEvent.change(screen.getByLabelText(/Full refund until/), { target: { value: "3" } });
+    expect(screen.queryByText("ID will be checked at the door")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/^Age restriction/), { target: { value: "18_plus" } });
+    expect(screen.getByText("ID will be checked at the door")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.click(screen.getByRole("switch", { name: "WhatsApp" }));
+    fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
+    fireEvent.change(screen.getByLabelText("YouTube (Optional)"), {
+      target: { value: "https://youtube.com/@jazznight" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByText(/Video up to 1 min/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Add media for Upload photos/i }));
+    acceptPostingTerms();
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    await waitFor(() => expect(screen.getByText("Submitted")).toBeInTheDocument());
+    const body = postedBody("/api/promotions");
+    expect(body.price_zar).toBe(150);
+    expect(body.contact_methods).toEqual(["call", "whatsapp"]);
+    expect(body.event_details).toMatchObject({
+      doors_open: "17:30",
+      ticket_sales: "door",
+      gate_payment: ["cash"],
+      refund_policy: "full_until_days",
+      refund_days: 3,
+      age_restriction: "18_plus",
+      social_links: { youtube: "https://youtube.com/@jazznight" },
+    });
+    expect(body.event_details).not.toHaveProperty("dress_code");
+    expect(body.event_details).not.toHaveProperty("recurring");
+    expect(body.event_details).not.toHaveProperty("group_discount_available");
   });
 });

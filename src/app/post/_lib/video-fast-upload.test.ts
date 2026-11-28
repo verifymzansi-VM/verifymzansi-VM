@@ -41,7 +41,9 @@ const {
   videoCoverForSubmit,
   prewarmVideoForFastUpload,
   uploadVideoWithFastPath,
+  VideoCoverMissingError,
 } = await import("@/app/post/_lib/video-fast-upload");
+const { VIDEO_COVER_NEEDED } = await import("@/lib/forms/video-cover-photo");
 
 /** What the preparation returns for a remuxed or converted output. */
 const converted = (file: File) => ({ file, source: "converted" as const });
@@ -477,10 +479,24 @@ describe("videoCoverForSubmit", () => {
     expect(isVideoPreparing(original)).toBe(false);
   });
 
-  it("gives no cover when no frame can be taken", async () => {
+  it("gives no cover when no frame can be taken and the post has photos", async () => {
     mockExtractFrame.mockResolvedValueOnce(null);
     await expect(
       videoCoverForSubmit(new File(["mp4"], "blank.mp4", { type: "video/mp4" }), [])
     ).resolves.toEqual([]);
+  });
+
+  it("stops the submit when no frame can be taken for a post with only a video", async () => {
+    mockExtractFrame.mockResolvedValueOnce(null);
+    const attempt = videoCoverForSubmit(
+      new File(["mp4"], "blank.mp4", { type: "video/mp4" }),
+      [],
+      true
+    );
+    await expect(attempt).rejects.toBeInstanceOf(VideoCoverMissingError);
+    mockExtractFrame.mockResolvedValueOnce(null);
+    await expect(
+      videoCoverForSubmit(new File(["mp4"], "blank2.mp4", { type: "video/mp4" }), [], true)
+    ).rejects.toThrow(VIDEO_COVER_NEEDED);
   });
 });

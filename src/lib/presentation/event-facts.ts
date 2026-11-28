@@ -17,13 +17,6 @@ export function getEventState(
   return "ongoing";
 }
 
-export const EVENT_RECURRING_LABELS: Record<string, string> = {
-  one_off: "One-off",
-  weekly: "Weekly",
-  monthly: "Monthly",
-  annual: "Annual",
-};
-
 export const EVENT_RAIN_POLICY_LABELS: Record<string, string> = {
   outdoor_rain_or_shine: "Outdoor — rain or shine",
   moved_indoors: "Moved indoors",

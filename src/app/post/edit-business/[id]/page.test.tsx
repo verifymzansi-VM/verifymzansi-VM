@@ -43,6 +43,15 @@ vi.mock("@/hooks/use-toast", () => ({
   useToast: vi.fn(),
 }));
 
+// The account's verified number: Call and WhatsApp publish it.
+const auth = vi.hoisted(() => ({
+  profile: { phone: "0821234567" } as { phone: string } | null,
+  isLoading: false,
+}));
+vi.mock("@/hooks/use-auth", () => ({
+  useAuth: () => ({ user: { id: "owner-1" }, profile: auth.profile, isLoading: auth.isLoading }),
+}));
+
 vi.mock("next/link", () => ({
   default: ({
     children,
@@ -145,6 +154,8 @@ describe("EditBusinessPage", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    auth.profile = { phone: "0821234567" };
+    auth.isLoading = false;
     (useRouter as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ push: mockPush });
     (useParams as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ id: "business-1" });
     (useToast as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ toast: mockToast });
@@ -321,6 +332,205 @@ describe("EditBusinessPage", () => {
       customer_pickup_allowed: false,
     });
     expectFoundationPostFields(payload, { expectedRevision: 3 });
+  });
+
+  function serveSavedBusiness(overrides: Record<string, unknown>) {
+    fetchMock.mockReset();
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse({
+          business: {
+            id: "business-9",
+            status: "live",
+            revision: 5,
+            business_type: "home_business",
+            business_name: "Lerato Nails",
+            slug: "lerato-nails",
+            description: "Nails at home.",
+            category: "beauty_personal",
+            location_province: "Gauteng",
+            location_city: "Johannesburg",
+            store_number: null,
+            map_directions: null,
+            phone: "0831112222",
+            whatsapp: "0831112222",
+            website: "",
+            logo_url: "",
+            cover_photo: "",
+            cover_video: "",
+            video_thumbnail: "",
+            gallery_photos: [],
+            services_offered: [],
+            payment_methods_accepted: [],
+            delivery_options: [],
+            social_links: {},
+            operating_hours: {},
+            service_areas: null,
+            business_details: null,
+            category_details: {
+              customer_access: {
+                version: 2,
+                methods: ["visit"],
+                premises: "home_business",
+                publishAddress: false,
+              },
+              contact_methods: ["call", "whatsapp"],
+            },
+            ...overrides,
+          },
+        })
+      )
+      .mockResolvedValueOnce(jsonResponse({ success: true, pendingReview: true }));
+  }
+
+  it("shows the verified number masked over an older typed one, and saves the verified number", async () => {
+    serveSavedBusiness({});
+    render(<EditBusinessPage />);
+    await termsLoaded();
+    await waitFor(() => expect(screen.getByDisplayValue("Lerato Nails")).toBeInTheDocument());
+    expect(screen.queryByDisplayValue("0831112222")).not.toBeInTheDocument();
+    expect(screen.getAllByText(/Your verified number 08/).length).toBe(2);
+    expect(screen.getByRole("switch", { name: "Call" })).toBeChecked();
+    expect(screen.getByRole("switch", { name: "WhatsApp" })).toBeChecked();
+
+    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    const payload = JSON.parse(fetchMock.mock.calls[1][1].body as string);
+    expect(payload.phone).toBe("0821234567");
+    expect(payload.whatsapp).toBe("0821234567");
+    expect(payload.contact_methods).toEqual(["call", "whatsapp"]);
+  });
+
+  it("waits for the verified number before saving, so Call and WhatsApp are not dropped", async () => {
+    auth.profile = null;
+    auth.isLoading = true;
+    serveSavedBusiness({});
+    render(<EditBusinessPage />);
+    await termsLoaded();
+    await waitFor(() => expect(screen.getByDisplayValue("Lerato Nails")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /Save Changes/i })).toBeDisabled();
+  });
+
+  it("asks a tourism stay's From price in rand and hides the dropped star and band fields", async () => {
+    serveSavedBusiness({
+      category: "tourism_hospitality",
+      category_details: { price_from_cents: 45000, price_unit: "night" },
+    });
+    render(<EditBusinessPage />);
+    await termsLoaded();
+    await waitFor(() => expect(screen.getByDisplayValue("Lerato Nails")).toBeInTheDocument());
+    const price = await screen.findByLabelText(/^Price from \(R\)/);
+    expect(price).toHaveValue("450");
+    expect(screen.queryByText(/in cents/)).toBeNull();
+    expect(screen.queryByLabelText(/star/i)).toBeNull();
+    expect(screen.queryByLabelText(/price range/i)).toBeNull();
+    fireEvent.change(price, { target: { value: "15000" } });
+    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    const payload = JSON.parse(fetchMock.mock.calls[1][1].body as string);
+    expect(payload.category_details.price_from_cents).toBe(1_500_000);
+  });
+
+  it("keeps typed rand decimals and saves them as cents", async () => {
+    serveSavedBusiness({
+      category: "tourism_hospitality",
+      category_details: { price_from_cents: 45000, price_unit: "night" },
+    });
+    render(<EditBusinessPage />);
+    await termsLoaded();
+    const price = await screen.findByLabelText(/^Price from \(R\)/);
+    // Typed one key at a time, as a person does: "450." and "450.0" must stay.
+    for (const typed of ["450", "450.", "450.0", "450.05"]) {
+      fireEvent.change(price, { target: { value: typed } });
+      expect(price).toHaveValue(typed);
+    }
+    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    const payload = JSON.parse(fetchMock.mock.calls[1][1].body as string);
+    expect(payload.category_details.price_from_cents).toBe(45005);
+  });
+
+  it("does not save a From price above R1 000 000", async () => {
+    serveSavedBusiness({
+      category: "tourism_hospitality",
+      category_details: { price_from_cents: 45000, price_unit: "night" },
+    });
+    render(<EditBusinessPage />);
+    await termsLoaded();
+    const price = await screen.findByLabelText(/^Price from \(R\)/);
+    fireEvent.change(price, { target: { value: "1000001" } });
+    expect(screen.getAllByText("Enter a price up to R1 000 000.").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+    await waitFor(() =>
+      expect(screen.getAllByText("Enter a price up to R1 000 000.").length).toBeGreaterThan(0)
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("loads and saves back the hours, booking, visitor, payment and YouTube details", async () => {
+    serveSavedBusiness({
+      operating_hours: {
+        Mon_Fri: "08:15 - 17:45",
+        Sat: "Closed",
+        Public_holidays: "10:00 - 14:00",
+        By_appointment: true,
+      },
+      payment_methods_accepted: ["zapper", "card_machine"],
+      social_links: { youtube: "https://youtube.com/@lerato" },
+      business_details: {
+        type: "home_business",
+        walk_in_policy: "walk_ins_welcome",
+        visitor_features: ["wheelchair_access"],
+      },
+      category_details: {
+        customer_access: {
+          version: 2,
+          methods: ["visit"],
+          premises: "home_business",
+          publishAddress: false,
+        },
+        contact_methods: ["form"],
+        booking_url: "https://book.example.com/lerato",
+      },
+    });
+    render(<EditBusinessPage />);
+    await termsLoaded();
+    await waitFor(() => expect(screen.getByDisplayValue("Lerato Nails")).toBeInTheDocument());
+
+    expect(screen.getByLabelText("Mon – Fri opens")).toHaveValue("08:15");
+    expect(screen.getByLabelText("Saturday closed")).toBeChecked();
+    expect(screen.getByLabelText("Public holidays closes")).toHaveValue("14:00");
+    expect(screen.getByLabelText("By appointment")).toBeChecked();
+    expect(screen.getByLabelText(/Booking link/)).toHaveValue("https://book.example.com/lerato");
+    expect(screen.getByLabelText("Walk-ins welcome")).toBeChecked();
+    expect(screen.getByLabelText("Wheelchair access")).toBeChecked();
+    expect(screen.getByLabelText("Zapper")).toBeChecked();
+    expect(screen.getByLabelText("YouTube (Optional)")).toHaveValue("https://youtube.com/@lerato");
+    expect(screen.getByRole("textbox", { name: /Custom profile link/ })).toHaveValue(
+      "lerato-nails"
+    );
+    expect(
+      screen.getByText("Photos up to 5 MB · Video up to 2 min, up to 300 MB")
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    const payload = JSON.parse(fetchMock.mock.calls[1][1].body as string);
+    expect(payload.operating_hours).toEqual({
+      Mon_Fri: "08:15 - 17:45",
+      Sat: "Closed",
+      Public_holidays: "10:00 - 14:00",
+      By_appointment: true,
+    });
+    expect(payload.payment_methods_accepted).toEqual(["zapper", "card_machine"]);
+    expect(payload.social_links).toEqual({ youtube: "https://youtube.com/@lerato" });
+    expect(payload.business_details).toEqual({
+      type: "home_business",
+      walk_in_policy: "walk_ins_welcome",
+      visitor_features: ["wheelchair_access"],
+    });
+    expect(payload.category_details.booking_url).toBe("https://book.example.com/lerato");
+    expect(payload.slug).toBe("lerato-nails");
   });
 
   it("keeps unsaved changes on the form when an earlier business edit is pending", async () => {
