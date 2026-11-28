@@ -35,7 +35,7 @@ export function eventSellsAtDoor(ticketSales: string | null | undefined): boolea
 }
 
 /** "Full refund until 7 days before", "No refunds"…; null when not set. */
-export function eventRefundText(details: EventDetails): string | null {
+function eventRefundText(details: EventDetails): string | null {
   switch (details.refund_policy) {
     case "full_until_days": {
       const days =

@@ -1,5 +1,6 @@
 import { customerAccessSchema } from "@/lib/forms/customer-access";
 import { z } from "zod";
+import { PAYMENT_METHODS, VISITOR_FEATURES } from "@/lib/forms/business-choices";
 import { isTrustedPlatformMediaUrl } from "@/lib/utils/media-url";
 import { businessNumber, WHATSAPP_NEEDS_MOBILE } from "@/lib/utils/phone";
 import { BUSINESS_TEXT_LIMITS } from "./business-limits";
@@ -47,23 +48,6 @@ const BUSINESS_CATEGORIES = [
   "tourism_hospitality",
   "general_other",
 ] as const;
-
-/** Payment methods a business can tick (labels in src/lib/forms/business-form.ts). */
-export const PAYMENT_METHODS = [
-  "cash",
-  "card",
-  "eft",
-  "snapscan",
-  "capitec_pay",
-  "zapper",
-  "card_machine",
-  "cash_on_delivery",
-  "instant_eft",
-  "other",
-] as const;
-
-/** What visitors find at the premises: business_details.visitor_features. */
-export const VISITOR_FEATURES = ["parking", "wheelchair_access", "kid_friendly"] as const;
 
 const WALK_IN_POLICIES = [
   "walk_ins_welcome",

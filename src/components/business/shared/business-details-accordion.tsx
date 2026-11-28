@@ -53,7 +53,7 @@ function DetailSection({
 }
 
 /** The opening-hours lines a business stored, in reading order. */
-export function openingHoursRows(hours: Record<string, unknown> | null | undefined) {
+function openingHoursRows(hours: Record<string, unknown> | null | undefined) {
   if (!hours) return [];
   const rows: { label: string; value: string }[] = [];
   if (hours.Open_24_hours === true) rows.push({ label: "Every day", value: "Open 24 hours" });

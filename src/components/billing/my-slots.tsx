@@ -46,7 +46,7 @@ const FREE_SOURCES = new Set<Slot["source"]>([
  * counts, e.g. "25 free slots, 16 empty", instead of 25 look-alike cards. An
  * Individual slot is renewed on its own, so it always keeps its own card.
  */
-export function groupSlots(slots: Slot[]): Slot[][] {
+function groupSlots(slots: Slot[]): Slot[][] {
   const groups = new Map<string, Slot[]>();
   for (const slot of slots) {
     const key = slot.individual

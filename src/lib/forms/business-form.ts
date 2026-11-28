@@ -7,7 +7,7 @@ import type { BusinessDetails } from "@/types/business-details";
 import type { BusinessType } from "@/types/enums";
 import { isValidUserEnteredUrl } from "@/lib/utils/external-url";
 import { businessNumber, WHATSAPP_NEEDS_MOBILE } from "@/lib/utils/phone";
-import { PAYMENT_METHODS, VISITOR_FEATURES } from "@/lib/validations/business-unified";
+import { PAYMENT_METHODS, VISITOR_FEATURES } from "./business-choices";
 
 export interface BusinessFormValues {
   businessType: BusinessType | "";
@@ -251,7 +251,7 @@ export const EMPTY_BUSINESS_HOURS: BusinessHours = {
 };
 
 /** "08:00 - 17:00", "Closed", or "" while a time is missing. */
-export function dayHoursText(day: DayHours): string {
+function dayHoursText(day: DayHours): string {
   if (day.closed) return "Closed";
   return day.open && day.close ? `${day.open} - ${day.close}` : "";
 }

@@ -1151,7 +1151,7 @@ const sizeAndGenderFields: AttributeField[] = [
   },
 ];
 /** "How the buyer gets it", asked for items (not property or jobs). */
-export const DELIVERY_METHODS_FIELD: AttributeField = {
+const DELIVERY_METHODS_FIELD: AttributeField = {
   name: "delivery_methods",
   label: "How the buyer gets it",
   type: "checklist",

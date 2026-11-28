@@ -7,6 +7,7 @@ import {
   priceSchema,
   externalUrlOrEmptySchema,
 } from "./shared";
+import { eventEntryFields, eventSocialLinksSchema } from "./event-fields";
 
 /* ── Allowed-value lists ─────────────────────────────────── */
 
@@ -217,26 +218,8 @@ const eventDetailsSchema = z.object({
   age_restriction: z.enum(AGE_RESTRICTION_VALUES).optional(),
   /** Older posts only. */
   dress_code: z.string().max(300).optional(),
-  doors_open: z
-    .string()
-    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use a time such as 18:30")
-    .optional(),
-  refund_policy: z.enum(["full_until_days", "only_if_cancelled", "no_refunds"]).optional(),
-  refund_days: z.number().int().min(1).max(365).optional(),
-  ticket_sales: z.enum(["online", "door", "both"]).optional(),
-  gate_payment: z
-    .array(z.enum(["cash", "card"]))
-    .max(2)
-    .optional(),
-  social_links: z
-    .object({
-      facebook: externalUrlOrEmptySchema("Enter a valid Facebook URL"),
-      instagram: externalUrlOrEmptySchema("Enter a valid Instagram URL"),
-      twitter: externalUrlOrEmptySchema("Enter a valid X / Twitter URL"),
-      tiktok: externalUrlOrEmptySchema("Enter a valid TikTok URL"),
-      youtube: externalUrlOrEmptySchema("Enter a valid YouTube URL"),
-    })
-    .optional(),
+  ...eventEntryFields,
+  social_links: eventSocialLinksSchema,
   lineup: z.string().max(2000).optional(),
   parking_available: z.boolean().optional(),
   accessibility: z.array(z.string().max(80)).optional(),

@@ -230,7 +230,7 @@ export function tourismCancellationText(details: Record<string, unknown>): strin
 }
 
 /** Backup power and water labels, in the form's order. */
-export function tourismBackupUtilities(details: Record<string, unknown>): string[] {
+function tourismBackupUtilities(details: Record<string, unknown>): string[] {
   const values = Array.isArray(details.backup_utilities) ? details.backup_utilities : [];
   return TOURISM_BACKUP_UTILITIES.filter((item) => values.includes(item.value)).map(
     (item) => item.label

@@ -102,7 +102,7 @@ const EVENT_KEYS: Array<[string, string]> = [
 ];
 
 /** Every answer the poster entered, with plain labels, for the staff review screen. */
-export function submittedDetailRows(item: Item): DetailRow[] {
+function submittedDetailRows(item: Item): DetailRow[] {
   const rows: DetailRow[] = [];
   const push = (label: string, value: string | null | undefined) => {
     if (value && value.trim()) rows.push({ label, value });
@@ -176,7 +176,7 @@ export function submittedDetailRows(item: Item): DetailRow[] {
 }
 
 /** The website and social links, from the post or (events) its event details. */
-export function submittedLinks(item: Item) {
+function submittedLinks(item: Item) {
   const event = item.event_details ?? {};
   return {
     website: item.website || (typeof event.website === "string" ? event.website : null),

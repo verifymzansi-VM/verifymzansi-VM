@@ -126,7 +126,7 @@ async function expectSubmitted(page: Page, title: string, area: string) {
   await expect(page.getByRole("heading", { name: "Submitted" })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("Our team reviews every post before it goes live.")).toBeVisible();
   await expect(
-    page.getByRole("link", { name: new RegExp(`${title}\\s*In review`) })
+    page.getByRole("link").filter({ hasText: title }).filter({ hasText: "In review" })
   ).toHaveAttribute("href", `/dashboard/listings?area=${area}`);
 }
 

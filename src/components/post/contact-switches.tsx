@@ -70,7 +70,7 @@ export function ContactSwitches({
                   )}
                 </p>
               </div>
-              <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 has-[:disabled]:cursor-not-allowed">
+              <label className="relative inline-flex min-h-11 cursor-pointer items-center gap-2 has-[:disabled]:cursor-not-allowed">
                 <span
                   aria-hidden="true"
                   className={cn(
@@ -94,7 +94,8 @@ export function ContactSwitches({
                         : selected.filter((value) => value !== option.id)
                     )
                   }
-                  className="peer sr-only"
+                  // Covers the whole on/off control, so a tap anywhere on it works.
+                  className="peer absolute inset-0 z-[1] m-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
                 />
                 <span
                   aria-hidden="true"
