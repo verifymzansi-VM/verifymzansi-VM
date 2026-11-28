@@ -72,6 +72,9 @@ export interface FeedOpeningHours {
   Mon_Fri?: string;
   Sat?: string;
   Sun?: string;
+  Public_holidays?: string;
+  /** Also open by appointment (shown as its own line). */
+  By_appointment?: true;
 }
 
 export interface FeedContact {

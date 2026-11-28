@@ -8,6 +8,7 @@ import { X } from "lucide-react";
 import { BRAND_SHIELD_LARGE_SRC, BrandMark } from "@/components/brand";
 import { SaFlagStripe } from "@/components/brand/sa-flag-stripe";
 import { Button } from "@/components/ui/button";
+import { VIEWER_CHECK_EVENT } from "@/lib/engagement";
 
 // Full-screen viewers cover the page and have their own controls; task pages
 // (posting, the dashboard, staff screens) need their first tap to reach the page.
@@ -44,7 +45,17 @@ function rememberClosed() {
 export function PrelaunchBanner() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  // A "not a robot" check on screen: the pop-up steps aside until it is done,
+  // so the check is never covered and focus stays with it.
+  const [checking, setChecking] = useState(false);
   const blocked = BANNER_BLOCKED_PATH_PREFIXES.some((prefix) => pathname?.startsWith(prefix));
+
+  useEffect(() => {
+    const onCheck = (event: Event) =>
+      setChecking(Boolean((event as CustomEvent<{ pending?: boolean }>).detail?.pending));
+    window.addEventListener(VIEWER_CHECK_EVENT, onCheck);
+    return () => window.removeEventListener(VIEWER_CHECK_EVENT, onCheck);
+  }, []);
 
   // Open just after hydration, so it arrives on a settled page.
   useEffect(() => {
@@ -55,13 +66,13 @@ export function PrelaunchBanner() {
 
   // The page behind doesn't scroll while the pop-up is open.
   useEffect(() => {
-    if (!open) return;
+    if (!open || checking) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = previous;
     };
-  }, [open]);
+  }, [open, checking]);
 
   if (blocked) return null;
 
@@ -71,7 +82,7 @@ export function PrelaunchBanner() {
     // below covers the page instead, and Escape or a click outside closes it.
     <DialogPrimitive.Root
       modal={false}
-      open={open}
+      open={open && !checking}
       onOpenChange={(next) => {
         if (next) return;
         rememberClosed();
@@ -79,7 +90,7 @@ export function PrelaunchBanner() {
       }}
     >
       <DialogPrimitive.Portal>
-        {open ? (
+        {open && !checking ? (
           <div
             aria-hidden="true"
             data-full-screen-popup

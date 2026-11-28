@@ -5,6 +5,17 @@ import Link from "next/link";
 import { CheckCircle2 } from "lucide-react";
 import type { MarketplaceArea } from "@/types/enums";
 
+/** The new post's id from a create answer (read from a copy, so the caller
+ * can still read the body); null when it is not there. */
+export async function createdPostId(response: Response): Promise<string | null> {
+  try {
+    const body = (await response.clone().json()) as { id?: unknown } | null;
+    return typeof body?.id === "string" && /^[0-9a-f-]{36}$/i.test(body.id) ? body.id : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * The clear screen every create form shows after a successful submit, in place
  * of a short pop-up: what happens next, and a link to the post, shown "In review".
@@ -12,9 +23,12 @@ import type { MarketplaceArea } from "@/types/enums";
 export function PostSubmittedScreen({
   postTitle,
   area,
+  postId = null,
 }: {
   postTitle: string;
   area: MarketplaceArea;
+  /** The new post: the link opens My posts at its card, shown "In review". */
+  postId?: string | null;
 }) {
   const headingRef = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
@@ -22,6 +36,7 @@ export function PostSubmittedScreen({
     window.scrollTo({ top: 0 });
   }, []);
   const myPostsHref = `/dashboard/listings?area=${area}`;
+  const postHref = postId ? `${myPostsHref}#post-${postId}` : myPostsHref;
   return (
     <section
       aria-labelledby="post-submitted-title"
@@ -46,7 +61,7 @@ export function PostSubmittedScreen({
         </p>
       </div>
       <Link
-        href={myPostsHref}
+        href={postHref}
         className="flex min-h-14 items-center justify-between gap-3 rounded-2xl border border-border px-4 py-3 text-left hover:bg-muted/50"
       >
         <span className="min-w-0 truncate font-semibold text-foreground">{postTitle}</span>

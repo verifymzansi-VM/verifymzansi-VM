@@ -54,6 +54,7 @@ import {
 } from "@/lib/constants/categories";
 import {
   getCategoryDetailFields,
+  TOURISM_PRICE_MAX_RAND,
   getDefaultCategoryDetails,
 } from "@/lib/forms/business-category-details";
 import { usePlanVideoAllowed, usePlanMaxPhotos } from "@/components/billing/plan-gate";
@@ -107,6 +108,10 @@ import {
 import { readMediaDimensions } from "@/lib/utils/media-metadata";
 import { VIDEO_SOUND_OFF_TIP } from "@/lib/media/video-length";
 
+/** Fields only older posts hold: no longer asked on create (TGCSA replaces the
+ * star rating, the "From" price replaces the price band). */
+const OLDER_POST_ONLY_FIELDS = new Set(["star_rating", "price_range"]);
+
 const selectClass =
   "flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-shadow sm:h-10 sm:text-sm";
 
@@ -123,7 +128,7 @@ export default function EditBusinessPage() {
   const params = useParams<{ id: string }>();
   const businessId = params.id;
   const { toast } = useToast();
-  const { profile } = useAuth();
+  const { profile, isLoading: profileLoading } = useAuth();
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -1007,6 +1012,42 @@ export default function EditBusinessPage() {
                       </p>
                       {fields.map((field) => {
                         const val = categoryDetails[field.name];
+                        // Fields the create form dropped stay only while they hold a value.
+                        if (OLDER_POST_ONLY_FIELDS.has(field.name) && (val == null || val === ""))
+                          return null;
+                        // The "From" price is stored in cents and asked in rand, as on create.
+                        if (field.name === "price_from_cents") {
+                          const rand = typeof val === "number" && val > 0 ? String(val / 100) : "";
+                          const tooHigh = Number(rand) > TOURISM_PRICE_MAX_RAND;
+                          return (
+                            <div key={field.name} className="space-y-1">
+                              <Label htmlFor="cat-price_from">Price from (R)</Label>
+                              <Input
+                                id="cat-price_from"
+                                type="number"
+                                inputMode="decimal"
+                                min={0}
+                                step="0.01"
+                                value={rand}
+                                onChange={(e) => {
+                                  const next = Number(e.target.value);
+                                  setCategoryDetails((prev) => ({
+                                    ...prev,
+                                    price_from_cents:
+                                      e.target.value && next > 0
+                                        ? Math.round(next * 100)
+                                        : undefined,
+                                  }));
+                                }}
+                                placeholder="e.g. 450"
+                                aria-invalid={tooHigh || undefined}
+                              />
+                              {tooHigh ? (
+                                <p className="inline-form-error">Enter a price up to R1 000 000.</p>
+                              ) : null}
+                            </div>
+                          );
+                        }
                         if (field.kind === "checkbox") {
                           return (
                             <label key={field.name} className="flex items-center gap-2 text-sm">
@@ -1626,7 +1667,16 @@ export default function EditBusinessPage() {
             <Button
               onClick={handleSubmit}
               variant="trust-verified"
-              disabled={isSubmitting || businessName.length < 2 || !category || !province || !city}
+              // Wait for the account's verified number, or Call and WhatsApp would be dropped.
+              disabled={
+                isSubmitting ||
+                profileLoading ||
+                !profile ||
+                businessName.length < 2 ||
+                !category ||
+                !province ||
+                !city
+              }
               aria-busy={isSubmitting}
               className="h-11 min-w-36 flex-1 gap-2 rounded-full px-6 font-semibold sm:flex-none"
             >

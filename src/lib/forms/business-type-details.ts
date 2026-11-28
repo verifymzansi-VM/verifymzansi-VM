@@ -25,6 +25,8 @@ export interface BusinessDetailsFieldConfig {
   placeholder?: string;
   required?: boolean;
   min?: number;
+  /** Largest number accepted (default 1,000,000). */
+  max?: number;
   step?: string;
   options?: SelectOption[];
 }

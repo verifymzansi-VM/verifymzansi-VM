@@ -89,4 +89,26 @@ describe("sanitizeCategoryDetails", () => {
       star_rating: 4,
     });
   });
+
+  it("keeps a tourism From price over R10 000, and drops a unit without a price", () => {
+    expect(
+      sanitizeCategoryDetails("tourism_hospitality", {
+        price_from_cents: 1_500_000,
+        price_unit: "night",
+        sleeps: 4,
+      })
+    ).toEqual({ price_from_cents: 1_500_000, price_unit: "night", sleeps: 4 });
+    // Above R1 000 000 the price is refused, and its unit goes with it.
+    expect(
+      sanitizeCategoryDetails("tourism_hospitality", {
+        price_from_cents: 100_000_001,
+        price_unit: "night",
+        sleeps: 4,
+      })
+    ).toEqual({ sleeps: 4 });
+    // Other number fields keep their own limit.
+    expect(sanitizeCategoryDetails("tourism_hospitality", { number_of_rooms: 2_000_000 })).toEqual(
+      {}
+    );
+  });
 });

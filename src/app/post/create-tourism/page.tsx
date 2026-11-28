@@ -21,7 +21,7 @@ import { MediaUpload } from "@/components/ui/media-upload";
 import { OnlinePresenceFields } from "@/components/post/online-presence-fields";
 import { ContactSwitches, type ContactSwitchOption } from "@/components/post/contact-switches";
 import { MediaLimitsLine } from "@/components/post/media-limits-line";
-import { PostSubmittedScreen } from "@/components/post/post-submitted-screen";
+import { PostSubmittedScreen, createdPostId } from "@/components/post/post-submitted-screen";
 import {
   TOURISM_BACKUP_UTILITIES,
   TOURISM_CANCELLATION_CHOICES,
@@ -404,6 +404,7 @@ function CreateTourismContent() {
   const [formError, setFormError] = useState<string | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
   const [submitSucceeded, setSubmitSucceeded] = useState(false);
+  const [submittedId, setSubmittedId] = useState<string | null>(null);
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
 
   /* ── Shared state ────────────────────────────────────────── */
@@ -1412,6 +1413,8 @@ function CreateTourismContent() {
           headers: withCsrfHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify({ ...body, ...postFields() }),
         });
+        // The new post's id, for the Submitted screen's link (read from a copy of the answer).
+        if (res.ok) setSubmittedId(await createdPostId(res));
         const payload = await res.json().catch(() => null);
 
         if (!res.ok) {
@@ -1563,6 +1566,8 @@ function CreateTourismContent() {
           headers: withCsrfHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify({ ...body, ...postFields() }),
         });
+        // The new post's id, for the Submitted screen's link (read from a copy of the answer).
+        if (res.ok) setSubmittedId(await createdPostId(res));
         const payload = await res.json().catch(() => null);
 
         if (!res.ok) {
@@ -1967,7 +1972,11 @@ function CreateTourismContent() {
         <Header isAuthenticated />
         <main id="main-content" className="flex-1">
           <div className="container-page py-10">
-            <PostSubmittedScreen postTitle={title.trim()} area="PROMOTIONS_EVENTS" />
+            <PostSubmittedScreen
+              postTitle={title.trim()}
+              area="PROMOTIONS_EVENTS"
+              postId={submittedId}
+            />
           </div>
         </main>
         <Footer />

@@ -125,9 +125,13 @@ async function enterPostingForm(page: Page, firstField: Locator) {
 async function expectSubmitted(page: Page, title: string, area: string) {
   await expect(page.getByRole("heading", { name: "Submitted" })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("Our team reviews every post before it goes live.")).toBeVisible();
-  await expect(
-    page.getByRole("link").filter({ hasText: title }).filter({ hasText: "In review" })
-  ).toHaveAttribute("href", `/dashboard/listings?area=${area}`);
+  // The link opens My posts at the new post's card.
+  const href = await page
+    .getByRole("link")
+    .filter({ hasText: title })
+    .filter({ hasText: "In review" })
+    .getAttribute("href");
+  expect(href?.startsWith(`/dashboard/listings?area=${area}#post-`)).toBe(true);
 }
 
 /** Ticks the posting-terms box when the form shows it (accepted terms may hide it). */

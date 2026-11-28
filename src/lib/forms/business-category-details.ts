@@ -16,6 +16,9 @@ import {
   TOURISM_TRAVEL_SPECIALIZATIONS,
 } from "@/lib/constants/categories";
 
+/** The highest tourism "From R___" price the forms accept. */
+export const TOURISM_PRICE_MAX_RAND = 1_000_000;
+
 /** Tourism "From R___" price units (category_details.price_unit). */
 export const TOURISM_PRICE_UNITS = [
   { value: "night", label: "per night" },
@@ -215,6 +218,7 @@ const CATEGORY_DETAIL_FIELDS: Partial<Record<BusinessCategory, BusinessDetailsFi
       label: "Price from (in cents)",
       kind: "number",
       min: 0,
+      max: TOURISM_PRICE_MAX_RAND * 100,
       step: "1",
       placeholder: "e.g. 45000",
       description: 'R450 is 45000. Shown as "From R450".',
@@ -564,7 +568,9 @@ function cleanField(field: BusinessDetailsFieldConfig, value: unknown): unknown 
       const raw = typeof value === "number" ? value : Number(value);
       // Whole-number fields (step "1") store whole numbers.
       const n = field.step === "1" ? Math.round(raw) : raw;
-      return Number.isFinite(n) && n >= (field.min ?? 0) && n <= 1_000_000 ? n : undefined;
+      return Number.isFinite(n) && n >= (field.min ?? 0) && n <= (field.max ?? 1_000_000)
+        ? n
+        : undefined;
     }
     case "list": {
       if (!Array.isArray(value)) return undefined;
@@ -629,5 +635,7 @@ export function sanitizeCategoryDetails(
       out[key] = value; // validated separately (contact methods, access, profile)
     }
   }
+  // A unit without a price says nothing.
+  if (out.price_from_cents === undefined) delete out.price_unit;
   return out;
 }

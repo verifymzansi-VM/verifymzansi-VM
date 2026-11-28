@@ -146,7 +146,7 @@ export function handleRestoredPostMutation(
           city = snapshot.profile_facts.location_city;
         if (province && city) fallback = { province, city };
       }
-      const normalized = buildRestoredPostInput(collection, input, fallback, !!id);
+      const normalized = buildRestoredPostInput(collection, input, fallback, !!id, account.phone);
       const references = await resolveOwnedMedia(api, {
         keys: [...normalized.media, ...normalized.presentation_media].map((m) => m.object_key),
       });

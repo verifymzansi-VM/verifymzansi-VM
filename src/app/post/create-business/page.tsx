@@ -9,7 +9,7 @@ import { PostSelect } from "@/components/post/post-select";
 import { BusinessHoursFields } from "@/components/post/business-hours-fields";
 import { BusinessVisitFields } from "@/components/post/business-visit-fields";
 import { MediaLimitsLine } from "@/components/post/media-limits-line";
-import { PostSubmittedScreen } from "@/components/post/post-submitted-screen";
+import { PostSubmittedScreen, createdPostId } from "@/components/post/post-submitted-screen";
 
 import { CustomerAccessFields } from "@/components/post/customer-access-fields";
 import {
@@ -388,6 +388,7 @@ function CreateBusinessContent() {
   const [formError, setFormError] = useState<string | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
   const [submitSucceeded, setSubmitSucceeded] = useState(false);
+  const [submittedId, setSubmittedId] = useState<string | null>(null);
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const { toast } = useToast();
   const {
@@ -1039,6 +1040,8 @@ function CreateBusinessContent() {
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ ...body, ...postFields() }),
       });
+      // The new post's id, for the Submitted screen's link (read from a copy of the answer).
+      if (res.ok) setSubmittedId(await createdPostId(res));
       const payload = await res.json().catch(() => null);
       if (!res.ok) {
         if (res.status === 401) {
@@ -1327,6 +1330,7 @@ function CreateBusinessContent() {
             <PostSubmittedScreen
               postTitle={businessName.trim() || "Your business"}
               area="MZANSI_BUSINESS"
+              postId={submittedId}
             />
           </div>
         </main>

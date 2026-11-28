@@ -303,10 +303,18 @@ function normalizeHours(value: unknown): FeedOpeningHours | null {
   if (!value || typeof value !== "object") return null;
   const record = value as Record<string, unknown>;
   const hours: FeedOpeningHours = {};
-  for (const key of ["Mon_Fri", "Sat", "Sun"] as const) {
+  const days = ["Mon_Fri", "Sat", "Sun"] as const;
+  for (const key of [...days, "Public_holidays"] as const) {
     if (typeof record[key] === "string" && record[key].trim()) {
       hours[key] = displayHoursText(record[key].trim());
     }
+  }
+  // "Open 24 hours" is stored as a flag with no day lines; "By appointment"
+  // fills the days without hours, so the open-now chip reads them too.
+  if (record.Open_24_hours === true) for (const key of days) hours[key] = "Open 24 hours";
+  else if (record.By_appointment === true) {
+    for (const key of days) hours[key] ??= "By appointment";
+    hours.By_appointment = true;
   }
   return Object.keys(hours).length > 0 ? hours : null;
 }

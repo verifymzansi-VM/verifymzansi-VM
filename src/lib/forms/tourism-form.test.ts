@@ -246,6 +246,9 @@ describe("validateTourismStep tours and experiences", () => {
     expect(step1({ priceFrom: "450.555" }).priceFrom).toBe(
       "Price can have at most 2 decimal places."
     );
+    // Prices over R10 000 are normal for stays; above R1 000 000 is refused.
+    expect(step1({ priceFrom: "15000" })).toEqual({});
+    expect(step1({ priceFrom: "1000001" }).priceFrom).toBe("Enter a price up to R1 000 000.");
     expect(step1({ sleeps: "0" }).sleeps).toBe("Sleeps must be a whole number of 1 or more.");
     expect(step1({ beds: "2.5" }).beds).toBe("Beds must be a whole number of 0 or more.");
     expect(step1({ cancellationPolicy: "free_until_days" }).cancellationFreeDays).toBe(

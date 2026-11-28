@@ -88,7 +88,7 @@ import {
   type OnlinePresenceValues,
 } from "@/components/post/online-presence-fields";
 import { MediaLimitsLine } from "@/components/post/media-limits-line";
-import { PostSubmittedScreen } from "@/components/post/post-submitted-screen";
+import { PostSubmittedScreen, createdPostId } from "@/components/post/post-submitted-screen";
 import {
   finishListingAttributes,
   JOB_SAFETY_LINE,
@@ -327,6 +327,7 @@ function CreateListingForm() {
   const [formError, setFormError] = useState<string | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
   const [submitSucceeded, setSubmitSucceeded] = useState(false);
+  const [submittedId, setSubmittedId] = useState<string | null>(null);
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
 
   const router = useRouter();
@@ -1062,6 +1063,8 @@ function CreateListingForm() {
             headers: withCsrfHeaders({ "Content-Type": "application/json" }),
             body: JSON.stringify(body),
           });
+      // The new post's id, for the Submitted screen's link (read from a copy of the answer).
+      if (res.ok) setSubmittedId(await createdPostId(res));
 
       if (!res.ok) {
         const payload = await res.json().catch(() => null);
@@ -1331,7 +1334,11 @@ function CreateListingForm() {
         <Header isAuthenticated />
         <main id="main-content" className="flex-1">
           <div className="container-page py-10">
-            <PostSubmittedScreen postTitle={title.trim()} area="MZANSI_MARKET" />
+            <PostSubmittedScreen
+              postTitle={title.trim()}
+              area="MZANSI_MARKET"
+              postId={copyId ?? submittedId}
+            />
           </div>
         </main>
         <Footer />

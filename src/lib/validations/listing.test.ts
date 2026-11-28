@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { listingSchema } from "./listing";
+import { listingSchema, isCalendarDate } from "./listing";
 
 // ── Listing Schema ──────────────────────────────────────────────────────────
 
@@ -290,6 +290,17 @@ describe("listingSchema: Market fields saved with the post", () => {
         attributes: { property_type: "house", listing_intent: "sale", occupation_date: "soon" },
       }).success
     ).toBe(false);
+    for (const bad of ["2026-13-45", "2026-02-30"])
+      for (const key of ["occupation_date", "available_from"])
+        expect(
+          listingSchema.safeParse({
+            ...baseFields,
+            category: "property",
+            attributes: { property_type: "house", listing_intent: "sale", [key]: bad },
+          }).success,
+          `${key} ${bad}`
+        ).toBe(false);
+    expect(isCalendarDate("2028-02-29")).toBe(true);
   });
 
   it("accepts website and social links, keeps only the known networks, and rejects a bad link", () => {

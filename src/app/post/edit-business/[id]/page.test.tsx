@@ -44,8 +44,12 @@ vi.mock("@/hooks/use-toast", () => ({
 }));
 
 // The account's verified number: Call and WhatsApp publish it.
+const auth = vi.hoisted(() => ({
+  profile: { phone: "0821234567" } as { phone: string } | null,
+  isLoading: false,
+}));
 vi.mock("@/hooks/use-auth", () => ({
-  useAuth: () => ({ user: { id: "owner-1" }, profile: { phone: "0821234567" }, isLoading: false }),
+  useAuth: () => ({ user: { id: "owner-1" }, profile: auth.profile, isLoading: auth.isLoading }),
 }));
 
 vi.mock("next/link", () => ({
@@ -150,6 +154,8 @@ describe("EditBusinessPage", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    auth.profile = { phone: "0821234567" };
+    auth.isLoading = false;
     (useRouter as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ push: mockPush });
     (useParams as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ id: "business-1" });
     (useToast as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ toast: mockToast });
@@ -393,6 +399,36 @@ describe("EditBusinessPage", () => {
     expect(payload.phone).toBe("0821234567");
     expect(payload.whatsapp).toBe("0821234567");
     expect(payload.contact_methods).toEqual(["call", "whatsapp"]);
+  });
+
+  it("waits for the verified number before saving, so Call and WhatsApp are not dropped", async () => {
+    auth.profile = null;
+    auth.isLoading = true;
+    serveSavedBusiness({});
+    render(<EditBusinessPage />);
+    await termsLoaded();
+    await waitFor(() => expect(screen.getByDisplayValue("Lerato Nails")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /Save Changes/i })).toBeDisabled();
+  });
+
+  it("asks a tourism stay's From price in rand and hides the dropped star and band fields", async () => {
+    serveSavedBusiness({
+      category: "tourism_hospitality",
+      category_details: { price_from_cents: 45000, price_unit: "night" },
+    });
+    render(<EditBusinessPage />);
+    await termsLoaded();
+    await waitFor(() => expect(screen.getByDisplayValue("Lerato Nails")).toBeInTheDocument());
+    const price = await screen.findByLabelText(/^Price from \(R\)/);
+    expect(price).toHaveValue(450);
+    expect(screen.queryByText(/in cents/)).toBeNull();
+    expect(screen.queryByLabelText(/star/i)).toBeNull();
+    expect(screen.queryByLabelText(/price range/i)).toBeNull();
+    fireEvent.change(price, { target: { value: "15000" } });
+    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    const payload = JSON.parse(fetchMock.mock.calls[1][1].body as string);
+    expect(payload.category_details.price_from_cents).toBe(1_500_000);
   });
 
   it("loads and saves back the hours, booking, visitor, payment and YouTube details", async () => {

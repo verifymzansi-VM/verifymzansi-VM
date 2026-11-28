@@ -11,6 +11,34 @@ import reference from "../domains/taxonomy/reference.json";
 import { isTrustedPlatformMediaUrl } from "../utils/media-url";
 import { buildBusinessMutationPayload } from "@/lib/forms/business-mutation-payload";
 import { getBusinessVenuePhotoUrls } from "../business/venue-photos";
+import { normalizeSaPhone } from "../utils/phone";
+
+export const VERIFIED_NUMBER_ONLY_MESSAGE =
+  "Call and WhatsApp use your verified number. Verify it in your profile, then try again.";
+
+/**
+ * A business's Call and WhatsApp numbers: always the account's verified
+ * number, never a number typed in the browser. The browser only says which
+ * channels are on (contact_methods); a number it sends must be the verified
+ * one, or the post is refused. An older client without contact_methods turns
+ * a channel on by sending a number.
+ */
+function verifiedBusinessContacts(
+  methods: readonly string[] | undefined,
+  sent: { phone?: string | null; whatsapp?: string | null },
+  verifiedPhone: string | null | undefined
+) {
+  const verified = verifiedPhone || null;
+  for (const number of [sent.phone, sent.whatsapp])
+    if (number && (!verified || normalizeSaPhone(number) !== verified))
+      throw new RestoredPostInputError(VERIFIED_NUMBER_ONLY_MESSAGE);
+  const on = (method: "call" | "whatsapp", number: string | null | undefined) =>
+    methods ? methods.includes(method) : Boolean(number);
+  return {
+    phone: verified && on("call", sent.phone) ? verified : null,
+    whatsapp: verified && on("whatsapp", sent.whatsapp) ? verified : null,
+  };
+}
 
 const envelope = z.looseObject({
   postRequestId: z.uuid().transform((value) => value.toLowerCase()),
@@ -129,7 +157,9 @@ export function buildRestoredPostInput(
   collection: "listings" | "businesses" | "promotions",
   input: unknown,
   fallbackLocality?: { province: string; city: string },
-  editing = false
+  editing = false,
+  /** The account's verified phone (+27…), the only number a business may show. */
+  verifiedPhone?: string | null
 ) {
   const transport = envelope.parse(input);
   if (editing && transport.expectedRevision === undefined)
@@ -244,7 +274,7 @@ export function buildRestoredPostInput(
       trial_days: data.trialDays,
       terms: transport.postingTerms,
       terms_accepted: !editing && data.termsAccepted,
-      contacts: { phone: phone || null, whatsapp: whatsapp || null },
+      contacts: verifiedBusinessContacts(data.contact_methods, { phone, whatsapp }, verifiedPhone),
       ...media(
         [cover_photo, ...gallery_photos].filter((v): v is string => !!v),
         cover_video ? [cover_video] : [],

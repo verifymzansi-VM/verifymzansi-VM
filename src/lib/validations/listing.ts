@@ -101,10 +101,13 @@ const sizeGenderAttrs = {
   size: z.string().trim().max(20, "Size must be 20 characters or fewer").optional(),
   gender: z.enum(["women", "men", "unisex", "girls", "boys"]).optional(),
 };
-const isoDate = z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, "Choose a date")
-  .optional();
+/** A real calendar date (YYYY-MM-DD): 2026-13-45 or 2026-02-30 is refused. */
+export function isCalendarDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+const isoDate = z.string().refine(isCalendarDate, "Choose a real date").optional();
 
 // ── Category-specific attributes ────────────────────────────
 const propertyAttrs = z.object({
@@ -140,7 +143,7 @@ const propertyAttrs = z.object({
   energy_features: z.array(z.string().max(80)).max(30).optional(),
   water_source: z.array(z.string().max(80)).max(30).optional(),
   fibre: z.enum(["not_available", "fibre_ready", "fibre_installed"]).optional(),
-  available_from: z.string().max(30).optional(),
+  available_from: isoDate,
   deposit_zar: z.number().min(0).max(1_000_000_000).optional(),
   lease_term: z.enum(["month_to_month", "6_months", "12_months", "24_months"]).optional(),
   utilities_included: z

@@ -80,6 +80,51 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Posting form display fields; business numbers from the verified phone, 28 November 2026
+
+`20261128012529_posting_form_display_fields.sql` is pending (see the applied
+register). The posting forms batch (launch checklist item 84, ledger group 955).
+
+- **New display keys on the public read.**
+  `internal.public_post_presentation_data` (full body) lists the new details the
+  forms save, so the public pages can show them:
+  `business_details.visitor_features` (Business: parking, wheelchair access,
+  kid-friendly); `category_details` `price_from_cents`, `price_unit`, `sleeps`,
+  `bedrooms`, `beds`, `bathrooms`, `backup_utilities`, `cancellation_free_days`
+  and `opening_hours` (Tourism); `event_details` `doors_open`, `refund_policy`,
+  `refund_days`, `ticket_sales` and `gate_payment` (Events). All are display
+  facts; none is a contact, identity or owner-only field, and the rule that
+  hides an unpublished address is unchanged. Market details use the existing
+  `source_attributes`, `website` and `social_links`.
+- **Business "Show number" reveals the verified number.**
+  `internal.reveal_post_phone` (full body) answers for a Business or Tourism
+  business post with the owner's current verified number
+  (`private.verification_phone_proofs`, as listings and events already do) for a
+  channel the post switched on, instead of the number stored with the post.
+  Whether a channel is on is decided as before
+  (`internal.business_contact_number` on the stored presentation), so
+  `business_contact_options` does not change. An owner without a verified number
+  reveals nothing, and a changed verified number reaches every post at once. The
+  website stores only the verified number and refuses any other
+  (`buildRestoredPostInput`).
+- **Guard.** It refuses with 55000 unless
+  `internal.public_post_presentation_data` has its reviewed body (md5
+  `0edd179a32830a17a051195629ce8497`) or this update's
+  (`a07fefcadbed5f09ec48986f583008df`), and `internal.reveal_post_phone` its
+  reviewed body (`a30f22dd9c40c95cdc35abb9dcf5e204`) or this update's
+  (`8694f1646d929efbdacd0cb129b1b1bd`).
+
+Expand only: two replaced function bodies; no command, argument, grant, table or
+stored row changes. ORDER: **apply-first** (apply, then merge). The current
+website asks nothing new; no post holds the new keys until the new forms are
+live. A business post saved with a number other than its owner's verified one
+reveals the verified number from the moment the update is applied (the preflight
+counts those posts). Read-only preflight (counts only):
+`../preflight/20261128012529_posting_form_display_fields.check.sql`; rollback:
+`../rollback/20261128012529_posting_form_display_fields.down.sql` (puts both
+earlier bodies back). Behaviour checks:
+`scripts/test-foundation-posting-form-display-fields.mjs`.
+
 ## Close unused commands; short names in the staff role review, 26 November 2026
 
 `20261127222829_close_unused_commands.sql` was applied on 28 November 2026 (see

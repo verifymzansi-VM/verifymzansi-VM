@@ -563,4 +563,26 @@ describe("ModerationPreviewPanel video length", () => {
     expect(screen.getByText("Zapper")).toBeInTheDocument();
     expect(screen.getByText("Card machine")).toBeInTheDocument();
   });
+
+  it("lists an older tourism cancellation choice and says the price unit once", () => {
+    render(
+      <ModerationPreviewPanel
+        item={{
+          ...baseBusinessItem,
+          contentType: "business",
+          area: "PROMOTIONS_EVENTS",
+          category: "tourism_hospitality",
+          business_details: null,
+          category_details: {
+            price_from_cents: 45000,
+            price_unit: "night",
+            cancellation_policy: "strict",
+          },
+        }}
+      />
+    );
+    expect(screen.getByText("Strict")).toBeInTheDocument();
+    expect(screen.getAllByText(/per night/)).toHaveLength(1);
+    expect(screen.queryByText("Price is:")).toBeNull();
+  });
 });

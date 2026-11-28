@@ -1,5 +1,9 @@
-import { afterEach, it, expect, vi } from "vitest";
-import { buildRestoredPostInput, restoredMediaKey } from "./restored-post-input";
+import { afterEach, describe, it, expect, vi } from "vitest";
+import {
+  buildRestoredPostInput,
+  restoredMediaKey,
+  VERIFIED_NUMBER_ONLY_MESSAGE,
+} from "./restored-post-input";
 const id = "11111111-1111-4111-8111-111111111111",
   photo = `https://media.verifymzansi.com/media/${id}`;
 const transport = {
@@ -162,6 +166,51 @@ it("uses the confirmed locality only as an online business's administrative loca
       location_address: null,
       website: "https://example.com",
     },
+  });
+});
+describe("business Call and WhatsApp use the verified number only", () => {
+  const shop = (extra: Record<string, unknown>) => ({
+    ...transport,
+    business_name: "Example online shop",
+    slug: "example-online-shop",
+    category: "general_other",
+    description: "An example online business.",
+    business_type: "online_only",
+    business_details: {
+      type: "online_only",
+      primary_order_channel: "website",
+      order_url: "https://example.com",
+    },
+    website: "https://example.com",
+    location_province: "Gauteng",
+    location_city: "Johannesburg",
+    ...extra,
+  });
+  const build = (extra: Record<string, unknown>, verified: string | null) =>
+    buildRestoredPostInput("businesses", shop(extra), undefined, false, verified) as {
+      contacts: unknown;
+    };
+
+  it("stores the verified number for the channels switched on", () => {
+    const command = build(
+      { contact_methods: ["call", "website"], phone: "082 123 4567", whatsapp: "" },
+      "+27821234567"
+    );
+    expect(command.contacts).toEqual({ phone: "+27821234567", whatsapp: null });
+  });
+
+  it("refuses any other number, and any number without a verified one", () => {
+    expect(() => build({ contact_methods: ["call"], phone: "0820000000" }, "+27821234567")).toThrow(
+      VERIFIED_NUMBER_ONLY_MESSAGE
+    );
+    expect(() => build({ contact_methods: ["whatsapp"], whatsapp: "0821234567" }, null)).toThrow(
+      VERIFIED_NUMBER_ONLY_MESSAGE
+    );
+  });
+
+  it("stores no number when Call and WhatsApp are off", () => {
+    const command = build({ contact_methods: ["website"] }, "+27821234567");
+    expect(command.contacts).toEqual({ phone: null, whatsapp: null });
   });
 });
 it("maps event activity and true SAST window without converting an event into a paid plan", () => {

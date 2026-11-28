@@ -1,3 +1,4 @@
+import { TOURISM_PRICE_MAX_RAND } from "./business-category-details";
 import type {
   TourismCategorySpecificFormFields,
   TourismListingType,
@@ -157,6 +158,8 @@ function validateStep1Tourism(v: TourismFormValues, errors: Record<string, strin
       errors.priceFrom = "Enter a price above R0, or leave it blank.";
     } else if (!hasValidMoneyPrecision(price)) {
       errors.priceFrom = "Price can have at most 2 decimal places.";
+    } else if (price > TOURISM_PRICE_MAX_RAND) {
+      errors.priceFrom = "Enter a price up to R1 000 000.";
     }
   }
 

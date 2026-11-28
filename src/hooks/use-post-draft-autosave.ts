@@ -22,16 +22,26 @@ async function saveToServer<T>(
   step: number,
   data: T
 ): Promise<void> {
+  // A stalled save gives up, so it can never hold back the delete queued
+  // behind it (the delete after a successful submit).
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), DRAFT_SAVE_TIMEOUT_MS);
   try {
     await fetch("/api/drafts", {
       method: "PUT",
       headers: withCsrfHeaders({ "Content-Type": "application/json", "X-Draft-Account": owner }),
       body: JSON.stringify({ flow: serverFlow(flow), step, data }),
+      signal: controller.signal,
     });
   } catch {
     // Server save is best-effort; localStorage is the primary store.
+  } finally {
+    clearTimeout(timer);
   }
 }
+
+/** How long one draft save to the server may take. */
+export const DRAFT_SAVE_TIMEOUT_MS = 10_000;
 
 // Tourism replaced the promotion wizard; retain its persisted database key.
 function serverFlow(flow: DraftFlow): DraftFlow {

@@ -202,6 +202,40 @@ describe("presentBusinessSlide shows each fact once", () => {
     ]);
   });
 
+  it("shows Open 24 hours, By appointment and Public holidays from the new hours", () => {
+    const always = presentBusinessSlide(
+      { ...shop, operating_hours: { Open_24_hours: true } } as unknown as BusinessDetailRecord,
+      owner,
+      [],
+      engagement
+    );
+    expect(always.headline.hours).toEqual({
+      Mon_Fri: "Open 24 hours",
+      Sat: "Open 24 hours",
+      Sun: "Open 24 hours",
+    });
+    const booked = presentBusinessSlide(
+      {
+        ...shop,
+        operating_hours: {
+          Mon_Fri: "08:00 - 17:00",
+          Public_holidays: "Closed",
+          By_appointment: true,
+        },
+      } as unknown as BusinessDetailRecord,
+      owner,
+      [],
+      engagement
+    );
+    expect(booked.headline.hours).toEqual({
+      Mon_Fri: "08:00 - 17:00",
+      Sat: "By appointment",
+      Sun: "By appointment",
+      Public_holidays: "Closed",
+      By_appointment: true,
+    });
+  });
+
   it("reads equal opening and closing times as 24 hours and recovers a labelled link", () => {
     const slide = presentBusinessSlide(shop, owner, [], engagement);
     expect(slide.headline.hours).toEqual({ Mon_Fri: "Open 24 hours", Sat: "08:00 - 13:00" });

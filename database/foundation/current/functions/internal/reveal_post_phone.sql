@@ -14,9 +14,13 @@ begin
     where p.id=p_post_id;
   if post_kind is null then return null; end if;
   if post_kind='business' then
-    -- The business's own number for a ticked channel, in +27 form.
-    select internal.business_contact_number(d.data,d.contacts,p_channel)
-      into number from private.post_presentations d where d.post_id=p_post_id;
+    -- A channel the business switched on shows the owner's current verified
+    -- number (the same phone proof as listings and events), so a changed
+    -- verified number reaches every business post at once.
+    select f.phone into number from private.post_presentations d
+      join private.posts p on p.id=d.post_id
+      join private.verification_phone_proofs f on f.owner_id=p.owner_id and f.revoked_at is null
+      where d.post_id=p_post_id and internal.business_contact_number(d.data,d.contacts,p_channel) is not null;
     return number;
   end if;
   select f.phone into number from private.public_eligible_posts eligible join private.posts p on p.id=eligible.id

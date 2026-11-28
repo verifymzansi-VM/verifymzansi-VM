@@ -3,19 +3,24 @@
 -- owner has decided so; prefer a forward fix. The public card read then stops
 -- returning the new display keys (the stored presentations keep them).
 -- It refuses (55000) unless internal.public_post_presentation_data has the
--- update's body, then puts back the earlier body byte for byte.
+-- update's bodies, then puts back both earlier bodies byte for byte (Business
+-- "Show number" then reveals the number stored with each post again).
 begin;
 set local lock_timeout='5s';
 
 do $$
-declare body text;
+declare item record;
 begin
-  select md5(replace(p.prosrc,E'\r\n',E'\n')) into body from pg_proc p
-    where p.oid=to_regprocedure('internal.public_post_presentation_data(text,jsonb)');
-  if body is distinct from 'a07fefcadbed5f09ec48986f583008df' then
-    raise exception 'rollback precondition: the posting form display fields update is not applied as reviewed (%)',coalesce(body,'absent')
-      using errcode='55000';
-  end if;
+  for item in select v.sig,v.applied,(select md5(replace(p.prosrc,E'\r\n',E'\n')) from pg_proc p where p.oid=to_regprocedure(v.sig)) as body
+    from (values
+      ('internal.public_post_presentation_data(text,jsonb)','a07fefcadbed5f09ec48986f583008df'),
+      ('internal.reveal_post_phone(uuid,text)','8694f1646d929efbdacd0cb129b1b1bd')) v(sig,applied)
+  loop
+    if item.body is distinct from item.applied then
+      raise exception 'rollback precondition: the posting form display fields update is not applied as reviewed (% %)',item.sig,coalesce(item.body,'absent')
+        using errcode='55000';
+    end if;
+  end loop;
 end$$;
 
 create or replace function internal.public_post_presentation_data(p_kind text, p_data jsonb)
@@ -68,5 +73,34 @@ returns jsonb language sql immutable set search_path to pg_catalog as $function$
 $function$;
 alter function internal.public_post_presentation_data(text,jsonb) owner to postgres;
 revoke all on function internal.public_post_presentation_data(text,jsonb) from public,anon,authenticated,service_role;
+
+CREATE OR REPLACE FUNCTION internal.reveal_post_phone(p_post_id uuid, p_channel text)
+ RETURNS text
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare number text; post_kind text;
+begin
+  if p_channel is null or p_channel not in('call','whatsapp') then raise exception 'invalid channel' using errcode='22023'; end if;
+  select p.kind::text into post_kind from private.public_eligible_posts eligible join private.posts p on p.id=eligible.id
+    where p.id=p_post_id;
+  if post_kind is null then return null; end if;
+  if post_kind='business' then
+    -- The business's own number for a ticked channel, in +27 form.
+    select internal.business_contact_number(d.data,d.contacts,p_channel)
+      into number from private.post_presentations d where d.post_id=p_post_id;
+    return number;
+  end if;
+  select f.phone into number from private.public_eligible_posts eligible join private.posts p on p.id=eligible.id
+    join private.post_contacts c on c.post_id=p.id and p_channel=any(c.channels)
+    join private.verification_phone_proofs f on f.owner_id=p.owner_id and f.revoked_at is null
+    where p.id=p_post_id;
+  return number;
+end;
+$function$;
+alter function internal.reveal_post_phone(uuid,text) owner to postgres;
+revoke all on function internal.reveal_post_phone(uuid,text) from public;
+grant execute on function internal.reveal_post_phone(uuid,text) to service_role;
 
 commit;

@@ -10,6 +10,7 @@ import {
 import type { EventDetails } from "@/types/tourism-details";
 import {
   TOURISM_SPOTLIGHT_KEYS,
+  tourismCancellationText,
   getTourismSpotlightFacts,
 } from "@/lib/presentation/business-facts";
 import { buildListingFacts } from "@/lib/presentation/listing-facts";
@@ -144,7 +145,19 @@ function submittedDetailRows(item: Item): DetailRow[] {
     const details = item.category_details ?? {};
     const spotlight = getTourismSpotlightFacts(details);
     rows.push(...spotlight.map(({ label, value }) => ({ label, value: String(value) })));
-    const skip = new Set<string>(spotlight.length ? TOURISM_SPOTLIGHT_KEYS : []);
+    // Keys the spotlight lines above already said; an older cancellation choice
+    // (flexible, strict…) has no spotlight wording, so it keeps its own row.
+    // The price unit is part of the "From" price line.
+    const skip = new Set<string>(
+      spotlight.length
+        ? [
+            ...TOURISM_SPOTLIGHT_KEYS.filter(
+              (key) => key !== "cancellation_policy" || tourismCancellationText(details)
+            ),
+            "price_unit",
+          ]
+        : []
+    );
     for (const field of getCategoryDetailFields(item.category as BusinessCategory)) {
       if (skip.has(field.name) || !filled(details[field.name])) continue;
       push(field.label, plain(details[field.name], field.options));

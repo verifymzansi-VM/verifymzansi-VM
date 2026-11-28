@@ -14,12 +14,25 @@
 -- Market details live in source_attributes, website and social_links, which
 -- the list already returns whole, so they need nothing here.
 --
--- Expand only: one replaced function body (the earlier list plus the new
--- keys); no command, argument, grant, table or stored row changes.
+-- Business "Show number" (item 6 of the batch, Call and WhatsApp use the
+-- verified number): internal.reveal_post_phone, full body. For a Business or
+-- Tourism business post it now returns the owner's current verified number
+-- (private.verification_phone_proofs, as listings and events already do) for
+-- a channel the post switched on, instead of the number stored with the post.
+-- Whether a channel is on is decided as before
+-- (internal.business_contact_number on the stored presentation), so the
+-- public contact options do not change. A post whose owner has no verified
+-- number reveals nothing. The website now stores only the verified number.
+--
+-- Expand only: two replaced function bodies (the earlier list plus the new
+-- keys; the reveal's business branch); no command, argument, grant, table or
+-- stored row changes.
 -- ORDER: apply first. The website asks nothing new; until the new forms are
--- live, no post holds the new keys, so the public pages are unchanged.
--- It refuses with 55000 unless internal.public_post_presentation_data has the
--- reviewed body (or this update's).
+-- live, no post holds the new keys, so the public pages are unchanged. A
+-- business post saved with a number other than its owner's verified one
+-- reveals the verified number from the moment this update is applied.
+-- It refuses with 55000 unless internal.public_post_presentation_data and
+-- internal.reveal_post_phone have their reviewed bodies (or this update's).
 -- Read-only preflight: ../preflight/20261128012529_posting_form_display_fields.check.sql.
 -- Rollback: ../rollback/20261128012529_posting_form_display_fields.down.sql.
 begin;
@@ -27,14 +40,18 @@ begin;
 set local lock_timeout='5s';
 
 do $$
-declare body text;
+declare item record;
 begin
-  select md5(replace(p.prosrc,E'\r\n',E'\n')) into body from pg_proc p
-    where p.oid=to_regprocedure('internal.public_post_presentation_data(text,jsonb)');
-  if body is null or body not in('0edd179a32830a17a051195629ce8497','a07fefcadbed5f09ec48986f583008df') then
-    raise exception 'posting form display fields precondition: internal.public_post_presentation_data(text,jsonb) is not the reviewed body (%)',coalesce(body,'absent')
-      using errcode='55000';
-  end if;
+  for item in select v.sig,v.allowed,(select md5(replace(p.prosrc,E'\r\n',E'\n')) from pg_proc p where p.oid=to_regprocedure(v.sig)) as body
+    from (values
+      ('internal.public_post_presentation_data(text,jsonb)',array['0edd179a32830a17a051195629ce8497','a07fefcadbed5f09ec48986f583008df']),
+      ('internal.reveal_post_phone(uuid,text)',array['a30f22dd9c40c95cdc35abb9dcf5e204','8694f1646d929efbdacd0cb129b1b1bd'])) v(sig,allowed)
+  loop
+    if item.body is null or not item.body=any(item.allowed) then
+      raise exception 'posting form display fields precondition: % is not the reviewed body (%)',item.sig,coalesce(item.body,'absent')
+        using errcode='55000';
+    end if;
+  end loop;
 end$$;
 
 create or replace function internal.public_post_presentation_data(p_kind text, p_data jsonb)
@@ -91,5 +108,38 @@ returns jsonb language sql immutable set search_path to pg_catalog as $function$
 $function$;
 alter function internal.public_post_presentation_data(text,jsonb) owner to postgres;
 revoke all on function internal.public_post_presentation_data(text,jsonb) from public,anon,authenticated,service_role;
+
+CREATE OR REPLACE FUNCTION internal.reveal_post_phone(p_post_id uuid, p_channel text)
+ RETURNS text
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare number text; post_kind text;
+begin
+  if p_channel is null or p_channel not in('call','whatsapp') then raise exception 'invalid channel' using errcode='22023'; end if;
+  select p.kind::text into post_kind from private.public_eligible_posts eligible join private.posts p on p.id=eligible.id
+    where p.id=p_post_id;
+  if post_kind is null then return null; end if;
+  if post_kind='business' then
+    -- A channel the business switched on shows the owner's current verified
+    -- number (the same phone proof as listings and events), so a changed
+    -- verified number reaches every business post at once.
+    select f.phone into number from private.post_presentations d
+      join private.posts p on p.id=d.post_id
+      join private.verification_phone_proofs f on f.owner_id=p.owner_id and f.revoked_at is null
+      where d.post_id=p_post_id and internal.business_contact_number(d.data,d.contacts,p_channel) is not null;
+    return number;
+  end if;
+  select f.phone into number from private.public_eligible_posts eligible join private.posts p on p.id=eligible.id
+    join private.post_contacts c on c.post_id=p.id and p_channel=any(c.channels)
+    join private.verification_phone_proofs f on f.owner_id=p.owner_id and f.revoked_at is null
+    where p.id=p_post_id;
+  return number;
+end;
+$function$;
+alter function internal.reveal_post_phone(uuid,text) owner to postgres;
+revoke all on function internal.reveal_post_phone(uuid,text) from public;
+grant execute on function internal.reveal_post_phone(uuid,text) to service_role;
 
 commit;

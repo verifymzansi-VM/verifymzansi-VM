@@ -20,11 +20,15 @@ const CONTENT_TABLES = {
 
 /**
  * This browser's note of the posts it liked (only a display hint): the count
- * it showed with its own like, so a remounted card or a cached page never
- * shows a red heart with a number that leaves the like out (a like from a new
- * browser waits 10 minutes before the server total includes it). Older notes
- * hold "1" and no count.
+ * it showed with its own like and when, so a remounted card or a cached page
+ * never shows a red heart with a number that leaves the like out (a like from
+ * a new browser waits 10 minutes before the server total includes it, and
+ * pages are cached for a while). The count is a floor only for
+ * LIKE_FLOOR_WINDOW_MS; after that the page's own count is the truth, so the
+ * number cannot stay inflated when others (or this account elsewhere) unlike.
+ * Older notes hold "1" and no count.
  */
+export const LIKE_FLOOR_WINDOW_MS = 30 * 60 * 1000;
 const LIKED_KEY = (id: string) => `vmz:liked:${id}`;
 function readLikeNote(id: string): string | null {
   try {
@@ -33,14 +37,20 @@ function readLikeNote(id: string): string | null {
     return null;
   }
 }
-export function parseLikeNote(note: string | null): { liked: boolean; count: number | null } {
+export function parseLikeNote(
+  note: string | null,
+  now = Date.now()
+): { liked: boolean; count: number | null } {
   if (note === null) return { liked: false, count: null };
-  const count = Number(note.startsWith("count:") ? note.slice(6) : NaN);
-  return { liked: true, count: Number.isFinite(count) && count >= 1 ? Math.floor(count) : null };
+  const match = /^count:(\d+):at:(\d+)$/.exec(note);
+  const count = match ? Number(match[1]) : NaN;
+  const at = match ? Number(match[2]) : NaN;
+  const fresh = Number.isFinite(at) && now >= at && now - at < LIKE_FLOOR_WINDOW_MS;
+  return { liked: true, count: fresh && count >= 1 ? count : null };
 }
 function rememberLiked(id: string, liked: boolean, count: number) {
   try {
-    if (liked) localStorage.setItem(LIKED_KEY(id), `count:${Math.max(1, count)}`);
+    if (liked) localStorage.setItem(LIKED_KEY(id), `count:${Math.max(1, count)}:at:${Date.now()}`);
     else localStorage.removeItem(LIKED_KEY(id));
   } catch {
     // Storage can be blocked (private mode); the heart then starts empty.
