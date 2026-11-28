@@ -14,7 +14,12 @@ import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf-client";
  * never loops. Resolves true when the browser now holds an identifier.
  */
 
-const RETRY_AFTER_FAILURE_MS = 10 * 60 * 1000;
+export const RETRY_AFTER_FAILURE_MS = 10 * 60 * 1000;
+/**
+ * Above every overlay (the welcome dialog, the desktop post viewer, Video
+ * mode): the check may need a click, and a covered check can never finish.
+ */
+export const CHALLENGE_Z_INDEX = 2147483647;
 const CHALLENGE_TIMEOUT_MS = 60 * 1000;
 
 let pending: Promise<boolean> | null = null;
@@ -54,8 +59,9 @@ function challengeToken(): Promise<string | null> {
   return new Promise((resolve) => {
     const host = document.createElement("div");
     host.setAttribute("data-viewer-challenge", "");
-    host.style.cssText =
-      "position:fixed;right:16px;bottom:16px;z-index:60;max-width:calc(100vw - 32px)";
+    // pointer-events: an open modal dialog switches pointer events off on the
+    // page body; the check must stay clickable.
+    host.style.cssText = `position:fixed;right:16px;bottom:16px;z-index:${CHALLENGE_Z_INDEX};pointer-events:auto;max-width:calc(100vw - 32px)`;
     document.body.appendChild(host);
     const root = createRoot(host);
     let done = false;

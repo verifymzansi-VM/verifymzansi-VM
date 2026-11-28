@@ -7,7 +7,10 @@ import {
 
 const ID = "00000000-0000-4000-8000-000000000123";
 const challenge = vi.hoisted(() => vi.fn(async () => true));
-vi.mock("@/components/engagement/viewer-challenge", () => ({ obtainViewerIdentifier: challenge }));
+vi.mock("@/components/engagement/viewer-challenge", () => ({
+  obtainViewerIdentifier: challenge,
+  RETRY_AFTER_FAILURE_MS: 10 * 60 * 1000,
+}));
 
 describe("trackContentView", () => {
   const fetchMock = vi.fn();
@@ -88,6 +91,52 @@ describe("trackContentView", () => {
     await vi.advanceTimersByTimeAsync(1100);
     await expect(refused).resolves.toBe(false);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("a view the server did not count for a missing check is not kept as sent", async () => {
+    challenge.mockClear().mockResolvedValue(false);
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true, counted: [], needs_challenge: true }),
+    });
+    const key = `vmz:view:listing:${ID}`;
+    const view = trackContentView({ type: "listing", id: ID, source: "page" });
+    await vi.advanceTimersByTimeAsync(1100);
+    await expect(view).resolves.toBe(false);
+    expect(localStorage.getItem(key)).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // Scrolling back on the same page sends nothing more while the check waits.
+    const scrollBack = trackContentView({ type: "listing", id: ID, source: "page" });
+    await vi.advanceTimersByTimeAsync(1100);
+    await expect(scrollBack).resolves.toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // Once the check may run again (10 minutes), the view is sent again.
+    const now = Date.now();
+    vi.spyOn(Date, "now").mockReturnValue(now + 10 * 60 * 1000 + 1);
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ ok: true, counted: [ID] }) });
+    const later = trackContentView({ type: "listing", id: ID, source: "page" });
+    await vi.advanceTimersByTimeAsync(1100);
+    await expect(later).resolves.toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("the next open of the page (a reload) sends an uncounted view again", async () => {
+    challenge.mockClear().mockResolvedValue(false);
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ ok: true, counted: [], needs_challenge: true }),
+    });
+    await Promise.all([
+      trackContentView({ type: "listing", id: ID, source: "page" }),
+      vi.advanceTimersByTimeAsync(1100),
+    ]);
+    resetContentViewQueueForTests(); // a reload: memory is new, storage kept
+    const reopened = trackContentView({ type: "listing", id: ID, source: "page" });
+    await vi.advanceTimersByTimeAsync(1100);
+    await expect(reopened).resolves.toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("forgets the send after a failure so a later play can retry", async () => {
