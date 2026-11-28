@@ -250,6 +250,13 @@ vi.mock("@/components/ui/media-upload", () => ({
   ),
 }));
 
+// A submit made before a cover was chosen takes a frame from the prepared video.
+vi.mock("@/lib/media/video-frame", () => ({
+  extractVideoFrame: vi.fn(
+    async (file: File) => new File(["frame"], `${file.name}_poster.jpg`, { type: "image/jpeg" })
+  ),
+}));
+
 vi.mock("@/lib/media/compress-before-upload", () => ({
   prepareVideoUpload: vi.fn(async (file: File) => ({ file, source: "kept" })),
   VideoTranscodeError: class VideoTranscodeError extends Error {
@@ -761,7 +768,12 @@ describe("CreateTourismPage type switch behavior", () => {
       string,
       unknown
     >;
-    expect(requestBody.images).toEqual([]);
+    // No thumbnail was chosen: a frame of the video is taken at submit and saved as photo 1
+    // (this mock answers every upload with the same URL).
+    expect(requestBody.images).toHaveLength(1);
+    expect(requestBody.video_thumbnail).toBe(
+      requestBody.images && (requestBody.images as string[])[0]
+    );
     expect(requestBody.videos).toEqual(["https://media.verifymzansi.com/promotion/video.mp4"]);
     expectFoundationPostFields(requestBody);
   });

@@ -38,7 +38,7 @@ export type VideoRuleProblem =
 
 /** What a member is told when the server refuses a video under the rule. */
 export const VIDEO_RULE_MESSAGE =
-  "This video can't be stored as it is. Pick it again in the posting form so it can be prepared, or export it as MP4 (H.264, up to 1080p).";
+  "This video can't be stored as it is. Refresh the page and choose it again, or export it as MP4 (H.264, up to 1080p).";
 
 /** The first rule the file breaks, or null when it can be stored as it is. */
 export function videoRuleProblem(

@@ -10,8 +10,9 @@ interface VideoFrameSelectorProps {
   /** Called when the user selects a frame (JPEG File). */
   onFrameSelect: (frame: File | null) => void;
   /**
-   * Prepares the video before frames are taken (resolves to the file that
-   * will be uploaded), so the cover matches what plays.
+   * Prepares the video for upload (resolves to the file that will be
+   * uploaded). Frames come from the picked file at once; only when this
+   * browser cannot show the picked file are they taken from the prepared one.
    */
   prepareVideo?: (file: File, onProgress: (percent: number) => void) => Promise<File>;
   /** Pick a frame by itself once the video loads (off when a cover is already set). */
@@ -34,11 +35,14 @@ export function VideoFrameSelector({
   autoSelect = true,
   className,
 }: VideoFrameSelectorProps) {
-  // The file frames come from: the picked one, or its prepared copy.
+  // Frames come from the picked file. When this browser cannot show it (for
+  // example HEVC in Chrome), they come from the prepared copy once it is ready.
+  const [unplayable, setUnplayable] = useState<File | null>(null);
   const [prepared, setPrepared] = useState<{ picked: File; file: File } | null>(null);
   const [preparing, setPreparing] = useState<{ picked: File; percent: number } | null>(null);
+  const waiting = !!prepareVideo && unplayable === picked;
   useEffect(() => {
-    if (!prepareVideo) return;
+    if (!prepareVideo || !waiting) return;
     let current = true;
     void prepareVideo(picked, (percent) => {
       if (current) setPreparing({ picked, percent });
@@ -47,15 +51,15 @@ export function VideoFrameSelector({
         if (current) setPrepared({ picked, file });
       },
       () => {
-        // Frames from the picked file; the submit says why it cannot go up.
+        // Stop waiting; the submit says why the video cannot go up.
         if (current) setPrepared({ picked, file: picked });
       }
     );
     return () => {
       current = false;
     };
-  }, [picked, prepareVideo]);
-  const file = prepareVideo ? (prepared?.picked === picked ? prepared.file : null) : picked;
+  }, [picked, prepareVideo, waiting]);
+  const file = !waiting ? picked : prepared?.picked === picked ? prepared.file : null;
   if (!file) {
     const percent = preparing?.picked === picked ? preparing.percent : 0;
     return (
@@ -74,6 +78,7 @@ export function VideoFrameSelector({
       file={file}
       onFrameSelect={onFrameSelect}
       autoSelect={autoSelect}
+      onUnplayable={file === picked && prepareVideo ? () => setUnplayable(picked) : undefined}
       className={className}
     />
   );
@@ -83,11 +88,14 @@ function FrameScrubber({
   file,
   onFrameSelect,
   autoSelect: autoSelectAtStart,
+  onUnplayable,
   className,
 }: {
   file: File;
   onFrameSelect: (frame: File | null) => void;
   autoSelect: boolean;
+  /** This browser cannot show the file (an error, or a 0 x 0 picture). */
+  onUnplayable?: () => void;
   className?: string;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -128,12 +136,13 @@ function FrameScrubber({
   const handleLoadedMetadata = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
+    if (video.videoWidth === 0 && onUnplayable) return onUnplayable();
     setDuration(video.duration);
     if (autoSelect && autoSelectedForKey !== fileKey) {
       const seekTarget = Math.min(1, video.duration * 0.1);
       video.currentTime = Math.max(0, seekTarget);
     }
-  }, [autoSelect, autoSelectedForKey, fileKey]);
+  }, [autoSelect, autoSelectedForKey, fileKey, onUnplayable]);
 
   // Capture the frame when the user seeks or on initial auto-select
   const captureFrame = useCallback(() => {
@@ -215,6 +224,7 @@ function FrameScrubber({
         playsInline
         className="sr-only"
         onLoadedMetadata={handleLoadedMetadata}
+        onError={onUnplayable}
         onSeeked={handleSeeked}
       />
 

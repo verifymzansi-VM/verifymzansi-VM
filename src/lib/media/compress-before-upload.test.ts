@@ -37,8 +37,8 @@ describe("prepareVideoUpload (phase 1b: keep, remux or convert)", () => {
     ["fail-moov-at-end.mp4", "video/mp4"],
     ["fail-subtitle-track.mp4", "video/mp4"],
     ["fail-two-audio-tracks.mp4", "video/mp4"],
-    // H.264/AAC in a MOV container (the picker's type), streams within the rule.
-    ["pass-720x1280-high-30fps-aac.mp4", "video/quicktime"],
+    // A real QuickTime file: H.264/AAC (esds inside a wave box), streams within the rule.
+    ["remux-h264-aac.mov", "video/quicktime"],
   ])("remuxes %s (%s): streams copied, nothing re-encoded", async (name, type) => {
     const output = sample("pass-720x1280-high-30fps-aac.mp4", "video/mp4", "out.mp4");
     transcodeVideo.mockResolvedValueOnce(output);

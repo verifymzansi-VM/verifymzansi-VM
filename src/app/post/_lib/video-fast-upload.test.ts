@@ -25,6 +25,9 @@ vi.mock("@/lib/media/compress-before-upload", () => ({
   prepareVideoUpload: mockPrepare,
 }));
 
+const mockExtractFrame = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/media/video-frame", () => ({ extractVideoFrame: mockExtractFrame }));
+
 vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => ({
     warn: mockLogWarn,
@@ -32,8 +35,10 @@ vi.mock("@/lib/utils/logger", () => ({
 }));
 
 const {
+  isVideoPreparing,
   pendingVideoPreparationCount,
   prepareVideoForCover,
+  videoCoverForSubmit,
   prewarmVideoForFastUpload,
   uploadVideoWithFastPath,
 } = await import("@/app/post/_lib/video-fast-upload");
@@ -436,5 +441,46 @@ describe("prepareVideoForCover", () => {
     const original = new File(["mov"], "broken.mov", { type: "video/quicktime" });
     mockPrepare.mockRejectedValueOnce(new MockVideoTranscodeError("bad video"));
     await expect(prepareVideoForCover(original, () => {})).resolves.toBe(original);
+  });
+});
+
+describe("videoCoverForSubmit", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockReadLength.mockResolvedValue(30);
+  });
+
+  it("keeps a chosen cover, and needs none without a video", async () => {
+    const cover = [new File(["jpg"], "cover.jpg", { type: "image/jpeg" })];
+    const video = new File(["mp4"], "chosen.mp4", { type: "video/mp4" });
+    await expect(videoCoverForSubmit(video, cover)).resolves.toBe(cover);
+    await expect(videoCoverForSubmit(undefined, [])).resolves.toEqual([]);
+    expect(mockPrepare).not.toHaveBeenCalled();
+    expect(mockExtractFrame).not.toHaveBeenCalled();
+  });
+
+  it("waits for a video still being prepared and takes its cover from the prepared file", async () => {
+    const original = new File(["mov"], "pending.mov", { type: "video/quicktime" });
+    const output = new File(["mp4"], "pending.mp4", { type: "video/mp4" });
+    const frame = new File(["jpg"], "pending_poster.jpg", { type: "image/jpeg" });
+    let finish: () => void = () => {};
+    mockPrepare.mockImplementationOnce(
+      () => new Promise((resolve) => (finish = () => resolve(converted(output))))
+    );
+    mockExtractFrame.mockResolvedValueOnce(frame);
+    void prewarmVideoForFastUpload(original);
+    await vi.waitFor(() => expect(isVideoPreparing(original)).toBe(true));
+    const cover = videoCoverForSubmit(original, []);
+    finish();
+    await expect(cover).resolves.toEqual([frame]);
+    expect(mockExtractFrame).toHaveBeenCalledWith(output);
+    expect(isVideoPreparing(original)).toBe(false);
+  });
+
+  it("gives no cover when no frame can be taken", async () => {
+    mockExtractFrame.mockResolvedValueOnce(null);
+    await expect(
+      videoCoverForSubmit(new File(["mp4"], "blank.mp4", { type: "video/mp4" }), [])
+    ).resolves.toEqual([]);
   });
 });

@@ -465,7 +465,7 @@ describe("video length and stored size at upload (M4.4)", () => {
         status: 400,
         reason: "video_format",
         detail:
-          "This video can't be stored as it is. Pick it again in the posting form so it can be prepared, or export it as MP4 (H.264, up to 1080p).",
+          "This video can't be stored as it is. Refresh the page and choose it again, or export it as MP4 (H.264, up to 1080p).",
       });
     }
     expect(rpc).not.toHaveBeenCalled();
@@ -568,6 +568,35 @@ describe("video length and stored size at upload (M4.4)", () => {
       );
     }
   }, 60_000);
+
+  it("tells the member when the package's storage is full, with the database's reason", async () => {
+    const full = vi.fn(async () => ({
+      data: null,
+      error: {
+        code: "PT409",
+        message: "storage for your package is full; delete unused posts or drafts",
+      },
+    })) as unknown as ReturnType<typeof videoIntent>;
+    await expect(
+      send(syntheticMp4(30, { faststart: true, audioSeconds: 30 }), full)
+    ).rejects.toMatchObject({
+      status: 409,
+      reason: "storage_full",
+      detail:
+        "Your storage allowance is full. Delete posts or drafts you no longer need, then try again.",
+    });
+    // Another conflict keeps the neutral refusal.
+    const other = vi.fn(async () => ({
+      data: null,
+      error: { code: "PT409", message: "x" },
+    })) as unknown as ReturnType<typeof videoIntent>;
+    const refusal = await send(
+      syntheticMp4(30, { faststart: true, audioSeconds: 30 }),
+      other
+    ).catch((error: unknown) => error);
+    expect(refusal).toMatchObject({ status: 409 });
+    expect(refusal).not.toHaveProperty("detail", expect.any(String));
+  });
 
   it("refuses a converted file over 50 MB before reserving storage", async () => {
     const rpc = videoIntent();

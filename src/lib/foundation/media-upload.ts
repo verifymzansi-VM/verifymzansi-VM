@@ -66,7 +66,8 @@ export type FoundationUploadedMedia = z.infer<typeof foundationUploadedMediaSche
  * cannot be read from the file (roadmap M4.4); `video_format`: a video that is
  * not MP4, or an MP4 outside the keep rule (src/lib/media/video-rule.ts).
  * `detail` holds the message the member sees. */
-export type FoundationMediaRefusal = "images_allowance_exhausted" | "video_length" | "video_format";
+export type FoundationMediaRefusal =
+  "images_allowance_exhausted" | "video_length" | "video_format" | "storage_full";
 /** Stored videos are MP4 (H.264/AAC); the posting forms convert others first. */
 const VIDEO_FORMAT_MESSAGE = "Videos are stored as MP4; please export it as MP4 and try again";
 export class FoundationMediaError extends Error {
@@ -82,7 +83,12 @@ export class FoundationMediaError extends Error {
 /** What a member is told when photo processing has run out for the month. */
 export const IMAGES_ALLOWANCE_EXHAUSTED_MESSAGE =
   "Photo uploads are paused for now. Please try again later.";
-function refused(error: { code?: string }) {
+/** What a member is told when their package's storage is full (begin_media_upload). */
+const STORAGE_FULL_MESSAGE =
+  "Your storage allowance is full. Delete posts or drafts you no longer need, then try again.";
+function refused(error: { code?: string; message?: string }) {
+  if (error.code === "PT409" && /storage for your package is full/.test(error.message ?? ""))
+    throw new FoundationMediaError(409, "storage_full", STORAGE_FULL_MESSAGE);
   throw new FoundationMediaError(
     error.code === "42501"
       ? 403

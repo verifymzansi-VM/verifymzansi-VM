@@ -4,6 +4,7 @@ import {
   type PreparedVideo,
 } from "@/lib/media/compress-before-upload";
 import { MAX_VIDEO_ORIGINAL_BYTES } from "@/lib/media/upload-policy";
+import { extractVideoFrame } from "@/lib/media/video-frame";
 import type { VideoSource } from "@/lib/media/video-rule";
 import { MAX_VIDEO_SECONDS, videoLengthProblem } from "@/lib/media/video-length";
 import { readVideoLengthSeconds } from "@/lib/media/video-length-client";
@@ -123,6 +124,24 @@ export function prepareVideoForCover(
       () => file
     )
     .finally(stopWatching);
+}
+
+/** Whether this video is still being kept, remuxed or converted (a submit may wait for it). */
+export function isVideoPreparing(file: File | undefined): boolean {
+  return !!file && preparationProgress.has(file);
+}
+
+/**
+ * The cover to upload with a video at submit: the one chosen, or, when the
+ * poster submitted before the frame picker had a frame (its original could
+ * not be shown and the video was still being prepared), a frame from the
+ * prepared video at 1 s. No submit goes out without a cover just because the
+ * preparation was still running.
+ */
+export async function videoCoverForSubmit(video: File | undefined, cover: File[]): Promise<File[]> {
+  if (cover.length > 0 || !video) return cover;
+  const frame = await extractVideoFrame(await prepareVideoForCover(video, () => {}));
+  return frame ? [frame] : [];
 }
 
 export function prewarmVideoForFastUpload(file: File): Promise<PreparedVideo> {

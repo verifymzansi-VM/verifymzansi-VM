@@ -78,8 +78,10 @@ import {
   uploadRequiredPromotionMedia,
 } from "@/app/post/_lib/promotion-media-upload";
 import {
+  isVideoPreparing,
   prepareVideoForCover,
   prewarmVideosForFastUpload,
+  videoCoverForSubmit,
 } from "@/app/post/_lib/video-fast-upload";
 import { VIDEO_GUIDANCE, videoLimitSeconds, VIDEO_SOUND_OFF_TIP } from "@/lib/media/video-length";
 import { useToast } from "@/hooks/use-toast";
@@ -947,7 +949,8 @@ function CreateTourismContent() {
       },
       photoFiles.length,
       videoFiles.length,
-      videoThumbnailFile.length
+      // A video still being prepared gets its thumbnail at submit at the latest.
+      videoThumbnailFile.length || (isVideoPreparing(videoFiles[0]) ? 1 : 0)
     );
 
     // Plan-based media limits
@@ -1110,11 +1113,11 @@ function CreateTourismContent() {
             }
             return urls;
           }),
-          uploadRequiredPromotionMedia({
-            files: videoThumbnailFile,
-            area: uploadArea,
-            field: "video_thumbnail",
-          }).then((urls) => urls[0]),
+          videoCoverForSubmit(videoFiles[0], videoThumbnailFile)
+            .then((files) =>
+              uploadRequiredPromotionMedia({ files, area: uploadArea, field: "video_thumbnail" })
+            )
+            .then((urls) => urls[0]),
           uploadRequiredPromotionMedia({
             files: logoFiles,
             area: listingType === "tourism_business" ? "business_logo" : "promotion",

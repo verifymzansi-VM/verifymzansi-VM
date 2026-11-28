@@ -76,7 +76,7 @@ it("sends how a single prepared video was made, and nothing for other uploads", 
 
 it("shows the server's reason when it cannot store a video as it is", async () => {
   const reason =
-    "This video can't be stored as it is. Pick it again in the posting form so it can be prepared, or export it as MP4 (H.264, up to 1080p).";
+    "This video can't be stored as it is. Refresh the page and choose it again, or export it as MP4 (H.264, up to 1080p).";
   fetchRetry.mockResolvedValue({
     ok: false,
     status: 400,

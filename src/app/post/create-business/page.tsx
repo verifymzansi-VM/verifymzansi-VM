@@ -98,6 +98,7 @@ import {
 import {
   prepareVideoForCover,
   prewarmVideosForFastUpload,
+  videoCoverForSubmit,
 } from "@/app/post/_lib/video-fast-upload";
 import { validateBusinessForm } from "@/lib/forms/business-form";
 import {
@@ -923,9 +924,13 @@ function CreateBusinessContent() {
       const finalCoverPhoto = coverUrls[0] || null;
       const finalCoverVideo = videoUrl;
       let finalVideoThumbnail: string | null = null;
-      if (finalCoverVideo && videoThumbnailFile.length > 0) {
+      // A frame from the prepared video when none was chosen yet (still preparing).
+      const thumbnailFiles = finalCoverVideo
+        ? await videoCoverForSubmit(promoVideoFile[0], videoThumbnailFile)
+        : [];
+      if (thumbnailFiles.length > 0) {
         const thumbUrls = await uploadRequiredBusinessMedia({
-          files: videoThumbnailFile,
+          files: thumbnailFiles,
           area: "business_cover",
           field: "video_thumbnail",
         });

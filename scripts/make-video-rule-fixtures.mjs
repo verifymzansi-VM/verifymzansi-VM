@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Makes the real MP4 files that src/lib/media/video-rule.test.ts checks the
+// Makes the real MP4 (and one MOV) files that src/lib/media/video-rule.test.ts checks the
 // video keep rule against (src/lib/media/__fixtures__/video-rule/). Each is a
 // one-second synthetic test pattern and tone, encoded with the site's own
 // ffmpeg.wasm (@ffmpeg/core, the build the posting forms ship) inside
@@ -159,6 +159,9 @@ const fixtures = {
     "64k",
     ...faststart
   ),
+  // A QuickTime file (the .mov muxer keeps AAC's esds inside a wave box):
+  // H.264/AAC streams within the rule, so the phone remuxes it.
+  "remux-h264-aac.mov": out(...pattern("640x360"), ...tone, ...h264("high", "3.1"), ...aac),
   "unreadable-fragmented.mp4": out(
     ...pattern("640x360"),
     ...h264("high", "3.1"),

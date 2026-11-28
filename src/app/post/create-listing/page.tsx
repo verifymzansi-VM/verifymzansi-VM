@@ -72,8 +72,10 @@ import {
   uploadListingVideoFiles,
 } from "@/app/post/_lib/listing-media-upload";
 import {
+  isVideoPreparing,
   prepareVideoForCover,
   prewarmVideosForFastUpload,
+  videoCoverForSubmit,
 } from "@/app/post/_lib/video-fast-upload";
 import {
   DEFAULT_LISTING_CONTACT_METHODS,
@@ -783,7 +785,9 @@ function CreateListingForm() {
 
     if (targetStep === 2) {
       const photoCount = existingPhotos.length + photoFiles.length;
-      const hasVideoCover = videoFile.length > 0 && videoCoverFile.length > 0;
+      // A video still being prepared gets its cover frame at submit at the latest.
+      const hasVideoCover =
+        videoFile.length > 0 && (videoCoverFile.length > 0 || isVideoPreparing(videoFile[0]));
       if (category !== "jobs_services" && photoCount === 0 && !hasVideoCover)
         errors.images = videoFile.length > 0 ? VIDEO_COVER_NEEDED : PHOTO_OR_VIDEO_RULE;
       if (photoCount > maxPhotos) {
@@ -951,11 +955,9 @@ function CreateListingForm() {
           if (videoFile.length) setUploadStatuses((current) => ({ ...current, video: "done" }));
           return urls;
         }),
-        uploadListingImages({
-          files: videoCoverFile,
-          area: "listing",
-          field: "videoThumbnail",
-        }).then((urls) => urls[0] ?? null),
+        videoCoverForSubmit(videoFile[0], videoCoverFile)
+          .then((files) => uploadListingImages({ files, area: "listing", field: "videoThumbnail" }))
+          .then((urls) => urls[0] ?? null),
       ]);
 
       setSubmitProgress("Saving listing...");

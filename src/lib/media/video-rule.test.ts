@@ -48,7 +48,7 @@ describe("real MP4 files (made with the site's own ffmpeg.wasm; see make-video-r
 
   it("has exactly the reviewed fixture set", () => {
     expect(readdirSync(FIXTURES).sort()).toEqual(
-      [...Object.keys(expected), "unreadable-fragmented.mp4"].sort()
+      [...Object.keys(expected), "remux-h264-aac.mov", "unreadable-fragmented.mp4"].sort()
     );
   });
 
@@ -219,7 +219,7 @@ describe("stored facts", () => {
 
   it("tells the member what to do", () => {
     expect(VIDEO_RULE_MESSAGE).toBe(
-      "This video can't be stored as it is. Pick it again in the posting form so it can be prepared, or export it as MP4 (H.264, up to 1080p)."
+      "This video can't be stored as it is. Refresh the page and choose it again, or export it as MP4 (H.264, up to 1080p)."
     );
   });
 });
@@ -243,6 +243,13 @@ describe("videoPreparation (what the phone does before upload, phase 1b)", () =>
   it.each(Object.entries(expected))("%s → %s", async (name, source) => {
     const bytes = new Uint8Array(readFileSync(`${FIXTURES}/${name}`));
     expect(videoPreparation(await factsOf(bytes), bytes.length, true)).toBe(source);
+  });
+
+  it("reads AAC inside a QuickTime wave box, so a real H.264/AAC MOV is remuxed", async () => {
+    const bytes = new Uint8Array(readFileSync(`${FIXTURES}/remux-h264-aac.mov`));
+    const facts = await factsOf(bytes);
+    expect(facts).toMatchObject({ audio: "aac", audioTracks: 1, faststart: false });
+    expect(videoPreparation(facts, bytes.length, false)).toBe("remuxed");
   });
 
   it("remuxes a file that meets the rule but is not an MP4 (MOV) or a different container", async () => {

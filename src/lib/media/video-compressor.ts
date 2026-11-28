@@ -63,9 +63,12 @@ export function transcodeArguments(mode: TranscodeOptions["mode"], facts: VideoF
   // 30 fps only when the source is faster (or its rate is unknown).
   const fps = facts && facts.video.fps > 0 && facts.video.fps <= 30.5 ? "" : "fps=30,";
   const sharp = facts !== null && facts.seconds <= SHARP_PRESET_MAX_SECONDS;
-  // The buffer lets a clip briefly exceed 3 Mbps. Over a short clip that
-  // burst would lift the average above the keep rule's 4 Mbps, so it is at
-  // most 0.5 Mbit per second of clip (6 Mbit from 12 s).
+  // The buffer lets a clip briefly exceed 3 Mbps: over T seconds the video
+  // averages at most 3 + buffer / T Mbps. A fixed 6 Mbit would lift a short
+  // clip above the keep rule's 4 Mbps, so the buffer is 0.5 Mbit per second
+  // of clip (3.5 Mbps at most), at least 0.5 Mbit and at most 6 Mbit (from
+  // 12 s). Under 1 second the floor allows more than 3.5 Mbps; an output over
+  // the rule is refused before upload (compress-before-upload.ts).
   const buffer = facts ? Math.min(6000, Math.max(500, Math.round(facts.seconds * 500))) : 6000;
   return [
     ...streams,
