@@ -112,6 +112,23 @@ import { VIDEO_SOUND_OFF_TIP } from "@/lib/media/video-length";
  * star rating, the "From" price replaces the price band). */
 const OLDER_POST_ONLY_FIELDS = new Set(["star_rating", "price_range"]);
 
+/** Why a typed "From" price (rand) cannot be saved, or null when it can. */
+function priceFromProblem(text: string | null): string | null {
+  const typed = text?.trim() ?? "";
+  if (!typed) return null;
+  const rand = Number(typed.replace(",", "."));
+  if (!Number.isFinite(rand) || rand <= 0) return "Enter a price above R0, or leave it blank.";
+  if (!/^\d+([.,]\d{1,2})?$/.test(typed)) return "Price can have at most 2 decimal places.";
+  if (rand > TOURISM_PRICE_MAX_RAND) return "Enter a price up to R1 000 000.";
+  return null;
+}
+
+/** The typed "From" price in cents; undefined when left blank. */
+function priceFromCents(text: string): number | undefined {
+  const rand = Number(text.trim().replace(",", "."));
+  return text.trim() && Number.isFinite(rand) && rand > 0 ? Math.round(rand * 100) : undefined;
+}
+
 const selectClass =
   "flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-shadow sm:h-10 sm:text-sm";
 
@@ -157,6 +174,9 @@ export default function EditBusinessPage() {
   const [category, setCategory] = useState("");
   const [subcategory, setSubcategory] = useState("");
   const [categoryDetails, setCategoryDetails] = useState<Record<string, unknown>>({});
+  // The tourism "From" price as typed, in rand (null until the owner edits it):
+  // kept as text so decimals survive typing, turned into cents only on save.
+  const [priceFromText, setPriceFromText] = useState<string | null>(null);
   // Businesses saved before customer access existed keep their type-specific details.
   const hadStoredAccess = useRef(false);
   const categoryAnswers = useRef<
@@ -463,6 +483,8 @@ export default function EditBusinessPage() {
         socialTiktok: socialTiktok.trim(),
         socialYoutube: socialYoutube.trim(),
       });
+      const priceProblem = priceFromProblem(priceFromText);
+      if (priceProblem) validationErrors["category_details.price_from_cents"] = priceProblem;
       if (!bookingUrlSchema.safeParse(bookingUrl).success)
         validationErrors["category_details.booking_url"] = "Enter a valid booking link.";
 
@@ -642,7 +664,10 @@ export default function EditBusinessPage() {
       const mediaDimensions = primaryMediaFile ? await readMediaDimensions(primaryMediaFile) : null;
 
       // The API rebuilds business_profile from the extras fields below.
-      const { business_profile: _staleProfile, ...categoryDetailsWithoutProfile } = categoryDetails;
+      const { business_profile: _staleProfile, ...categoryDetailsWithoutProfile } =
+        priceFromText === null
+          ? categoryDetails
+          : { ...categoryDetails, price_from_cents: priceFromCents(priceFromText) };
       const body = {
         contact_methods: contactMethods,
         business_name: businessName,
@@ -1017,34 +1042,25 @@ export default function EditBusinessPage() {
                           return null;
                         // The "From" price is stored in cents and asked in rand, as on create.
                         if (field.name === "price_from_cents") {
-                          const rand = typeof val === "number" && val > 0 ? String(val / 100) : "";
-                          const tooHigh = Number(rand) > TOURISM_PRICE_MAX_RAND;
+                          const rand =
+                            priceFromText ??
+                            (typeof val === "number" && val > 0 ? String(val / 100) : "");
+                          const problem =
+                            fieldErrors["category_details.price_from_cents"] ??
+                            priceFromProblem(rand);
                           return (
                             <div key={field.name} className="space-y-1">
                               <Label htmlFor="cat-price_from">Price from (R)</Label>
                               <Input
                                 id="cat-price_from"
-                                type="number"
+                                type="text"
                                 inputMode="decimal"
-                                min={0}
-                                step="0.01"
                                 value={rand}
-                                onChange={(e) => {
-                                  const next = Number(e.target.value);
-                                  setCategoryDetails((prev) => ({
-                                    ...prev,
-                                    price_from_cents:
-                                      e.target.value && next > 0
-                                        ? Math.round(next * 100)
-                                        : undefined,
-                                  }));
-                                }}
+                                onChange={(e) => setPriceFromText(e.target.value)}
                                 placeholder="e.g. 450"
-                                aria-invalid={tooHigh || undefined}
+                                aria-invalid={problem ? true : undefined}
                               />
-                              {tooHigh ? (
-                                <p className="inline-form-error">Enter a price up to R1 000 000.</p>
-                              ) : null}
+                              {problem ? <p className="inline-form-error">{problem}</p> : null}
                             </div>
                           );
                         }

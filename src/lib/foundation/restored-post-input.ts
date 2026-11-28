@@ -15,6 +15,9 @@ import { normalizeSaPhone } from "../utils/phone";
 
 export const VERIFIED_NUMBER_ONLY_MESSAGE =
   "Call and WhatsApp use your verified number. Verify it in your profile, then try again.";
+/** The page was opened before the account's verified number changed. */
+export const VERIFIED_NUMBER_CHANGED_MESSAGE =
+  "Your verified number changed. Refresh the page and try again.";
 
 /**
  * A business's Call and WhatsApp numbers: always the account's verified
@@ -30,8 +33,10 @@ function verifiedBusinessContacts(
 ) {
   const verified = verifiedPhone || null;
   for (const number of [sent.phone, sent.whatsapp])
-    if (number && (!verified || normalizeSaPhone(number) !== verified))
-      throw new RestoredPostInputError(VERIFIED_NUMBER_ONLY_MESSAGE);
+    if (number && normalizeSaPhone(number) !== verified)
+      throw new RestoredPostInputError(
+        verified ? VERIFIED_NUMBER_CHANGED_MESSAGE : VERIFIED_NUMBER_ONLY_MESSAGE
+      );
   const on = (method: "call" | "whatsapp", number: string | null | undefined) =>
     methods ? methods.includes(method) : Boolean(number);
   return {

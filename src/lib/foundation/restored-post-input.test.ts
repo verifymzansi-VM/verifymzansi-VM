@@ -2,6 +2,7 @@ import { afterEach, describe, it, expect, vi } from "vitest";
 import {
   buildRestoredPostInput,
   restoredMediaKey,
+  VERIFIED_NUMBER_CHANGED_MESSAGE,
   VERIFIED_NUMBER_ONLY_MESSAGE,
 } from "./restored-post-input";
 const id = "11111111-1111-4111-8111-111111111111",
@@ -200,8 +201,9 @@ describe("business Call and WhatsApp use the verified number only", () => {
   });
 
   it("refuses any other number, and any number without a verified one", () => {
+    // A page opened before the verified number changed sends the old one.
     expect(() => build({ contact_methods: ["call"], phone: "0820000000" }, "+27821234567")).toThrow(
-      VERIFIED_NUMBER_ONLY_MESSAGE
+      VERIFIED_NUMBER_CHANGED_MESSAGE
     );
     expect(() => build({ contact_methods: ["whatsapp"], whatsapp: "0821234567" }, null)).toThrow(
       VERIFIED_NUMBER_ONLY_MESSAGE

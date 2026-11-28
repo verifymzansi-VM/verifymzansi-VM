@@ -4,12 +4,28 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const widget = vi.hoisted(() => ({ fail: false }));
+const widget = vi.hoisted(() => ({
+  fail: false,
+  /** Cloudflare asks the visitor to click (before-interactive). */
+  interactive: true,
+  passes: [] as Array<(token: string) => void>,
+}));
 vi.mock("next/navigation", () => ({ usePathname: () => "/mzansi-business/post-1" }));
-// Cloudflare wants a click: the widget renders and waits (or fails at once).
+// The widget asks for a click (or passes invisibly, or fails at once) and
+// waits; a test ends the check through widget.passes.
 vi.mock("@/components/ui/turnstile-widget", () => ({
-  TurnstileWidget: ({ onError }: { onError: () => void }) => {
+  TurnstileWidget: ({
+    onError,
+    onInteractive,
+    onSuccess,
+  }: {
+    onError: () => void;
+    onInteractive?: () => void;
+    onSuccess: (token: string) => void;
+  }) => {
     if (widget.fail) queueMicrotask(onError);
+    else if (widget.interactive) queueMicrotask(() => onInteractive?.());
+    widget.passes.push(onSuccess);
     return <button type="button">Verify you are human</button>;
   },
 }));
@@ -35,6 +51,8 @@ function checkHost() {
 
 beforeEach(() => {
   widget.fail = false;
+  widget.interactive = true;
+  widget.passes = [];
   window.sessionStorage.clear();
   resetViewerChallengeForTests();
 });
@@ -65,12 +83,32 @@ describe("viewer check placement", () => {
     expect(await screen.findByRole("button", { name: "Verify you are human" })).toBeVisible();
   });
 
-  it("the welcome pop-up steps aside while the check is on screen", async () => {
+  it("the welcome pop-up steps aside while the check asks for a click, then returns", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(null, { status: 200 }))
+    );
+    render(<PrelaunchBanner />);
+    await screen.findByRole("dialog");
+    const check = obtainViewerIdentifier();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(checkHost()).not.toBeNull();
+    widget.passes.at(-1)?.("token");
+    await check;
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+
+  it("an invisible check leaves the welcome pop-up alone (no flicker)", async () => {
+    widget.interactive = false;
     render(<PrelaunchBanner />);
     await screen.findByRole("dialog");
     void obtainViewerIdentifier();
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(checkHost()).not.toBeNull();
+    await vi.waitFor(() => {
+      if (widget.passes.length === 0) throw new Error("no check yet");
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 });
 

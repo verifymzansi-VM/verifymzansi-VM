@@ -420,7 +420,7 @@ describe("EditBusinessPage", () => {
     await termsLoaded();
     await waitFor(() => expect(screen.getByDisplayValue("Lerato Nails")).toBeInTheDocument());
     const price = await screen.findByLabelText(/^Price from \(R\)/);
-    expect(price).toHaveValue(450);
+    expect(price).toHaveValue("450");
     expect(screen.queryByText(/in cents/)).toBeNull();
     expect(screen.queryByLabelText(/star/i)).toBeNull();
     expect(screen.queryByLabelText(/price range/i)).toBeNull();
@@ -429,6 +429,42 @@ describe("EditBusinessPage", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     const payload = JSON.parse(fetchMock.mock.calls[1][1].body as string);
     expect(payload.category_details.price_from_cents).toBe(1_500_000);
+  });
+
+  it("keeps typed rand decimals and saves them as cents", async () => {
+    serveSavedBusiness({
+      category: "tourism_hospitality",
+      category_details: { price_from_cents: 45000, price_unit: "night" },
+    });
+    render(<EditBusinessPage />);
+    await termsLoaded();
+    const price = await screen.findByLabelText(/^Price from \(R\)/);
+    // Typed one key at a time, as a person does: "450." and "450.0" must stay.
+    for (const typed of ["450", "450.", "450.0", "450.05"]) {
+      fireEvent.change(price, { target: { value: typed } });
+      expect(price).toHaveValue(typed);
+    }
+    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    const payload = JSON.parse(fetchMock.mock.calls[1][1].body as string);
+    expect(payload.category_details.price_from_cents).toBe(45005);
+  });
+
+  it("does not save a From price above R1 000 000", async () => {
+    serveSavedBusiness({
+      category: "tourism_hospitality",
+      category_details: { price_from_cents: 45000, price_unit: "night" },
+    });
+    render(<EditBusinessPage />);
+    await termsLoaded();
+    const price = await screen.findByLabelText(/^Price from \(R\)/);
+    fireEvent.change(price, { target: { value: "1000001" } });
+    expect(screen.getAllByText("Enter a price up to R1 000 000.").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+    await waitFor(() =>
+      expect(screen.getAllByText("Enter a price up to R1 000 000.").length).toBeGreaterThan(0)
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("loads and saves back the hours, booking, visitor, payment and YouTube details", async () => {

@@ -103,13 +103,20 @@ function challengeToken(): Promise<string | null> {
     document.body.appendChild(host);
     const root = createRoot(host);
     let done = false;
+    // Only a check that asks the visitor to click is announced (the welcome
+    // pop-up steps aside for it); an invisible pass changes nothing on screen.
+    let shown = false;
     const announce = (isPending: boolean) =>
       window.dispatchEvent(new CustomEvent(VIEWER_CHECK_EVENT, { detail: { pending: isPending } }));
-    announce(true);
+    const interactive = () => {
+      if (done || shown) return;
+      shown = true;
+      announce(true);
+    };
     const finish = (token: string | null) => {
       if (done) return;
       done = true;
-      announce(false);
+      if (shown) announce(false);
       window.clearTimeout(timer);
       // Unmount after the widget's own callback has returned.
       window.setTimeout(() => {
@@ -125,6 +132,7 @@ function challengeToken(): Promise<string | null> {
         action={VIEWER_CHALLENGE_ACTION}
         size="compact"
         onSuccess={(token) => finish(token)}
+        onInteractive={interactive}
         onError={() => finish(null)}
         onUnavailable={() => finish(null)}
       />
