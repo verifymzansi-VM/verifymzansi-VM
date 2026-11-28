@@ -14,16 +14,12 @@ vi.mock("@/hooks/use-toast", () => ({
 }));
 
 /** jsdom cannot read real video headers; each test states the picked clip's length. */
-const pickedLength = vi.hoisted(() => ({ seconds: 30 as number | null, noPicture: false }));
+const pickedLength = vi.hoisted(() => ({ seconds: 30 as number | null }));
 vi.mock("@/lib/media/video-length-client", async () => {
   const { videoLengthProblem } = await import("@/lib/media/video-length");
-  const NO_VIDEO_TRACK_MESSAGE = "This file has no video. Choose a video file.";
   return {
-    NO_VIDEO_TRACK_MESSAGE,
     checkPickedVideoLength: vi.fn(async (_file: Blob, limit: number) =>
-      pickedLength.noPicture
-        ? NO_VIDEO_TRACK_MESSAGE
-        : videoLengthProblem(pickedLength.seconds, limit)
+      videoLengthProblem(pickedLength.seconds, limit)
     ),
   };
 });
@@ -78,7 +74,6 @@ describe("MediaUpload", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     pickedLength.seconds = 30;
-    pickedLength.noPicture = false;
     global.URL.createObjectURL = vi.fn(() => "blob:preview-url");
     global.URL.revokeObjectURL = vi.fn();
   });
@@ -126,16 +121,6 @@ describe("MediaUpload", () => {
           "\"unknown.mp4\": We couldn't read this video's length; please export it as MP4."
         )
       ).toBeInTheDocument();
-    });
-
-    it("refuses a picked file with no video (an audio file named .mp4)", async () => {
-      pickedLength.noPicture = true;
-      render(<EventVideoHarness />);
-      pick("song.mp4");
-      expect(
-        await screen.findByText('"song.mp4": This file has no video. Choose a video file.')
-      ).toBeInTheDocument();
-      expect(screen.queryByRole("button", { name: "Remove song.mp4" })).not.toBeInTheDocument();
     });
 
     it("refuses an MP4 that goes up as it is but cannot be shown, at the field and without adding it", async () => {

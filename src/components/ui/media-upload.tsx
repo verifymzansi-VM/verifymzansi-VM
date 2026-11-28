@@ -9,7 +9,7 @@ import {
   MAX_VIDEO_SECONDS,
   UNREADABLE_VIDEO_LENGTH_MESSAGE,
 } from "@/lib/media/video-length";
-import { checkPickedVideoLength, NO_VIDEO_TRACK_MESSAGE } from "@/lib/media/video-length-client";
+import { checkPickedVideoLength } from "@/lib/media/video-length-client";
 import {
   canBrowserShowVideo,
   UNSUPPORTED_VIDEO_FORMAT_MESSAGE,
@@ -355,14 +355,7 @@ export function MediaUpload({
 
         // The phone check of the video length rule; the server checks again.
         if (isVideo) {
-          setCheckingVideo(true);
-          const problem = await checkPickedVideoLength(normalized, maxVideoSeconds).finally(() =>
-            setCheckingVideo(false)
-          );
-          if (problem === NO_VIDEO_TRACK_MESSAGE) {
-            rejectFile("No video", `"${file.name}": ${problem}`);
-            continue;
-          }
+          const problem = await checkPickedVideoLength(normalized, maxVideoSeconds);
           if (problem) {
             rejectFile(
               problem === UNREADABLE_VIDEO_LENGTH_MESSAGE

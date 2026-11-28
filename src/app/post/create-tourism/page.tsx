@@ -540,6 +540,8 @@ function CreateTourismContent() {
     discard: discardDraft,
   } = usePostDraftAutosave<CreateTourismDraft>("tourism", user?.id, !isLoading);
   const lastAutosaveSignatureRef = useRef<string>("");
+  // The draft is applied once; a later re-run of the restore effect does not repeat it.
+  const draftAppliedRef = useRef(false);
 
   const locationValue: LocationValue = {
     province,
@@ -625,7 +627,8 @@ function CreateTourismContent() {
   useEffect(() => {
     if (!user?.id || isLoading) return;
     void Promise.resolve(restoreDraft()).then((draft) => {
-      if (!draft) return;
+      if (!draft || draftAppliedRef.current) return;
+      draftAppliedRef.current = true;
       const d = draft.data;
       // An explicit route (for example ?type=event) never receives answers from a
       // draft of the other listing type.
@@ -843,8 +846,8 @@ function CreateTourismContent() {
       businessId,
     };
 
-    // Off the key press, as Business and Market do: the signature of about
-    // 100 fields is built after the input has updated.
+    // Deferred to a microtask, as Business and Market do (it still runs
+    // before the next paint).
     queueMicrotask(() => {
       const autosaveSignature = JSON.stringify({ step, draftData });
       if (autosaveSignature === lastAutosaveSignatureRef.current) return;
