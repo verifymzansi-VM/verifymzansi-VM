@@ -1,6 +1,8 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import CreateListingPage from "./page";
+import { prepareVideoUpload } from "@/lib/media/compress-before-upload";
+import { extractVideoFrame } from "@/lib/media/video-frame";
 import type * as HiddenFeatures from "@/lib/hidden-features";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
@@ -82,8 +84,15 @@ vi.mock("@/lib/utils/upload-preflight", () => ({
   checkUploadServiceReachable: vi.fn().mockResolvedValue(undefined),
 }));
 
+// A submit made before a cover was chosen takes a frame from the prepared video.
+vi.mock("@/lib/media/video-frame", () => ({
+  extractVideoFrame: vi.fn(
+    async (file: File) => new File(["frame"], `${file.name}_poster.jpg`, { type: "image/jpeg" })
+  ),
+}));
+
 vi.mock("@/lib/media/compress-before-upload", () => ({
-  compressVideoForUpload: vi.fn(async (file: File) => file),
+  prepareVideoUpload: vi.fn(async (file: File) => ({ file, source: "kept" })),
   VideoTranscodeError: class VideoTranscodeError extends Error {
     constructor(message = "Video transcode failed") {
       super(message);
@@ -808,6 +817,110 @@ describe("CreateListingPage", () => {
     expect(payload.videos).toEqual(["https://media.verifymzansi.com/listings/clip.mp4"]);
   });
 
+  describe("a submit while the video is still being prepared", () => {
+    const coverUrl = "https://media.verifymzansi.com/media/00000000-0000-4000-8000-0000000000c0";
+    const photoUrl = "https://media.verifymzansi.com/media/00000000-0000-4000-8000-0000000000d0";
+    const videoUrl = "https://media.verifymzansi.com/listings/clip.mp4";
+    let finishPreparations: () => void = () => {};
+
+    beforeEach(() => {
+      const waiting: Array<() => void> = [];
+      finishPreparations = () => waiting.splice(0).forEach((finish) => finish());
+      vi.mocked(prepareVideoUpload).mockImplementation(
+        (file: File) =>
+          new Promise((resolve) => waiting.push(() => resolve({ file, source: "converted" })))
+      );
+      fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (input === "/api/media/upload") {
+          const form = init?.body instanceof FormData ? init.body : null;
+          const name = (form?.get("files") as File | null)?.name ?? "";
+          const url =
+            form?.get("area") === "listing_video"
+              ? videoUrl
+              : name.endsWith("_poster.jpg")
+                ? coverUrl
+                : photoUrl;
+          return { ok: true, status: 200, json: async () => ({ urls: [url], errors: [] }) };
+        }
+        if (input === "/api/listings") return { ok: true, json: async () => ({ id: "listing-1" }) };
+        return { ok: true, json: async () => ({ success: true }) };
+      });
+    });
+    afterEach(() => {
+      vi.mocked(prepareVideoUpload).mockImplementation(async (file: File) => ({
+        file,
+        source: "kept",
+      }));
+    });
+
+    async function openMediaStep() {
+      render(<CreateListingPage />);
+      await termsLoaded();
+      fireEvent.click(screen.getByText("Select Electronics"));
+      fireEvent.change(screen.getByLabelText("Title (Required)"), {
+        target: { value: "Used iPhone 15" },
+      });
+      fireEvent.change(screen.getByLabelText("Description (Required)"), {
+        target: { value: "A clean listing description with enough detail to continue." },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Next" }));
+      fireEvent.change(screen.getByLabelText(/^(Asking price|Monthly Rent) \(ZAR\)/i), {
+        target: { value: "1500" },
+      });
+      fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
+      fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
+      fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    }
+
+    async function submitted() {
+      acceptListingTerms();
+      fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
+      await waitFor(() => expect(vi.mocked(prepareVideoUpload)).toHaveBeenCalled());
+      expect(fetchMock.mock.calls.some((call) => call[0] === "/api/listings")).toBe(false);
+      await act(async () => finishPreparations());
+      await waitFor(() =>
+        expect(fetchMock.mock.calls.some((call) => call[0] === "/api/listings")).toBe(true)
+      );
+      const request = fetchMock.mock.calls.find((call) => call[0] === "/api/listings")!;
+      return JSON.parse(request[1].body as string);
+    }
+
+    it("video only: waits for the video and saves its frame as the cover and photo 1", async () => {
+      await openMediaStep();
+      fireEvent.click(screen.getByRole("button", { name: "Video (max 1)" }));
+      const payload = await submitted();
+      expect(payload.videos).toEqual([videoUrl]);
+      expect(payload.videoThumbnail).toBe(coverUrl);
+      expect(payload.images).toEqual([coverUrl]);
+      expect(screen.queryByText("Add a photo, or a cover image for the video.")).toBeNull();
+    });
+
+    it("with photos: the post still gets a video cover", async () => {
+      await openMediaStep();
+      fireEvent.click(screen.getByRole("button", { name: "Photos (max 5)" }));
+      fireEvent.click(screen.getByRole("button", { name: "Video (max 1)" }));
+      const payload = await submitted();
+      expect(payload.images).toEqual([photoUrl]);
+      expect(payload.videoThumbnail).toBe(coverUrl);
+    });
+
+    it("a video replaced during preparation gets a cover from the new video, not the old one", async () => {
+      await openMediaStep();
+      fireEvent.click(screen.getByRole("button", { name: "Video (max 1)" }));
+      // A cover chosen for the first video is dropped when the video is replaced.
+      fireEvent.click(screen.getByRole("button", { name: "Pick cover frame" }));
+      fireEvent.click(screen.getByRole("button", { name: "Video (max 1)" }));
+      const payload = await submitted();
+      const replaced = vi.mocked(prepareVideoUpload).mock.calls.at(-1)![0];
+      expect(vi.mocked(extractVideoFrame)).toHaveBeenLastCalledWith(replaced);
+      expect(payload.videoThumbnail).toBe(coverUrl);
+      const uploadedCover = fetchMock.mock.calls
+        .map((call) => (call[1]?.body instanceof FormData ? call[1].body.get("files") : null))
+        .find((file) => file instanceof File && file.type === "image/jpeg") as File;
+      expect(uploadedCover.name).not.toBe("clip_poster.jpg");
+    });
+  });
+
   it("asks for a photo or video when the media step is empty", async () => {
     render(<CreateListingPage />);
     await termsLoaded();
@@ -854,6 +967,8 @@ describe("CreateListingPage", () => {
     fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     fireEvent.click(screen.getByRole("button", { name: "Video (max 1)" }));
+    // The video is prepared (a video still being prepared gets its frame at submit).
+    await act(async () => {});
     acceptListingTerms();
     fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
 

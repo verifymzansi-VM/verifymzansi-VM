@@ -5,7 +5,8 @@ import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { generateBlurHash } from "@/lib/utils/blurhash";
 import { fetchWithRetry } from "@/lib/utils/fetch-retry";
 import { mediaUploadTimeoutMs } from "@/lib/media/upload-policy";
-import type { CompressionResult } from "@/lib/media/video-compressor";
+import { extractVideoFrame } from "@/lib/media/video-frame";
+import type { VideoSource } from "@/lib/media/video-rule";
 
 interface UploadState {
   isUploading: boolean;
@@ -43,84 +44,6 @@ const COMPRESSIBLE_VIDEO_TYPES = new Set([...UPLOAD_VIDEO_TYPES, "video/quicktim
 
 /** Max video duration default: 2 minutes */
 const DEFAULT_MAX_DURATION_SEC = 120;
-
-/**
- * Extract a poster frame from a video at a given seek time.
- * Returns a JPEG File (or null if extraction fails).
- */
-function extractVideoFrame(file: File, seekTimeSec: number = 1): Promise<File | null> {
-  return new Promise((resolve) => {
-    const url = URL.createObjectURL(file);
-    const video = document.createElement("video");
-    video.preload = "auto";
-    video.muted = true;
-
-    const cleanup = () => {
-      URL.revokeObjectURL(url);
-      video.remove();
-    };
-
-    const timer = setTimeout(() => {
-      cleanup();
-      resolve(null);
-    }, 15_000);
-
-    video.addEventListener("loadedmetadata", () => {
-      const dur = video.duration;
-      // Seek to the earlier of seekTimeSec or 10% of duration
-      const target = Number.isFinite(dur)
-        ? Math.min(seekTimeSec, dur * 0.1, dur - 0.01)
-        : seekTimeSec;
-      video.currentTime = Math.max(0, target);
-    });
-
-    video.addEventListener(
-      "seeked",
-      () => {
-        try {
-          const canvas = document.createElement("canvas");
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          const ctx = canvas.getContext("2d");
-          if (!ctx || canvas.width === 0 || canvas.height === 0) {
-            clearTimeout(timer);
-            cleanup();
-            resolve(null);
-            return;
-          }
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          canvas.toBlob(
-            (blob) => {
-              clearTimeout(timer);
-              cleanup();
-              if (!blob) {
-                resolve(null);
-                return;
-              }
-              const posterName = file.name.replace(/\.[^.]+$/, "_poster.jpg");
-              resolve(new File([blob], posterName, { type: "image/jpeg" }));
-            },
-            "image/jpeg",
-            0.85
-          );
-        } catch {
-          clearTimeout(timer);
-          cleanup();
-          resolve(null);
-        }
-      },
-      { once: true }
-    );
-
-    video.addEventListener("error", () => {
-      clearTimeout(timer);
-      cleanup();
-      resolve(null);
-    });
-
-    video.src = url;
-  });
-}
 
 /**
  * Read video duration and dimensions client-side using a temporary <video> element.
@@ -338,7 +261,7 @@ export function useMediaUpload(options: UploadOptions = {}) {
   const [dimensions, setDimensions] = useState<MediaDimensions | null>(null);
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const [blurhash, setBlurhash] = useState<string | null>(null);
-  const [compressionResult, setCompressionResult] = useState<CompressionResult | null>(null);
+  const [videoSource, setVideoSource] = useState<VideoSource | null>(null);
   const compressionAbortRef = useRef<AbortController | null>(null);
 
   const validate = useCallback(
@@ -374,7 +297,7 @@ export function useMediaUpload(options: UploadOptions = {}) {
         return null;
       }
 
-      setCompressionResult(null);
+      setVideoSource(null);
       setState({
         isUploading: true,
         isCompressing: false,
@@ -446,74 +369,43 @@ export function useMediaUpload(options: UploadOptions = {}) {
             progress: 0,
           }));
 
-          let uploadFile = file;
+          // Kept, remuxed or converted with the keep rule the server enforces
+          // (compress-before-upload.ts); a failure blocks the upload.
+          let uploadFile: File;
+          let source: VideoSource;
           try {
-            const { compressVideo } = await import("@/lib/media/video-compressor");
-            // Bound compression so a hung FFmpeg WASM worker cannot stall the
-            // upload forever — fall back to the original file on timeout.
-            const COMPRESSION_TIMEOUT_MS = UPLOAD_VIDEO_TYPES.has(file.type) ? 60_000 : 10 * 60_000;
-            let timeoutId: ReturnType<typeof setTimeout> | undefined;
-            const timeoutPromise = new Promise<never>((_resolve, reject) => {
-              timeoutId = setTimeout(() => {
-                compAbort.abort(new DOMException("Compression timed out", "AbortError"));
-                reject(new DOMException("Compression timed out", "TimeoutError"));
-              }, COMPRESSION_TIMEOUT_MS);
-            });
-            try {
-              const result = await Promise.race([
-                compressVideo(file, {
-                  onProgress: (pct) => {
-                    setState((prev) => ({ ...prev, compressionProgress: pct }));
-                  },
-                  signal: compAbort.signal,
-                }),
-                timeoutPromise,
-              ]);
-              setCompressionResult(result);
-              uploadFile = result.file;
-            } finally {
-              if (timeoutId !== undefined) clearTimeout(timeoutId);
-            }
-          } catch (compErr) {
-            // Abort means user cancelled — bail out
-            if (compErr instanceof DOMException && compErr.name === "AbortError") {
-              setState({
-                isUploading: false,
-                isCompressing: false,
-                compressionProgress: 0,
-                progress: 0,
-                error: null,
-                url: null,
-              });
-              return null;
-            }
-            // Timeout or other errors — upload original file with a console warning
-            console.warn("[use-media-upload] Compression failed, uploading original:", compErr);
-          }
-
-          setState((prev) => ({ ...prev, isCompressing: false, compressionProgress: 100 }));
-
-          if (!UPLOAD_VIDEO_TYPES.has(uploadFile.type)) {
-            const errorMsg =
-              file.type === "video/quicktime"
-                ? "MOV videos must be compressed to MP4 before upload. Please try again or export as MP4."
-                : `File type "${uploadFile.type}" not allowed. Accepted: ${[...UPLOAD_VIDEO_TYPES].join(", ")}`;
+            const { prepareVideoUpload } = await import("@/lib/media/compress-before-upload");
+            ({ file: uploadFile, source } = await prepareVideoUpload(file, {
+              onProgress: (pct) => {
+                setState((prev) => ({ ...prev, compressionProgress: pct }));
+              },
+            }));
+          } catch (prepareError) {
             setState({
               isUploading: false,
               isCompressing: false,
               compressionProgress: 0,
               progress: 0,
-              error: errorMsg,
+              error:
+                prepareError instanceof Error && prepareError.message
+                  ? prepareError.message
+                  : "We couldn't convert this video.",
               url: null,
             });
             return null;
           }
+          // Cancelled (another upload or a reset) while it was prepared.
+          if (compAbort.signal.aborted) return null;
+          setVideoSource(source);
+
+          setState((prev) => ({ ...prev, isCompressing: false, compressionProgress: 100 }));
 
           // 1. Upload through the validated server endpoint
           setState((prev) => ({ ...prev, progress: 2 }));
 
           const videoForm = new FormData();
           videoForm.append("files", uploadFile);
+          videoForm.append("video_source", source);
           videoForm.append("area", area);
           videoForm.append("bucket", bucket);
 
@@ -530,9 +422,14 @@ export function useMediaUpload(options: UploadOptions = {}) {
 
           if (!uploadResponse.ok) {
             const data = await uploadResponse.json().catch(() => ({}));
+            const record = data as { error?: unknown; errors?: unknown };
+            // The server's reason first (such as a video it cannot store).
             const errorMsg =
-              ((data as Record<string, unknown>).error as string) ||
-              `Upload failed (${uploadResponse.status})`;
+              (Array.isArray(record.errors) && typeof record.errors[0] === "string"
+                ? record.errors[0]
+                : typeof record.error === "string"
+                  ? record.error
+                  : "") || `Upload failed (${uploadResponse.status})`;
             setState({
               isUploading: false,
               isCompressing: false,
@@ -695,7 +592,7 @@ export function useMediaUpload(options: UploadOptions = {}) {
     setDimensions(null);
     setPosterUrl(null);
     setBlurhash(null);
-    setCompressionResult(null);
+    setVideoSource(null);
   }, []);
 
   return {
@@ -703,7 +600,7 @@ export function useMediaUpload(options: UploadOptions = {}) {
     dimensions,
     posterUrl,
     blurhash,
-    compressionResult,
+    videoSource,
     upload,
     reset,
     validate,

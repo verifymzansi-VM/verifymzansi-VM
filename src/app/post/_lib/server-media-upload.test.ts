@@ -60,3 +60,35 @@ it.each([
     })
   ).rejects.toThrow("Some images failed");
 });
+
+it("sends how a single prepared video was made, and nothing for other uploads", async () => {
+  const video = new File(["video"], "clip.mp4", { type: "video/mp4" });
+  await uploadMediaViaServer({
+    files: [video],
+    area: "listing",
+    fallbackMessage: "failed",
+    videoSource: "remuxed",
+  });
+  await uploadMediaViaServer({ files: [video], area: "listing", fallbackMessage: "failed" });
+  const sent = fetchRetry.mock.calls.map(([, init]) => (init.body as FormData).get("video_source"));
+  expect(sent).toEqual(["remuxed", null]);
+});
+
+it("shows the server's reason when it cannot store a video as it is", async () => {
+  const reason =
+    "This video can't be stored as it is. Refresh the page and choose it again, or export it as MP4 (H.264, up to 1080p).";
+  fetchRetry.mockResolvedValue({
+    ok: false,
+    status: 400,
+    headers: new Headers(),
+    json: async () => ({ success: false, urls: [], objects: [], errors: [reason] }),
+  });
+  await expect(
+    uploadMediaViaServer({
+      files: [new File(["video"], "clip.mp4", { type: "video/mp4" })],
+      area: "listing",
+      fallbackMessage: "Video upload failed.",
+      preferPayloadError: true,
+    })
+  ).rejects.toThrow(reason);
+});

@@ -71,7 +71,13 @@ import {
   uploadListingImages,
   uploadListingVideoFiles,
 } from "@/app/post/_lib/listing-media-upload";
-import { prewarmVideosForFastUpload } from "@/app/post/_lib/video-fast-upload";
+import {
+  isVideoPreparing,
+  prepareVideoForCover,
+  prewarmVideosForFastUpload,
+  videoCoverForSubmit,
+  VideoCoverMissingError,
+} from "@/app/post/_lib/video-fast-upload";
 import {
   DEFAULT_LISTING_CONTACT_METHODS,
   coerceListingAttributes,
@@ -833,7 +839,9 @@ function CreateListingForm() {
 
     if (targetStep === 2) {
       const photoCount = existingPhotos.length + photoFiles.length;
-      const hasVideoCover = videoFile.length > 0 && videoCoverFile.length > 0;
+      // A video still being prepared gets its cover frame at submit at the latest.
+      const hasVideoCover =
+        videoFile.length > 0 && (videoCoverFile.length > 0 || isVideoPreparing(videoFile[0]));
       if (category !== "jobs_services" && photoCount === 0 && !hasVideoCover)
         errors.images = videoFile.length > 0 ? VIDEO_COVER_NEEDED : PHOTO_OR_VIDEO_RULE;
       if (photoCount > maxPhotos) {
@@ -1000,11 +1008,13 @@ function CreateListingForm() {
           if (videoFile.length) setUploadStatuses((current) => ({ ...current, video: "done" }));
           return urls;
         }),
-        uploadListingImages({
-          files: videoCoverFile,
-          area: "listing",
-          field: "videoThumbnail",
-        }).then((urls) => urls[0] ?? null),
+        videoCoverForSubmit(
+          videoFile[0],
+          videoCoverFile,
+          category !== "jobs_services" && existingPhotos.length + photoFiles.length === 0
+        )
+          .then((files) => uploadListingImages({ files, area: "listing", field: "videoThumbnail" }))
+          .then((urls) => urls[0] ?? null),
       ]);
 
       setSubmitProgress("Saving listing...");
@@ -1147,6 +1157,15 @@ function CreateListingForm() {
       if (!copyId) discardDraft();
       setUploadStatuses((current) => ({ ...current, saving: "done" }));
     } catch (error: unknown) {
+      // No cover frame could be taken for a post with only a video: the poster picks one.
+      if (error instanceof VideoCoverMissingError) {
+        const errors = { images: error.message };
+        setStep(2);
+        setFieldErrors(errors);
+        setFormError(`Please fix 1 field on Step 3 — ${STEPS[2].label}.`);
+        focusFirstError(errors, 2);
+        return;
+      }
       const uploadFailure = getListingMediaUploadErrorState(error);
       if (uploadFailure) {
         setStep(2);
@@ -1734,7 +1753,8 @@ function CreateListingForm() {
                           onChange={(files) => {
                             setVideoFile(files);
                             prewarmVideosForFastUpload(files);
-                            if (files.length === 0) setVideoCoverFile([]);
+                            // The cover belongs to the first video.
+                            if (files[0] !== videoFile[0]) setVideoCoverFile([]);
                             clearErrors("videos");
                           }}
                           accept="video/*"
@@ -1760,6 +1780,8 @@ function CreateListingForm() {
                         <div className="space-y-3">
                           <VideoFrameSelector
                             file={videoFile[0]}
+                            prepareVideo={prepareVideoForCover}
+                            autoSelect={videoCoverFile.length === 0}
                             onFrameSelect={(frame) => {
                               setVideoCoverFile(frame ? [frame] : []);
                               clearErrors("videoThumbnail");

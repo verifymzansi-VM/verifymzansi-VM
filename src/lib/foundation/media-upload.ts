@@ -29,7 +29,12 @@ import {
   UNREADABLE_VIDEO_LENGTH_MESSAGE,
   videoLengthProblem,
 } from "../media/video-length";
-import { VIDEO_RULE_MESSAGE, videoRuleProblem, videoUploadFacts } from "../media/video-rule";
+import {
+  VIDEO_RULE_MESSAGE,
+  videoRuleProblem,
+  videoUploadFacts,
+  type VideoSource,
+} from "../media/video-rule";
 
 const log = createLogger("FoundationMediaUpload");
 const IMMUTABLE_CACHE = "public, max-age=31536000, immutable";
@@ -61,7 +66,8 @@ export type FoundationUploadedMedia = z.infer<typeof foundationUploadedMediaSche
  * cannot be read from the file (roadmap M4.4); `video_format`: a video that is
  * not MP4, or an MP4 outside the keep rule (src/lib/media/video-rule.ts).
  * `detail` holds the message the member sees. */
-export type FoundationMediaRefusal = "images_allowance_exhausted" | "video_length" | "video_format";
+export type FoundationMediaRefusal =
+  "images_allowance_exhausted" | "video_length" | "video_format" | "storage_full";
 /** Stored videos are MP4 (H.264/AAC); the posting forms convert others first. */
 const VIDEO_FORMAT_MESSAGE = "Videos are stored as MP4; please export it as MP4 and try again";
 export class FoundationMediaError extends Error {
@@ -77,7 +83,12 @@ export class FoundationMediaError extends Error {
 /** What a member is told when photo processing has run out for the month. */
 export const IMAGES_ALLOWANCE_EXHAUSTED_MESSAGE =
   "Photo uploads are paused for now. Please try again later.";
-function refused(error: { code?: string }) {
+/** What a member is told when their package's storage is full (begin_media_upload). */
+const STORAGE_FULL_MESSAGE =
+  "Your storage allowance is full. Delete posts or drafts you no longer need, then try again.";
+function refused(error: { code?: string; message?: string }) {
+  if (error.code === "PT409" && /storage for your package is full/.test(error.message ?? ""))
+    throw new FoundationMediaError(409, "storage_full", STORAGE_FULL_MESSAGE);
   throw new FoundationMediaError(
     error.code === "42501"
       ? 403
@@ -189,11 +200,13 @@ export async function uploadFoundationMedia(
   service: FoundationServiceApi,
   file: File,
   write: typeof uploadToR2 | undefined = undefined,
-  environment = process.env
+  environment = process.env,
+  /** How the posting form prepared the video, as it says (stored with the facts). */
+  videoSource?: VideoSource
 ): Promise<FoundationUploadedMedia> {
   const usage: { allowance?: ImagesAllowance } = {};
   try {
-    return await uploadCheckedMedia(api, service, file, write, environment, usage);
+    return await uploadCheckedMedia(api, service, file, write, environment, usage, videoSource);
   } finally {
     await usage.allowance?.save();
   }
@@ -205,7 +218,8 @@ async function uploadCheckedMedia(
   file: File,
   write: typeof uploadToR2 | undefined,
   environment: NodeJS.ProcessEnv,
-  usage: { allowance?: ImagesAllowance }
+  usage: { allowance?: ImagesAllowance },
+  videoSource: VideoSource | undefined
 ): Promise<FoundationUploadedMedia> {
   // Stored videos are MP4 only (M4.4): the site converts WebM and MOV on the
   // phone first, and browser-made WebM often has no readable length.
@@ -247,7 +261,7 @@ async function uploadCheckedMedia(
     // The keep rule (src/lib/media/video-rule.ts). VIDEO_UPLOAD_RULE=log
     // stores a video that breaks it and records which rule it broke.
     const broken = videoRuleProblem(facts!, bytes.length);
-    videoFacts = videoUploadFacts(facts!, broken);
+    videoFacts = videoUploadFacts(facts!, broken, videoSource);
     const enforce = environment.VIDEO_UPLOAD_RULE !== "log";
     log.info("Video upload rule", {
       result: broken ?? "pass",

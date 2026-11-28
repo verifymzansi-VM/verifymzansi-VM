@@ -91,7 +91,13 @@ import {
   uploadPromotionVideoFiles,
   uploadRequiredPromotionMedia,
 } from "@/app/post/_lib/promotion-media-upload";
-import { prewarmVideosForFastUpload } from "@/app/post/_lib/video-fast-upload";
+import {
+  isVideoPreparing,
+  prepareVideoForCover,
+  prewarmVideosForFastUpload,
+  videoCoverForSubmit,
+  VideoCoverMissingError,
+} from "@/app/post/_lib/video-fast-upload";
 import { videoLimitSeconds, VIDEO_SOUND_OFF_TIP } from "@/lib/media/video-length";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
@@ -1107,7 +1113,8 @@ function CreateTourismContent() {
       },
       photoFiles.length,
       videoFiles.length,
-      videoThumbnailFile.length
+      // A video still being prepared gets its thumbnail at submit at the latest.
+      videoThumbnailFile.length || (isVideoPreparing(videoFiles[0]) ? 1 : 0)
     );
 
     // Plan-based media limits
@@ -1301,11 +1308,11 @@ function CreateTourismContent() {
             }
             return urls;
           }),
-          uploadRequiredPromotionMedia({
-            files: videoThumbnailFile,
-            area: uploadArea,
-            field: "video_thumbnail",
-          }).then((urls) => urls[0]),
+          videoCoverForSubmit(videoFiles[0], videoThumbnailFile, photoFiles.length === 0)
+            .then((files) =>
+              uploadRequiredPromotionMedia({ files, area: uploadArea, field: "video_thumbnail" })
+            )
+            .then((urls) => urls[0]),
           uploadRequiredPromotionMedia({
             files: logoFiles,
             area: listingType === "tourism_business" ? "business_logo" : "promotion",
@@ -1650,6 +1657,15 @@ function CreateTourismContent() {
       setUploadStatuses((c) => ({ ...c, saving: "done" }));
       discardDraft();
     } catch (error: unknown) {
+      // No cover frame could be taken for a post with only a video: the poster picks one.
+      if (error instanceof VideoCoverMissingError) {
+        const errors = { video_thumbnail: error.message };
+        setStep(3);
+        setFieldErrors((current) => ({ ...current, ...errors }));
+        setFormError(`Please fix 1 field on Step 4 — ${STEPS[3].label}.`);
+        focusFirstError(errors, 3);
+        return;
+      }
       const uploadFailure = getPromotionMediaUploadErrorState(error);
       if (uploadFailure) {
         const normalizedFieldErrors = normalizeTourismFieldErrors(uploadFailure.fieldErrors);
@@ -3883,6 +3899,8 @@ function CreateTourismContent() {
                           <p className="text-sm font-medium">Video thumbnail</p>
                           <VideoFrameSelector
                             file={videoFiles[0]}
+                            prepareVideo={prepareVideoForCover}
+                            autoSelect={videoThumbnailFile.length === 0}
                             onFrameSelect={(f) => {
                               setVideoThumbnailFile(f ? [f] : []);
                               clearErrors("video_thumbnail");

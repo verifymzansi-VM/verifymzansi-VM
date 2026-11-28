@@ -134,7 +134,7 @@ vi.mock("@/components/billing/plan-gate", () => ({
 }));
 
 vi.mock("@/lib/media/compress-before-upload", () => ({
-  compressVideoForUpload: vi.fn(async (file: File) => file),
+  prepareVideoUpload: vi.fn(async (file: File) => ({ file, source: "kept" })),
 }));
 
 vi.mock("@/lib/constants/sa-provinces", () => ({
