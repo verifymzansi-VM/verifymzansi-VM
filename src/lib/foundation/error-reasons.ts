@@ -309,6 +309,8 @@ export const FOUNDATION_ERROR_REASONS = {
  */
 export const FOUNDATION_ERROR_MESSAGES = {
   postingCapacityInUse: "all posting capacity is in use",
+  // An edit of a post in review (consume_frontend_post_command).
+  postCannotBeEditedNow: "post cannot be edited now",
   supportedMailKindsRequired: "supported mail kinds required",
   unsupportedMailKind: "unsupported mail kind",
   ownerApprovedAdministratorInvitationRequired: "owner-approved administrator invitation required",

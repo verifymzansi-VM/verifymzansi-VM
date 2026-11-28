@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 const { trackContentViewSpy } = vi.hoisted(() => ({
@@ -442,5 +442,54 @@ describe("PromotionDetailContent", () => {
     expect(screen.getAllByRole("link", { name: "Facebook" })).toHaveLength(1);
     expect(screen.getAllByRole("link", { name: "Website" })).toHaveLength(1);
     expect(screen.getByRole("link", { name: /Open location pin/ })).toBeInTheDocument();
+  });
+});
+
+describe("PromotionDetailContent title line price", () => {
+  it("shows From with the lowest of the entry price and the ticket tiers", () => {
+    render(
+      <PromotionDetailContent
+        promotion={{
+          id: "promotion-price",
+          owner_id: "owner-1",
+          business_id: null,
+          title: "Gagasi Night",
+          description: "A night of music.",
+          promotion_type: "event",
+          category: null,
+          category_key: null,
+          photos: [],
+          videos: [],
+          video_thumbnail: null,
+          // The "Entry price from" field.
+          price_cents: 100_000,
+          price_negotiable: false,
+          location_province: "KwaZulu-Natal",
+          location_city: "Durban",
+          location_town: null,
+          location_address: null,
+          contact_methods: ["form"],
+          start_date: "2099-03-06T16:00:00.000Z",
+          end_date: null,
+          boost_until: null,
+          featured_until: null,
+          view_count: 0,
+          created_at: "2099-03-01T08:00:00.000Z",
+          event_details: {
+            ticket_tiers: [
+              { name: "General", price_cents: 40_000 },
+              { name: "VIP", price_cents: 100_000 },
+            ],
+          },
+        }}
+        advertiserProfile={null}
+        linkedBusiness={null}
+        showContactActions={false}
+        trackView={false}
+      />
+    );
+    const titleLine = screen.getByRole("heading", { name: "Gagasi Night" }).parentElement!;
+    expect(within(titleLine).getByText("From R400")).toBeInTheDocument();
+    expect(within(titleLine).queryByText("R1 000")).not.toBeInTheDocument();
   });
 });

@@ -445,14 +445,15 @@ export function PromotionDetailContent({
   const venueLabel = promotion.event_details?.venue_name ?? null;
   // Date and the time the organiser chose, with the finish when it differs.
   const whenLabel = formatEventWhen(promotion.start_date, promotion.end_date);
-  // The tiers are listed further down; up here the cheapest price says more.
+  // The tiers are listed further down; up here the cheapest price says more:
+  // the lowest of the entry price ("Entry price from") and the ticket tiers.
   const tierPrices = (promotion.event_details?.ticket_tiers ?? []).map(
     (tier) => tier.price_cents ?? 0
   );
-  const paidPrices = tierPrices.filter((cents) => cents > 0);
+  const paidPrices = [...tierPrices, promotion.price_cents ?? 0].filter((cents) => cents > 0);
   const ticketSummary =
     paidPrices.length > 0
-      ? `${tierPrices.length > 1 ? "From " : ""}${formatZARShort(Math.min(...paidPrices))}`
+      ? `From ${formatZARShort(Math.min(...paidPrices))}`
       : tierPrices.length > 0
         ? "Free entry"
         : promotion.event_details?.tickets_url
@@ -674,9 +675,9 @@ export function PromotionDetailContent({
                   promotion.location_province,
                 ])}
               </span>
-              {promotion.price_cents != null && promotion.price_cents > 0 && (
+              {paidPrices.length > 0 && (
                 <span className="font-bold">
-                  {formatZARShort(promotion.price_cents)}
+                  {ticketSummary}
                   {promotion.price_negotiable && (
                     <span className="ml-1 text-xs font-normal text-brand-green">Negotiable</span>
                   )}

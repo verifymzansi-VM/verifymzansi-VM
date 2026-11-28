@@ -21,9 +21,9 @@ const OPEN_DIALOG = '[role="dialog"]:not([data-state="closed"])';
 
 export type MediaChangeCause = "user" | "auto";
 
-/** Arrows and expand: on mouse-over or keyboard focus; always on touch screens (no hover there). */
+/** Arrows and expand: on mouse-over or keyboard focus; always on touch screens (no hover there). A disabled arrow (first or last item) is never shown: `invisible` wins over the hover opacity. */
 const ARROW_CLASS =
-  "absolute top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-brand-green-950/70 text-white transition-colors hover:bg-brand-green-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold-300 disabled:pointer-events-none disabled:opacity-0 opacity-0 group-hover/stage:opacity-100 [@media(hover:none)]:opacity-100 focus-visible:opacity-100";
+  "absolute top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-brand-green-950/70 text-white transition-colors hover:bg-brand-green-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold-300 disabled:pointer-events-none disabled:invisible opacity-0 group-hover/stage:opacity-100 [@media(hover:none)]:opacity-100 focus-visible:opacity-100";
 
 /**
  * The centre frame: one post's media at 9:16. Videos come first, then photos;

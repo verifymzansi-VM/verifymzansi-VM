@@ -106,6 +106,21 @@ describe("categories", () => {
       ]);
     });
 
+    it("asks no furniture details on clothing and gives Brand a clothing example", () => {
+      expect(names("clothing_accessories")).not.toContain("material");
+      expect(names("clothing_accessories")).not.toContain("dimensions");
+      expect(names("clothing_accessories")).toEqual(
+        expect.arrayContaining(["size", "gender", "brand"])
+      );
+      const brand = getCategory("clothing_accessories" as ListingCategory)!.attributeFields.find(
+        (f) => f.name === "brand"
+      )!;
+      expect(brand.placeholder).toBe("e.g. Nike, Woolworths");
+      // Sports and other items keep the shared list.
+      expect(names("sports_hobbies")).toEqual(expect.arrayContaining(["material", "dimensions"]));
+      expect(names("other_items")).toEqual(expect.arrayContaining(["material", "dimensions"]));
+    });
+
     it("asks how the buyer gets it for items, not for property or jobs", () => {
       for (const cat of CATEGORIES) {
         const asks = cat.attributeFields.some((f) => f.name === "delivery_methods");

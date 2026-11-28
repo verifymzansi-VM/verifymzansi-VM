@@ -136,7 +136,7 @@ export default async function PostCreatePage() {
         </div>
       </main>
 
-      <Footer />
+      <Footer showPostBand={false} />
     </div>
   );
 }

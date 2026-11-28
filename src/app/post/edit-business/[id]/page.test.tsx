@@ -574,7 +574,10 @@ describe("EditBusinessPage", () => {
       .mockResolvedValueOnce({
         ok: false,
         status: 409,
-        json: async () => ({ code: "pending_edit_exists" }),
+        json: async () => ({
+          error: "You can edit this post after it has been reviewed.",
+          reason: "post_in_review",
+        }),
       });
 
     render(<EditBusinessPage />);
@@ -587,7 +590,9 @@ describe("EditBusinessPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/Your latest changes were not submitted/)).toBeInTheDocument();
+      expect(
+        screen.getByText("You can edit this post after it has been reviewed.")
+      ).toBeInTheDocument();
     });
     expect(mockToast).not.toHaveBeenCalled();
     expect(mockPush).not.toHaveBeenCalled();

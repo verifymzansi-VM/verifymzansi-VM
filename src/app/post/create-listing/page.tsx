@@ -1031,7 +1031,7 @@ function CreateListingForm() {
         ...priced,
         category: mapListingCategory(category),
         condition:
-          category === "jobs_services" || category === "auto_parts"
+          category === "jobs_services" || category === "auto_parts" || category === "property"
             ? undefined
             : condition || undefined,
         attributes: normalizedAttributes,
@@ -1360,7 +1360,7 @@ function CreateListingForm() {
             />
           </div>
         </main>
-        <Footer />
+        <Footer showPostBand={false} />
       </div>
     );
   }
@@ -1496,35 +1496,37 @@ function CreateListingForm() {
                     )}
 
                     <PostFormSection title="Describe it">
-                      {category !== "jobs_services" && category !== "auto_parts" && (
-                        <div className="space-y-2">
-                          <Label htmlFor="condition">Condition</Label>
-                          <PostSelect
-                            id="condition"
-                            aria-label="Condition"
-                            className={FIELD_SELECT_CLASS}
-                            value={condition}
-                            onChange={(event) => {
-                              setCondition(event.target.value as ListingCondition | "");
-                              // Auto-focus the title field after selecting condition
-                              requestAnimationFrame(() => {
-                                const el = document.getElementById("title");
-                                if (el) {
-                                  el.focus();
-                                  el.scrollIntoView({ behavior: "smooth", block: "center" });
-                                }
-                              });
-                            }}
-                          >
-                            <option value="">Condition not specified</option>
-                            {LISTING_CONDITIONS.map((item) => (
-                              <option key={item.value} value={item.value}>
-                                {item.label}
-                              </option>
-                            ))}
-                          </PostSelect>
-                        </div>
-                      )}
+                      {category !== "jobs_services" &&
+                        category !== "auto_parts" &&
+                        category !== "property" && (
+                          <div className="space-y-2">
+                            <Label htmlFor="condition">Condition</Label>
+                            <PostSelect
+                              id="condition"
+                              aria-label="Condition"
+                              className={FIELD_SELECT_CLASS}
+                              value={condition}
+                              onChange={(event) => {
+                                setCondition(event.target.value as ListingCondition | "");
+                                // Auto-focus the title field after selecting condition
+                                requestAnimationFrame(() => {
+                                  const el = document.getElementById("title");
+                                  if (el) {
+                                    el.focus();
+                                    el.scrollIntoView({ behavior: "smooth", block: "center" });
+                                  }
+                                });
+                              }}
+                            >
+                              <option value="">Condition not specified</option>
+                              {LISTING_CONDITIONS.map((item) => (
+                                <option key={item.value} value={item.value}>
+                                  {item.label}
+                                </option>
+                              ))}
+                            </PostSelect>
+                          </div>
+                        )}
 
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
@@ -1881,7 +1883,7 @@ function CreateListingForm() {
         </div>
       </main>
 
-      <Footer />
+      <Footer showPostBand={false} />
     </div>
   );
 }

@@ -498,6 +498,8 @@ function CreateBusinessContent() {
 
       const restoredData = restored.data as typeof restored.data & Partial<BusinessDraftExtras>;
       const restoredType = (restoredData.businessType as BusinessType) || "";
+      // A late restore never replaces text already typed (only empty fields are filled).
+      const keep = (saved: string) => (current: string) => current || saved;
       queueMicrotask(() => {
         setStep(Math.min(Math.max(restored.step ?? 0, 0), STEPS.length - 1));
         setBusinessType(restoredType);
@@ -512,8 +514,8 @@ function CreateBusinessContent() {
           setBusinessDetails(null);
         }
 
-        setBusinessName(restoredData.businessName ?? "");
-        setDescription(restoredData.description ?? "");
+        setBusinessName(keep(restoredData.businessName ?? ""));
+        setDescription(keep(restoredData.description ?? ""));
         setCategory((restoredData.category as BusinessCategory | "") ?? "");
         setSubcategory(
           typeof restoredData.subcategory === "string" ? restoredData.subcategory : ""
@@ -531,18 +533,18 @@ function CreateBusinessContent() {
         });
         setProvince(restoredData.province ?? "");
         setCity(restoredData.city ?? "");
-        setLocationTown(restoredData.locationTown ?? "");
-        setLocationAddress(restoredData.locationAddress ?? "");
-        setStoreNumber(restoredData.storeNumber ?? "");
-        setMapDirections(restoredData.mapDirections ?? "");
-        setWebsite(restoredData.website ?? "");
+        setLocationTown(keep(restoredData.locationTown ?? ""));
+        setLocationAddress(keep(restoredData.locationAddress ?? ""));
+        setStoreNumber(keep(restoredData.storeNumber ?? ""));
+        setMapDirections(keep(restoredData.mapDirections ?? ""));
+        setWebsite(keep(restoredData.website ?? ""));
         // Older drafts kept each group as text ("08:00 - 17:00").
         setHours(
           restoredData.hours ??
             readBusinessHours({
               Mon_Fri: restoredData.hoursMonFri,
               Sat: restoredData.hoursSat,
-              Sun: restoredData.hoursSun || "Closed",
+              Sun: restoredData.hoursSun,
             })
         );
         setVisit(
@@ -551,12 +553,12 @@ function CreateBusinessContent() {
             visitor_features: restoredData.visit?.visitorFeatures,
           })
         );
-        setSocialFacebook(restoredData.socialFacebook ?? "");
-        setSocialInstagram(restoredData.socialInstagram ?? "");
-        setSocialTwitter(restoredData.socialTwitter ?? "");
-        setSocialTiktok(restoredData.socialTiktok ?? "");
-        setSocialYoutube(restoredData.socialYoutube ?? "");
-        setServicesInput(restoredData.servicesInput ?? "");
+        setSocialFacebook(keep(restoredData.socialFacebook ?? ""));
+        setSocialInstagram(keep(restoredData.socialInstagram ?? ""));
+        setSocialTwitter(keep(restoredData.socialTwitter ?? ""));
+        setSocialTiktok(keep(restoredData.socialTiktok ?? ""));
+        setSocialYoutube(keep(restoredData.socialYoutube ?? ""));
+        setServicesInput(keep(restoredData.servicesInput ?? ""));
         setServices(Array.isArray(restoredData.services) ? restoredData.services : []);
         setPaymentMethods(
           Array.isArray(restoredData.paymentMethods) ? restoredData.paymentMethods : []
@@ -1329,6 +1331,12 @@ function CreateBusinessContent() {
     );
   }
 
+  // The area is needed whenever customers are served anywhere but online
+  // (the same rule as the step check); only then is it not optional.
+  const locationRequired = readCustomerAccess(categoryDetails.customer_access).methods.some(
+    (m) => m !== "online"
+  );
+
   if (submitSucceeded) {
     return (
       <div className="flex min-h-screen flex-col bg-muted/30">
@@ -1342,7 +1350,7 @@ function CreateBusinessContent() {
             />
           </div>
         </main>
-        <Footer />
+        <Footer showPostBand={false} />
       </div>
     );
   }
@@ -1831,17 +1839,13 @@ function CreateBusinessContent() {
                     </PostFormSection>
                     <PostFormSection
                       title="Where to find you"
-                      optional={businessType === "online_only"}
+                      optional={!locationRequired}
                       description={
-                        businessType === "online_only"
-                          ? "Add an area to show up in local searches."
-                          : undefined
+                        locationRequired ? undefined : "Add an area to show up in local searches."
                       }
                     >
                       <LocationSelector
-                        areaRequired={readCustomerAccess(
-                          categoryDetails.customer_access
-                        ).methods.some((m) => m !== "online")}
+                        areaRequired={locationRequired}
                         addressRequired={
                           readCustomerAccess(categoryDetails.customer_access).publishAddress
                         }
@@ -1857,14 +1861,11 @@ function CreateBusinessContent() {
                         showAddress={readCustomerAccess(
                           categoryDetails.customer_access
                         ).methods.includes("visit")}
-                        errors={
-                          businessType === "online_only"
-                            ? {}
-                            : {
-                                province: fieldErrors.location_province,
-                                city: fieldErrors.location_city,
-                              }
-                        }
+                        errors={{
+                          province: fieldErrors.location_province,
+                          city: fieldErrors.location_city,
+                          address: fieldErrors.location_address,
+                        }}
                       />
                     </PostFormSection>
                   </div>
@@ -2184,7 +2185,7 @@ function CreateBusinessContent() {
           </PlanGate>
         </div>
       </main>
-      <Footer />
+      <Footer showPostBand={false} />
     </div>
   );
 }

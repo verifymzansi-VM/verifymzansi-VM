@@ -83,6 +83,8 @@ export class FoundationMediaError extends Error {
 /** What a member is told when photo processing has run out for the month. */
 export const IMAGES_ALLOWANCE_EXHAUSTED_MESSAGE =
   "Photo uploads are paused for now. Please try again later.";
+/** What a member is told when storing the file ran out of time. */
+const STORAGE_TIMEOUT_MESSAGE = "The upload took too long. Try again on a stronger connection.";
 /** What a member is told when their package's storage is full (begin_media_upload). */
 const STORAGE_FULL_MESSAGE =
   "Your storage allowance is full. Delete posts or drafts you no longer need, then try again.";
@@ -339,10 +341,15 @@ async function uploadCheckedMedia(
         throw new FoundationMediaError(409);
       stored = { key: reserved.object_key, url: publicUrl };
     }
-  } catch {
+  } catch (error) {
     // A lost transfer reply can follow a stored object. Keep the digest-bound
     // intent so the explicit retry resolves the immutable winner safely.
-    throw new FoundationMediaError(503);
+    const name = (error as { name?: string } | null)?.name;
+    throw new FoundationMediaError(
+      503,
+      undefined,
+      name === "TimeoutError" || name === "AbortError" ? STORAGE_TIMEOUT_MESSAGE : undefined
+    );
   }
   // Before completion, so a photo is never shown before its copies exist.
   // An unfinished upload's copies are deleted with it by media cleanup. Copies

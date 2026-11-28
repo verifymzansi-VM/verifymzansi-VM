@@ -57,7 +57,7 @@ export function EventDateFields({
             id="end_date"
             type="date"
             className={inputClass}
-            value={end.slice(0, 10) === start.slice(0, 10) ? "" : end.slice(0, 10)}
+            value={end.slice(0, 10)}
             onChange={(e) =>
               onEnd(
                 e.target.value

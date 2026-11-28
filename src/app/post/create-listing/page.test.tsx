@@ -129,7 +129,11 @@ vi.mock("@/components/layout/header", () => ({
 }));
 
 vi.mock("@/components/layout/footer", () => ({
-  Footer: () => <footer data-testid="footer">Footer</footer>,
+  Footer: ({ showPostBand = true }: { showPostBand?: boolean }) => (
+    <footer data-testid="footer" data-post-band={String(showPostBand)}>
+      Footer
+    </footer>
+  ),
 }));
 
 vi.mock("@/components/layout/page-header", () => ({
@@ -333,6 +337,19 @@ describe("CreateListingPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
     expect(screen.getByRole("button", { name: "Submit for review" })).toBeInTheDocument();
+  });
+
+  it("hides the footer's Post for free band on the posting form", () => {
+    render(<CreateListingPage />);
+    expect(screen.getByTestId("footer")).toHaveAttribute("data-post-band", "false");
+  });
+
+  it("asks item Condition for goods but not for property", () => {
+    render(<CreateListingPage />);
+    fireEvent.click(screen.getByText("Select Electronics"));
+    expect(screen.getByLabelText("Condition")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Select Property"));
+    expect(screen.queryByLabelText("Condition")).not.toBeInTheDocument();
   });
 
   it("renders saved category attributes inside the shared listing preview", () => {

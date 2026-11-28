@@ -176,10 +176,13 @@ describe("opening hours", () => {
       })
     ).toEqual({
       Mon_Fri: "08:00 - 17:00",
-      Sun: "Closed",
       Public_holidays: "Closed",
       By_appointment: true,
     });
+  });
+
+  it("saves nothing when the poster set no hours (Sunday is not assumed closed)", () => {
+    expect(businessHoursPayload(EMPTY_BUSINESS_HOURS)).toEqual({});
   });
 
   it("stores only the flag when open 24 hours", () => {

@@ -294,6 +294,25 @@ describe("storage service", () => {
     });
   });
 
+  describe("R2 transfer deadline", () => {
+    it("gives a 50 MB write far longer than two minutes, capped at ten", async () => {
+      const timeout = vi.spyOn(AbortSignal, "timeout");
+      const bytes = Buffer.alloc(50 * 1024 * 1024);
+      await putImmutableR2Bytes("verifymzansi-public", "media/fixture/video.mp4", bytes);
+      await uploadToR2({
+        bucket: "b",
+        key: "k/a.jpg",
+        file: new Blob(["x"]),
+        contentType: "image/jpeg",
+      });
+      const [bigWrite, smallWrite] = timeout.mock.calls.map(([ms]) => ms);
+      expect(bigWrite).toBe(120_000 + 420 * 1000);
+      expect(bigWrite).toBeLessThanOrEqual(600_000);
+      expect(smallWrite).toBe(121_000);
+      timeout.mockRestore();
+    });
+  });
+
   describe("R2 client configuration", () => {
     it("disables SDK default checksums for R2 compatibility", async () => {
       // Force a fresh client construction (the singleton is keyed by credentials)

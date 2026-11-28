@@ -426,11 +426,14 @@ describe("EditListingPage", () => {
     expect(screen.queryByRole("button", { name: "Remove Current logo" })).not.toBeInTheDocument();
   });
 
-  it("keeps unsaved changes on the form when an earlier edit is pending", async () => {
+  it("keeps unsaved changes and explains that a post in review cannot be edited yet", async () => {
     fetchMock.mockResolvedValueOnce({
       ok: false,
       status: 409,
-      json: async () => ({ code: "pending_edit_exists" }),
+      json: async () => ({
+        error: "You can edit this post after it has been reviewed.",
+        reason: "post_in_review",
+      }),
     });
 
     render(<EditListingPage />);
@@ -443,7 +446,9 @@ describe("EditListingPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/Your latest changes were not submitted/)).toBeInTheDocument();
+      expect(
+        screen.getByText("You can edit this post after it has been reviewed.")
+      ).toBeInTheDocument();
     });
     expect(mockToast).not.toHaveBeenCalled();
     expect(mockPush).not.toHaveBeenCalled();

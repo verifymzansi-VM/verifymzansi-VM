@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { hasDatabaseMessage, hasDatabaseReason } from "./error-reasons";
 import { videoLengthRefusalMessage } from "./video-length-refusal";
+import { DUPLICATE_EVENT_MESSAGE } from "./post-submission";
 import { collectionArea } from "./areas";
 import { handleFoundationOwnerRoute, type FoundationRefusal } from "@/lib/foundation/owner-route";
 import { readFoundationAccountContext, FoundationAccountContextError } from "./account-context";
@@ -63,6 +64,18 @@ function fail(
       error: "An active posting plan is required",
       reason: "Choose a posting plan to continue.",
       redirectUrl: `/pricing?area=${collectionArea(collection)}`,
+    });
+  if (error.code === "PT409" && hasDatabaseMessage(error, "postCannotBeEditedNow"))
+    throw new PostRefusal({
+      status: 409,
+      error: "You can edit this post after it has been reviewed.",
+      reason: "post_in_review",
+    });
+  if (error.code === "PT409" && hasDatabaseReason(error, "duplicate_event"))
+    throw new PostRefusal({
+      status: 409,
+      error: DUPLICATE_EVENT_MESSAGE,
+      reason: "duplicate_event",
     });
   if (error.code === "PT409")
     throw new PostRefusal({

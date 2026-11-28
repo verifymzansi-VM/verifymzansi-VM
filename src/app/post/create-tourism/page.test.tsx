@@ -342,7 +342,7 @@ describe("CreateTourismPage type switch behavior", () => {
   });
 
   it.each([
-    ["tourism_business", "Business Name (Required)", 100, 3000],
+    ["tourism_business", "Name of your stay or activity (Required)", 100, 3000],
     ["event", "Event name (Required)", 120, 5000],
   ])(
     "shows and enforces the %s text limits",
@@ -403,7 +403,7 @@ describe("CreateTourismPage type switch behavior", () => {
 
       await waitFor(() => expect(screen.getAllByText(message).length).toBeGreaterThan(0));
       const invalidField = screen.getByLabelText(
-        titleLength > 100 ? "Business Name (Required)" : "Description (Required)"
+        titleLength > 100 ? "Name of your stay or activity (Required)" : "Description (Required)"
       );
       expect(invalidField).toHaveAttribute("aria-invalid", "true");
       expect(invalidField).toHaveAccessibleDescription(expect.stringContaining(message));
@@ -413,13 +413,39 @@ describe("CreateTourismPage type switch behavior", () => {
     }
   );
 
+  it("a late draft restore fills empty fields but keeps text already typed", async () => {
+    let finish: (draft: unknown) => void = () => {};
+    restoreDraftMock.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+    render(<CreateTourismPage />);
+    const name = screen.getByLabelText("Name of your stay or activity (Required)");
+    fireEvent.change(name, { target: { value: "Typed Lodge" } });
+    await act(async () => {
+      finish({
+        step: 0,
+        data: {
+          listingType: "tourism_business",
+          title: "Saved Lodge",
+          description: "A saved description for the lodge by the lagoon.",
+        },
+      });
+    });
+    await waitFor(() =>
+      expect(screen.getByLabelText("Description (Required)")).toHaveValue(
+        "A saved description for the lodge by the lagoon."
+      )
+    );
+    expect(name).toHaveValue("Typed Lodge");
+  });
+
   it("honors the canonical event creation query param on first render", () => {
     searchParamGetMock.mockImplementation((key: string) => (key === "type" ? "event" : null));
 
     render(<CreateTourismPage />);
 
     expect(screen.getByLabelText("Event name (Required)")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Business Name (Required)")).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Name of your stay or activity (Required)")
+    ).not.toBeInTheDocument();
   });
 
   /** Fills an event up to the media step (Step 4). */
@@ -454,7 +480,7 @@ describe("CreateTourismPage type switch behavior", () => {
   /** Fills a tourism business up to the media step (Step 4). */
   function fillTourismBusinessToMediaStep() {
     render(<CreateTourismPage />);
-    fireEvent.change(screen.getByLabelText("Business Name (Required)"), {
+    fireEvent.change(screen.getByLabelText("Name of your stay or activity (Required)"), {
       target: { value: "Kruger Sunset Lodge" },
     });
     fireEvent.change(screen.getByLabelText("Description (Required)"), {
@@ -553,7 +579,7 @@ describe("CreateTourismPage type switch behavior", () => {
     render(<CreateTourismPage />);
     await termsLoaded();
 
-    fireEvent.change(screen.getByLabelText("Business Name (Required)"), {
+    fireEvent.change(screen.getByLabelText("Name of your stay or activity (Required)"), {
       target: { value: "Kruger Sunset Lodge" },
     });
     fireEvent.change(screen.getByLabelText("Description (Required)"), {
@@ -633,7 +659,7 @@ describe("CreateTourismPage type switch behavior", () => {
     render(<CreateTourismPage />);
     await termsLoaded();
 
-    fireEvent.change(screen.getByLabelText("Business Name (Required)"), {
+    fireEvent.change(screen.getByLabelText("Name of your stay or activity (Required)"), {
       target: { value: "Soweto Heritage Museum" },
     });
     fireEvent.change(screen.getByLabelText("Description (Required)"), {
@@ -885,7 +911,7 @@ describe("CreateTourismPage type switch behavior", () => {
       render(<CreateTourismPage />);
       await termsLoaded();
 
-      fireEvent.change(screen.getByLabelText("Business Name (Required)"), {
+      fireEvent.change(screen.getByLabelText("Name of your stay or activity (Required)"), {
         target: { value: "Kruger Sunset Lodge" },
       });
       fireEvent.change(screen.getByLabelText("Description (Required)"), {
@@ -1303,7 +1329,7 @@ describe("CreateTourismPage type switch behavior", () => {
   /** Step 1 of a tourism business with the given category, then Next. */
   function startTourismBusiness(subcategory: string) {
     render(<CreateTourismPage />);
-    fireEvent.change(screen.getByLabelText("Business Name (Required)"), {
+    fireEvent.change(screen.getByLabelText("Name of your stay or activity (Required)"), {
       target: { value: "Kruger Sunset Lodge" },
     });
     fireEvent.change(screen.getByLabelText("Description (Required)"), {
