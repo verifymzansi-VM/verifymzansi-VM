@@ -10,6 +10,7 @@ import { SlideHeadline, SlideSections } from "@/components/immersive/immersive-p
 import { ImmersiveStage, type MediaChangeCause } from "@/components/immersive/immersive-stage";
 import { ImmersiveTopBar } from "@/components/immersive/immersive-top-bar";
 import { defaultBrowse, describeBrowse, type FeedBrowse } from "@/lib/feed/browse";
+import { AREA_ORDER, nextArea, rolloverBrowse, rolloverCue } from "@/lib/feed/rollover";
 import { useFeedSequence, type FeedItem } from "@/components/immersive/use-feed-sequence";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { useDwellView } from "@/components/immersive/use-dwell-view";
@@ -478,7 +479,58 @@ function ViewerContent({
       ? `Post ${activeIndex + 1}: ${activeSlide.title}`
       : "Loading profile";
 
-  const canPrevious = position > 0;
+  /* ── Roll-over: past an area's last post the next area carries on (and back) ── */
+  const [browseBusy, setBrowseBusy] = useState<"section" | "province" | "filters" | null>(null);
+  const [browseError, setBrowseError] = useState(false);
+  const [cue, setCue] = useState<{ text: string; key: number } | null>(null);
+  // Each area's filters from earlier in this visit come back when the visitor returns to it.
+  const areaMemory = useRef<Partial<Record<FeedVertical, FeedBrowse>>>({});
+  const rolling = useRef(false);
+  // The design preview has no feed to move into, so it keeps its end slide.
+  const canRoll = !preview && postItems.length > 0;
+  const rollOver = useCallback(
+    async (direction: 1 | -1) => {
+      if (rolling.current) return;
+      rolling.current = true;
+      const from = feed.browse ?? defaultBrowse((activeSlide ?? initialSlide).vertical);
+      areaMemory.current[from.vertical] = from;
+      let target = from.vertical;
+      try {
+        // The other two areas, then this one again from the top: a loop.
+        for (let step = 0; step < AREA_ORDER.length; step += 1) {
+          target = nextArea(target, direction);
+          const next = rolloverBrowse(from, target, areaMemory.current[target]);
+          setBrowseBusy("section");
+          setBrowseError(false);
+          const result = await feed.browseTo(next, { skipEmpty: true });
+          setBrowseBusy(null);
+          if (!result.ok) {
+            setBrowseError(true);
+            return;
+          }
+          if (!result.firstId || !result.lastId) continue;
+          setOnEnd(false);
+          setActive(
+            direction === 1
+              ? { id: result.firstId, index: 0 }
+              : { id: result.lastId, index: Math.max(0, result.count - 1) }
+          );
+          if (next.vertical !== from.vertical) setCue({ text: rolloverCue(next), key: Date.now() });
+          return;
+        }
+      } finally {
+        rolling.current = false;
+      }
+    },
+    [activeSlide, feed, initialSlide]
+  );
+  useEffect(() => {
+    if (!cue) return;
+    const timer = window.setTimeout(() => setCue(null), 1500);
+    return () => window.clearTimeout(timer);
+  }, [cue]);
+
+  const canPrevious = position > 0 || canRoll;
   const canNext = !onEnd && (activeIndex < postItems.length - 1 || Boolean(tailItem));
 
   const go = useCallback(
@@ -490,7 +542,8 @@ function ViewerContent({
         if (onEnd) return;
         if (activeIndex < postItems.length - 1) {
           setActive({ id: postItems[activeIndex + 1].id, index: activeIndex + 1 });
-        } else if (tailItem) setOnEnd(true);
+        } else if (tailItem?.type === "end" && canRoll) void rollOver(1);
+        else if (tailItem) setOnEnd(true);
         return;
       }
       if (onEnd) {
@@ -501,9 +554,9 @@ function ViewerContent({
       }
       if (activeIndex > 0) {
         setActive({ id: postItems[activeIndex - 1].id, index: activeIndex - 1 });
-      }
+      } else if (canRoll) void rollOver(-1);
     },
-    [activeIndex, onEnd, postItems, tailItem]
+    [activeIndex, canRoll, onEnd, postItems, rollOver, tailItem]
   );
 
   /* ── Address bar, title and announcements follow the post on screen ── */
@@ -531,8 +584,6 @@ function ViewerContent({
   );
 
   /* ── Section, province and filters from the top bar: stay in the viewer ── */
-  const [browseBusy, setBrowseBusy] = useState<"section" | "province" | "filters" | null>(null);
-  const [browseError, setBrowseError] = useState(false);
   const browse = useCallback(
     async (next: FeedBrowse, cause: "section" | "province" | "filters") => {
       setBrowseBusy(cause);
@@ -696,7 +747,7 @@ function ViewerContent({
       />
 
       <div className="sr-only" aria-live="polite" tabIndex={-1} ref={liveRef}>
-        {announcement}
+        {cue ? `Now showing ${cue.text}` : announcement}
       </div>
 
       {emptyBrowse && feed.browse ? (
@@ -770,6 +821,18 @@ function ViewerContent({
                   : undefined
               }
             />
+          </div>
+        ) : null}
+
+        {cue ? (
+          <div
+            key={cue.key}
+            className="vm-cue pointer-events-none absolute inset-x-0 top-3 z-20 flex justify-center"
+            aria-hidden="true"
+          >
+            <span className="rounded-full bg-brand-green-950/90 px-4 py-2 text-sm font-semibold text-white ring-2 ring-brand-gold-300">
+              {cue.text}
+            </span>
           </div>
         ) : null}
 

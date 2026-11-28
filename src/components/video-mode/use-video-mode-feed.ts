@@ -30,8 +30,12 @@ export interface VideoModeFeed {
   sessionId: string | null;
   posts: VideoModePost[];
   terminal: FeedTerminal | null;
-  /** Replace the feed with another section, province or filter choice. */
-  browseTo: (browse: FeedBrowse) => Promise<boolean>;
+  /**
+   * Replace the feed with another section, province or filter choice. Gives the
+   * new feed's post ids in order, or null when it could not load. With
+   * `skipEmpty`, a choice with no posts leaves the current feed in place.
+   */
+  browseTo: (browse: FeedBrowse, options?: { skipEmpty?: boolean }) => Promise<string[] | null>;
   retry: () => void;
   retrySlide: (id: string) => void;
 }
@@ -187,16 +191,20 @@ export function useVideoModeFeed({
   }, [session, fixtures, visible, activeIndex, slides, failed, loadSlides, reload]);
 
   const browseTo = useCallback(
-    async (next: FeedBrowse) => {
+    async (next: FeedBrowse, options?: { skipEmpty?: boolean }) => {
       try {
         const built = await build(next, abort.current.signal);
+        if (options?.skipEmpty && built.refs.length === 0) return [];
         setFailed(new Set());
         setBrowse(next);
         setSession(built);
         setStatus("ready");
-        return true;
+        return built.refs
+          .map(decodeRef)
+          .filter((ref): ref is FeedRef => Boolean(ref))
+          .map((ref) => ref.id);
       } catch {
-        return false;
+        return null;
       }
     },
     [build]

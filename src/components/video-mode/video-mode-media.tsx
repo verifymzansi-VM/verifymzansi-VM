@@ -132,7 +132,7 @@ export function VideoModeMedia({
   constrained: boolean;
   analytics: boolean;
   /** True right after a swipe, so the finger lifting is not taken as a tap. */
-  ignoreTap: () => boolean;
+  ignoreTap: (fromPointer: boolean) => boolean;
   onVideoViewRecorded: () => void;
   /** The video on screen started or stopped (clean view hides the controls only while playing). */
   onPlayingChange: (playing: boolean) => void;
@@ -203,7 +203,7 @@ function ActiveVideo({
   muted: boolean;
   held: boolean;
   constrained: boolean;
-  ignoreTap: () => boolean;
+  ignoreTap: (fromPointer: boolean) => boolean;
   onPlayingChange: (playing: boolean) => void;
   onUserPause: () => void;
   onSoundBlocked: () => void;
@@ -311,8 +311,8 @@ function ActiveVideo({
     setBuffering(false);
   };
 
-  function toggle() {
-    if (ignoreTap()) return;
+  function toggle(fromPointer: boolean) {
+    if (ignoreTap(fromPointer)) return;
     if (failed) return;
     if (waitsForTap || blocked) {
       setStarted(true);
@@ -363,7 +363,8 @@ function ActiveVideo({
       />
       <button
         type="button"
-        onClick={toggle}
+        // A finger or mouse gives a click count; a keyboard or screen reader press gives 0.
+        onClick={(event) => toggle(event.detail > 0)}
         className="absolute inset-0 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-gold-300"
         aria-label={showPlay ? "Play video" : "Pause video"}
         aria-pressed={!showPlay}

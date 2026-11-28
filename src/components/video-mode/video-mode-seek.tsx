@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { VideoSeekBar } from "@/components/ui/video-seek-bar";
-import { formatVideoProgress } from "@/lib/media/video-time";
+import { VideoProgressLine } from "@/components/ui/video-seek-bar";
 
 const ACTIVE_VIDEO = "video[data-vm-active-video]";
 const EVENTS = ["loadedmetadata", "durationchange", "timeupdate", "seeked", "emptied"] as const;
@@ -12,7 +11,7 @@ function activeVideo() {
 }
 
 /**
- * The seek bar and time for the video on screen. Only that post mounts a
+ * The quiet progress line for the video on screen. Only that post mounts a
  * <video>; this follows it by listening on the page, so a retry or a new
  * element after a swipe is picked up without wiring through the stage.
  */
@@ -50,16 +49,8 @@ export function VideoModeSeek() {
   };
 
   return (
-    <div className="vm-shadow flex items-center gap-2 text-white" data-vm-control>
-      <VideoSeekBar
-        currentTime={time.current}
-        duration={time.duration}
-        onSeek={seek}
-        className="block min-w-0 flex-1 accent-brand-gold-300"
-      />
-      <span className="shrink-0 text-xs tabular-nums text-white/90">
-        {formatVideoProgress(time.current, time.duration)}
-      </span>
+    <div data-vm-control>
+      <VideoProgressLine currentTime={time.current} duration={time.duration} onSeek={seek} />
     </div>
   );
 }

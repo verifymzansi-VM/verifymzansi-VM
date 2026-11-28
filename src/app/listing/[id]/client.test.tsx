@@ -250,7 +250,7 @@ describe("ListingDetailClient", () => {
     expect(screen.queryByRole("heading")).toBeNull();
   });
 
-  it("moves the caption above the video controls and fades it while the video plays", () => {
+  it("draws no caption over a video", () => {
     const { container } = render(
       <ListingDetailClient
         photos={[]}
@@ -262,12 +262,9 @@ describe("ListingDetailClient", () => {
       />
     );
 
-    const caption = () => container.querySelector("[data-post-caption]");
-    expect(caption()).toHaveClass("bottom-16", "opacity-100");
-    fireEvent.playing(screen.getByLabelText("Beaded necklaces video"));
-    expect(caption()).toHaveClass("opacity-0");
-    fireEvent.pause(screen.getByLabelText("Beaded necklaces video"));
-    expect(caption()).toHaveClass("opacity-100");
+    // A video keeps a clear picture: the heading and details follow under it.
+    expect(container.querySelector("[data-post-caption]")).toBeNull();
+    expect(screen.getByLabelText("Beaded necklaces video")).toBeInTheDocument();
   });
 
   it("shows no caption when the post page passes none", () => {

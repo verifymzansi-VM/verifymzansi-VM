@@ -8,11 +8,6 @@ export function formatVideoTime(seconds: number): string {
   return hours > 0 ? `${hours}:${mins.toString().padStart(2, "0")}:${secs}` : `${mins}:${secs}`;
 }
 
-/** The player's time label: where playback is and how long the video is, e.g. "0:12 / 0:45". */
-export function formatVideoProgress(currentTime: number, duration: number): string {
-  return `${formatVideoTime(currentTime)} / ${formatVideoTime(duration)}`;
-}
-
 /** The same position for screen readers, e.g. "0:12 of 0:45". */
 export function describeVideoProgress(currentTime: number, duration: number): string {
   return `${formatVideoTime(currentTime)} of ${formatVideoTime(duration)}`;
