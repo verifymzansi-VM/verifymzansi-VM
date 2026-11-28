@@ -643,10 +643,7 @@ function CreateTourismContent() {
         return;
       }
       // A late restore fills only what is still empty: never text already typed.
-      const keep =
-        <T,>(saved: T) =>
-        (current: T) =>
-          current || saved;
+      const keep = (saved: string) => (current: string) => current || saved;
       queueMicrotask(() => {
         setStep(draft.step);
         if (d.listingType && !requestedListingType)
